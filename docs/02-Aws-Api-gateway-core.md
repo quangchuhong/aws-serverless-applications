@@ -747,6 +747,7 @@ Trong LAB:
    }
 
 ```
+
      - Mapping template tạo payload cho Lambda:
 ```json
      {
@@ -804,3 +805,73 @@ Trong LAB:
    - $util.toJson, $util.escapeJavaScript – format JSON string cho các service như SNS.
 
 
+### 6.5. Usage Plan & API Key
+
+**API Key:**
+
+   - Chuỗi bí mật client gửi trong header x-api-key (hoặc query).
+   - Không thay thế JWT/OAuth – chủ yếu để:
+      - Kiểm soát sử dụng (usage tracking).
+      - Giới hạn rate/quota.
+      - Gate-keeping đơn giản cho các client trusted.
+        
+**Usage Plan:**
+
+   - Gắn API key với:
+      - Một hoặc nhiều API/stage.
+        
+   - Thiết lập:
+      - Throttling (burst/rate).
+      - Quota (tổng request trong chu kỳ).
+        
+   - Giúp:
+      - Phân tầng khách hàng: Free / Pro / Enterprise.
+      - Chia băng thông, bảo vệ backend.
+        
+Trong LAB:
+
+   - MobilePlan:
+      - rate_limit = 100 req/s, burst_limit = 200.
+      - quota = 100000 req/ngày.
+   - mobile-app-key gắn vào MobilePlan.
+   - Tất cả method (POST /orders, POST /orders/{id}/notify, GET /orders/{id}) đều api_key_required = true.
+
+
+### 6.6. Bảo mật (Authorization & Authentication)
+
+Các option chính của API Gateway:
+
+   1. IAM Authorization (AWS_IAM)  
+
+      - Dùng SigV4 signing.
+      - Phù hợp cho client là AWS service (Lambda, EC2, backend internal).
+      - Policy IAM kiểm soát ai được gọi method nào.
+        
+   2. Lambda Authorizer (Custom Authorizer)  
+
+      - Lambda tự viết, xử lý:
+         - JWT từ IdP custom.
+         - API token, header, cookie, v.v.
+      - Trả về IAM policy cho phép/từ chối truy cập.
+      - Flexibile, nhưng phải tự maintain code Lambda.
+        
+   3. Cognito User Pools Authorizer  
+
+      - API Gateway validate JWT token phát hành bởi Amazon Cognito.
+      - Tích hợp tốt với mobile/web app.
+      - Đỡ phải tự viết logic validate token.
+        
+   4. API Key + Usage Plan (đang dùng trong LAB)  
+
+      - Không phải auth mạnh (không biết user cuối là ai).
+      - Phù hợp:
+         - Throttle & quota.
+         - Quy định “chỉ những client nào được cấp key mới dùng API”.
+      - Nên kết hợp thêm: IAM/Lambda/Cognito authorizer cho security production.
+        
+Trong LAB:
+
+   - Dùng authorization = "NONE" + api_key_required = true.
+   - Bảo mật ở mức:
+      - Chỉ client có API key mới gọi được.
+      - Có rate/quota để tránh abuse.
