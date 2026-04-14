@@ -111,3 +111,110 @@ def _response(status_code, body):
     }
 
 ```
+
+### 3.2. lambda/order_processor.py
+
+Lambda đọc message từ SQS, ghi order vào DynamoDB OrdersTable.
+```python
+import json
+import logging
+import os
+import boto3
+from botocore.exceptions import ClientError
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+dynamodb = boto3.resource("dynamodb")
+table_name = os.environ["ORDERS_TABLE_NAME"]
+orders_table = dynamodb.Table(table_name)
+
+
+def lambda_handler(event, context):
+    records = event.get("Records", [])
+
+    for record in records:
+        body = record["body"]
+        msg = json.loads(body)
+
+        order_id = msg.get("orderId")
+        user_id = msg.get("userId")
+        items = msg.get("items")
+        created_at = msg.get("createdAt")
+
+        logger.info(
+            "Processing order: orderId=%s userId=%s createdAt=%s",
+            order_id,
+            user_id,
+            created_at,
+        )
+
+        try:
+            orders_table.put_item(
+                Item={
+                    "orderId": order_id,
+                    "userId": user_id,
+                    "items": items,
+                    "createdAt": created_at,
+                }
+            )
+        except ClientError as e:
+            logger.error("Failed to write order %s to DynamoDB: %s", order_id, e)
+            # Raise để SQS/Lambda retry, quá maxReceiveCount → vào DLQ
+            raise
+
+    return {"status": "ok"}
+
+```
+
+### 3.3. lambda/get_order_handler.py
+
+Lambda đọc một order từ DynamoDB theo orderId và trả JSON.
+Có custom encoder để serialize Decimal từ DynamoDB.
+```python
+import os
+import json
+import boto3
+from botocore.exceptions import ClientError
+from decimal import Decimal
+
+dynamodb = boto3.resource("dynamodb")
+table = dynamodb.Table(os.environ["ORDERS_TABLE_NAME"])
+
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            # tuỳ bạn: float hoặc int; ở đây dùng float
+            return float(o)
+        return super(DecimalEncoder, self).default(o)
+
+
+def lambda_handler(event, context):
+    order_id = event.get("pathParameters", {}).get("id")
+    if not order_id:
+        return _response(400, {"message": "Missing path parameter: id"})
+
+    try:
+        resp = table.get_item(Key={"orderId": order_id})
+    except ClientError as e:
+        return _response(
+            500,
+            {"message": f"DynamoDB error: {e.response['Error']['Message']}"},
+        )
+
+    item = resp.get("Item")
+    if not item:
+        return _response(404, {"message": "Order not found"})
+
+    return _response(200, item)
+
+
+def _response(status_code, body):
+    return {
+        "statusCode": status_code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body, cls=DecimalEncoder),
+    }
+
+```
