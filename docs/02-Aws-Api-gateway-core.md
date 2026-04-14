@@ -1,77 +1,98 @@
-  # OrderServiceAPI – Amazon API Gateway REST API (Terraform Lab)
+# AWS API Gateway – OrderServiceAPI LAB (Terraform + Theory)
 
-Tài liệu này tổng hợp toàn bộ phần chúng ta đã trao đổi và triển khai về **AWS API Gateway (REST API)** với Terraform, kèm test case, logging/monitoring và bảo mật cơ bản. Bạn có thể dùng làm README cho repo GitHub.
+Tài liệu này tổng hợp toàn bộ phần LAB chúng ta đã triển khai **AWS API Gateway REST API** bằng Terraform, kèm phần **lý thuyết giải thích các khái niệm và options chính trong API Gateway**.
+
+Bạn có thể dùng làm README cho repo GitHub hoặc tài liệu học.
 
 ---
 
-## 1. Mục tiêu
+## Mục lục
 
-Demo một API “Order Service” dùng **Amazon API Gateway REST API** với các tính năng:
+1. [Mục tiêu LAB](#mục-tiêu-lab)  
+2. [Kiến trúc tổng quan LAB](#kiến-trúc-tổng-quan-lab)  
+3. [Cấu trúc project](#cấu-trúc-project)  
+4. [Triển khai bằng Terraform](#triển-khai-bằng-terraform)  
+   - 4.1. Lambda  
+   - 4.2. SNS Topic  
+   - 4.3. API Gateway REST API & Resources  
+   - 4.4. Các endpoint & integration  
+   - 4.5. Deployment & Stage  
+   - 4.6. Usage Plan & API Key  
+   - 4.7. Logging & Monitoring  
+5. [Test cases](#test-cases)  
+6. [Lý thuyết: Các khái niệm & options trong API Gateway](#lý-thuyết-các-khái-niệm--options-trong-api-gateway)  
+   - 6.1. Loại API (REST, HTTP, WebSocket)  
+   - 6.2. Resource, Method, Route  
+   - 6.3. Integration types  
+   - 6.4. Mapping Templates (VTL)  
+   - 6.5. Usage Plan & API Key  
+   - 6.6. Bảo mật (Authorization & Authentication)  
+   - 6.7. Logging, Monitoring & Observability  
+   - 6.8. Throttling & Quota  
+   - 6.9. Caching (REST API)  
 
-- REST API với nhiều kiểu **integration nâng cao**:
-  - `POST /orders` → **Lambda** (mapping template phức tạp)
+---
+
+## 1. Mục tiêu LAB
+
+Xây dựng một API “Order Service” bằng **Amazon API Gateway REST API**, với:
+
+- **REST API** có 3 endpoint:
+  - `POST /orders` → **Lambda** (mapping template phức tạp, response mapping)
   - `POST /orders/{id}/notify` → **SNS** (AWS Service integration)
   - `GET /orders/{id}` → **HTTP backend** (httpbin.org)
-- **Mapping templates** (VTL) phức tạp cho request/response.
-- **Usage Plan + API Key** để:
-  - Bắt buộc client dùng API key.
-  - Hạn chế tốc độ (rate limit, burst).
-  - Hạn chế quota (số request/ngày).
-- **Logging & Monitoring**:
-  - CloudWatch Logs (access log + execution log).
-  - Metrics mặc định của API Gateway.
-- Cấu hình bằng **Terraform**.
+- **Usage Plan + API Key**:
+  - Bắt buộc dùng API key.
+  - Giới hạn rate & quota.
+- **CloudWatch Logs**:
+  - Access logs & execution logs cho API Gateway.
+  - Logs cho Lambda.
+- Dùng **Terraform** để khai báo hạ tầng (IaC).
 
 ---
 
-## 2. Kiến trúc tổng quan
+## 2. Kiến trúc tổng quan LAB
 
-### 2.1. Thành phần chính
+### Thành phần chính
 
-- **API Gateway REST API** – `OrderServiceAPI`
-  - Stage: `prod`
+- **API Gateway REST API** – `OrderServiceAPI`, stage `prod`
 - **Lambda Function** – `create_order_function`
-  - Runtime: Python
-  - Dùng để xử lý `POST /orders`.
 - **SNS Topic** – `order-notifications`
-  - Nhận message từ `POST /orders/{id}/notify`.
-- **HTTP Backend** – `https://httpbin.org/get`
-  - Dùng làm service mock cho `GET /orders/{id}`.
-- **Usage Plan + API Key**
-  - `MobilePlan` + `mobile-app-key`
-- **CloudWatch Logs**
-  - Access log: `/aws/apigateway/OrderServiceAPI-access`
-  - Execution logs: nhóm log API Gateway + Lambda.
+- **HTTP Backend Demo** – `https://httpbin.org/get`
+- **Usage Plan** – `MobilePlan`
+- **API Key** – `mobile-app-key`
+- **CloudWatch Logs**:
+  - `/aws/apigateway/OrderServiceAPI-access`
+  - `API-Gateway-Execution-Logs_<rest_api_id>/prod`
+  - `/aws/lambda/create_order_function`
 
-### 2.2. Luồng chính
+### Luồng chính
 
-1. **POST /orders**
-   - Client gửi JSON order + `x-api-key`.
-   - API Gateway kiểm tra API key + usage plan.
-   - Mapping template chuyển payload → format nội bộ.
-   - Gọi Lambda `create_order_function`.
-   - Lambda trả kết quả.
-   - Response mapping template rút gọn/trang điểm response trước khi trả cho client.
+1. `POST /orders`
+   - Client gửi JSON order + header `x-api-key`.
+   - API Gateway kiểm tra API key theo Usage Plan.
+   - Request mapping template → chuyển payload thành format nội bộ cho Lambda.
+   - Lambda xử lý & trả về kết quả.
+   - Response mapping template → chuẩn hóa JSON trả cho client.
 
-2. **POST /orders/{id}/notify**
+2. `POST /orders/{id}/notify`
    - Client gửi JSON notify (type, to) + `x-api-key`.
-   - API Gateway kiểm tra API key + usage plan.
-   - Mapping template build payload `sns:Publish` (TopicArn + Message).
-   - API Gateway gọi SNS với IAM role `api-gw-sns-role`.
-   - SNS nhận message, fanout tới subscribers (email/SQS/Lambda… nếu cấu hình).
-   - API Gateway trả `"Notification queued"` cho client.
+   - API Gateway build payload `sns:Publish` (TopicArn + Message JSON string).
+   - Dùng IAM role `api-gw-sns-role` để gọi SNS.
+   - SNS nhận message, fanout theo subscription (email/SQS/Lambda…).
+   - API Gateway trả `"Notification queued"`.
 
-3. **GET /orders/{id}**
+3. `GET /orders/{id}`
    - Client gọi `GET /orders/{id}?fields=...` + `x-api-key`.
-   - API Gateway kiểm tra API key + usage plan.
-   - Mapping `path param {id}` → query `order_id`, gọi `https://httpbin.org/get?order_id={id}`.
-   - Trả nguyên response từ httpbin.org về client.
+   - API Gateway map path param `{id}` → query `order_id`.
+   - Gửi request tới `https://httpbin.org/get?order_id={id}`.
+   - Trả nguyên response body từ httpbin.org cho client.
 
 ---
 
-## 3. Cấu trúc repo (gợi ý)
+## 3. Cấu trúc project
 
 ```text
 .
-├── main.tf               # Terraform – định nghĩa toàn bộ infra
-└── lambda_create_order.py # Code Lambda create order
+├── main.tf               # Terraform: định nghĩa Lambda, SNS, API Gateway, Usage Plan, Logging...
+└── lambda_create_order.py # Code Lambda đơn giản để test mapping template
