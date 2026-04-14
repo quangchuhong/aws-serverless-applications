@@ -688,3 +688,89 @@ Trong LAB:
 ### 6.3. Integration types
 
 Integration là cách API Gateway “nối” đến backend:
+
+#### 1. Lambda Integration  
+
+   - API Gateway gọi AWS Lambda.
+   - 2 kiểu:
+      - Lambda proxy (event = full request context).
+      - Lambda non-proxy (dùng mapping template như LAB).
+   - LAB: POST /orders → non-proxy Lambda để demo mapping template.
+     
+#### 2. HTTP / HTTP Proxy Integration  
+
+   - Gọi đến HTTP/HTTPS backend:
+      - Internal service, public API, microservice, v.v.
+   - HTTP proxy integration:
+      - Pass-through hầu hết request/response.
+   - Non-proxy:
+      - Tùy biến header, query, body bằng mapping template & request parameters.
+   - LAB: GET /orders/{id} → HTTP integration đến https://httpbin.org/get.
+     
+#### 3. AWS Service Integration  
+
+   - Gọi trực tiếp AWS services không cần Lambda:
+      - SNS (Publish), SQS (SendMessage), DynamoDB (GetItem/PutItem), Step Functions (StartExecution), v.v.
+   - Cần IAM role (credentials) cho phép API Gateway gọi service đó.
+   - LAB: POST /orders/{id}/notify → SNS Publish.
+     
+#### 4. MOCK Integration  
+
+   - Không gọi backend.
+   - API Gateway trả response giả theo mapping template.
+   - Dùng để test, stub, health check, hoặc quick demo.
+
+### 6.4. Mapping Templates (VTL)
+
+Mapping Template cho phép:
+
+   - Biến đổi Request trước khi gửi đến backend.
+   - Biến đổi Response từ backend trước khi trả cho client.
+     
+Sử dụng:
+
+   - REST API → request_templates, response_templates.
+   - Ngôn ngữ: Velocity Template Language (VTL).
+     
+Trong LAB:
+
+   - Request mapping POST /orders:
+        - Client gửi:
+     ```json
+     {
+  "customer": { "id": "u-123", "name": "Alice" },
+  "items": [
+    { "sku": "SKU-1", "qty": 2 },
+    { "sku": "SKU-2", "qty": 1 }
+  ],
+  "meta": { "source": "mobile", "campaign": "SPRING" }
+}
+
+     ```
+     - Mapping template tạo payload cho Lambda:
+     ```json
+     {
+  "orderId": "<requestId>",
+  "customerId": "u-123",
+  "items": [
+    { "sku": "SKU-1", "quantity": 2 },
+    { "sku": "SKU-2", "quantity": 1 }
+  ],
+  "source": "mobile",
+  "campaign": "SPRING",
+  "requestContext": { ... }
+}
+
+     ```
+     
+   - Response mapping POST /orders:
+
+      - Lambda trả:
+     ```json
+     {
+  "ok": true,
+  "order": { "id": "ord-xxx", "total": 199.5 },
+  "debug": { "received": {...} }
+}
+
+     ```
