@@ -921,3 +921,51 @@ Trong thực tế:
          - Latency tăng bất thường.
          - Throttling nhiều.
       - Dashboards để quan sát traffic theo thời gian.
+
+### 6.8. Throttling & Quota
+
+**Throttling**:
+
+   - Bảo vệ backend khỏi bị “ngập” request.
+   - 2 cấp:
+      - Account-level throttling (mặc định trên toàn bộ API Gateway account).
+      - Usage Plan throttling:
+         - rate_limit (requests/second trung bình).
+         - burst_limit (burst tối đa trong thời gian ngắn).
+   - Nếu vượt limit:
+      - API Gateway trả 429 Too Many Requests.
+        
+**Quota**:
+
+   - Giới hạn tổng số request trong một chu kỳ:
+      - limit: số lượng request.
+      - period: DAY | WEEK | MONTH.
+      - offset: offset tính chu kỳ.
+   - Nếu client vượt quota:
+      - API Gateway từ chối request đến khi chu kỳ mới bắt đầu.
+        
+Trong LAB:
+
+   - MobilePlan:
+      - rate_limit = 100, burst_limit = 200.
+      - limit = 100000 / DAY.
+
+
+### 6.9. Caching (REST API)
+
+_"LAB này chưa bật cache, nhưng đây là feature quan trọng của REST API."_
+
+- **API Gateway Cache:**
+
+   - Cho phép cache response ở level method.
+   - Giảm số lần gọi backend, giảm latency.
+   - Có cost riêng (GB/hour).
+- Config chính:
+   - Bật cache trên Stage hoặc Method:
+      - caching_enabled = true.
+      - cache_ttl_in_seconds.
+   - Xác định key:
+      - Query params, headers, request body (tùy chọn).
+- Use case:
+   - GET dữ liệu ít thay đổi.
+   - Public data có thể cache (product list, metadata, v.v.).
