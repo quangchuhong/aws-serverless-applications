@@ -651,3 +651,40 @@ Trong LAB, ta chọn REST API để demo: mapping template phức tạp, usage p
 
 ### 6.2. Resource, Method, Route
 
+
+- Resource (REST API)  
+
+   - Đại diện cho một path trong URL, ví dụ:
+      - /orders
+      - /orders/{id}
+      - /orders/{id}/notify
+   - Trong Terraform: aws_api_gateway_resource.
+     
+- Method (REST API)  
+
+   - HTTP method trên một resource:
+      - GET /orders/{id}
+      - POST /orders
+      - POST /orders/{id}/notify
+   - Trong Terraform: aws_api_gateway_method.
+   - Option chính:
+      - http_method: GET, POST, PUT, DELETE,…
+      - authorization: NONE, AWS_IAM, CUSTOM, COGNITO_USER_POOLS.
+      - api_key_required: true/false (có yêu cầu API key hay không).
+      - request_parameters: định nghĩa query/path/header param cần có.
+        
+- Route (HTTP & WebSocket APIs)  
+
+   - Khái niệm tương tự trong HTTP API/WebSocket:
+      - HTTP APIs: GET /orders/{id} là một route.
+      - WebSocket APIs: $connect, $disconnect, $default, custom routes.
+        
+Trong LAB:  
+
+- Ta sử dụng REST Resource + Method:
+   - Resource: /orders, /orders/{id}, /orders/{id}/notify.
+   - Method: POST, GET với các options auth, api_key_required.
+
+### 6.3. Integration types
+
+Integration là cách API Gateway “nối” đến backend:
