@@ -589,4 +589,65 @@ API_KEY=$(terraform output -raw api_key_mobile)
 
 ```
 
+### 5.1. POST /orders → Lambda
+```bash
+curl -X POST "$API_URL/orders" \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer": { "id": "u-123", "name": "Alice" },
+    "items": [
+      { "sku": "SKU-1", "qty": 2 },
+      { "sku": "SKU-2", "qty": 1 }
+    ],
+    "meta": { "source": "mobile", "campaign": "SPRING" }
+  }'
+
+```
+
+### 5.2. POST /orders/{id}/notify → SNS
+```bash
+curl -X POST "$API_URL/orders/ord-123/notify" \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "EMAIL",
+    "to": "user@example.com"
+  }'
+
+```
+
+### 5.3. GET /orders/{id} → httpbin.org
+```bash
+curl "$API_URL/orders/ord-999?fields=items,customer" \
+  -H "x-api-key: $API_KEY"
+
+```
+---
+
+## 6. Lý thuyết: Các khái niệm & options trong API Gateway
+
+### 6.1. Loại API (REST, HTTP, WebSocket)
+
+   - REST API (v1)  
+
+      - Cũ hơn nhưng nhiều tính năng nâng cao.
+      - Hỗ trợ mapping template, usage plan, API key, caching, request/response transformation, request validation, v.v.
+      - Phù hợp với use case cần customize sâu – như LAB này.
+        
+   - HTTP API (v2)
+     
+      - Mới hơn, rẻ hơn, latency thấp hơn.
+      - Thiết kế hiện đại, cấu hình đơn giản.
+      - Tốt cho phần lớn use case mới: front cho Lambda/HTTP backend với JWT authorizer.
+      - Ít tính năng hơn REST (ít hoặc không có usage plan, mapping phức tạp ở thời điểm đầu).
+        
+   - WebSocket API  
+
+      - Hỗ trợ kết nối 2 chiều, lâu dài (stateful).
+      - Dùng cho chat, game real-time, notification push, dashboard live, v.v.
+        
+Trong LAB, ta chọn REST API để demo: mapping template phức tạp, usage plan + API key, nhiều loại integration.
+
+### 6.2. Resource, Method, Route
 
