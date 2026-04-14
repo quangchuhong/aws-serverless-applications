@@ -875,3 +875,49 @@ Trong LAB:
    - Bảo mật ở mức:
       - Chỉ client có API key mới gọi được.
       - Có rate/quota để tránh abuse.
+
+
+### 6.7. Logging, Monitoring & Observability
+
+**Logging**:
+
+   - Access Logs:
+
+      - Log ở level stage, mỗi request 1 dòng (JSON).
+      - Chứa:
+         - IP, method, path, status, latency, requestId, errors, v.v.
+      - Trong LAB:
+         - Log group: /aws/apigateway/OrderServiceAPI-access.
+         - Format JSON tùy biến.
+           
+**Execution Logs**:
+
+   - Log chi tiết per-method trong API Gateway.
+   - Gồm:
+      - Request mapping, integration, response, error từ integration, v.v.
+   - Bật qua aws_api_gateway_method_settings:
+      - logging_level: OFF | ERROR | INFO.
+      - data_trace_enabled: true/false (log full body – cẩn thận với dữ liệu nhạy cảm).
+        
+**Lambda Logs**:
+
+   - Mặc định Lambda log ra CloudWatch log group:
+      - /aws/lambda/<function_name>.
+        
+**Monitoring (Metrics)**:
+
+   - API Gateway:
+      - Count, 4XXError, 5XXError, Latency, IntegrationLatency, CacheHit/MissCount,…
+   - Lambda:
+      - Invocations, Errors, Duration, Throttles, v.v.
+   - SNS:
+      - NumberOfMessagesPublished, NumberOfNotificationsDelivered,…
+        
+Trong thực tế:
+
+   - Kết hợp metrics + logs:
+      - Alarms (CloudWatch Alarms) khi:
+         - 5XX tăng cao.
+         - Latency tăng bất thường.
+         - Throttling nhiều.
+      - Dashboards để quan sát traffic theo thời gian.
