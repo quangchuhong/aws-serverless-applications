@@ -736,7 +736,7 @@ Trong LAB:
 
    - Request mapping POST /orders:
         - Client gửi:
-     ```json
+```json
      {
   "customer": { "id": "u-123", "name": "Alice" },
   "items": [
@@ -744,11 +744,11 @@ Trong LAB:
     { "sku": "SKU-2", "qty": 1 }
   ],
   "meta": { "source": "mobile", "campaign": "SPRING" }
-}
+   }
 
-     ```
+```
      - Mapping template tạo payload cho Lambda:
-     ```json
+```json
      {
   "orderId": "<requestId>",
   "customerId": "u-123",
@@ -759,9 +759,8 @@ Trong LAB:
   "source": "mobile",
   "campaign": "SPRING",
   "requestContext": { ... }
-}
-
-     ```
+   }
+```
      
    - Response mapping POST /orders:
 
