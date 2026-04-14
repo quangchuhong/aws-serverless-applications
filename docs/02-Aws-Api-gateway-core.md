@@ -738,38 +738,69 @@ Trong LAB:
         - Client gửi:
 ```json
      {
-  "customer": { "id": "u-123", "name": "Alice" },
-  "items": [
-    { "sku": "SKU-1", "qty": 2 },
-    { "sku": "SKU-2", "qty": 1 }
-  ],
-  "meta": { "source": "mobile", "campaign": "SPRING" }
+     "customer": { "id": "u-123", "name": "Alice" },
+     "items": [
+       { "sku": "SKU-1", "qty": 2 },
+       { "sku": "SKU-2", "qty": 1 }
+     ],
+     "meta": { "source": "mobile", "campaign": "SPRING" }
    }
 
 ```
      - Mapping template tạo payload cho Lambda:
 ```json
      {
-  "orderId": "<requestId>",
-  "customerId": "u-123",
-  "items": [
-    { "sku": "SKU-1", "quantity": 2 },
-    { "sku": "SKU-2", "quantity": 1 }
-  ],
-  "source": "mobile",
-  "campaign": "SPRING",
-  "requestContext": { ... }
+     "orderId": "<requestId>",
+     "customerId": "u-123",
+     "items": [
+       { "sku": "SKU-1", "quantity": 2 },
+       { "sku": "SKU-2", "quantity": 1 }
+     ],
+     "source": "mobile",
+     "campaign": "SPRING",
+     "requestContext": { ... }
    }
 ```
      
    - Response mapping POST /orders:
 
       - Lambda trả:
-     ```json
-     {
-  "ok": true,
-  "order": { "id": "ord-xxx", "total": 199.5 },
-  "debug": { "received": {...} }
+```json
+   {
+     "ok": true,
+     "order": { "id": "ord-xxx", "total": 199.5 },
+     "debug": { "received": {...} }
+   }
+
+```
+   - Template trả cho client:
+```json
+{
+  "orderId": "ord-xxx",
+  "total": 199.5,
+  "status": "CREATED",
+  "debug": { ... }
 }
 
-     ```
+```
+
+- **Request mapping POST /orders/{id}/notify:**
+
+   - Input: { "type": "EMAIL", "to": "user@example.com" }.
+
+   - Output cho SNS Publish:
+```json
+{
+  "TopicArn": "...",
+  "Message": "{\"orderId\": \"ord-123\", ... }"
+}
+
+```
+
+**Option quan trọng:**
+
+   - $input.path('$'), $input.json('$') – truy cập body JSON.
+   - $context.* – truy cập thông tin request (requestId, stage, identity, headers,…).
+   - $util.toJson, $util.escapeJavaScript – format JSON string cho các service như SNS.
+
+
