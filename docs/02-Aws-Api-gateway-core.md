@@ -969,3 +969,77 @@ _"LAB này chưa bật cache, nhưng đây là feature quan trọng của REST A
 - Use case:
    - GET dữ liệu ít thay đổi.
    - Public data có thể cache (product list, metadata, v.v.).
+
+---
+
+## 7. Monitoring & Logging trong thực tế
+
+Thực hành tốt (best practices):
+
+   - Bật Access Logs:
+
+      - Sử dụng format JSON để dễ filter & phân tích.
+      - Dùng trường như requestId, status, integrationError, ip, userAgent.
+        
+   - Bật Execution Logs có chọn lọc:
+
+      - Môi trường dev/stage: logging_level = INFO, data_trace_enabled = true để debug.
+      - Prod: logging_level = ERROR, tắt data_trace hoặc chỉ bật cho một số method vì lý do bảo mật & chi phí.
+        
+   - Đặt Alarms:
+
+      - 5XX tăng → có vấn đề backend.
+      - 4XX tăng → client dùng sai / invalid auth / vượt quota.
+      - Latency tăng → hiệu năng backend kém.
+        
+   - Trace:
+
+      - Có thể bật AWS X-Ray để trace end-to-end qua API Gateway → Lambda → backend khác.
+---
+
+## 8. Bảo mật trong thực tế
+
+Một số patterns:
+
+   - Public API:
+      - Tối thiểu: API key + usage plan → rate/quota.
+      - Tốt hơn: JWT (Cognito) + API key (cho billing/usage).
+   - Internal API (microservices):
+      - AWS_IAM (SigV4) + VPC, private endpoint.
+   - B2B / Partner API:
+      - OAuth2/JWT/Lambda Authorizer.
+      - Mỗi partner một usage plan + API key riêng.
+        
+Các điểm cần chú ý:
+
+   - Không log thông tin nhạy cảm (PII, secrets) trong CloudWatch (data_trace).
+   - Rotate API key định kỳ.
+   - Hạn chế IP (nếu phù hợp) bằng WAF + resource policy.
+
+---
+
+## 9. Hướng mở rộng LAB
+
+Một số hướng bạn có thể phát triển thêm:
+
+   1. Thêm Auth:
+
+      - Cognito User Pools + JWT authorizer.
+      - Hoặc Lambda authorizer đơn giản.
+        
+   2. Thêm CORS:
+
+      - Cho phép frontend SPA (React/Vue/Angular) gọi API.
+
+   3. Thêm DynamoDB integration:
+
+      - GET /orders/{id} đọc thẳng từ DynamoDB (AWS Service integration).
+      - Không cần Lambda cho read.
+        
+   4. Custom Domain + ACM:
+
+      - Gắn domain đẹp: https://api.example.com/orders.
+        
+   5. CI/CD:
+
+      - Dùng GitHub Actions / CodePipeline để apply Terraform.
