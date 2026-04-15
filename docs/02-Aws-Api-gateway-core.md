@@ -1043,3 +1043,239 @@ Một số hướng bạn có thể phát triển thêm:
    5. CI/CD:
 
       - Dùng GitHub Actions / CodePipeline để apply Terraform.
+     
+---
+
+# Phần mở rộng: Cognito – Authentication & Security (Lý thuyết)
+
+Phần này bổ sung **kiến thức lý thuyết** về Authentication & Security của **Amazon Cognito**, để bạn ghép chung với tài liệu LAB API Gateway/Cognito.
+
+---
+
+## 10. Lý thuyết: Cognito Authentication vs Security
+
+### 10.1. Cognito giải quyết vấn đề gì?
+
+Amazon Cognito có 2 “mảng” lớn:
+
+1. **User Pools** – Authentication & Identity  
+   - Đăng ký, đăng nhập, quản lý user (email/username/password, social login).
+   - Phát hành **JWT token** (ID token, Access token, Refresh token).
+   - Là nguồn “sự thật” về user (identity store) cho ứng dụng.
+
+2. **Federation / Identity Pools (không dùng trong LAB)**  
+   - Map user đã xác thực (qua Cognito hoặc IdP khác) thành **AWS credentials tạm thời** (STS) để gọi trực tiếp các dịch vụ AWS (S3, DynamoDB,…).
+   - Không chi tiết ở đây vì LAB tập trung vào User Pools + API Gateway.
+
+Trong LAB của bạn, chúng ta dùng **User Pool** để làm:
+
+- Authentication: xác thực user login.
+- Security ở mức API: cấp JWT token, dùng ở API Gateway.
+
+---
+
+### 10.2. Authentication trong Cognito (User Pools)
+
+**Authentication = khẳng định user là ai.**
+
+Cognito User Pool hỗ trợ:
+
+1. **User/Password** truyền thống:
+   - Đăng ký (sign-up): email/username + password.
+   - Xác thực email (optional).
+   - Đăng nhập (sign-in): email/username + password.
+
+2. **Password policy**:
+   - Độ dài tối thiểu.
+   - Bắt buộc có số, chữ hoa, chữ thường, ký tự đặc biệt.
+   - Expiration (nếu cần).
+
+3. **MFA (Multi-Factor Authentication)** (tùy chọn):
+   - SMS OTP, TOTP (Google Authenticator, Authy,…).
+   - Có thể buộc tất cả user dùng MFA hoặc chỉ bắt buộc trong trường hợp rủi ro cao.
+
+4. **Social login / Enterprise SSO**:
+   - OIDC: Google, Auth0, Keycloak, v.v.
+   - SAML: IdP công ty, ADFS, Okta.
+   - Cognito sẽ federate các IdP này vào 1 User Pool.
+
+5. **Hosted UI**:
+   - Cung cấp sẵn trang login/sign-up/forgot password.
+   - Hỗ trợ cả social login/SSO.
+   - Có thể custom logo, màu sắc, text, và gắn custom domain (`auth.company.com`).
+
+6. **Token-based Authentication**:
+   - Sau khi login thành công, Cognito phát hành:
+     - `id_token`: chứa thông tin user (claims).
+     - `access_token`: dùng để bảo vệ API.
+     - `refresh_token`: dùng để lấy token mới mà không login lại.
+
+**Trong LAB**:
+- Bạn dùng Hosted UI (classic) + username/password.
+- Sau login, Cognito trả `id_token` + `access_token` trên URL (implicit flow).
+- Bạn lấy JWT từ URL và dùng để gọi API Gateway.
+
+---
+
+### 10.3. JWT Tokens của Cognito & cách dùng
+
+Cognito phát hành 3 loại token (OIDC compliant):
+
+1. **ID Token**:
+   - Dành cho client/front-end.
+   - Chứa profile user:
+     - `sub`, `email`, `email_verified`, `cognito:username`, custom claims.
+   - Dùng khi bạn muốn app biết “user này là ai”.
+
+2. **Access Token**:
+   - Dùng để bảo vệ API/backends.
+   - Chứa:
+     - Scope (permissions).
+     - Client ID, username, groups,…
+   - Khi gửi đến API Gateway, thường dùng format:
+     - `Authorization: Bearer <access_token>` (hoặc `id_token` trong 1 số flow).
+
+3. **Refresh Token**:
+   - Dùng để **lấy token mới** mà không cần user login lại.
+   - Không nên gửi refresh token qua API Gateway; chỉ dùng giữa client ↔ Cognito.
+
+**Đặc điểm chung của JWT Cognito**:
+
+- Ký bằng RSA (`RS256`) với key riêng của User Pool.
+- Có tiêu chuẩn:
+  - `iss` – issuer (URL của User Pool).
+  - `aud` – audience (client_id).
+  - `exp` – thời điểm hết hạn.
+- Verifiable bằng public keys (`JWKS`) tại:
+  - `https://cognito-idp.<region>.amazonaws.com/<user_pool_id>/.well-known/jwks.json`
+
+**Trong LAB**:
+
+- Bạn lấy token từ Hosted UI, gắn vào header:
+  - `Authorization: Bearer <id_token>` (demo).
+- API Gateway (qua Cognito authorizer hoặc Lambda authorizer) validate token trước khi cho phép vào API.
+
+---
+
+### 10.4. Security trong Cognito – Chính sách & bảo vệ tài khoản
+
+Cognito hỗ trợ nhiều feature “security” xoay quanh user:
+
+1. **Password Policy** (đã dùng):
+   - Độ mạnh, pattern password.
+   - Giảm nguy cơ bị brute force / password yếu.
+
+2. **MFA**:
+   - Yêu cầu user nhập thêm OTP (SMS, TOTP).
+   - Bảo vệ chống stolen password.
+
+3. **Account Status & Lockout**:
+   - Bạn có thể:
+     - Disable user.
+     - Force password reset.
+   - Kết hợp với app logic để lock user khi bị nghi ngờ tấn công.
+
+4. **Advanced Security / Adaptive Authentication** (nếu bật, có phí):
+   - Phân tích hành vi đăng nhập:
+     - Địa điểm mới / thiết bị lạ.
+     - Nhiều lần login fail, login lạ.
+   - Phân loại: low / medium / high risk.
+   - Tùy policy:
+     - Allow, require MFA, hoặc Deny login.
+   - Đây là “threat protection” ở mức **tài khoản**.
+
+---
+
+### 10.5. Cognito + API Gateway trong Security tổng thể
+
+Cognito tự nó **không chặn các kiểu tấn công HTTP** (SQLi, XSS, DDoS nhỏ,...); phần đó thuộc về:
+
+- **AWS WAF** (Web Application Firewall)  
+- **API Gateway features** (throttling, resource policy, usage plan)
+
+Tuy nhiên, Cognito là mảnh ghép quan trọng trong **API security**:
+
+1. **Authentication**:  
+   - User login → nhận JWT.
+
+2. **Authorization ở API layer (bảo vệ API)**:
+   - **Cognito Authorizer**:
+     - API Gateway tự validate JWT.
+   - **Lambda Authorizer** (nếu bạn tự code):
+     - Tự validate JWT & thêm logic role/permission.
+
+3. **Kết hợp**:
+   - JWT (Cognito) + API Key (Usage Plan):
+     - JWT = biết “user là ai”.
+     - API key = phân biệt “client/app nào” + rate/quota.
+   - JWT + WAF:
+     - WAF chặn bot/tấn công HTTP trước khi đụng đến Cognito/API.
+   - JWT + backend:
+     - Backend (Lambda / HTTP services) có thể đọc claims từ JWT (email, groups, custom:role,…) để phân quyền sâu hơn.
+
+**Trong LAB**:
+
+- JWT Cognito + API Key bắt buộc cho `GET /orders/{id}`.
+- Bạn có thể mở rộng:
+  - Backend đọc `email`, `cognito:username` từ JWT để log/audit.
+  - Chỉ cho phép `role=admin` gọi một số endpoint.
+
+---
+
+### 10.6. Khi nào dùng Cognito authorizer, khi nào dùng Lambda authorizer?
+
+**Cognito authorizer**:
+
+- Ưu:
+  - Không phải viết code validate JWT.
+  - Cấu hình đơn giản.
+  - An toàn, chuẩn AWS.
+- Nhược:
+  - Logic cố định (chủ yếu chỉ check signature/iss/aud/exp).
+  - Khó kết hợp với hệ thống role/DB custom phức tạp.
+
+**Lambda authorizer (trên JWT Cognito)**:
+
+- Ưu:
+  - Toàn quyền viết logic:
+    - Chỉ cho phép email `@company.com`.
+    - Check user trong DB nội bộ (trạng thái active/banned).
+    - Áp chính sách tuỳ tenant / organization.
+  - Có thể validate token từ nhiều nguồn (Cognito + IdP khác).
+- Nhược:
+  - Phải tự code và bảo trì.
+  - Nếu code sai phần security, có thể tạo lỗ hổng.
+
+**Chiến lược thực tế**:
+
+- 80% use case: **Cognito User Pool + Cognito authorizer** là đủ.
+- Khi cần rule đặc biệt hoặc multi-IdP phức tạp:
+  - Chuyển sang **Lambda authorizer** (nhưng vẫn dùng Cognito làm IdP).
+
+---
+
+### 10.7. Tóm tắt: Authentication vs Security trong Cognito (theo LAB)
+
+- **Authentication (Cognito)**:
+  - Ai đang login?  
+  - Xác thực user bằng password, MFA, social login.  
+  - Phát hành JWT chuẩn (ID/Access/Refresh token).
+
+- **Security (Cognito + API Gateway + WAF)**:
+  - Cognito:
+    - Chính sách password, MFA, adaptive authentication.
+    - Bảo vệ từng user account.
+  - API Gateway:
+    - Cognito/Lambda authorizer – validate JWT, allow/deny API.
+    - Usage Plan + API key – rate/quota & client-level control.
+  - WAF (optional, ngoài LAB):
+    - Chặn bot, SQLi, XSS, brute force HTTP trước khi vào API.
+
+Trong LAB OrderServiceAPI, bạn đã ghép:
+
+- Cognito User Pool → Hosted UI → JWT.  
+- JWT → API Gateway Cognito/Lambda authorizer → bảo vệ `GET /orders/{id}`.  
+- JWT + API Key → security ở cả **user** và **client/app**.
+
+---
+
