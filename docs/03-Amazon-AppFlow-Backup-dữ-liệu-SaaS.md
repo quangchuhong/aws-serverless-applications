@@ -110,3 +110,61 @@ Một số loại dữ liệu hay trích xuất:
     "web_url": "https://gitlab.example.com/group/project/-/issues/7"
   }
 ]
+```
+
+**Merge Requests – CSV:**
+```csv
+id,iid,project_id,title,state,author_username,created_at,merged_at
+9876,15,42,"Add user audit log","merged","alice","2026-04-10T09:00:00Z","2026-04-11T14:20:30Z"
+9877,16,42,"Refactor auth module","opened","jdoe","2026-04-12T07:15:00Z",
+
+```
+
+**Projects – JSON:**
+```csv
+[
+  {
+    "id": 42,
+    "name": "payment-service",
+    "path_with_namespace": "backend/payment-service",
+    "visibility": "private",
+    "description": "Microservice for payment processing",
+    "default_branch": "main",
+    "web_url": "https://gitlab.example.com/backend/payment-service",
+    "created_at": "2024-03-01T08:00:00Z",
+    "last_activity_at": "2026-04-16T07:30:12Z"
+  }
+]
+
+```
+
+### 5.4. Gợi ý tổ chức folder trên S3
+
+Ví dụ cấu trúc:
+```text
+s3://<bucket-name>/gitlab/projects/2026-04-16/projects.json
+s3://<bucket-name>/gitlab/issues/2026-04-16/issues.json
+s3://<bucket-name>/gitlab/merge_requests/2026-04-16/merge_requests.csv
+
+```
+Hoặc phân vùng theo năm/tháng/ngày:
+```text
+gitlab/issues/year=2026/month=04/day=16/issues.parquet
+
+```
+---
+
+## 6. Tóm tắt
+
+- **AppFlow:**
+
+  - Là công cụ data integration để kéo dữ liệu SaaS về AWS (S3, Redshift, Snowflake,...) phục vụ analytics.
+  - Hỗ trợ backup dạng data copy/snapshot, không phải full app restore.
+    
+- **Backup GitLab:**
+
+  - Không có connector AppFlow sẵn → cần:
+    - Lambda + GitLab API + S3, hoặc
+    - Custom Connector AppFlow gọi GitLab API.
+      
+  - Lưu dữ liệu dạng JSON/CSV/Parquet trên S3, dễ dàng phân tích & lưu trữ dài hạn.
