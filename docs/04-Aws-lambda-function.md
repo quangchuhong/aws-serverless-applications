@@ -103,3 +103,80 @@ Các loại concurrency:
     - on_failure: khi Lambda lỗi sau retry.
     - on_success: khi Lambda xử lý thành công.
   - Destination có thể là: SQS, SNS, Lambda khác, EventBridge.
+
+
+### 0.6. Monitoring & Observability cho Lambda
+
+Monitoring giúp bạn hiểu:
+
+  - Lambda đang chạy tốt hay không?
+  - Concurrency có bị full không?
+  - Có bị throttle, lỗi nhiều không?
+  - Thời gian chạy (duration) và lỗi (error) như thế nào?
+    
+AWS cung cấp các công cụ chính:
+
+  - CloudWatch Logs – log chi tiết từng invoke.
+  - CloudWatch Metrics – metric tổng quan (Invocations, Errors, Duration,…).
+  - X-Ray – trace, profiling chi tiết (tuỳ chọn).
+    
+#### 0.6.1. CloudWatch Logs
+
+Mỗi Lambda function mặc định log vào CloudWatch Logs (nhờ policy AWSLambdaBasicExecutionRole):
+
+  - Log group: /aws/lambda/<function_name>.
+  - Mỗi container/instance có log stream riêng.
+
+Dùng CLI:
+
+```bash
+aws logs tail "/aws/lambda/sync-api-lambda" --since 5m
+
+```
+
+Trong log bạn thường thấy:
+
+  - START RequestId: ...
+  - Log của bạn: console.log(...), console.error(...).
+  - END RequestId: ...
+  - REPORT RequestId: ... Duration: ... ms ...
+
+
+#### 0.6.2. CloudWatch Metrics – Những metric quan trọng
+
+Vào CloudWatch → Metrics → Lambda → chọn theo FunctionName.
+
+Các metric chính:
+
+  - Invocations  
+
+    - Số lần function được invoke (kể cả thành công hay lỗi).
+      
+  - Errors  
+
+    - Số lần invoke trả lỗi (không tính retry async nội bộ).
+      
+  - Throttles  
+
+    - Số lần bị throttle (Rate Exceeded / TooManyRequests) do:
+      - Vượt account concurrency.
+      - Vượt reserved_concurrent_executions.
+
+  - ConcurrentExecutions  
+
+    - Số instance đang chạy cùng lúc cho function.
+      
+  - Duration  
+
+    - Thời gian chạy (ms).
+    - Có thể xem P50, P90, P95,… để hiểu latency.
+      
+  - ProvisionedConcurrentExecutions / ProvisionedConcurrencyUtilization (nếu dùng PC)  
+
+    - Theo dõi mức độ sử dụng Provisioned Concurrency.
+      
+Bạn có thể dùng các metric này để:
+
+  - Vẽ biểu đồ concurrency theo thời gian.
+  - Phát hiện khi nào function bị throttle.
+  - Tối ưu memory / timeout / provisioned concurrency.
