@@ -32,15 +32,15 @@ Lab này minh họa:
 
 2. Asynchronous (bất đồng bộ)  
 
-  - Caller gửi event, không chờ kết quả.
-  - Ví dụ: S3, SNS, EventBridge.
-  - Lambda tự retry (theo config) và có thể gửi event thất bại vào DLQ / Event Destination.
+    - Caller gửi event, không chờ kết quả.
+    - Ví dụ: S3, SNS, EventBridge.
+    - Lambda tự retry (theo config) và có thể gửi event thất bại vào DLQ / Event Destination.
     
 3. Event Source Mapping (stream/poll-based)  
 
-  - Lambda chủ động poll dữ liệu từ nguồn:
-    - SQS, Kinesis, DynamoDB Streams, Kafka…
-  - Mỗi batch data đọc được → 1 lần invoke Lambd
+    - Lambda chủ động poll dữ liệu từ nguồn:
+      - SQS, Kinesis, DynamoDB Streams, Kafka…
+    - Mỗi batch data đọc được → 1 lần invoke Lambd
 
 ### 0.3. Concurrency (Đồng thời)
 
