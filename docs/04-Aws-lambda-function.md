@@ -263,3 +263,113 @@ Kết hợp:
     - Batch message không bị xoá khỏi queue.
     - Sau khi hết VisibilityTimeout, SQS giao lại message → Lambda được invoke lại (retry).
     - Số lần giao lại phụ thuộc redrive policy của SQS (maxReceiveCount), sau đó message chuyển sang DLQ của SQS (nếu cấu hình).
+   
+---
+
+## 1. Kiến trúc tổng quan của lab
+
+### 1.1. Thành phần
+
+**1. Lambda A – sync-api-lambda**
+
+  - Ngôn ngữ: Node.js 18.
+  - Invoke: synchronous qua HTTP API Gateway.
+  - Route: GET /test.
+  - Cấu hình:
+    - publish = true.
+    - Alias: prod.
+    - **Provisioned Concurrency = 5** (trên alias prod).
+    - Có thể đặt reserved_concurrent_executions để giới hạn concurrency tối đa.
+      
+**2. Lambda B – async-s3-lambda**
+
+  - Ngôn ngữ: Node.js 18.
+  - Invoke: asynchronous từ S3 bucket.
+  - Trigger: s3:ObjectCreated:*.
+  - Cấu hình:
+    - maximum_retry_attempts = 2.
+    - Event thất bại sau retry → gửi vào SQS DLQ async-s3-lambda-dlq.
+      
+**3. Tài nguyên khác**
+
+  - HTTP API Gateway: demo-sync-api.
+  - S3 bucket: demo-lambda-concurrency-<random>.
+  - SQS DLQ: async-s3-lambda-dlq.
+  - IAM Role cho Lambda.
+---
+
+## 2. Workflow & Khái niệm trong lab
+
+### 2.1. Sync Lambda A (sync-api-lambda)
+
+Workflow:
+```text
+[Client] 
+   |
+   | 1. HTTP GET /test
+   v
+[API Gateway HTTP API: demo-sync-api]
+   |
+   | 2. Invoke Lambda alias prod (AWS_PROXY)
+   v
+[Lambda A: sync-api-lambda:prod]
+   |
+   | 3. Xử lý:
+   |    - Log EVENT
+   |    - Sleep 2s (mô phỏng xử lý lâu)
+   | 4. Trả về {statusCode: 200, body: JSON}
+   v
+[API Gateway]
+   |
+   | 5. HTTP 200 + JSON
+   v
+[Client]
+
+```
+Concurrency:
+
+  - Ví dụ reserved_concurrent_executions = 5:
+    - Tối đa 5 request được xử lý song song.
+    - Request thứ 6 trở lên (khi 5 cái đầu chưa xong) → Lambda bị throttle (Rate Exceeded).
+  - Provisioned Concurrency = 5:
+    - 5 instance luôn “ấm sẵn” → gần như không có cold start cho 5 request đầu.
+
+### 2.2. Async Lambda B (async-s3-lambda) + DLQ
+
+Workflow thành công:
+```text
+[Client / System]
+   |
+   | 1. PUT object (file_X.txt)
+   v
+[S3 Bucket: demo-lambda-concurrency-xxxx]
+   |
+   | 2. Phát event ObjectCreated:Put
+   v
+[Lambda B: async-s3-lambda]
+   |
+   | 3. Nhận event, log "S3 Event: ..."
+   |    - Đọc bucket, key
+   |    - Xử lý business
+   v
+[Hoàn thành]
+
+```
+
+Workflow lỗi + DLQ (khi cố tình throw new Error("Simulated processing error")):
+```text
+[S3 Bucket] --ObjectCreated--> [Lambda B: async-s3-lambda]
+                                   |
+                                   | 1. Handler chạy -> throw Error
+                                   v
+                          [Lambda Async Retry Logic]
+                                   |
+                                   | 2. Retry tối đa 2 lần
+                                   v
+                [SQS DLQ: async-s3-lambda-dlq (on_failure destination)]
+                                   |
+                                   | 3. Event S3 gốc được lưu trong DLQ
+                                   v
+                    [Consumer khác / người vận hành đọc & xử lý lại]
+
+```
