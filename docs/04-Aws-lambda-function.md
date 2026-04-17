@@ -26,9 +26,9 @@ Lab này minh họa:
 
 1. Synchronous (đồng bộ)  
 
-  - Caller chờ Lambda chạy xong, nhận kết quả.
-  - Ví dụ: API Gateway, AWS SDK gọi trực tiếp.
-  - Nếu Lambda lỗi → caller nhận lỗi ngay.
+    - Caller chờ Lambda chạy xong, nhận kết quả.
+    - Ví dụ: API Gateway, AWS SDK gọi trực tiếp.
+    - Nếu Lambda lỗi → caller nhận lỗi ngay.
 
 2. Asynchronous (bất đồng bộ)  
 
