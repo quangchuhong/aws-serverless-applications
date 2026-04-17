@@ -180,3 +180,86 @@ Bạn có thể dùng các metric này để:
   - Vẽ biểu đồ concurrency theo thời gian.
   - Phát hiện khi nào function bị throttle.
   - Tối ưu memory / timeout / provisioned concurrency.
+
+
+#### 0.6.3 Lý thuyết: SQS → Lambda & xử lý đồng thời nhiều message
+
+##### 1. SQS → Lambda hoạt động thế nào?
+
+Bạn cấu hình Event Source Mapping giữa SQS và Lambda:
+```text
+[Producer] -> [SQS Queue] -> [Event Source Mapping] -> [Lambda Function]
+
+```
+- Event Source Mapping sẽ:
+  - Poll message từ SQS.
+  - Gom message theo batch_size.
+  - Mỗi batch → 1 lần invoke Lambda (1 execution).
+
+##### 2. batch_size và Records
+
+- batch_size = N → mỗi execution Lambda nhận tối đa N message:
+```json
+{
+  "Records": [
+    { "body": "msg1", ... },
+    { "body": "msg2", ... },
+    ...
+    { "body": "msgN", ... }
+  ]
+}
+
+```
+
+- Thường trong handler:
+```js
+for (const record of event.Records) {
+  // xử lý từng message trong batch
+}
+
+```
+
+##### 3. Xử lý đồng thời nhiều message
+
+- Concurrency Lambda = số execution đang chạy cùng lúc.
+
+- Nếu:
+
+  - batch_size = 1
+  - Và Lambda được phép chạy tối đa 5 execution song song
+    → Tại 1 thời điểm, Lambda có thể xử lý tối đa 5 message song song (mỗi execution 1 message).
+- Nếu:
+
+  - batch_size = 5
+  - Tối đa 5 execution song song
+    → Tại 1 thời điểm, Lambda đang xử lý tối đa 25 message:
+    - 5 execution × 5 message/batch.
+    - Mỗi execution xử lý 5 record trong event.Records (thường là lần lượt).
+
+##### 4. Các “núm vặn” để giới hạn song song
+
+- batch_size trong Event Source Mapping:
+
+  - 1 → mỗi execution 1 message.
+_  -   1 → mỗi execution nhiều message.
+_
+- reserved_concurrent_executions trên Lambda:
+
+  - Giới hạn số execution tối đa chạy cùng lúc cho function.
+- (Nếu có) scaling_config.maximum_concurrency trên Event Source Mapping:
+
+  - Giới hạn số poller song song trên queue đó.
+    
+Kết hợp:
+
+  - Muốn tối đa N message song song:
+    - Đặt batch_size = 1.
+    - Đặt reserved_concurrent_executions = N (và/hoặc maximum_concurrency = N).
+
+##### 5. Retry với SQS (khác với async S3/SNS)
+- Với SQS:
+  - Retry không dùng maximum_retry_attempts của Lambda async.
+  - Khi execution fail (throw error):
+    - Batch message không bị xoá khỏi queue.
+    - Sau khi hết VisibilityTimeout, SQS giao lại message → Lambda được invoke lại (retry).
+    - Số lần giao lại phụ thuộc redrive policy của SQS (maxReceiveCount), sau đó message chuyển sang DLQ của SQS (nếu cấu hình).
