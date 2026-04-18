@@ -377,3 +377,49 @@ Các option:
 [DLQ (Dead-Letter Queue)]
 
 ```
+
+**Redrive Policy** trên queue chính:
+
+- Thiết lập:
+  - deadLetterTargetArn: ARN của queue DLQ.
+  - maxReceiveCount: số lần tối đa message có thể được nhận (mà không bị xóa) trước khi bị chuyển DLQ.
+
+**Flow:**
+
+- Message được nhận lần 1:
+
+  - Lambda lỗi → không xóa → Visibility Timeout hết → ReceiveCount = 1.
+    
+- Nhận lần 2:
+
+  - Vẫn lỗi → ReceiveCount = 2.
+    
+- Nếu maxReceiveCount = 5:
+
+  - Đến lần 5 vẫn fail → ReceiveCount = 5.
+  - Lần 6, thay vì lại trả về cho consumer:
+    - SQS chuyển message sang DLQ.
+      
+**Trong DLQ:**
+
+- Bạn có thể:
+  - Dùng Lambda/worker riêng đọc DLQ để xử lý đặc biệt.
+  - Alert/monitor, phân tích message lỗi.
+
+
+### 4.6. Maximum Message Size & Encryption trong toàn flow
+
+- Maximum Message Size (256 KB):
+
+  - Áp dụng khi SendMessage từ API Gateway/backend.
+  - Nếu payload > 256 KB:
+    - Pattern thường dùng:
+      - Lưu nội dung lớn ở S3.
+      - Trong SQS chỉ đặt metadata + S3 URL/key.
+        
+**Encryption (KMS):**
+
+  - Áp dụng khi message được lưu trong SQS (at rest).
+  - Trong suốt toàn bộ vòng đời message:
+    - Từ lúc gửi → lưu trữ → nhận lại → xoá/chuyển DLQ.
+  - Không đổi cách code; chỉ cần IAM/KMS policy phù hợp.
