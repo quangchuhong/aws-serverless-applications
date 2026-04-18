@@ -260,3 +260,76 @@ Chỉ áp dụng cho FIFO queue.
     - Nếu bật KMS encryption:
       - Message được mã hóa at-rest khi lưu trong SQS.
       - Ứng dụng/consumer không cần làm gì thêm, SDK xử lý trong suốt.
+
+
+### 4.2. Message nằm trong queue: Retention & Delay
+```text
+[SQS Standard Queue]
+   |
+   |-- Message mới đến:
+   |     - Bị delay X giây (Delivery Delay)
+   |     - Được mã hóa (Encryption) nếu bật
+   |
+   |-- Sau khi hết delay:
+   |     - Trở thành "visible"
+   |
+   |-- Nếu không được xử lý / xóa trong Retention Period:
+   |     - SQS auto delete (Message Retention Period)
+
+```
+
+Các option:
+
+**1. Delivery Delay**
+
+  - Trì hoãn thời điểm message trở thành visible.
+  - Ví dụ: DelaySeconds = 60 → 60s sau khi gửi mới có thể được đọc.
+    
+**2. Message Retention Period**
+
+  - Message ở trong queue tối đa X giây/ngày (1 phút – 14 ngày).
+  - Nếu trong thời gian đó:
+    - Không bị consumer xóa.
+    - Và cũng không bị chuyển DLQ.
+  - → Hết hạn → SQS tự động xóa message.
+    
+**3. Encryption**
+
+  - Ảnh hưởng toàn bộ thời gian message lưu trong queue.
+  - Không thay đổi cách code nhận/gửi.
+
+### 4.3. Event Source Mapping & Long Polling (SQS → Lambda)
+```text
+[SQS Standard Queue]
+   |
+   |  Event Source Mapping
+   |   - Long Polling
+   |   - batch_size
+   v
+[Lambda Consumer]
+
+```
+
+- Event Source Mapping là cấu hình “Trigger” SQS → Lambda:
+
+  - Poll SQS theo ReceiveMessage.
+  - Thường kết hợp Long Polling:
+    - ReceiveMessageWaitTimeSeconds = 0–20s.
+    - Khi queue trống, poll sẽ chờ X giây để đợi message mới → giảm empty receive.
+- Khi poll được message:
+  - Gom theo batch_size → 1 event Lambda:
+```json
+    {
+  "Records": [
+    { "body": "msg1", ... },
+    { "body": "msg2", ... }
+  ]
+}
+
+```
+**Long Polling** ở đây:
+
+- Giúp:
+  - Giảm số request ReceiveMessage rỗng.
+  - Tiết kiệm chi phí.
+- Không ảnh hưởng đến logic xử lý message, chỉ là tối ưu IO.
