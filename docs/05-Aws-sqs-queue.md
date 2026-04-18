@@ -428,8 +428,6 @@ Các option:
 
 ## So sánh Standard Queue vs FIFO Queue
 
-```text
-
 | Tiêu chí                    | Standard Queue                                                                 | FIFO Queue                                                                                                   |
 |-----------------------------|-------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
 | Thông lượng (Throughput)   | **Gần như không giới hạn** TPS per API action.                               | **Cao nhưng giới hạn**: ~300 msg/s (send/receive/delete). Nếu batch 10 msg/operation → ~3,000 msg/s.       |
@@ -437,4 +435,3 @@ Các option:
 | Giao hàng (Delivery)       | **At-least-once delivery**: mỗi message được giao **ít nhất 1 lần**, đôi khi >1 lần (có duplicate). | **Exactly-once processing**: mỗi message được giao **một lần**, giữ nguyên trong queue đến khi consumer xử lý & xóa; **không tự sinh duplicate** trong queue. |
 | Use case điển hình         | Tải rất lớn, không cần thứ tự tuyệt đối, xử lý được duplicate.               | Cần thứ tự nghiêm ngặt, tránh duplicate, luồng giao dịch/order theo user, account, đơn hàng,…              |
 
-```
