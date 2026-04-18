@@ -122,3 +122,69 @@ Khi một consumer (ví dụ Lambda) nhận message:
   - maxReceiveCount = 5:
     - Message được consumer nhận tối đa 5 lần.
     - Nếu mỗi lần đều fail (không xoá) → lần thứ 6, SQS chuyển message sang DLQ.
+
+### 2.7. Message Group & Deduplication (FIFO)
+
+Chỉ áp dụng cho FIFO queue.
+
+**a) MessageGroupId**
+
+  - Dùng để nhóm message có liên quan.
+  - SQS đảm bảo thứ tự cho từng group:
+    - Cùng MessageGroupId → xử lý đúng thứ tự gửi.
+    - Group khác nhau có thể xử lý song song.
+      
+**Ví dụ:**
+
+  - MessageGroupId = user-123 → mọi event của user 123 được xử lý theo thứ tự.
+  - MessageGroupId = order-xyz → mọi event của order xyz theo thứ tự.
+    
+**b) DeduplicationId**
+
+  - Tránh message trùng lặp.
+  - Mỗi DeduplicationId trong 1 khoảng thời gian dedup (mặc định 5 phút) chỉ được xử lý 1 lần.
+  - Có thể:
+    - Cho phép SQS tự động dùng nội dung message để dedup (ContentBasedDeduplication = true).
+    - Hoặc bạn tự set MessageDeduplicationId.
+
+### 2.8. Encryption
+
+  - SQS hỗ trợ KMS encryption at rest:
+
+    - Bật encryption để mã hóa message khi lưu trong SQS.
+    - Chọn KMS key (AWS-managed hoặc customer-managed).
+  - Không ảnh hưởng nhiều tới logic ứng dụng, chủ yếu liên quan compliance/bảo mật.
+
+---
+
+## 3. Tóm tắt “config nào để làm gì?”
+
+**Standard vs FIFO:**
+
+  - Standard: throughput cao, không đảm bảo thứ tự, có thể duplicate.
+  - FIFO: thứ tự + exactly-once (ở mức SQS), throughput thấp hơn.
+    
+**Visibility Timeout:**
+
+  - Thời gian message “ẩn” sau khi được nhận.
+  - Cần > thời gian xử lý tối đa của consumer.
+    
+**Message Retention Period:**
+
+  - Tối đa message ở lại queue bao lâu trước khi bị auto-delete.
+    
+**Delivery Delay:**
+
+  - Trì hoãn xử lý message X giây/phút sau khi gửi.
+    
+**Long Polling:**
+
+  - Chờ message mới khi queue trống, giảm empty receive & chi phí.
+    
+**Redrive Policy (DLQ, MaxReceiveCount):**
+
+  - Tự động chuyển message lỗi sang DLQ sau N lần nhận thất bại.
+    
+**FIFO – MessageGroupId / DeduplicationId:**
+
+  - Group để đảm bảo thứ tự per group, và tránh duplicate.
