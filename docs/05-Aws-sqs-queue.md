@@ -244,19 +244,19 @@ Chỉ áp dụng cho FIFO queue.
     
 - Tại thời điểm SendMessage, các option liên quan:
 
-  1. Maximum Message Size
+  - Maximum Message Size
     - Payload gửi vào SQS tối đa 256 KB.
     - Nếu dữ liệu lớn hơn:
       - Thường: lưu nội dung lớn ở S3, trong message chỉ chứa S3 key / metadata.
         
-  2. Delivery Delay
+  - Delivery Delay
     - Có thể cấu hình:
       - Ở mức queue: mọi message bị delay X giây.
       - Hoặc per-message (qua DelaySeconds trong SendMessage).
     - Trong thời gian delay:
       - Message chưa visible, consumer chưa đọc được.
         
-  3. Encryption
+  - Encryption
     - Nếu bật KMS encryption:
       - Message được mã hóa at-rest khi lưu trong SQS.
       - Ứng dụng/consumer không cần làm gì thêm, SDK xử lý trong suốt.
