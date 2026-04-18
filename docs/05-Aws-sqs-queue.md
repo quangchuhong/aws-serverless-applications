@@ -333,3 +333,47 @@ Các option:
   - Giảm số request ReceiveMessage rỗng.
   - Tiết kiệm chi phí.
 - Không ảnh hưởng đến logic xử lý message, chỉ là tối ưu IO.
+
+## 4.4. Lambda xử lý & Visibility Timeout
+```text
+[Lambda Consumer]
+   |
+   |  Nhận event:
+   |   {
+   |     "Records": [ {msg1}, {msg2}, ... ]
+   |   }
+   |
+   |-- Trong thời gian Visibility Timeout:
+   |      - Message "ẩn" đối với consumer khác
+   |
+   |-- Nếu handler:
+   |    a) Thành công:
+   |        - Gọi DeleteMessage (Lambda runtime/ESM làm)
+   |        - Message biến mất khỏi queue
+   |
+   |    b) Lỗi / timeout / throw:
+   |        - Không DeleteMessage
+   |        - Hết Visibility Timeout:
+   |            + Message lại "hiện ra"
+   |            + ReceiveCount++
+   |            + Có thể được đọc lại (retry)
+
+```
+
+**Visibility Timeout:**
+
+  - Thời gian “giữ chỗ” message khi một consumer đã nhận.
+  - Phải được set > thời gian xử lý tối đa của Lambda.
+  - Nếu Lambda chưa xóa message trước khi Visibility hết:
+    - SQS cho phép consumer khác nhận → xem như retry.
+
+### 4.5. Redrive Policy, DLQ & MaxReceiveCount
+```text
+[SQS Standard Queue]
+   |
+   |-- Message nhận nhiều lần nhưng luôn fail:
+   |     ReceiveCount >= MaxReceiveCount
+   v
+[DLQ (Dead-Letter Queue)]
+
+```
