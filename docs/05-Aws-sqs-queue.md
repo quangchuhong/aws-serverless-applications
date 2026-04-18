@@ -188,3 +188,50 @@ Chỉ áp dụng cho FIFO queue.
 **FIFO – MessageGroupId / DeduplicationId:**
 
   - Group để đảm bảo thứ tự per group, và tránh duplicate.
+
+---
+
+## 4. Flow tổng thể: API Gateway → SQS Standard → Lambda
+
+```text
+[Client]
+   |
+   |  HTTP Request
+   v
+[API Gateway]
+   |
+   | 1. Gửi message (SendMessage) tới SQS
+   v
+[SQS Standard Queue]
+   |  (lưu message, áp dụng: 
+   |   - Delivery Delay
+   |   - Maximum Message Size
+   |   - Encryption
+   |   - Message Retention Period
+   |   - Redrive Policy (DLQ) khi maxReceiveCount)
+   |
+   | 2. Event Source Mapping (poll)
+   |    - Long Polling
+   |    - batch_size
+   v
+[Lambda Consumer]
+   |  (xử lý message trong Visibility Timeout)
+   |
+   | 3a. Thành công -> DeleteMessage
+   |      -> message biến mất
+   |
+   | 3b. Lỗi / timeout -> không Delete
+   |      -> hết Visibility Timeout -> message hiện lại
+   |      -> ReceiveCount tăng
+   |      -> nếu ReceiveCount > MaxReceiveCount ->
+   v                                  chuyển sang DLQ
+[SQS DLQ (Dead-Letter Queue)]
+
+```
+
+### 4.1. Giai đoạn API Gateway nhận request & gửi vào SQS
+```text
+[Client] ---> [API Gateway] ---> [SQS Standard Queue]
+                       (producer)
+
+```
