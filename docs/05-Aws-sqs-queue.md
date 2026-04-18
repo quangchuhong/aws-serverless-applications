@@ -417,7 +417,7 @@ Các option:
       - Lưu nội dung lớn ở S3.
       - Trong SQS chỉ đặt metadata + S3 URL/key.
         
-**Encryption (KMS):**
+- Encryption (KMS):
 
   - Áp dụng khi message được lưu trong SQS (at rest).
   - Trong suốt toàn bộ vòng đời message:
