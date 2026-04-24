@@ -591,3 +591,43 @@ Trong log bạn thường thấy:
   - Log của bạn: console.log(...), console.error(...).
   - END RequestId: ...
   - REPORT RequestId: ... Duration: ... ms ...
+
+
+### 6.2. CloudWatch Metrics – Những metric quan trọng
+
+Vào CloudWatch → Metrics → Lambda → chọn theo FunctionName.
+
+Các metric chính:
+
+  - Invocations  
+
+    - Số lần function được invoke (kể cả thành công hay lỗi).
+      
+  - Errors  
+
+    - Số lần invoke trả lỗi (không tính retry async nội bộ).
+      
+  - Throttles  
+
+    - Số lần bị throttle (Rate Exceeded / TooManyRequests) do:
+      - Vượt account concurrency.
+      - Vượt reserved_concurrent_executions.
+        
+  - ConcurrentExecutions  
+
+    - Số instance đang chạy cùng lúc cho function.
+      
+  - Duration  
+
+    - Thời gian chạy (ms).
+    - Có thể xem P50, P90, P95,… để hiểu latency.
+      
+  - ProvisionedConcurrentExecutions / ProvisionedConcurrencyUtilization (nếu dùng PC)  
+
+    - Theo dõi mức độ sử dụng Provisioned Concurrency.
+      
+Bạn có thể dùng các metric này để:
+
+  - Vẽ biểu đồ concurrency theo thời gian.
+  - Phát hiện khi nào function bị throttle.
+  - Tối ưu memory / timeout / provisioned concurrency.
