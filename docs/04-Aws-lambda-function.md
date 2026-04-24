@@ -452,6 +452,12 @@ resource "aws_lambda_alias" "prod" {
 }
 ```
 
+**Tóm lại:**
+
+  - Mỗi lần update code → tạo version mới (nếu bạn publish).
+  - Alias vẫn là một cái duy nhất cho mỗi môi trường (dev, prod, staging, …):
+  - Chỉ cần cập nhật alias trỏ sang version mới khi release.
+
 ### 4.3 Examples Flow: API Gateway → Lambda Alias → Version (và rollback)
 ```text
                +------------------------+
