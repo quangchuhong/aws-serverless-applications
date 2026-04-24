@@ -408,3 +408,27 @@ project/
     - Event source mapping:
       - batch_size = 1.
       - (Nếu hỗ trợ) scaling_config.maximum_concurrency = N.
+---
+
+## 5. Triển khai (Deploy) một AWS Lambda Function
+
+### 5.1. Các cách deploy phổ biến
+
+Có nhiều cách để deploy Lambda, trong đó 2 cách hay dùng trong thực tế:
+
+  1. **Sử dụng SDK / CLI (imperative)**
+
+  - Ví dụ: AWS SDK (Node.js, Python), hoặc aws lambda create-function / update-function-code.
+  - Phù hợp cho:
+    - Script CI/CD đơn giản.
+    - Tool nội bộ tự động build & push code.
+      
+  2. **Sử dụng IaC (Infrastructure as Code) – Terraform, CloudFormation, CDK (declarative)**
+
+  - Khai báo hạ tầng + code bằng file cấu hình / code.
+  - Phù hợp cho:
+    - Môi trường production / nhiều môi trường (dev, staging, prod).
+    - Team DevOps muốn version control toàn bộ hạ tầng.
+      
+Trong lab này chúng ta dùng Terraform, nhưng dưới đây là so sánh ngắn và ví dụ cho cả 2.
+
