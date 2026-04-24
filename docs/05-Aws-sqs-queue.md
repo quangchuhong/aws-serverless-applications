@@ -611,3 +611,186 @@ Các option:
 | Giao hàng (Delivery)       | **At-least-once delivery**: mỗi message được giao **ít nhất 1 lần**, đôi khi >1 lần (có duplicate). | **Exactly-once processing**: mỗi message được giao **một lần**, giữ nguyên trong queue đến khi consumer xử lý & xóa; **không tự sinh duplicate** trong queue. |
 | Use case điển hình         | Tải rất lớn, không cần thứ tự tuyệt đối, xử lý được duplicate.               | Cần thứ tự nghiêm ngặt, tránh duplicate, luồng giao dịch/order theo user, account, đơn hàng,…              |
 
+---
+
+## 5. Hướng dẫn tính chi phí (cost) cho Amazon SQS
+
+### 5.1. Các thành phần tính tiền chính
+
+1. **Số request (API requests)**  
+   Mọi thao tác với SQS đều tính theo **số request**, ví dụ:
+   - `SendMessage`, `SendMessageBatch`
+   - `ReceiveMessage`, `ReceiveMessageBatch`
+   - `DeleteMessage`, `DeleteMessageBatch`
+   - (các lệnh quản lý khác như `GetQueueAttributes`, `SetQueueAttributes`, … cũng là request nhưng ít hơn nhiều)
+
+   AWS tính tiền theo **số request trên mỗi 1 triệu request** (sau free tier).
+
+2. **Kiểu queue: Standard vs FIFO**
+   - **Standard queue**: rẻ hơn, throughput gần như không giới hạn.
+   - **FIFO queue**: đắt hơn (do đảm bảo thứ tự + dedup).
+
+3. **Kích thước payload (gián tiếp)**
+   - Giá SQS **cơ bản tính theo request**, không tính theo KB/message.
+   - Tuy nhiên, nếu payload lớn (gần 256 KB), thường dùng pattern:
+     - Lưu payload lớn ở S3.
+     - Trong SQS chỉ gửi metadata + S3 key → phát sinh chi phí S3 + request S3.
+
+4. **Data transfer**
+   - Thông thường, giao tiếp giữa SQS và các dịch vụ AWS cùng region **không tính phí data transfer**.
+   - Kịch bản SQS gửi/nhận trực tiếp ra Internet hiếm, nếu có thì bị tính theo Data Transfer Pricing chung.
+
+5. **Encryption (KMS)**
+   - Nếu dùng **AWS-managed key (`aws/sqs`)**: thường không tính thêm phí KMS riêng.
+   - Nếu dùng **Customer-managed CMK (KMS)**:
+     - Mỗi lần encrypt/decrypt sẽ tính thêm request KMS.
+
+---
+
+### 5.2. Đơn giá – cách nghĩ (khung logic)
+
+> Lưu ý: **giá cụ thể** thay đổi theo region, cần tra bảng giá chính thức AWS. Dưới đây chỉ mô tả **cách tính**, không chốt con số.
+
+- **Standard Queue**
+  - Có **free tier**: một lượng request miễn phí mỗi tháng (ví dụ 1M request, tuỳ thời điểm/chính sách).
+  - Sau free tier: tính `X USD / 1,000,000 request`.
+
+- **FIFO Queue**
+  - Không (hoặc ít) free tier hơn Standard.
+  - Giá/1M request **cao hơn Standard** (vì đảm bảo FIFO + dedup).
+
+**Batch giúp giảm số request:**
+
+- `SendMessageBatch` gửi tối đa 10 message → tính là **1 request**.
+- `ReceiveMessage` với `MaxNumberOfMessages = 10` → lấy tối đa 10 message trong **1 request**.
+- `DeleteMessageBatch` xoá nhiều message trong 1 request.
+
+---
+
+### 5.3. Cách tự tính chi phí – quy trình
+
+Giả sử:
+
+- 1 Standard queue.
+- Mỗi tháng:
+  - 10 triệu message gửi (Send).
+  - Mỗi message được nhận 1 lần, xoá 1 lần:
+    - 10 triệu Receive.
+    - 10 triệu Delete.
+- Không dùng batch.
+
+#### Bước 1 – Tính số request
+
+- Send: 10M
+- Receive: 10M
+- Delete: 10M
+
+Tổng `= 30M request / tháng`.
+
+Nếu có free tier 1M:
+
+- Request tính phí `= 30M - 1M = 29M`.
+
+#### Bước 2 – Nhân với giá / 1M request
+
+Ví dụ (minh hoạ, KHÔNG phải giá thật):
+
+- Standard queue: `0.40 USD / 1M request`.
+
+Chi phí SQS ≈ `29 * 0.40 = 11.6 USD / tháng`.
+
+(Chưa tính S3/KMS nếu có.)
+
+---
+
+### 5.4. Ảnh hưởng của batch
+
+Nếu dùng batch 10 message/request cho cả send/receive/delete:
+
+- 10M message → 1M request send.
+- 10M message → 1M request receive.
+- 10M message → 1M request delete.
+
+Tổng `= 3M request / tháng` (so với 30M ban đầu).
+
+Nếu free tier 1M:
+
+- Tính phí 2M request.
+
+Chi phí SQS ≈ `2 * 0.40 = 0.8 USD / tháng`.
+
+→ **Batch có thể giảm cost rất nhiều**.
+
+---
+
+### 5.5. Ví dụ nhanh với FIFO queue
+
+Giả sử:
+
+- 5M message/tháng trên FIFO queue:
+  - 5M Send.
+  - 5M Receive.
+  - 5M Delete.
+- Không dùng batch → 15M request.
+
+Ví dụ (minh hoạ):
+
+- FIFO: `1.20 USD / 1M request`.
+
+Chi phí ≈ `15 * 1.20 = 18 USD / tháng`.
+
+Nếu dùng batch 10:
+
+- Send: 0.5M.
+- Receive: 0.5M.
+- Delete: 0.5M.
+- Tổng: 1.5M request.
+
+Chi phí ≈ `1.5 * 1.20 = 1.8 USD / tháng`.
+
+---
+
+### 5.6. Những yếu tố thường bị bỏ sót
+
+1. **Long Polling**
+   - `ReceiveMessage` với `WaitTimeSeconds > 0`:
+     - 1 lần gọi = 1 request, **không tính thêm theo thời gian chờ**.
+   - Long polling giúp **giảm số request rỗng**, tức là **tiết kiệm cost**, không làm tăng.
+
+2. **DLQ (Dead-Letter Queue)**
+   - Message rơi vào DLQ:
+     - Có thêm 1 lần `SendMessage` vào DLQ.
+   - Nếu bạn đọc DLQ (Receive/Delete) → cũng tốn thêm request ở DLQ.
+
+3. **Retry / lỗi xử lý**
+   - Nếu consumer (Lambda/EC2) xử lý fail nhiều lần:
+     - Message bị Receive lại → `ApproximateReceiveCount` tăng.
+     - Mỗi lần Receive/Delete = thêm `request`.
+   - Lỗi nhiều → số request tăng → cost tăng.
+
+4. **KMS (Customer-managed CMK)**
+   - Nếu bật SSE với CMK riêng:
+     - Mỗi lần gửi/nhận message có thể gọi KMS (encrypt/decrypt).
+     - Chi phí KMS có thể đáng kể nếu traffic lớn.
+
+---
+
+### 5.7. Cách ước lượng nhanh khi thiết kế
+
+1. Ước lượng số message:
+   - Message/tháng hoặc message/ngày × 30.
+2. Ước lượng số lần receive/delete:
+   - Lý tưởng: mỗi message receive 1 lần, delete 1 lần.
+   - Thực tế: thêm 10–20% nếu có retry (tùy chất lượng code).
+3. Tính tổng số request (có/không batch):
+   - `#Send / batch_size + #Receive / batch_size + #Delete / batch_size`.
+4. Trừ free tier (nếu còn).
+5. Nhân với đơn giá / 1M request (Standard/FIFO theo loại queue).
+6. Cộng thêm (nếu dùng):
+   - Chi phí KMS (CMK).
+   - S3 (nếu lưu payload lớn ở S3).
+   - Request ở DLQ (nếu error nhiều).
+
+> Gợi ý: khi lên production, nên thêm CloudWatch Dashboard để:
+> - Theo dõi `NumberOfMessagesSent`, `NumberOfMessagesReceived`, `NumberOfMessagesDeleted`.
+> - Từ đó đối chiếu với bill SQS hàng tháng để hiệu chỉnh batch_size, retry và kiến trúc.
