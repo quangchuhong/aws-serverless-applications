@@ -450,11 +450,72 @@ resource "aws_lambda_alias" "prod" {
   function_name    = aws_lambda_function.my_func.arn
   function_version = aws_lambda_function.my_func.version
 }
+```
 
-````
+### 4.3 Examples Flow: API Gateway → Lambda Alias → Version (và rollback)
+```text
+               +------------------------+
+               |   Lambda Function      |
+               |   Name: my-func        |
+               |   $LATEST (mutable)    |
+               +------------------------+
+                    |       |       |
+          publish v1|   publish v2  |publish v3
+                    v       v       v
+             +---------+ +---------+ +---------+
+             | v1      | | v2      | | v3      |
+             | (fixed) | | (fixed) | | (fixed) |
+             +---------+ +---------+ +---------+
+                  ^             ^
+                  |             |
+        +---------+             +----------+
+        |                                |
++-------------------+          +-------------------+
+| Alias: dev        |          | Alias: prod       |
+| -> function: v3   |          | -> function: v2   |
++-------------------+          +-------------------+
+           ^                              ^
+           |                              |
+   +----------------+             +----------------+
+   | API Gateway    |             | API Gateway    |
+   | (dev endpoint) |             | (prod endpoint)|
+   +----------------+             +----------------+
 
 ```
 
+**Giải thích**
+
+  - Mỗi lần publish-version → tạo version bất biến: v1, v2, v3.
+  - $LATEST là bản code mới nhất, thay đổi mỗi lần update.
+  - Alias là “nhãn” trỏ tới 1 version:
+    - dev → v3 (test code mới).
+    - prod → v2 (đang phục vụ traffic thật).
+  - API Gateway / client chỉ gọi qua alias:
+    - Dev endpoint gọi my-func:dev.
+    - Prod endpoint gọi my-func:prod.
+
+
+**Rollout & Rollback**
+
+  1. Bạn deploy code mới:
+
+    - Update function → $LATEST.
+    - publish-version → v3.
+  
+  2. Test ở dev:
+
+    - Cập nhật alias dev → v3.
+    - Kiểm tra OK.
+  
+  3. Release prod:
+
+    - Đổi alias prod từ v2 → v3.
+    - API Gateway prod tự động dùng version mới.
+  
+  4. Nếu lỗi:
+
+    - Đổi alias prod ngược lại từ v3 → v2.
+    - Rollback nhanh, không cần redeploy code.
 
 ---
 
