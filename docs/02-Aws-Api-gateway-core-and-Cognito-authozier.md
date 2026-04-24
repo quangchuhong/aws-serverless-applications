@@ -1277,5 +1277,88 @@ Trong LAB OrderServiceAPI, bạn đã ghép:
 - JWT → API Gateway Cognito/Lambda authorizer → bảo vệ `GET /orders/{id}`.  
 - JWT + API Key → security ở cả **user** và **client/app**.
 
+
+### 10.8. Đặt WAF, Cognito, API Gateway cạnh nhau như thế nào?
+
+Kiến trúc “đẹp” cho API bạn đang lab có thể là:
+```text
+Client
+  ↓
+CloudFront (optional, cache + global edge)
+  ↓
+AWS WAF (hoặc Akamai WAF / F5 đứng trước)
+  ↓
+API Gateway (custom domain: api.company.com)
+  ├─ Auth:
+  │    • Cognito User Pool + JWT authorizer
+  │    • (hoặc) Lambda authorizer validate JWT
+  ├─ Security:
+  │    • Usage Plan + API Key (rate/quota per client)
+  │    • Throttling, request/response validation
+  ↓
+Backend:
+  ├─ Lambda (create order)
+  ├─ SNS (notify)
+  └─ HTTP backend (ALB/EC2, httpbin demo)
+
+```
+
+Vai trò:
+
+- **WAF (AWS / F5 / Akamai)**:
+
+   - Ngăn, lọc traffic xấu trước khi đụng vào API Gateway:
+      - SQLi, XSS, bot, brute-force login, scanner,…
+        
+- **Cognito:**
+
+   - Xác thực user (authentication): ai đang login?
+   - Phát hành JWT.
+     
+- **API Gateway:**
+
+   - Check JWT (authorizer) → user có quyền truy cập không?
+   - Check API Key + Usage Plan → client nào, quota/rate bao nhiêu?
+   - Mapping, routing, logging, throttling.
+
+
+### 10.9 Workflow chuẩn: Client → WAF → API Gateway → Cognito → Backend
+
+Luồng logic (với bất kỳ WAF nào)
+```text
+[1] Client (Web/Mobile/Service)
+    → gửi HTTP(S) request đến WAF/CDN layer
+
+[2] WAF (AWS WAF / F5 / Akamai)
+    → Kiểm tra:
+       - IP reputation, bot, rate limit, SQLi, XSS, scanner...
+    → Nếu traffic xấu → chặn tại đây
+    → Nếu OK → forward tới API Gateway
+
+[3] API Gateway (REST API)
+    → Kiểm tra:
+       - API Key + Usage Plan (rate/quota theo client)
+       - Auth (Cognito JWT authorizer hoặc Lambda authorizer)
+       - Throttling riêng của API Gateway
+       - Mapping template (request/response)
+
+[4] Cognito (User Pool)
+    → Đã chạy trước đó (user login qua Hosted UI / app):
+       - Xác thực user (email/password/MFA/SSO)
+       - Phát hành JWT (id_token / access_token)
+    → API Gateway/authorizer dùng JWT này để:
+       - Xác định user là ai
+       - Cho phép/không cho phép truy cập
+
+[5] Backend
+    → Lambda (create order)
+    → SNS (notify)
+    → HTTP backend (ALB/EC2 — ví dụ httpbin.org trong lab)
+    → Trả kết quả cho API Gateway → WAF (nếu inline) → Client
+
+```
+
+
+
 ---
 
