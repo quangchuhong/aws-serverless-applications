@@ -188,6 +188,7 @@ Chỉ áp dụng cho FIFO queue.
 **FIFO – MessageGroupId / DeduplicationId:**
 
   - Group để đảm bảo thứ tự per group, và tránh duplicate.
+---
 
 
 ## 3.1. Ứng dụng phù hợp với SQS Standard (chấp nhận / xử lý được duplicate)
