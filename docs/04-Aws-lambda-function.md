@@ -432,3 +432,82 @@ Có nhiều cách để deploy Lambda, trong đó 2 cách hay dùng trong thực
       
 Trong lab này chúng ta dùng Terraform, nhưng dưới đây là so sánh ngắn và ví dụ cho cả 2.
 
+
+### 5.2. Deploy Lambda bằng SDK / CLI (imperative)
+
+**a) Ý tưởng**
+
+  - Bạn build/zip code Lambda → upload lên AWS bằng SDK hoặc CLI.
+  - Nếu function chưa tồn tại → create-function.
+  - Nếu function đã tồn tại → update-function-code (và tùy chọn publish version mới).
+    
+**b) Ví dụ với AWS CLI (Python/Node đều giống ý tưởng)**
+
+Giả sử:
+
+  - Code nằm trong lambda_sync.js.
+  - Bạn zip lại thành lambda_sync.zip.
+    
+```bash
+zip lambda_sync.zip lambda_sync.js
+
+```
+
+Tạo function lần đầu:
+
+```bash
+aws lambda create-function \
+  --function-name my-sync-lambda \
+  --runtime nodejs18.x \
+  --role arn:aws:iam::<ACCOUNT_ID>:role/demo-lambda-exec-role \
+  --handler lambda_sync.handler \
+  --zip-file fileb://lambda_sync.zip \
+  --timeout 10 \
+  --memory-size 256
+
+```
+
+Update code (mỗi lần sửa):
+
+```bash
+zip lambda_sync.zip lambda_sync.js
+
+aws lambda update-function-code \
+  --function-name my-sync-lambda \
+  --zip-file fileb://lambda_sync.zip \
+  --publish
+
+_"--publish sẽ tạo một version mới của Lambda (VD: 1, 2, 3,…)."_
+
+```
+
+**c) Ví dụ bằng SDK Node.js (tự động deploy từ script)**
+```js
+// deploy_lambda.js
+const fs = require("fs");
+const path = require("path");
+const { LambdaClient, UpdateFunctionCodeCommand } = require("@aws-sdk/client-lambda");
+
+const lambda = new LambdaClient({ region: "ap-southeast-1" });
+
+async function deploy() {
+  const zipFile = fs.readFileSync(path.join(__dirname, "lambda_sync.zip"));
+
+  const cmd = new UpdateFunctionCodeCommand({
+    FunctionName: "my-sync-lambda",
+    ZipFile: zipFile,
+    Publish: true, // tạo version mới
+  });
+
+  const res = await lambda.send(cmd);
+  console.log("Deployed. New version:", res.Version);
+}
+
+deploy().catch(console.error);
+
+```
+Chạy:
+
+```bash
+node deploy_lambda.js
+```
