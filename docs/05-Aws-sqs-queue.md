@@ -794,3 +794,119 @@ Chi phí ≈ `1.5 * 1.20 = 1.8 USD / tháng`.
 > Gợi ý: khi lên production, nên thêm CloudWatch Dashboard để:
 > - Theo dõi `NumberOfMessagesSent`, `NumberOfMessagesReceived`, `NumberOfMessagesDeleted`.
 > - Từ đó đối chiếu với bill SQS hàng tháng để hiệu chỉnh batch_size, retry và kiến trúc.
+
+---
+
+
+## 6 Monitoring SQS (và Lambda consumer)
+
+### 6.1. CloudWatch Metrics quan trọng cho SQS
+
+Trong CloudWatch → Metrics → SQS, theo từng queue, các metric hay dùng:
+
+- **NumberOfMessagesSent**
+  - Số message gửi vào queue (SendMessage/SendMessageBatch).
+  - Dùng để:
+    - Đo **input load** vào hệ thống.
+    - So sánh với `NumberOfMessagesDeleted` xem có backlog không.
+
+- **NumberOfMessagesReceived**
+  - Số message được **receive** bởi consumer (kể cả message bị nhận nhiều lần do retry).
+  - Nếu chênh nhiều so với `NumberOfMessagesDeleted`:
+    - Có thể consumer **fail nhiều**, không xoá message → bị receive lại.
+
+- **NumberOfMessagesDeleted**
+  - Số message được xoá khỏi queue sau khi xử lý thành công.
+  - Gần bằng hoặc hơi thấp hơn `NumberOfMessagesSent` (nếu chưa xử lý xong).
+
+- **ApproximateNumberOfMessagesVisible**
+  - Số message **visible** hiện tại trong queue (chưa được nhận).
+  - Dùng để:
+    - Phát hiện **backlog**: số visible tăng liên tục → consumer không theo kịp.
+
+- **ApproximateNumberOfMessagesNotVisible**
+  - Số message **đang bị hold** bởi consumer (trong Visibility Timeout).
+  - Thể hiện lượng message đang được xử lý “in-flight”.
+
+- **ApproximateAgeOfOldestMessage**
+  - Tuổi (giây) của message cũ nhất trong queue.
+  - Nếu tăng cao:
+    - Backlog lâu ngày, message bị “kẹt” không được xử lý kịp.
+
+- (Nếu có DLQ) **NumberOfMessagesSent/Received/Deleted** cho DLQ queue:
+  - Dùng để phát hiện **lỗi logic** (nhiều message rơi vào DLQ).
+
+### 6.2. CloudWatch Metrics cho Lambda consumer
+
+Với Lambda đọc SQS (event source mapping), quan trọng:
+
+- **Invocations**
+  - Số lần Lambda được invoke (batch từ queue).
+
+- **Errors**
+  - Số lần invoke lỗi (throw exception, timeout).
+  - Nếu Errors tăng → nhiều message SQS bị retry, có thể dẫn tới DLQ & tăng cost.
+
+- **Throttles**
+  - Lambda bị throttle do vượt concurrency.
+  - Nếu nhiều Throttles:
+    - Có thể phải:
+      - Tăng reserved concurrency.
+      - Giảm tốc độ producer.
+      - Thêm queue/buffer.
+
+- **Duration**
+  - Thời gian chạy mỗi invoke.
+  - Dùng để:
+    - Ước lượng thời gian xử lý 1 message hoặc 1 batch.
+    - Kết hợp với SQS backlog để xem **đủ consumer chưa**.
+
+- **ConcurrentExecutions**
+  - Số execution Lambda đang chạy cùng lúc.
+  - Kết hợp với `ApproximateNumberOfMessagesVisible`:
+    - Nếu concurrency đã chạm giới hạn mà backlog vẫn cao → cần scale rộng hơn.
+
+### 6.3. Gợi ý CloudWatch Alarm
+
+Một số alarm nên có cho production:
+
+- Trên **SQS queue chính**:
+  - `ApproximateNumberOfMessagesVisible`:
+    - Cảnh báo nếu > ngưỡng X trong Y phút (backlog tăng).
+  - `ApproximateAgeOfOldestMessage`:
+    - Cảnh báo nếu > ngưỡng (ví dụ 300s, 600s) → message chậm xử lý.
+
+- Trên **DLQ**:
+  - `NumberOfMessagesSent` hoặc `ApproximateNumberOfMessagesVisible`:
+    - Cảnh báo nếu > 0 (hoặc > 1) trong khoảng thời gian nhất định.
+    - Báo hiệu có logic xử lý lỗi liên tục.
+
+- Trên **Lambda consumer**:
+  - `Errors`:
+    - Cảnh báo khi > 0 trong X phút, hoặc tăng bất thường.
+  - `Throttles`:
+    - Cảnh báo khi > 0 → Lambda không đủ concurrency.
+  - `Duration`:
+    - Cảnh báo khi P95/P99 Duration tăng nhiều → có thể cần tối ưu code hoặc tăng memory.
+
+### 6.4. Dashboard gợi ý
+
+Một dashboard CloudWatch đơn giản cho 1 cặp “queue + Lambda consumer”:
+
+- Hàng 1 (SQS):
+  - `NumberOfMessagesSent`, `NumberOfMessagesDeleted` (line chart).
+  - `ApproximateNumberOfMessagesVisible`.
+  - `ApproximateAgeOfOldestMessage`.
+
+- Hàng 2 (Lambda consumer):
+  - `Invocations`, `Errors`, `Throttles`.
+  - `Duration` (P50/P95).
+  - `ConcurrentExecutions`.
+
+- Hàng 3 (DLQ nếu có):
+  - `ApproximateNumberOfMessagesVisible` trên DLQ.
+  - `NumberOfMessagesSent` vào DLQ.
+
+> Với dashboard + alarm, bạn có thể:
+> - Phát hiện sớm backlog, message lỗi, consumer bị nghẽn.
+> - Điều chỉnh batch_size, concurrency, hoặc logic xử lý trước khi ảnh hưởng người dùng cuối.
