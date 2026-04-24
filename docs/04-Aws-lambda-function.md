@@ -373,3 +373,38 @@ Workflow lỗi + DLQ (khi cố tình throw new Error("Simulated processing error
                     [Consumer khác / người vận hành đọc & xử lý lại]
 
 ```
+
+## 3. Cấu trúc thư mục
+```text
+
+project/
+  main.tf
+  lambda_sync.js
+  lambda_async.js
+  test_concurrency.py   # (tùy chọn, để benchmark concurrency)
+```
+
+---
+
+## 4. Ghi chú & Mở rộng
+
+**Sync (sync-api-lambda):**
+
+  - 1 request = 1 invoke.
+  - Không auto retry phía Lambda khi lỗi.
+    
+**Async (async-s3-lambda):**
+
+  - Có auto retry theo maximum_retry_attempts.
+  - Sau đó failure → DLQ / Event Destination.
+    
+**Tuần tự vs song song:**
+
+  - Muốn xử lý tuần tự (1 message một lúc) từ SQS:
+    - reserved_concurrent_executions = 1 cho Lambda.
+    - Event source mapping batch_size = 1.
+  - Muốn xử lý tối đa N message song song:
+    - reserved_concurrent_executions = N.
+    - Event source mapping:
+      - batch_size = 1.
+      - (Nếu hỗ trợ) scaling_config.maximum_concurrency = N.
