@@ -189,6 +189,84 @@ Chỉ áp dụng cho FIFO queue.
 
   - Group để đảm bảo thứ tự per group, và tránh duplicate.
 
+
+## 3.1. Ứng dụng phù hợp với SQS Standard (chấp nhận / xử lý được duplicate)
+
+SQS Standard có đặc tính **at-least-once delivery** → message **có thể bị xử lý nhiều hơn một lần**.  
+Những loại ứng dụng sau thường **chấp nhận được** (hoặc dễ xử lý) duplicate, nên rất hợp dùng Standard queue:
+
+### 3.1.1. Hệ thống gửi thông báo: Email / SMS / Push / Notification
+
+- Ví dụ:
+  - Gửi email marketing, email nhắc việc.
+  - Gửi SMS OTP/notification.
+  - Gửi push notification lên mobile app.
+- Nếu bị gửi lại 2 lần:
+  - Thường **không làm hỏng dữ liệu lõi** (chỉ hơi “phiền” cho user).
+  - Có thể giảm duplicate bằng logic phía service gửi (log đã gửi, không gửi lại trong X phút,…).
+
+### 3.1.2. Background job không phá dữ liệu (task queue)
+
+- Ví dụ:
+  - Resize ảnh, tạo thumbnail.
+  - Chuyển đổi video/audio (transcoding).
+  - Generate báo cáo PDF, export file.
+  - Index/reindex dữ liệu vào search (Elasticsearch/OpenSearch).
+- Nếu 1 job chạy lại:
+  - Thumbnail tạo lại → ghi đè file cũ.
+  - Reindex lại → ghi đè document cũ.
+  - Generate báo cáo → ghi đè file kết quả.
+- → Job dạng này **tự nhiên idempotent** (chạy lại cũng không sao).
+
+### 3.1.3. Log, metrics, analytics, event tracking
+
+- Ví dụ:
+  - Ghi log hoạt động user.
+  - Gửi metric, event tracking, clickstream.
+- Nếu event bị gửi 2 lần:
+  - Chỉ tạo thêm dòng log hoặc thêm 1 event cho hệ thống analytics.
+  - Thường **không phá dữ liệu nghiệp vụ**.
+- Có thể:
+  - Chấp nhận sai số nhỏ trong analytics, hoặc
+  - Dùng cơ chế dedup ở downstream (dựa trên eventId).
+
+### 3.1.4. Worker pool / batch job không ràng buộc giao dịch
+
+- Ví dụ:
+  - Crawler đọc dữ liệu từ API ngoài rồi lưu vào cache.
+  - Job sync dữ liệu định kỳ với hệ thống bên ngoài.
+  - Gửi webhook sang hệ thống khác để cập nhật trạng thái.
+- Nếu job bị chạy lại:
+  - Thường là **gọi lại API / sync lại dữ liệu** → không phá dữ liệu nếu thiết kế đúng (upsert, overwrite,…).
+
+### 3.1.5. Các hệ thống đã thiết kế idempotent ở tầng ứng dụng
+
+- Consumer đọc message, nhưng **tự đảm bảo idempotency**, ví dụ:
+  - Mỗi message có `eventId` hoặc `transactionId` duy nhất.
+  - Trước khi xử lý, consumer check trong DB:
+    - Nếu đã xử lý `eventId` đó → bỏ qua.
+    - Nếu chưa → xử lý và ghi log là đã xử lý.
+- Kết quả:
+  - Dù Standard queue giao cùng 1 message **nhiều lần**, ứng dụng **chỉ tính là 1 lần xử lý thực sự**.
+
+### Kết luận lựa chọn
+
+- Dùng **SQS Standard** khi:
+  - Cần **throughput rất cao**.
+  - Không cần thứ tự tuyệt đối.
+  - Duplicate:
+    - Hoặc **không phá** hệ thống (log, email, thumbnail, reindex,…), hoặc
+    - Đã có **idempotency** phía backend (transactionId/eventId, upsert, check-before-write,…).
+
+- Nếu duplicate có thể gây:
+  - Double charge tiền.
+  - Double trừ tồn kho.
+  - Làm sai trạng thái đơn hàng/giao dịch.
+  
+  → Nên:
+  - Dùng **FIFO queue** với `MessageGroupId`, **hoặc**
+  - Dùng Standard nhưng **bắt buộc** consumer phải idempotent rất chặt.
+
 ---
 
 ## 4. Flow tổng thể: API Gateway → SQS Standard → Lambda
