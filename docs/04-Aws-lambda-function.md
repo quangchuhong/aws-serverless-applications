@@ -408,6 +408,54 @@ project/
     - Event source mapping:
       - batch_size = 1.
       - (Nếu hỗ trợ) scaling_config.maximum_concurrency = N.
+
+### 4.1. Lambda Version là gì?
+
+  - Mỗi lần bạn publish function, AWS tạo ra một version bất biến:
+    - Tên dạng: function-name:1, function-name:2, …
+    - Code + cấu hình (memory, timeout, env…) của version đó không đổi.
+      
+  - $LATEST:
+    - Luôn trỏ vào bản code mới nhất chưa publish.
+    - Có thể thay đổi bất cứ lúc nào khi bạn update function.
+      
+**Dùng version để:**
+
+  - Rollback: nếu v3 lỗi, quay lại gọi v2.
+  - Gắn với alias, provisioned concurrency, deployment strategy.
+    
+Ví dụ CLI:
+```bash
+aws lambda publish-version --function-name my-func
+# => trả về Version: "3"
+```
+
+### 4.2. Lambda Alias là gì?
+
+  - Alias = tên “nhãn” trỏ tới 1 version cụ thể.
+  - Ví dụ:
+    - Alias dev → version 5
+    - Alias prod → version 10
+  - Khi invoke:
+    - my-func:prod → luôn chạy version 10 (cho đến khi bạn đổi alias sang version khác).
+  - Alias trông giống function riêng:
+    - Có ARN riêng.
+    - Có thể gán permission riêng.
+    - Có thể gán Provisioned Concurrency lên alias.
+      
+Ví dụ Terraform:
+```hcl
+resource "aws_lambda_alias" "prod" {
+  name             = "prod"
+  function_name    = aws_lambda_function.my_func.arn
+  function_version = aws_lambda_function.my_func.version
+}
+
+````
+
+```
+
+
 ---
 
 ## 5. Triển khai (Deploy) một AWS Lambda Function
