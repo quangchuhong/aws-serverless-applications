@@ -511,3 +511,83 @@ Chạy:
 ```bash
 node deploy_lambda.js
 ```
+
+### 5.3. Deploy Lambda bằng Terraform (declarative)
+
+Trong lab, chúng ta sử dụng Terraform để:
+
+  - Định nghĩa function, IAM role, trigger, API Gateway, S3, SQS DLQ, provisioned concurrency.
+  - Mọi thứ được quản lý bằng code, lưu trên Git, có thể review/rollback.
+    
+Ví dụ khai báo Lambda bằng Terraform (đã dùng trong lab):
+```hcl
+data "archive_file" "lambda_sync_zip" {
+  type        = "zip"
+  source_file = "${path.module}/lambda_sync.js"
+  output_path = "${path.module}/lambda_sync.zip"
+}
+
+resource "aws_lambda_function" "sync_api_lambda" {
+  function_name = "sync-api-lambda"
+  role          = aws_iam_role.lambda_exec_role.arn
+  handler       = "lambda_sync.handler"
+  runtime       = "nodejs18.x"
+
+  filename         = data.archive_file.lambda_sync_zip.output_path
+  source_code_hash = data.archive_file.lambda_sync_zip.output_base64sha256
+
+  # reserved_concurrent_executions = 20  # nếu cần
+  memory_size = 256
+  timeout     = 10
+
+  publish = true
+}
+
+```
+
+Khi sửa code lambda_sync.js:
+
+Chỉ cần chạy:
+```bash
+terraform apply
+
+```
+
+**So sánh nhanh SDK vs Terraform**
+
+---
+
+## 6. Monitoring & Observability cho Lambda
+
+Monitoring giúp bạn hiểu:
+
+  - Lambda đang chạy tốt hay không?
+  - Concurrency có bị full không?
+  - Có bị throttle, lỗi nhiều không?
+  - Thời gian chạy (duration) và lỗi (error) như thế nào?
+    
+AWS cung cấp các công cụ chính:
+
+  - CloudWatch Logs – log chi tiết từng invoke.
+  - CloudWatch Metrics – metric tổng quan (Invocations, Errors, Duration,…).
+  - X-Ray – trace, profiling chi tiết (tuỳ chọn).
+
+### 6.1. CloudWatch Logs
+
+Mỗi Lambda function mặc định log vào CloudWatch Logs (nhờ policy AWSLambdaBasicExecutionRole):
+
+  - Log group: /aws/lambda/<function_name>.
+  - Mỗi container/instance có log stream riêng.
+    
+Dùng CLI:
+```bash
+aws logs tail "/aws/lambda/sync-api-lambda" --since 5m
+
+```
+
+Trong log bạn thường thấy:
+
+  - START RequestId: ...
+  - Log của bạn: console.log(...), console.error(...).
+  - END RequestId: ...
+  - REPORT RequestId: ... Duration: ... ms ...
