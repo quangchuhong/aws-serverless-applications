@@ -1,3 +1,5 @@
+```text
+
 +---------------------+         +----------------------+         +------------------------+
 |  Người dùng / Dev   |         |     Jira Service     |         |   Jenkins / GitLab CI  |
 |  Ops / Business     |         |   Management (JSM)   |         |   (Pipeline Engine)    |
@@ -76,3 +78,6 @@
 |  AWS / Win / RHEL   |<----------------------------------------------------+
 |  K8s / OpenShift    |
 +---------------------+
+
+
+```
