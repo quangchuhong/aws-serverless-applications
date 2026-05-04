@@ -257,3 +257,97 @@ Internal clients (vNet / VPN / ExpressRoute)
   - Rate limiting, ACL.
   - Logging, metrics (ELK, Prometheus).
   - Transformation, request/response rewrite.
+
+### 5.2. Cấu hình declarative (YAML)
+```yaml
+_format_version: "2.1"
+services:
+  - name: orders-service
+    url: http://orders-api.default.svc.cluster.local:8080
+    routes:
+      - name: orders-route
+        paths:
+          - /orders
+plugins:
+  - name: key-auth
+    service: orders-service
+  - name: rate-limiting
+    service: orders-service
+    config:
+      minute: 100
+      policy: local
+
+```
+
+### 5.3. Mô hình với Kubernetes
+```text
+Internet
+   |
+[ Cloud LB / Ingress ]
+   |
+[ Kong (Ingress Controller) ]
+   |
+   +--> Service A (Deployment A)
+   +--> Service B (Deployment B)
+   +--> Service C (Deployment C)
+
+```
+Dùng cho: hệ microservices trên K8s (cloud hoặc on‑prem).
+
+---
+
+## 6. Mô hình Public vs Private API Gateway
+
+### 6.1. Public API Gateway
+```text
+Mobile / Web / Partners
+        |
+      Internet
+        |
+[ Public API Gateway ]
+        |
+[ BFF / public-facing services ]
+
+```
+- Dùng cho:
+  - Mobile app, SPA, website, partner bên ngoài.
+- Thường bật:
+  - OAuth2/OIDC, JWT, API key.
+  - WAF, rate-limit, quota.
+  - Logging, tracing.
+
+### 6.2. Private / Internal API Gateway
+```text
+Internal apps / microservices / backoffice
+        |
+   VPC / vNet / VPN / Internal network
+        |
+[ Internal API Gateway ]
+        |
+[ Internal microservices / DB / legacy ]
+
+```
+- Không expose ra Internet.
+- Dùng cho:
+  - Giao tiếp nội bộ giữa dịch vụ.
+  - Backoffice, CRM, batch, BI.
+
+
+### 6.3. Kết hợp Public + Private
+```text
+Internet
+   |
+[ Public API Gateway ]
+   |
+ (VPC Link / PrivateLink / internal LB)
+   |
+[ Private API Gateway / Internal LB ]
+   |
+[ Internal microservices / core systems ]
+
+```
+- Public:
+  - Edge layer, bảo vệ, product hóa API.
+- Private:
+  - Routing nội bộ, che giấu topology, chuẩn hóa access nội bộ.
+
