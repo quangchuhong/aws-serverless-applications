@@ -125,3 +125,55 @@ Internal clients (EC2/ECS/Lambda/on‑prem via VPN/DC)
 ```
 Dùng cho: API nội bộ, backoffice, batch.
 
+---
+
+## 3. GCP API Gateway & Apigee
+
+### 3.1. GCP API Gateway
+
+  - Managed API gateway cho Cloud Run / Cloud Functions / App Engine / HTTP backend.
+  - Cấu hình bằng OpenAPI + x-google-backend.
+  - Tích hợp tốt với IAM, Cloud Logging, Cloud Monitoring.
+    
+Ví dụ rút gọn (OpenAPI):
+```yaml
+swagger: '2.0'
+info:
+  title: example-api
+  version: 1.0.0
+host: my-gateway-xyz.a.run.app
+x-google-endpoints:
+  - name: my-gateway-xyz.a.run.app
+paths:
+  /orders/{id}:
+    get:
+      x-google-backend:
+        address: https://my-service-abcdef-uc.a.run.app
+      responses:
+        '200':
+          description: OK
+
+```
+
+### 3.2. Apigee (Apigee X / Hybrid)
+
+- Nền tảng API Management enterprise:
+  - Policies: rate limit, spike arrest, JWT/OAuth2, transform XML/JSON, caching, security.
+  - API Product, quota, analytics, developer portal.
+- Backend:
+  - Cloud Run/Functions/App Engine.
+  - HTTP backend ở bất cứ đâu (AWS, Azure, on‑prem).
+    
+Mô hình hay gặp trong bank/enterprise:
+```text
+Mobile / Web / Partner
+        |
+      Internet
+        |
+     [ Apigee ]
+        |
+  (VPN / Interconnect)
+        |
+[ ESB / Core Banking / Legacy ]
+
+```
