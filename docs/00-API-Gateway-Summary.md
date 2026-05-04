@@ -89,3 +89,39 @@ Internet
 [ Lambda ]
    |
 [ DynamoDB / RDS / S3 / ... ]
+```
+
+Dùng cho: mobile/web API, serverless backend.
+
+#### 2.5.2. Public API → LB → microservices
+
+```text
+Internet
+   |
+[ API Gateway ]
+   |
+ (VPC Link / HTTP integration)
+   |
+[ NLB/ALB private ]
+   |
+[ ECS / EKS / EC2 services ]
+
+```
+
+  - LB chịu trách nhiệm health check, load balancing, deployment strategy.
+  - Gateway chịu trách nhiệm API-level concerns (auth, rate limit, mapping).
+
+
+#### 2.5.3. Private API trong VPC
+```text
+Internal clients (EC2/ECS/Lambda/on‑prem via VPN/DC)
+      |
+    VPC / PrivateLink
+      |
+[ API Gateway (PRIVATE endpoint) ]
+      |
+[ Internal services ]
+
+```
+Dùng cho: API nội bộ, backoffice, batch.
+
