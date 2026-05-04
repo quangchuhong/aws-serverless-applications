@@ -423,3 +423,38 @@ Mobile App         Web App
   - Payload nhỏ, ít trường, tối ưu mạng di động.
 - Web BFF:
   - Có thể trả nhiều dữ liệu hơn, phục vụ layout phức tạp.
+
+---
+
+## 9. Mô hình API trong E‑commerce
+
+### 9.1. API Gateway + BFF + Microservices (AWS ví dụ)
+```text
+Web SPA / Mobile App / Partner
+             |
+           Internet
+             |
+        [ CloudFront ]
+             |
+        [ AWS API Gateway ]
+             |
+          [ BFF Layer ]
+        (Web BFF / Mobile BFF)
+             |
+   +---------+-----------------------------+
+   |         |         |         |        |
+[ Product ] [ Cart ] [ Order ] [ Payment ] [ User/Auth ]
+[ Search ]  [ Promo ] [ Stock ] [ Shipping ] [ etc... ]
+
+```
+
+- Product/Catalog Service:
+  - DB: DynamoDB + search engine (OpenSearch/Elasticsearch/Algolia).
+- Cart Service:
+  - State ngắn hạn (DynamoDB, Redis).
+- Order Service:
+  - RDS/Aurora (cho ACID, báo cáo) hoặc DynamoDB (nếu thiết kế NoSQL).
+- Payment Service:
+  - Gọi cổng thanh toán bên ngoài (Stripe, Adyen, local PSP…).
+- Shipping/Logistics Service:
+  - Tích hợp hãng vận chuyển / kho / WMS.
