@@ -601,3 +601,39 @@ Mobile / Web / Partner / Open Banking
         [ Core Banking / Cards / Loans / CRM / ESB / MQ ]
 ```
 
+- **System APIs:**
+
+  - Kết nối vào core banking, thẻ, LOS, CRM, DWH, ESB cũ, MQ…
+  - Chuẩn hóa giao diện: REST/JSON, che giấu chi tiết kỹ thuật bên dưới.
+- **Process APIs:**
+
+  - Thực hiện nghiệp vụ composite:
+    - Mở tài khoản, chuyển tiền, thu nợ, giải ngân, đăng ký sản phẩm…
+  - Orchestrate nhiều System APIs, áp dụng rule nghiệp vụ, xử lý lỗi.
+- **Experience APIs:**
+
+  - Thiết kế cho từng kênh:
+    - Mobile banking, internet banking, API cho đối tác fintech, merchant.
+  - Mapping nhu cầu của UI/UX (payload, paging, filter…) mà không làm bẩn Process/System APIs.
+    
+---
+ 
+### 11.5. Khi nào bank dùng ESB, khi nào dùng (hoặc nâng cấp sang) MuleSoft?
+
+- **ESB vẫn đang chạy tốt, tập trung trong DC, ít yêu cầu mở API ra ngoài:**
+
+  - ESB tiếp tục đóng vai trò integration backbone.
+  - MuleSoft có thể được đặt như “API layer” phía trên ESB:
+    - System APIs nối với ESB cũ.
+    - Process/Experience APIs thêm logic & giao diện cho kênh số.
+- **Bank muốn chiến lược API‑first / Open Banking / Digital platform:**
+
+  - MuleSoft thường được chọn làm nền tảng chính, dần thay thế vai trò integration của ESB:
+    - Dùng các connector của MuleSoft kết nối trực tiếp vào core/CRM/DB/MQ.
+    - Dùng API Manager để quản lý API cho mobile/web/partner.
+    - ESB cũ có thể trở thành một trong các “System” phía dưới.
+      
+Tóm lại:
+
+  - ESB = lớp integration truyền thống tập trung vào kết nối / transform / route giữa hệ thống nội bộ.
+  - MuleSoft = integration + API platform hiện đại, phù hợp cho chiến lược bank‑wide API: vừa kết nối legacy, vừa expose API ra kênh số và đối tác một cách quản trị được.
