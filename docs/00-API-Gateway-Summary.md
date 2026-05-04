@@ -177,3 +177,83 @@ Mobile / Web / Partner
 [ ESB / Core Banking / Legacy ]
 
 ```
+---
+
+## 4. Azure API Management (APIM)
+
+### 4.1. Tổng quan
+
+- Fully-managed API Management: gateway + policies + dev portal + analytics.
+- Chế độ:
+  - Public: có public IP, exposure ra Internet.
+  - Internal (vNet-injected): chỉ trong vNet, không public IP.
+    
+### 4.2. Policies (XML)
+
+Ví dụ policy đơn giản:
+```text
+<policies>
+  <inbound>
+    <base />
+    <!-- Rate limit -->
+    <rate-limit calls="10" renewal-period="60" />
+    <!-- Thêm header -->
+    <set-header name="X-From-APIM" exists-action="override">
+      <value>true</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
+
+```
+
+### 4.3. Mô hình
+
+Public:
+
+```text
+Internet
+   |
+[ Azure APIM (public) ]
+   |
+   +--> Azure Functions
+   +--> App Service / AKS
+   +--> HTTP external services
+
+```
+
+Internal:
+
+```text
+Internal clients (vNet / VPN / ExpressRoute)
+      |
+    vNet
+      |
+[ Azure APIM (internal, vNet-injected) ]
+      |
+[ Internal services in vNet / on‑prem ]
+
+```
+---
+
+## 5. Kong API Gateway
+
+### 5.1. Tổng quan
+
+- Open source / Enterprise, self-hosted.
+- Chạy trên:
+  - Kubernetes (Kong Ingress Controller).
+  - Docker, VM, bare-metal.
+- Plugin phong phú:
+  - Auth: JWT, Key Auth, OAuth2, OIDC.
+  - Rate limiting, ACL.
+  - Logging, metrics (ELK, Prometheus).
+  - Transformation, request/response rewrite.
