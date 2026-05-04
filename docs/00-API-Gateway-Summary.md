@@ -351,3 +351,75 @@ Internet
 - Private:
   - Routing nội bộ, che giấu topology, chuẩn hóa access nội bộ.
 
+## 7. Orchestration (Orchestrate) là gì?
+
+**Orchestration** = điều phối nhiều dịch vụ nhỏ để thực hiện 1 nghiệp vụ phức tạp, theo:
+
+  - Thứ tự (A → B → C).
+  - Điều kiện (nếu B ok thì C, nếu ko thì D).
+  - Xử lý lỗi (retry, rollback, compensating transaction).
+    
+Ví dụ (bank):
+
+  1. Gọi service A: tạo tài khoản.
+  2. Nếu A thành công → gọi B: kiểm tra KYC.
+  3. Nếu B OK → gọi C: cấp hạn mức.
+  4. Sau cùng gọi D: gửi email/SMS.
+  5. Nếu B hoặc C lỗi → rollback / log / notify.
+     
+Các platform như MuleSoft, Apigee (policies/flows), AWS Step Functions, Camunda… thường dùng để orchestration.
+
+---
+
+## 8. Mô hình API trong Banking / Finance
+
+### 8.1. API Gateway + Core Banking/Legacy
+```text
+Mobile / Web / Partner
+        |
+      Internet
+        |
+ [ API Management / API Gateway ]
+ (Apigee / MuleSoft / Azure APIM / AWS API GW)
+        |
+ (VPN / DirectConnect / Interconnect)
+        |
+[ ESB / Core Banking / Legacy ]
+
+```
+- Mục tiêu:
+  - Bọc hệ thống cũ (SOAP, MQ, DB, mainframe) thành RESTful API.
+  - Thêm security, rate limit, audit, monitoring.
+
+### 8.2. API Platform + Microservices
+```text
+Clients (web/mobile/partners)
+        |
+[ API Gateway / API Management ]
+        |
+[ Microservices layer (K8s/ECS/App Service/Cloud Run) ]
+        |
+[ Core banking / DB / message bus ]
+```
+
+- Bank dần hiện đại hóa:
+  - Tách monolith/ESB thành microservices: account, card, payment, customer…
+
+
+### 8.3. BFF (Backend For Frontend) cho mobile/web
+```text
+Mobile App         Web App
+   |                 |
+[ Mobile BFF ]   [ Web BFF ]
+        \          /
+         \        /
+        [ API Gateway ]
+               |
+         [ Core / services ]
+
+```
+
+- Mobile BFF:
+  - Payload nhỏ, ít trường, tối ưu mạng di động.
+- Web BFF:
+  - Có thể trả nhiều dữ liệu hơn, phục vụ layout phức tạp.
