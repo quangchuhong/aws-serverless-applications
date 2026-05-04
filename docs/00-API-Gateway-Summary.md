@@ -512,3 +512,92 @@ Dùng SNS/SQS/EventBridge (hoặc Kafka) để phát sự kiện:
   - Dùng Azure API Management.
 - Multi‑cloud / on‑prem / K8s-heavy / muốn tự kiểm soát gateway:
   - Dùng Kong API Gateway (Kong Ingress trên K8s, hoặc VM).
+    
+---
+
+## 11. MuleSoft vs ESB trong môi trường ngân hàng (Bank‑wide)
+
+### 11.1. ESB là gì trong ngân hàng?
+
+ESB (Enterprise Service Bus) là lớp trung gian dùng để:
+
+1. **Kết nối hệ thống dị biệt (integration hub)**  
+   - Core banking, thẻ, LOS, CRM, DWH, hệ thống kế toán…  
+   - Giao thức khác nhau: HTTP, SOAP, JMS, MQ, file, DB…  
+   - ESB cung cấp adapter/connector để các hệ thống chỉ cần kết nối về ESB, thay vì point‑to‑point lẫn nhau.
+
+2. **Chuyển đổi & chuẩn hóa dữ liệu (transformation)**  
+   - Chuyển đổi XML ↔ JSON ↔ fixed‑length ↔ CSV…  
+   - Mapping field (tên, format, kiểu dữ liệu) để các hệ thống hiểu nhau.
+
+3. **Orchestration & routing (điều phối luồng nghiệp vụ)**  
+   - Điều phối nhiều bước:  
+     - VD: tạo khách hàng → gọi CRM → gọi core → gọi scoring → gửi email/SMS.  
+   - Routing theo rule nghiệp vụ, xử lý lỗi, retry.
+
+4. **Giảm phụ thuộc (decoupling)**  
+   - Hệ thống không gọi trực tiếp nhau, mà nói chuyện qua ESB.  
+   - Khi thay thế core/CRM/LOS, tác động tới hệ khác được giảm bớt.
+
+ESB truyền thống: IBM Integration Bus, TIBCO, Oracle ESB, v.v.
+
+---
+
+### 11.2. MuleSoft là gì trong bức tranh đó?
+
+MuleSoft Anypoint Platform thường được dùng như **integration + API management platform hiện đại**, có thể thay thế hoặc “bọc” ESB truyền thống.
+
+Đặc điểm chính:
+
+- Có đủ chức năng **ESB**:
+  - Connector phong phú: HTTP, SOAP, JMS, MQ, FTP, DB, SAP, mainframe adapter…
+  - DataWeave để transform các format dữ liệu.
+  - Flow để orchestration, routing, xử lý lỗi.
+
+- Đồng thời là **API Management**:
+  - API design (RAML/OAS), publish, secure, monitor.
+  - Policies: OAuth2/JWT, rate limit, quota, logging, masking, IP filter…
+  - Developer/consumer portal (Anypoint Exchange).
+
+- Có **mô hình 3 lớp API** (System / Process / Experience) rất hợp với bank‑wide:
+  - **System APIs**: bọc trực tiếp vào core/CRM/LOS/ESB/MQ.
+  - **Process APIs**: orchestration nghiệp vụ (mở tài khoản, chuyển tiền, vay…).
+  - **Experience APIs**: API cho từng kênh (mobile, web, partner), tối ưu payload / use case.
+
+---
+
+### 11.3. So sánh MuleSoft vs ESB truyền thống (góc nhìn bank‑wide)
+
+| Tiêu chí | ESB truyền thống | MuleSoft Anypoint Platform |
+|----------|------------------|----------------------------|
+| Mục tiêu | Integration hub, kết nối hệ thống nội bộ | Integration + API Management toàn doanh nghiệp |
+| Kiểu tích hợp | Chủ yếu SOAP/XML, JMS, MQ, file, DB | HTTP/REST/JSON + SOAP/XML + JMS/MQ + nhiều connector cloud/SAAS |
+| API Management | Thường yếu hoặc không có (cần sản phẩm khác để quản lý API) | Tích hợp sẵn: design, policies, portal, analytics |
+| Tổ chức API | Ít khái niệm rõ ràng về phân tầng API | Three‑layer API: System / Process / Experience |
+| Hướng sử dụng | Tập trung trong nội bộ DC / on‑prem | On‑prem, cloud (CloudHub), hybrid, multi‑DC |
+| Governance & reuse | Thường bị giới hạn ở mức project/ESB team | Anypoint Exchange làm catalogue bank‑wide, khuyến khích reuse System/Process APIs |
+| Thân thiện với kênh số (digital) | Thường cần “bọc” thêm API GW/Layer mới | Hỗ trợ trực tiếp design/API lifecycle cho mobile/web/open API |
+
+---
+
+### 11.4. Cách MuleSoft thường được dùng “bank‑wide”
+
+Mô hình điển hình:
+
+```text
+Mobile / Web / Partner / Open Banking
+                |
+              Internet
+                |
+        [ API Gateway / Edge (F5, WAF, etc.) ]
+                |
+         [ MuleSoft Anypoint Platform ]
+          (API Manager + Runtime)
+                |
+        +-------+---------------------+
+        |       |         |           |
+   [ Experience APIs ] [ Process APIs ] [ System APIs ]
+                |
+        [ Core Banking / Cards / Loans / CRM / ESB / MQ ]
+```
+
