@@ -458,3 +458,57 @@ Web SPA / Mobile App / Partner
   - Gọi cổng thanh toán bên ngoài (Stripe, Adyen, local PSP…).
 - Shipping/Logistics Service:
   - Tích hợp hãng vận chuyển / kho / WMS.
+
+
+### 9.2. Public vs Internal API
+
+- **Public API:**
+
+  - Cho website, mobile app, partner integrations.
+  - Qua public API Gateway (AWS API GW / Kong / NGINX/Envoy + LB).
+    
+- **Internal/Admin API:**
+```text
+Admin UI / CRM / OMS
+        |
+     VPN / SSO
+        |
+ [ Internal LB / Internal Gateway ]
+        |
+ [ Admin/Backoffice services ]
+
+```
+- Quản lý sản phẩm, giá, promotion, order management, refund…
+
+### 9.3. Xử lý bất đồng bộ & sự kiện
+
+Dùng SNS/SQS/EventBridge (hoặc Kafka) để phát sự kiện:
+```text
+[ Order Service ] -- "OrderCreated" --> [ SNS / EventBridge / Kafka ]
+                                  |
+         +------------------------+--------------------+
+         |                        |                    |
+[ Email Service ]          [ Analytics ]        [ Fraud Check ]
+
+```
+
+- Email/SMS:
+  - Worker/Lambda subscribe topic để gửi mail.
+- Analytics:
+  - Đẩy data sang data lake/warehouse cho BI.
+- Fraud:
+  - Gọi hệ thống chấm điểm rủi ro.
+
+---
+
+## 10. Gợi ý chọn API Gateway theo ngữ cảnh
+
+- Hệ thống chủ yếu trên AWS:
+  - Dùng AWS API Gateway (HTTP API/REST API) + Lambda/ECS + Cognito.
+- Hệ thống chủ yếu trên GCP:
+  - Dùng GCP API Gateway cho Cloud Run/Functions;
+  - Enterprise/bank cân nhắc Apigee.
+- Hệ thống trên Azure:
+  - Dùng Azure API Management.
+- Multi‑cloud / on‑prem / K8s-heavy / muốn tự kiểm soát gateway:
+  - Dùng Kong API Gateway (Kong Ingress trên K8s, hoặc VM).
