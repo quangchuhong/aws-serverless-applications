@@ -101,9 +101,11 @@ Xây dựng một API “Order Service” bằng **Amazon API Gateway REST API**
 
 ```text
 .
-├── main.tf               # Terraform: định nghĩa Lambda, SNS, API Gateway, Usage Plan, Logging...
-└── lambda_create_order.py # Code Lambda đơn giản để test mapping template
+├── main.tf                # Lambda, SNS, API Gateway, Usage Plan, Cognito, Logging
+└── lambda_create_order.py  # Lambda đơn giản để test mapping template
 ```
+
+> Code chạy được của lab này nằm ở [`labs/02-api-gateway-cognito/`](../labs/02-api-gateway-cognito/).
 
 ---
 

@@ -324,10 +324,27 @@ Workflow lỗi + DLQ (khi cố tình throw new Error("Simulated processing error
 
 project/
   main.tf
-  lambda_sync.js
-  lambda_async.js
-  test_concurrency.py   # (tùy chọn, để benchmark concurrency)
+  lambda_sync.mjs       # Lambda A – sync qua API Gateway
+  lambda_async.mjs      # Lambda B – async từ S3
+  test_concurrency.py   # bắn tải song song để quan sát concurrency
 ```
+
+> Code chạy được của lab này nằm ở [`labs/04-lambda-concurrency/`](../labs/04-lambda-concurrency/).
+
+**Vì sao `.mjs` chứ không phải `.js`?**
+
+Runtime Node.js của Lambda quyết định module type theo đuôi file và trường
+`type` trong `package.json`:
+
+| Đuôi file | Module type |
+|-----------|-------------|
+| `.mjs`    | Luôn là ES module |
+| `.cjs`    | Luôn là CommonJS |
+| `.js`     | Phụ thuộc `"type"` trong `package.json`; mặc định CommonJS |
+
+Lab này zip đúng một file, không có `package.json`, nên `.js` sẽ được coi là
+CommonJS và cú pháp `export const handler` báo lỗi. Dùng `.mjs` là cách tường
+minh nhất. (Handler vẫn khai là `lambda_sync.handler` — không kèm đuôi file.)
 
 ---
 
@@ -505,11 +522,11 @@ Trong lab này chúng ta dùng Terraform, nhưng dưới đây là so sánh ng�
 
 Giả sử:
 
-  - Code nằm trong lambda_sync.js.
+  - Code nằm trong lambda_sync.mjs.
   - Bạn zip lại thành lambda_sync.zip.
     
 ```bash
-zip lambda_sync.zip lambda_sync.js
+zip lambda_sync.zip lambda_sync.mjs
 
 ```
 
@@ -530,7 +547,7 @@ aws lambda create-function \
 Update code (mỗi lần sửa):
 
 ```bash
-zip lambda_sync.zip lambda_sync.js
+zip lambda_sync.zip lambda_sync.mjs
 
 aws lambda update-function-code \
   --function-name my-sync-lambda \
@@ -583,7 +600,7 @@ Ví dụ khai báo Lambda bằng Terraform (đã dùng trong lab):
 ```hcl
 data "archive_file" "lambda_sync_zip" {
   type        = "zip"
-  source_file = "${path.module}/lambda_sync.js"
+  source_file = "${path.module}/lambda_sync.mjs"
   output_path = "${path.module}/lambda_sync.zip"
 }
 
@@ -605,7 +622,7 @@ resource "aws_lambda_function" "sync_api_lambda" {
 
 ```
 
-Khi sửa code lambda_sync.js:
+Khi sửa code lambda_sync.mjs:
 
 Chỉ cần chạy:
 ```bash
