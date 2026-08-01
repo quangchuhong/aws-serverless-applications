@@ -121,7 +121,7 @@ id,iid,project_id,title,state,author_username,created_at,merged_at
 ```
 
 **Projects – JSON:**
-```csv
+```json
 [
   {
     "id": 42,

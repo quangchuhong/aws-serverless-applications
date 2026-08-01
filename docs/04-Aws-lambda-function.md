@@ -16,6 +16,9 @@ Lab này minh họa:
   - Chạy code mà không cần quản lý server.
   - Tự động scale theo số lượng request (concurrency).
 - Hỗ trợ nhiều runtime: Node.js, Python, Java, Go, .NET, v.v.
+- Tính phí theo:
+  - Số lần gọi (invocations).
+  - Thời gian chạy (duration) × bộ nhớ (memory).
 
 > **Runtime có hạn sử dụng.** AWS deprecate runtime theo lịch riêng, bám sát
 > vòng đời upstream của ngôn ngữ. Khi runtime hết hạn: không tạo được function
@@ -23,10 +26,7 @@ Lab này minh họa:
 > `nodejs18.x` đã hết hỗ trợ từ 9/2025 — lab này dùng `nodejs22.x`.
 > Kiểm tra định kỳ trang "Lambda runtimes" trong AWS docs trước khi bắt đầu
 > project mới.
-- Tính phí theo:
-  - Số lần gọi (invocations).
-  - Thời gian chạy (duration) × bộ nhớ (memory).
-    
+
 ### 0.2. Invocation (Cách Lambda được gọi)
 
 3 kiểu chính:
@@ -47,7 +47,7 @@ Lab này minh họa:
 
     - Lambda chủ động poll dữ liệu từ nguồn:
       - SQS, Kinesis, DynamoDB Streams, Kafka…
-    - Mỗi batch data đọc được → 1 lần invoke Lambd
+    - Mỗi batch data đọc được → 1 lần invoke Lambda.
 
 ### 0.3. Concurrency (Đồng thời)
 
@@ -125,86 +125,11 @@ Các loại concurrency:
 > dù tên queue là `async-s3-lambda-dlq`.
 
 
-### 0.6. Monitoring & Observability cho Lambda
+### 0.6. SQS → Lambda & xử lý đồng thời nhiều message
 
-Monitoring giúp bạn hiểu:
+> Phần monitoring (CloudWatch Logs, Metrics) nằm ở [mục 6](#6-monitoring--observability-cho-lambda).
 
-  - Lambda đang chạy tốt hay không?
-  - Concurrency có bị full không?
-  - Có bị throttle, lỗi nhiều không?
-  - Thời gian chạy (duration) và lỗi (error) như thế nào?
-    
-AWS cung cấp các công cụ chính:
-
-  - CloudWatch Logs – log chi tiết từng invoke.
-  - CloudWatch Metrics – metric tổng quan (Invocations, Errors, Duration,…).
-  - X-Ray – trace, profiling chi tiết (tuỳ chọn).
-    
-#### 0.6.1. CloudWatch Logs
-
-Mỗi Lambda function mặc định log vào CloudWatch Logs (nhờ policy AWSLambdaBasicExecutionRole):
-
-  - Log group: /aws/lambda/<function_name>.
-  - Mỗi container/instance có log stream riêng.
-
-Dùng CLI:
-
-```bash
-aws logs tail "/aws/lambda/sync-api-lambda" --since 5m
-
-```
-
-Trong log bạn thường thấy:
-
-  - START RequestId: ...
-  - Log của bạn: console.log(...), console.error(...).
-  - END RequestId: ...
-  - REPORT RequestId: ... Duration: ... ms ...
-
-
-#### 0.6.2. CloudWatch Metrics – Những metric quan trọng
-
-Vào CloudWatch → Metrics → Lambda → chọn theo FunctionName.
-
-Các metric chính:
-
-  - Invocations  
-
-    - Số lần function được invoke (kể cả thành công hay lỗi).
-      
-  - Errors  
-
-    - Số lần invoke trả lỗi (không tính retry async nội bộ).
-      
-  - Throttles  
-
-    - Số lần bị throttle (Rate Exceeded / TooManyRequests) do:
-      - Vượt account concurrency.
-      - Vượt reserved_concurrent_executions.
-
-  - ConcurrentExecutions  
-
-    - Số instance đang chạy cùng lúc cho function.
-      
-  - Duration  
-
-    - Thời gian chạy (ms).
-    - Có thể xem P50, P90, P95,… để hiểu latency.
-      
-  - ProvisionedConcurrentExecutions / ProvisionedConcurrencyUtilization (nếu dùng PC)  
-
-    - Theo dõi mức độ sử dụng Provisioned Concurrency.
-      
-Bạn có thể dùng các metric này để:
-
-  - Vẽ biểu đồ concurrency theo thời gian.
-  - Phát hiện khi nào function bị throttle.
-  - Tối ưu memory / timeout / provisioned concurrency.
-
-
-#### 0.6.3 Lý thuyết: SQS → Lambda & xử lý đồng thời nhiều message
-
-##### 1. SQS → Lambda hoạt động thế nào?
+#### 0.6.1. SQS → Lambda hoạt động thế nào?
 
 Bạn cấu hình Event Source Mapping giữa SQS và Lambda:
 ```text
@@ -216,7 +141,7 @@ Bạn cấu hình Event Source Mapping giữa SQS và Lambda:
   - Gom message theo batch_size.
   - Mỗi batch → 1 lần invoke Lambda (1 execution).
 
-##### 2. batch_size và Records
+#### 0.6.2. batch_size và Records
 
 - batch_size = N → mỗi execution Lambda nhận tối đa N message:
 ```json
@@ -239,7 +164,7 @@ for (const record of event.Records) {
 
 ```
 
-##### 3. Xử lý đồng thời nhiều message
+#### 0.6.3. Xử lý đồng thời nhiều message
 
 - Concurrency Lambda = số execution đang chạy cùng lúc.
 
@@ -256,13 +181,13 @@ for (const record of event.Records) {
     - 5 execution × 5 message/batch.
     - Mỗi execution xử lý 5 record trong event.Records (thường là lần lượt).
 
-##### 4. Các “núm vặn” để giới hạn song song
+#### 0.6.4. Các “núm vặn” để giới hạn song song
 
 - batch_size trong Event Source Mapping:
 
-  - 1 → mỗi execution 1 message.
-_  -   1 → mỗi execution nhiều message.
-_
+  - `= 1` → mỗi execution nhận đúng 1 message.
+  - `> 1` → mỗi execution nhận nhiều message trong `event.Records`.
+
 - reserved_concurrent_executions trên Lambda:
 
   - Giới hạn số execution tối đa chạy cùng lúc cho function.
@@ -276,7 +201,7 @@ Kết hợp:
     - Đặt batch_size = 1.
     - Đặt reserved_concurrent_executions = N (và/hoặc maximum_concurrency = N).
 
-##### 5. Retry với SQS (khác với async S3/SNS)
+#### 0.6.5. Retry với SQS (khác với async S3/SNS)
 - Với SQS:
   - Retry không dùng maximum_retry_attempts của Lambda async.
   - Khi execution fail (throw error):
@@ -611,10 +536,10 @@ aws lambda update-function-code \
   --function-name my-sync-lambda \
   --zip-file fileb://lambda_sync.zip \
   --publish
-
-_"--publish sẽ tạo một version mới của Lambda (VD: 1, 2, 3,…)."_
-
 ```
+
+> `--publish` tạo một version bất biến mới của Lambda (v1, v2, v3,…).
+> Không có flag này thì chỉ `$LATEST` được cập nhật.
 
 **c) Ví dụ bằng SDK Node.js (tự động deploy từ script)**
 ```js
@@ -688,7 +613,40 @@ terraform apply
 
 ```
 
-**So sánh nhanh SDK vs Terraform**
+### 5.4. So sánh nhanh SDK/CLI vs Terraform
+
+| Tiêu chí | SDK / CLI (imperative) | Terraform (declarative) |
+|----------|------------------------|--------------------------|
+| Phạm vi quản lý | Chỉ code + config của function | Toàn bộ hạ tầng: IAM role, trigger, API GW, S3, SQS, alarm… |
+| Trạng thái | Không lưu state; bạn tự biết đang có gì trên AWS | State file ghi nhận thực tế, `plan` cho biết trước thay đổi |
+| Tạo lần đầu | Phải phân biệt `create-function` vs `update-function-code` | `apply` — Terraform tự quyết định tạo hay sửa |
+| Xoá tài nguyên | Tự nhớ và xoá tay từng thứ | `terraform destroy` |
+| Nhiều môi trường | Copy script, sửa biến, dễ lệch | Workspace / module / tfvars |
+| Rollback | Gọi lại API với version cũ | `git revert` + `apply` |
+| Tốc độ vòng lặp | Nhanh — vài giây/lần deploy | Chậm hơn — phải refresh state |
+| Rủi ro drift | Cao: sửa tay trên Console không ai biết | `plan` phát hiện drift |
+
+**Chọn cái nào?**
+
+- **SDK/CLI**: bước "deploy code" bên trong CI/CD, script nội bộ, thử nghiệm
+  nhanh. Đặc biệt hợp khi hạ tầng đã ổn định và chỉ có code thay đổi mỗi ngày.
+- **Terraform**: dựng và quản lý hạ tầng, môi trường production, nhiều môi
+  trường song song.
+
+Thực tế nhiều team dùng **cả hai**: Terraform tạo function + IAM + trigger một
+lần, sau đó pipeline dùng `aws lambda update-function-code --publish` cho mỗi
+commit (nhanh hơn nhiều so với chạy `terraform apply` mỗi lần). Khi đó nhớ đặt
+`ignore_changes` để Terraform không ghi đè ngược code:
+
+```hcl
+resource "aws_lambda_function" "sync_api_lambda" {
+  # ...
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash, last_modified]
+  }
+}
+```
 
 ---
 
