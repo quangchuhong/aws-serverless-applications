@@ -16,6 +16,13 @@ Lab này minh họa:
   - Chạy code mà không cần quản lý server.
   - Tự động scale theo số lượng request (concurrency).
 - Hỗ trợ nhiều runtime: Node.js, Python, Java, Go, .NET, v.v.
+
+> **Runtime có hạn sử dụng.** AWS deprecate runtime theo lịch riêng, bám sát
+> vòng đời upstream của ngôn ngữ. Khi runtime hết hạn: không tạo được function
+> mới, rồi không update được code, và cuối cùng không còn nhận security patch.
+> `nodejs18.x` đã hết hỗ trợ từ 9/2025 — lab này dùng `nodejs22.x`.
+> Kiểm tra định kỳ trang "Lambda runtimes" trong AWS docs trước khi bắt đầu
+> project mới.
 - Tính phí theo:
   - Số lần gọi (invocations).
   - Thời gian chạy (duration) × bộ nhớ (memory).
@@ -89,20 +96,33 @@ Các loại concurrency:
 
 ### 0.5. Dead Letter Queue (DLQ) & Event Destinations
 
-- DLQ (Dead Letter Queue):
+Đây là **hai cơ chế khác nhau**, hay bị gọi lẫn lộn là "DLQ":
 
-  - Thường là SQS hoặc SNS.
-  - Lưu các event mà Lambda xử lý thất bại sau khi đã retry.
-  - Dùng để:
-    - Debug, kiểm tra lỗi.
-    - Hoặc có 1 worker khác đọc & xử lý lại.
-      
-- Event Destinations (cho async invoke):
+- **DLQ của Lambda** (`dead_letter_config` — cơ chế cũ):
+
+  - Đích đến là SQS hoặc SNS.
+  - Chỉ áp dụng cho **async invoke** (S3, SNS, EventBridge).
+  - Gửi đi **payload gốc của event**, không kèm thông tin lỗi.
+  - AWS khuyến nghị dùng Event Destinations thay thế.
+
+- **Event Destinations** (`function_event_invoke_config` — cơ chế hiện tại):
 
   - Cấu hình điểm đến cho:
-    - on_failure: khi Lambda lỗi sau retry.
-    - on_success: khi Lambda xử lý thành công.
+    - `on_failure`: khi Lambda lỗi sau khi hết retry.
+    - `on_success`: khi Lambda xử lý thành công.
   - Destination có thể là: SQS, SNS, Lambda khác, EventBridge.
+  - Gửi đi **payload gốc + request/response context + error message** → debug
+    dễ hơn hẳn so với DLQ cũ.
+
+- **DLQ của SQS** (redrive policy) — hoàn toàn khác hai cái trên:
+
+  - Là thuộc tính của **queue**, không phải của Lambda.
+  - Áp dụng khi Lambda đọc SQS qua event source mapping.
+  - Message chuyển sang DLQ sau `maxReceiveCount` lần nhận không thành công.
+
+> Lab trong tài liệu này dùng `on_failure` destination trỏ tới một SQS queue.
+> Về mặt kỹ thuật đó là **Event Destination**, không phải `dead_letter_config`,
+> dù tên queue là `async-s3-lambda-dlq`.
 
 
 ### 0.6. Monitoring & Observability cho Lambda
@@ -272,7 +292,7 @@ Kết hợp:
 
 **1. Lambda A – sync-api-lambda**
 
-  - Ngôn ngữ: Node.js 18.
+  - Ngôn ngữ: Node.js 22.
   - Invoke: synchronous qua HTTP API Gateway.
   - Route: GET /test.
   - Cấu hình:
@@ -283,7 +303,7 @@ Kết hợp:
       
 **2. Lambda B – async-s3-lambda**
 
-  - Ngôn ngữ: Node.js 18.
+  - Ngôn ngữ: Node.js 22.
   - Invoke: asynchronous từ S3 bucket.
   - Trigger: s3:ObjectCreated:*.
   - Cấu hình:
@@ -573,7 +593,7 @@ Tạo function lần đầu:
 ```bash
 aws lambda create-function \
   --function-name my-sync-lambda \
-  --runtime nodejs18.x \
+  --runtime nodejs22.x \
   --role arn:aws:iam::<ACCOUNT_ID>:role/demo-lambda-exec-role \
   --handler lambda_sync.handler \
   --zip-file fileb://lambda_sync.zip \
@@ -646,7 +666,7 @@ resource "aws_lambda_function" "sync_api_lambda" {
   function_name = "sync-api-lambda"
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "lambda_sync.handler"
-  runtime       = "nodejs18.x"
+  runtime       = "nodejs22.x"
 
   filename         = data.archive_file.lambda_sync_zip.output_path
   source_code_hash = data.archive_file.lambda_sync_zip.output_base64sha256

@@ -19,6 +19,7 @@ Bạn có thể dùng làm README cho repo GitHub hoặc tài liệu học.
    - 4.5. Deployment & Stage  
    - 4.6. Usage Plan & API Key  
    - 4.7. Logging & Monitoring  
+   - 4.8. Cognito User Pool & Authorizer  
 5. [Test cases](#test-cases)  
 6. [Lý thuyết: Các khái niệm & options trong API Gateway](#lý-thuyết-các-khái-niệm--options-trong-api-gateway)  
    - 6.1. Loại API (REST, HTTP, WebSocket)  
@@ -40,10 +41,13 @@ Xây dựng một API “Order Service” bằng **Amazon API Gateway REST API**
 - **REST API** có 3 endpoint:
   - `POST /orders` → **Lambda** (mapping template phức tạp, response mapping)
   - `POST /orders/{id}/notify` → **SNS** (AWS Service integration)
-  - `GET /orders/{id}` → **HTTP backend** (httpbin.org)
+  - `GET /orders/{id}` → **HTTP backend** (httpbin.org), bảo vệ bằng **Cognito JWT**
 - **Usage Plan + API Key**:
   - Bắt buộc dùng API key.
   - Giới hạn rate & quota.
+- **Cognito User Pool**:
+  - Hosted UI, authorization code + PKCE.
+  - Cognito authorizer validate JWT ở tầng API Gateway.
 - **CloudWatch Logs**:
   - Access logs & execution logs cho API Gateway.
   - Logs cho Lambda.
@@ -61,6 +65,8 @@ Xây dựng một API “Order Service” bằng **Amazon API Gateway REST API**
 - **HTTP Backend Demo** – `https://httpbin.org/get`
 - **Usage Plan** – `MobilePlan`
 - **API Key** – `mobile-app-key`
+- **Cognito User Pool** – `orders-user-pool` + Hosted UI
+- **API Gateway Authorizer** – `cognito-authorizer` (COGNITO_USER_POOLS)
 - **CloudWatch Logs**:
   - `/aws/apigateway/OrderServiceAPI-access`
   - `API-Gateway-Execution-Logs_<rest_api_id>/prod`
@@ -83,7 +89,8 @@ Xây dựng một API “Order Service” bằng **Amazon API Gateway REST API**
    - API Gateway trả `"Notification queued"`.
 
 3. `GET /orders/{id}`
-   - Client gọi `GET /orders/{id}?fields=...` + `x-api-key`.
+   - Client gọi `GET /orders/{id}?fields=...` + `x-api-key` + `Authorization: <JWT>`.
+   - Cognito authorizer validate chữ ký/`iss`/`aud`/`exp` của JWT.
    - API Gateway map path param `{id}` → query `order_id`.
    - Gửi request tới `https://httpbin.org/get?order_id={id}`.
    - Trả nguyên response body từ httpbin.org cho client.
@@ -356,24 +363,38 @@ resource "aws_api_gateway_integration" "post_notify_integration" {
   uri                     = "arn:aws:apigateway:${var.region}:sns:action/Publish"
   credentials             = aws_iam_role.api_gw_sns_role.arn
 
+  # SNS là Query-protocol API: body phải là form-urlencoded, KHÔNG phải JSON.
+  request_parameters = {
+    "integration.request.header.Content-Type" = "'application/x-www-form-urlencoded'"
+  }
+
   request_templates = {
     "application/json" = <<EOF
 #set($inputRoot = $input.path('$'))
-
-{
-  "TopicArn": "${aws_sns_topic.order_notifications.arn}",
-  "Message": "$util.escapeJavaScript($util.toJson({
-    "orderId": $input.params('id'),
-    "notificationType": $inputRoot.type,
-    "target": $inputRoot.to,
-    "timestamp": $context.requestTimeEpoch
-  }))"
-}
+#set($payload = "{""orderId"":""$input.params('id')"",""notificationType"":""$inputRoot.type"",""target"":""$inputRoot.to"",""timestamp"":$context.requestTimeEpoch}")
+Action=Publish&TopicArn=$util.urlEncode('${aws_sns_topic.order_notifications.arn}')&Message=$util.urlEncode($payload)
 EOF
   }
 }
 
 ```
+
+> **Hai lỗi rất dễ mắc ở integration này:**
+>
+> 1. **Gửi JSON body cho SNS.** `arn:aws:apigateway:<region>:sns:action/Publish`
+>    trỏ tới AWS Query API — SNS chỉ đọc tham số dạng
+>    `Action=Publish&TopicArn=...&Message=...`. Nếu gửi
+>    `{"TopicArn": ..., "Message": ...}` thì SNS không parse được và trả lỗi
+>    `MissingParameter`. Bắt buộc phải override header `Content-Type` thành
+>    `application/x-www-form-urlencoded`.
+>
+> 2. **Dùng `$util.toJson({...})` với object literal.** VTL không cho phép viết
+>    JSON object literal lồng trong một chuỗi đã mở nháy kép — template sẽ hỏng
+>    ngay khi parse. Trong VTL, escape nháy kép bằng cách **nhân đôi** nó (`""`),
+>    như ở `#set($payload = ...)` phía trên.
+>
+> Mọi giá trị đưa vào query string đều phải qua `$util.urlEncode()`, nếu không
+> ký tự `&` hoặc `=` trong payload sẽ phá vỡ request.
 
 Response:
 ```hcl
@@ -400,11 +421,15 @@ EOF
 c. GET /orders/{id} → HTTP (httpbin.org)
 ```hcl
 resource "aws_api_gateway_method" "get_order" {
-  rest_api_id     = aws_api_gateway_rest_api.order_api.id
-  resource_id     = aws_api_gateway_resource.order_id.id
-  http_method     = "GET"
-  authorization   = "NONE"
+  rest_api_id      = aws_api_gateway_rest_api.order_api.id
+  resource_id      = aws_api_gateway_resource.order_id.id
+  http_method      = "GET"
   api_key_required = true
+
+  # Endpoint này được bảo vệ bằng JWT của Cognito (xem mục 4.8),
+  # khác với POST /orders và POST /orders/{id}/notify chỉ dùng API key.
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
 
   request_parameters = {
     "method.request.path.id" = true
@@ -463,8 +488,24 @@ EOF
 resource "aws_api_gateway_deployment" "order_api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.order_api.id
 
+  # KHÔNG dùng timestamp(): sẽ tạo deployment mới mỗi lần apply kể cả khi
+  # không có gì thay đổi. Hash cấu hình để chỉ redeploy khi API thực sự đổi.
   triggers = {
-    redeploy = timestamp()
+    redeploy = sha1(jsonencode([
+      aws_api_gateway_resource.orders,
+      aws_api_gateway_resource.order_id,
+      aws_api_gateway_resource.order_id_notify,
+      aws_api_gateway_method.post_orders,
+      aws_api_gateway_method.post_notify,
+      aws_api_gateway_method.get_order,
+      aws_api_gateway_integration.post_orders_integration,
+      aws_api_gateway_integration.post_notify_integration,
+      aws_api_gateway_integration.get_order_integration,
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   depends_on = [
@@ -571,13 +612,100 @@ resource "aws_api_gateway_method_settings" "all_methods_logging" {
   method_path = "*/*"
 
   settings {
-    metrics_enabled    = true
-    logging_level      = "INFO"
-    data_trace_enabled = true
+    metrics_enabled = true
+    logging_level   = "INFO"
+
+    # data_trace ghi FULL request/response body vào CloudWatch.
+    # Chỉ bật ở dev/stage — xem mục 7. Ở đây để false cho đúng với stage "prod".
+    data_trace_enabled = false
   }
 }
 
 ```
+
+### 4.8. Cognito User Pool & Authorizer
+
+Phần này hiện thực hoá lý thuyết ở mục 10: tạo User Pool, Hosted UI, và gắn
+authorizer vào `GET /orders/{id}`.
+
+```hcl
+resource "aws_cognito_user_pool" "orders" {
+  name = "orders-user-pool"
+
+  username_attributes      = ["email"]
+  auto_verified_attributes = ["email"]
+
+  password_policy {
+    minimum_length    = 12
+    require_lowercase = true
+    require_uppercase = true
+    require_numbers   = true
+    require_symbols   = true
+  }
+}
+
+resource "aws_cognito_user_pool_domain" "orders" {
+  domain       = "orders-lab-${random_id.suffix.hex}"
+  user_pool_id = aws_cognito_user_pool.orders.id
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+resource "aws_cognito_user_pool_client" "web" {
+  name         = "orders-web-client"
+  user_pool_id = aws_cognito_user_pool.orders.id
+
+  generate_secret = false
+
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"] # authorization code + PKCE
+  allowed_oauth_scopes                 = ["openid", "email", "profile"]
+  supported_identity_providers         = ["COGNITO"]
+
+  callback_urls = ["http://localhost:3000/callback"]
+
+  # Refresh token 30 ngày, access/id token 1 giờ
+  refresh_token_validity = 30
+  access_token_validity  = 1
+  id_token_validity      = 1
+
+  token_validity_units {
+    refresh_token = "days"
+    access_token  = "hours"
+    id_token      = "hours"
+  }
+}
+
+resource "aws_api_gateway_authorizer" "cognito" {
+  name          = "cognito-authorizer"
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  type          = "COGNITO_USER_POOLS"
+  provider_arns = [aws_cognito_user_pool.orders.arn]
+
+  # Header mà client gửi token vào
+  identity_source = "method.request.header.Authorization"
+}
+
+output "cognito_hosted_ui_url" {
+  value = join("", [
+    "https://${aws_cognito_user_pool_domain.orders.domain}",
+    ".auth.${var.region}.amazoncognito.com/login",
+    "?client_id=${aws_cognito_user_pool_client.web.id}",
+    "&response_type=code",
+    "&scope=openid+email+profile",
+    "&redirect_uri=http://localhost:3000/callback",
+  ])
+}
+```
+
+> **Về `response_type`:** tài liệu cũ của lab dùng implicit flow
+> (`response_type=token`) vì lấy token từ URL cho nhanh. Implicit grant đã bị
+> loại khỏi OAuth 2.1 do token lộ trong URL/history/referer. Cognito vẫn hỗ trợ
+> nhưng nên dùng **authorization code + PKCE** như cấu hình ở trên; đổi lại bạn
+> phải exchange `code` lấy token qua endpoint `/oauth2/token`.
+
 ---
 
 ## 5. Test Cases
@@ -617,12 +745,45 @@ curl -X POST "$API_URL/orders/ord-123/notify" \
 
 ```
 
-### 5.3. GET /orders/{id} → httpbin.org
-```bash
-curl "$API_URL/orders/ord-999?fields=items,customer" \
-  -H "x-api-key: $API_KEY"
+### 5.3. GET /orders/{id} → httpbin.org (cần JWT)
 
+Endpoint này yêu cầu **cả** API key **và** JWT từ Cognito:
+
+```bash
+# 1. Mở Hosted UI, đăng nhập, lấy "code" trên callback URL
+terraform output -raw cognito_hosted_ui_url
+
+# 2. Đổi code lấy token
+CLIENT_ID=$(terraform output -raw cognito_client_id)
+DOMAIN=$(terraform output -raw cognito_domain)
+
+ID_TOKEN=$(curl -s -X POST "https://$DOMAIN/oauth2/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "client_id=$CLIENT_ID" \
+  -d "code=$CODE" \
+  -d "redirect_uri=http://localhost:3000/callback" \
+  | jq -r .id_token)
+
+# 3. Gọi API
+curl "$API_URL/orders/ord-999?fields=items,customer" \
+  -H "x-api-key: $API_KEY" \
+  -H "Authorization: $ID_TOKEN"
 ```
+
+Kết quả mong đợi khi thiếu từng thành phần:
+
+| Thiếu | Response |
+|-------|----------|
+| `x-api-key` | `403 Forbidden` – `Forbidden` |
+| `Authorization` | `401 Unauthorized` – `Unauthorized` |
+| Token hết hạn / sai chữ ký | `401 Unauthorized` |
+| Đủ cả hai | `200 OK` + body từ httpbin.org |
+
+> Cognito authorizer nhận token **không có** tiền tố `Bearer ` theo mặc định.
+> Nếu client của bạn luôn gửi `Authorization: Bearer <token>`, hãy dùng Lambda
+> authorizer hoặc cấu hình lại phía client.
+
 ---
 
 ## 6. Lý thuyết: Các khái niệm & options trong API Gateway
@@ -640,7 +801,9 @@ curl "$API_URL/orders/ord-999?fields=items,customer" \
       - Mới hơn, rẻ hơn, latency thấp hơn.
       - Thiết kế hiện đại, cấu hình đơn giản.
       - Tốt cho phần lớn use case mới: front cho Lambda/HTTP backend với JWT authorizer.
-      - Ít tính năng hơn REST (ít hoặc không có usage plan, mapping phức tạp ở thời điểm đầu).
+      - Ít tính năng hơn REST. Cụ thể HTTP API **không có**: usage plan & API key,
+        mapping template VTL, request validation, cache, private endpoint,
+        WAF integration. Nếu cần một trong số đó → phải dùng REST API.
         
    - WebSocket API  
 
@@ -1111,9 +1274,15 @@ Cognito User Pool hỗ trợ:
      - `refresh_token`: dùng để lấy token mới mà không login lại.
 
 **Trong LAB**:
-- Bạn dùng Hosted UI (classic) + username/password.
-- Sau login, Cognito trả `id_token` + `access_token` trên URL (implicit flow).
-- Bạn lấy JWT từ URL và dùng để gọi API Gateway.
+- Bạn dùng Hosted UI + email/password.
+- Sau login, Cognito redirect về callback URL kèm `code` (authorization code flow).
+- Bạn đổi `code` lấy `id_token`/`access_token` qua endpoint `/oauth2/token`,
+  rồi dùng token đó gọi API Gateway.
+
+> Bản LAB đầu tiên dùng implicit flow (`response_type=token`) cho nhanh — token
+> trả thẳng trên URL fragment. Cách này đã bị loại khỏi OAuth 2.1 vì token bị
+> ghi vào browser history, server log và header `Referer`. Cấu hình ở mục 4.8
+> dùng authorization code + PKCE.
 
 ---
 
@@ -1231,7 +1400,9 @@ Tuy nhiên, Cognito là mảnh ghép quan trọng trong **API security**:
   - Cấu hình đơn giản.
   - An toàn, chuẩn AWS.
 - Nhược:
-  - Logic cố định (chủ yếu chỉ check signature/iss/aud/exp).
+  - Logic cố định: check signature/`iss`/`aud`/`exp`, cộng thêm OAuth scope nếu
+    bạn khai `authorization_scopes` trên method (chỉ áp dụng cho access token,
+    không dùng được với id token).
   - Khó kết hợp với hệ thống role/DB custom phức tạp.
 
 **Lambda authorizer (trên JWT Cognito)**:
