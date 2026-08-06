@@ -411,7 +411,18 @@ Kiến trúc này tái sử dụng đúng những khối trong `01-Example-Aws-S
 
 ---
 
-## 9. Tóm tắt một dòng
+## 9. Làm tiếp
+
+Phần lý thuyết dừng ở đây. Để thực sự hiểu MCP, hãy deploy một cái:
+
+→ [`07-MCP-tren-AWS-Serverless-Hands-on.md`](./07-MCP-tren-AWS-Serverless-Hands-on.md)
+— 4 lab từ stdio server local đến MCP server remote có OAuth trên
+API Gateway + Lambda, kèm Terraform chạy được tại
+[`examples/07-mcp-server-serverless/`](../examples/07-mcp-server-serverless/).
+
+---
+
+## 10. Tóm tắt một dòng
 
 > **MCP là cách agent chạm vào hệ thống của bạn. MLOps (và LLMOps) là cách bạn
 > đảm bảo nó chạm đúng — hôm nay, và cả sáu tháng nữa.**
