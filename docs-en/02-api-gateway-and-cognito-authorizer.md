@@ -51,6 +51,64 @@ between: SNS `Publish`, SQS `SendMessage`, DynamoDB `GetItem`, Step Functions
 **Mock** — return a canned response with no backend at all. Useful for stubs
 and for CORS preflight.
 
+### Integration responses — the non-proxy trap
+
+With a **proxy** integration, the backend's status code passes straight
+through and you configure nothing.
+
+With a **non-proxy** integration, every status code you want the client to see
+must be declared explicitly — and an `aws_api_gateway_integration_response`
+**with no `selection_pattern` is the default branch**. It catches everything.
+
+So if you declare only one integration response with `status_code = "200"`, a
+backend returning 503 produces this:
+
+```text
+HTTP/2 200
+content-type: application/json
+
+<html>
+<head><title>503 Service Temporarily Unavailable</title></head>
+...
+```
+
+A `200`, with an HTML error page inside it, labelled as JSON.
+
+The bad response is the least of the damage:
+
+- **The client cannot detect the failure.** Retry logic and circuit breakers
+  are blind, because from where they sit everything succeeded.
+- **`5XXError` stays at zero.** Any alarm you built on that metric will never
+  fire, no matter how thoroughly the backend is down.
+- **The backend's error body reaches the client verbatim** — potentially a
+  stack trace or internal hostnames.
+
+Declare the error branches:
+
+```hcl
+# Default branch: no selection_pattern, catches 2xx/3xx
+resource "aws_api_gateway_integration_response" "get_order_200" {
+  status_code = "200"
+  # ...
+}
+
+resource "aws_api_gateway_integration_response" "get_order_502" {
+  status_code       = "502"
+  selection_pattern = "5\\d{2}"
+
+  # Don't pass the backend's error body through.
+  response_templates = {
+    "application/json" = jsonencode({ message = "Upstream service unavailable" })
+  }
+}
+```
+
+> `selection_pattern` means **two different things** depending on integration
+> type. For an **HTTP integration** it is a regex matched against the
+> backend's **status code**. For a **Lambda integration** it is matched
+> against the **error message** the function throws. Same attribute, entirely
+> different semantics.
+
 ---
 
 ## 3. Mapping templates (VTL)
@@ -304,6 +362,16 @@ whether or not anything changed. Hash the actual configuration instead, and add
 `create_before_destroy` so the stage is never left pointing at a deleted
 deployment.
 
+**Include integration and method responses in that hash.** This one fails
+silently. If the hash omits them, editing a response mapping and running
+`apply` updates the API configuration but **creates no new deployment**. The
+`prod` stage keeps serving the previous snapshot, so the endpoint returns
+exactly what it did before — while the console displays your new configuration.
+It is very easy to lose an afternoon assuming the template is wrong.
+
+The rule: anything that affects the API's runtime behaviour belongs in the
+hash.
+
 ---
 
 ## Practice
@@ -344,6 +412,20 @@ doubt the rest of what you say.
 | **a gotcha** | "One practical gotcha: no `Bearer` prefix." |
 | **to default to** | "Default to the Cognito authorizer." |
 | **preemptively** | "Don't reach for a Lambda authorizer preemptively." |
+| **to mask an error** | "The integration response was masking backend errors as 200." |
+| **to swallow an error** | "That catch block swallows the exception." |
+| **to fail silently** | "It fails silently — the config updates but never deploys." |
+| **to pass through** | "With a proxy integration the status code passes straight through." |
+| **verbatim** | "The backend's error body reaches the client verbatim." |
+| **to be blind to** | "Retry logic is blind to a failure that arrives as a 200." |
+| **to surface** something | "Nothing surfaces the failure to the caller." |
+| **to fire** (an alarm) | "The alarm never fires because the metric stays at zero." |
+
+That block of phrases came out of an actual debugging session on this lab —
+the integration returned `200` wrapping an HTML `503`. **Phrases you collect
+while genuinely confused stick far better than phrases from a list**, so when
+something breaks, write down how you would describe it in English before you
+fix it.
 
 Two errors that stand out badly:
 

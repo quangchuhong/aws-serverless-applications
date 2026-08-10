@@ -48,6 +48,14 @@ is listed here.
 | to be lost / to lose data | "Nothing is lost; processing just lags." |
 | to recover from | "You need time to investigate before you recover from it." |
 | to roll back | "Rolling back is just repointing the alias." |
+| to mask an error | "The integration response was masking backend errors as 200." |
+| to swallow an error | "That catch block swallows the exception." |
+| to fail silently | "It fails silently — the config updates but never deploys." |
+| to be blind to | "Retry logic is blind to a failure that arrives as a 200." |
+| to surface something | "Nothing surfaces the failure to the caller." |
+| to fire (an alarm) | "The alarm never fires because the metric stays at zero." |
+| verbatim | "The error body reaches the client verbatim." |
+| to pass through | "With a proxy integration the status code passes straight through." |
 
 ---
 
