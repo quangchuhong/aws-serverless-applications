@@ -689,10 +689,31 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
     create_before_destroy = true
   }
 
+  # Đưa vào triggers là CHƯA ĐỦ. Khi một integration response được sửa
+  # TẠI CHỖ (in-place update), Terraform không đảm bảo nó được apply xong
+  # trước khi deployment mới được tạo. Deployment chụp snapshot cấu hình tại
+  # thời điểm tạo, nên nếu chạy trước thì nó chụp phải cấu hình CŨ.
+  #
+  # Triệu chứng: apply thành công, Console hiển thị template mới, nhưng
+  # endpoint vẫn trả kết quả cũ. Lambda code và gateway response thì lại đổi
+  # ngay (chúng không cần deployment) — nên bạn thấy trạng thái nửa cũ nửa mới,
+  # rất khó đoán.
+  #
+  # depends_on tường minh mới ép được thứ tự.
   depends_on = [
     aws_api_gateway_integration.post_orders_integration,
     aws_api_gateway_integration.post_notify_integration,
     aws_api_gateway_integration.get_order_integration,
+    aws_api_gateway_integration_response.post_orders_200,
+    aws_api_gateway_integration_response.post_orders_400,
+    aws_api_gateway_integration_response.post_notify_200,
+    aws_api_gateway_integration_response.post_notify_500,
+    aws_api_gateway_integration_response.get_order_200,
+    aws_api_gateway_integration_response.get_order_502,
+    aws_api_gateway_integration_response.get_order_404,
+    aws_api_gateway_gateway_response.integration_timeout,
+    aws_api_gateway_gateway_response.integration_failure,
+    aws_api_gateway_gateway_response.unauthorized,
   ]
 }
 

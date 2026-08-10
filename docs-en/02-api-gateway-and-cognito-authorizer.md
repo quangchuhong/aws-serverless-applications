@@ -423,6 +423,34 @@ It is very easy to lose an afternoon assuming the template is wrong.
 The rule: anything that affects the API's runtime behaviour belongs in the
 hash.
 
+**And `triggers` alone is still not enough.** When an integration response is
+modified **in place** rather than created, Terraform does not guarantee that
+update finishes before the new deployment is created. A deployment snapshots
+the configuration at the moment it is created — run it first and it captures
+the old configuration.
+
+The symptom is genuinely confusing, because the system lands in a **half-old,
+half-new** state:
+
+| Component | Needs a deployment? | After `apply` |
+|-----------|---------------------|---------------|
+| Lambda code | No | Changes immediately |
+| Gateway response | No | Changes immediately |
+| Integration response | **Yes** | Still the old one |
+
+You change the function to throw a new error, change the response template to
+match, apply successfully — and the endpoint returns something that matches
+neither version of your code, because it is the new function wired to the old
+template.
+
+The fix is an explicit `depends_on` on `aws_api_gateway_deployment` listing
+**every** integration response, method response and gateway response. This is
+the one place in this lab where `depends_on` is genuinely required rather than
+redundant.
+
+To recover once it has already happened:
+`terraform apply -replace="aws_api_gateway_deployment.<name>"`.
+
 ---
 
 ## Practice

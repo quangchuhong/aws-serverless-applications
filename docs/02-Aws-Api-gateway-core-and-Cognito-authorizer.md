@@ -618,6 +618,30 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
 > Nguyên tắc: mọi resource ảnh hưởng tới hành vi runtime của API đều phải có
 > mặt trong hash.
 
+> **Và `triggers` vẫn chưa đủ.** Khi một integration response được sửa **tại
+> chỗ** (in-place update, không phải tạo mới), Terraform không đảm bảo nó
+> hoàn tất trước khi deployment mới được tạo. Deployment chụp snapshot cấu
+> hình tại thời điểm nó được tạo — chạy trước thì chụp phải cấu hình cũ.
+>
+> Triệu chứng rất dễ gây hoang mang, vì hệ thống rơi vào trạng thái **nửa cũ
+> nửa mới**:
+>
+> | Thành phần | Cần deployment? | Sau `apply` |
+> |------------|-----------------|-------------|
+> | Code Lambda | Không | Đổi ngay |
+> | Gateway response | Không | Đổi ngay |
+> | Integration response | **Có** | Vẫn như cũ |
+>
+> Bạn sửa Lambda ném exception mới, sửa cả response template, apply thành
+> công — rồi endpoint trả về một response không khớp với bất kỳ phiên bản nào
+> trong code, vì nó là Lambda mới ghép với template cũ.
+>
+> Cách chữa: khai `depends_on` tường minh trên `aws_api_gateway_deployment`,
+> liệt kê **tất cả** integration response, method response và gateway
+> response. Đây là chỗ duy nhất `depends_on` thực sự cần thiết trong lab này.
+>
+> Chữa cháy khi đã lỡ: `terraform apply -replace="aws_api_gateway_deployment.<tên>"`.
+
 ### 4.6. Usage Plan & API Key
 ```hcl
 resource "aws_api_gateway_api_key" "mobile_key" {
