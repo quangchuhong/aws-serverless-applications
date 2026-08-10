@@ -262,6 +262,18 @@ resource "aws_api_gateway_method_response" "post_orders_200" {
   }
 }
 
+resource "aws_api_gateway_method_response" "post_orders_400" {
+  rest_api_id = aws_api_gateway_rest_api.order_api.id
+  resource_id = aws_api_gateway_resource.orders.id
+  http_method = aws_api_gateway_method.post_orders.http_method
+  status_code = "400"
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+# Nhánh default: KHÔNG có selection_pattern
 resource "aws_api_gateway_integration_response" "post_orders_200" {
   rest_api_id = aws_api_gateway_rest_api.order_api.id
   resource_id = aws_api_gateway_resource.orders.id
@@ -271,26 +283,44 @@ resource "aws_api_gateway_integration_response" "post_orders_200" {
   response_templates = {
     "application/json" = <<-EOF
       #set($inputRoot = $input.path('$'))
-      #if($inputRoot.ok == true)
       {
         "orderId": "$inputRoot.order.id",
         "total": $inputRoot.order.total,
         "status": "CREATED",
         "debug": $input.json('$.debug')
       }
-      #else
-      {
-        "message": "Order creation failed",
-        "errorCode": "$inputRoot.errorCode",
-        "details": "$inputRoot.message"
-      }
-      #end
     EOF
   }
 
   depends_on = [
     aws_api_gateway_integration.post_orders_integration,
     aws_api_gateway_method_response.post_orders_200,
+  ]
+}
+
+# Với LAMBDA integration, selection_pattern khớp với ERROR MESSAGE mà function
+# ném ra — khác hẳn HTTP integration (khớp status code của backend).
+# Lambda ném "[400] Missing customerId or items", regex dưới bắt tiền tố đó.
+resource "aws_api_gateway_integration_response" "post_orders_400" {
+  rest_api_id       = aws_api_gateway_rest_api.order_api.id
+  resource_id       = aws_api_gateway_resource.orders.id
+  http_method       = aws_api_gateway_method.post_orders.http_method
+  status_code       = aws_api_gateway_method_response.post_orders_400.status_code
+  selection_pattern = ".*\\[400\\].*"
+
+  response_templates = {
+    "application/json" = <<-EOF
+      #set($msg = $input.path('$.errorMessage'))
+      {
+        "message": "$msg.replaceAll("\[400\] ", "")",
+        "errorCode": "INVALID_ORDER"
+      }
+    EOF
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.post_orders_integration,
+    aws_api_gateway_method_response.post_orders_400,
   ]
 }
 
@@ -376,6 +406,23 @@ resource "aws_api_gateway_method_response" "post_notify_200" {
   }
 }
 
+resource "aws_api_gateway_method_response" "post_notify_500" {
+  rest_api_id = aws_api_gateway_rest_api.order_api.id
+  resource_id = aws_api_gateway_resource.order_id_notify.id
+  http_method = aws_api_gateway_method.post_notify.http_method
+  status_code = "500"
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+# Nhánh default: KHÔNG có selection_pattern.
+#
+# Đây từng là integration response DUY NHẤT của endpoint này, nên mọi lỗi từ
+# SNS (400 MissingParameter, 403 AuthorizationError) đều bị viết lại thành
+# 200 + "Notification queued". Client không có cách nào biết notification
+# chưa từng được gửi.
 resource "aws_api_gateway_integration_response" "post_notify_200" {
   rest_api_id = aws_api_gateway_rest_api.order_api.id
   resource_id = aws_api_gateway_resource.order_id_notify.id
@@ -393,6 +440,28 @@ resource "aws_api_gateway_integration_response" "post_notify_200" {
   depends_on = [
     aws_api_gateway_integration.post_notify_integration,
     aws_api_gateway_method_response.post_notify_200,
+  ]
+}
+
+# SNS trả 4xx khi request sai (template hỏng, thiếu tham số) — đó là lỗi của
+# CHÚNG TA, không phải của client, nên trả 500 chứ không phải 400.
+# SNS trả 5xx khi chính nó gặp sự cố -> 500 luôn cho gọn.
+resource "aws_api_gateway_integration_response" "post_notify_500" {
+  rest_api_id       = aws_api_gateway_rest_api.order_api.id
+  resource_id       = aws_api_gateway_resource.order_id_notify.id
+  http_method       = aws_api_gateway_method.post_notify.http_method
+  status_code       = aws_api_gateway_method_response.post_notify_500.status_code
+  selection_pattern = "[45]\\d{2}"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Failed to queue notification"
+    })
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.post_notify_integration,
+    aws_api_gateway_method_response.post_notify_500,
   ]
 }
 
@@ -522,6 +591,58 @@ resource "aws_api_gateway_integration_response" "get_order_404" {
 }
 
 ########################
+# Gateway Responses
+########################
+
+# TẦNG THỨ BA, tách biệt với integration response.
+#
+# Khi API Gateway chưa hề nhận được response từ backend (timeout, DNS lỗi,
+# authorizer từ chối, request không khớp route nào), nó tự sinh response.
+# Lúc đó không có status code nào của backend để khớp, nên selection_pattern
+# hoàn toàn không được xét — integration response bị bỏ qua.
+#
+# Quan sát được trong lab: backend treo -> client nhận
+# 504 {"message": "Endpoint request timed out"} — câu của AWS, không phải
+# của template nào trong file này.
+
+resource "aws_api_gateway_gateway_response" "integration_timeout" {
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  response_type = "INTEGRATION_TIMEOUT"
+  status_code   = "504"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Upstream service did not respond in time"
+    })
+  }
+}
+
+resource "aws_api_gateway_gateway_response" "integration_failure" {
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  response_type = "INTEGRATION_FAILURE"
+  status_code   = "502"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Upstream service unreachable"
+    })
+  }
+}
+
+# Mặc định API Gateway trả body rỗng cho 401/403 của authorizer.
+resource "aws_api_gateway_gateway_response" "unauthorized" {
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  response_type = "UNAUTHORIZED"
+  status_code   = "401"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Missing or invalid authentication token"
+    })
+  }
+}
+
+########################
 # Deployment & Stage
 ########################
 
@@ -545,15 +666,22 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
       aws_api_gateway_integration.post_notify_integration,
       aws_api_gateway_integration.get_order_integration,
       aws_api_gateway_integration_response.post_orders_200,
+      aws_api_gateway_integration_response.post_orders_400,
       aws_api_gateway_integration_response.post_notify_200,
+      aws_api_gateway_integration_response.post_notify_500,
       aws_api_gateway_integration_response.get_order_200,
       aws_api_gateway_integration_response.get_order_502,
       aws_api_gateway_integration_response.get_order_404,
       aws_api_gateway_method_response.post_orders_200,
+      aws_api_gateway_method_response.post_orders_400,
       aws_api_gateway_method_response.post_notify_200,
+      aws_api_gateway_method_response.post_notify_500,
       aws_api_gateway_method_response.get_order_200,
       aws_api_gateway_method_response.get_order_502,
       aws_api_gateway_method_response.get_order_404,
+      aws_api_gateway_gateway_response.integration_timeout,
+      aws_api_gateway_gateway_response.integration_failure,
+      aws_api_gateway_gateway_response.unauthorized,
     ]))
   }
 

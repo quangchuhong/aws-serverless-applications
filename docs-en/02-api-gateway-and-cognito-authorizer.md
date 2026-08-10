@@ -109,6 +109,57 @@ resource "aws_api_gateway_integration_response" "get_order_502" {
 > against the **error message** the function throws. Same attribute, entirely
 > different semantics.
 
+### Three layers produce responses — the easiest thing to confuse
+
+A response reaching the client can originate in **three different places**, and
+they do not substitute for one another:
+
+| Layer | Terraform resource | When it applies |
+|-------|--------------------|-----------------|
+| **Method response** | `aws_api_gateway_method_response` | Declares the *contract* — which status codes this method may return |
+| **Integration response** | `aws_api_gateway_integration_response` | Maps what the backend **did return** onto a status code and body |
+| **Gateway response** | `aws_api_gateway_gateway_response` | API Gateway **generates** the response itself, having never reached the backend |
+
+The critical point: when API Gateway receives **nothing** from the backend —
+a timeout, a DNS failure, an authorizer rejection, a request matching no route
+— there is no status code to match against, so **`selection_pattern` is never
+evaluated**. The entire integration-response layer is bypassed.
+
+Observed in this lab: with the backend hanging until the integration timeout
+(29 seconds maximum for a REST API), the client received:
+
+```json
+HTTP/2 504
+{"message": "Endpoint request timed out"}
+```
+
+AWS generated that. No template in `main.tf` produced it. Changing it requires
+a gateway response:
+
+```hcl
+resource "aws_api_gateway_gateway_response" "integration_timeout" {
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  response_type = "INTEGRATION_TIMEOUT"
+  status_code   = "504"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Upstream service did not respond in time"
+    })
+  }
+}
+```
+
+Response types worth configuring: `INTEGRATION_TIMEOUT`,
+`INTEGRATION_FAILURE`, `UNAUTHORIZED`, `ACCESS_DENIED`, `THROTTLED`,
+`MISSING_AUTHENTICATION_TOKEN` (returned when a path matches no route),
+`DEFAULT_4XX`, `DEFAULT_5XX`.
+
+> Worth doing on day one for a practical reason: API Gateway returns an
+> **empty body** by default for authorizer 401s and 403s. A partner integrating
+> against your API gets a rejection that explains nothing, and then messages
+> you to ask why.
+
 ---
 
 ## 3. Mapping templates (VTL)

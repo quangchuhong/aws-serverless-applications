@@ -121,6 +121,60 @@ curl -i "$API_URL/orders/ord-999" \
 terraform apply -var="http_backend_url=https://postman-echo.com/get"
 ```
 
+### Kiểm chứng ánh xạ status code
+
+Ép backend trả mã cụ thể để test từng nhánh:
+
+```bash
+# 5xx -> 502
+terraform apply -auto-approve -var="http_backend_url=https://postman-echo.com/status/503"
+curl -s -o /dev/null -w "backend 503 -> client %{http_code}\n" \
+  "$API_URL/orders/ord-999" -H "x-api-key: $API_KEY" -H "Authorization: $ID_TOKEN"
+
+# 4xx -> 404
+terraform apply -auto-approve -var="http_backend_url=https://postman-echo.com/status/404"
+curl -s -o /dev/null -w "backend 404 -> client %{http_code}\n" \
+  "$API_URL/orders/ord-999" -H "x-api-key: $API_KEY" -H "Authorization: $ID_TOKEN"
+
+terraform apply -auto-approve   # trả về mặc định
+```
+
+Xác nhận metric không còn bị mù:
+
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ApiGateway --metric-name 5XXError \
+  --dimensions Name=ApiName,Value=OrderServiceAPI Name=Stage,Value=prod \
+  --start-time "$(date -u -v-15M +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --period 300 --statistics Sum
+```
+
+### Kiểm chứng POST /orders — validation error
+
+```bash
+curl -i -X POST "$API_URL/orders" \
+  -H "x-api-key: $API_KEY" -H "Content-Type: application/json" \
+  -d '{"meta":{"source":"mobile"}}'
+```
+
+Mong đợi **400** + `{"message":"Missing customerId or items","errorCode":"INVALID_ORDER"}`.
+Trước bản vá, endpoint trả **200** cho đơn hàng bị từ chối.
+
+### Kiểm chứng SNS thực sự nhận được message
+
+Response `{"message":"Notification queued"}` là chuỗi tĩnh — nó không chứng minh
+gì cả. Kiểm tra bằng metric:
+
+```bash
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/SNS --metric-name NumberOfMessagesPublished \
+  --dimensions Name=TopicName,Value=order-notifications \
+  --start-time "$(date -u -v-15M +%Y-%m-%dT%H:%M:%SZ)" \
+  --end-time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --period 300 --statistics Sum
+```
+
 ## Dọn dẹp
 
 ```bash

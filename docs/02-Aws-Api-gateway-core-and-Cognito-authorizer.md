@@ -516,6 +516,56 @@ resource "aws_api_gateway_integration_response" "get_order_502" {
 > **error message** mà function ném ra. Cùng một thuộc tính, hai ngữ nghĩa
 > hoàn toàn khác nhau.
 
+#### Ba tầng sinh ra response — dễ nhầm nhất trong API Gateway
+
+Một response trả về client có thể đến từ **ba nơi khác nhau**, và chúng không
+thay thế được cho nhau:
+
+| Tầng | Resource Terraform | Khi nào dùng |
+|------|--------------------|--------------|
+| **Method response** | `aws_api_gateway_method_response` | Khai báo *hợp đồng*: những status code nào endpoint được phép trả |
+| **Integration response** | `aws_api_gateway_integration_response` | Ánh xạ response **backend đã trả về** sang status code + body cho client |
+| **Gateway response** | `aws_api_gateway_gateway_response` | API Gateway **tự sinh** response, chưa hề gọi tới backend |
+
+Điểm mấu chốt: khi API Gateway **không nhận được gì** từ backend — timeout,
+DNS lỗi, authorizer từ chối, request không khớp route nào — thì không có status
+code nào để khớp, nên **`selection_pattern` hoàn toàn không được xét**. Toàn bộ
+integration response bị bỏ qua.
+
+Quan sát được trong lab: khi backend treo tới hết timeout tích hợp (REST API
+tối đa **29 giây**), client nhận:
+
+```json
+HTTP/2 504
+{"message": "Endpoint request timed out"}
+```
+
+Câu đó do AWS sinh ra, không phải từ template nào trong `main.tf`. Muốn đổi nó
+phải dùng gateway response:
+
+```hcl
+resource "aws_api_gateway_gateway_response" "integration_timeout" {
+  rest_api_id   = aws_api_gateway_rest_api.order_api.id
+  response_type = "INTEGRATION_TIMEOUT"
+  status_code   = "504"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Upstream service did not respond in time"
+    })
+  }
+}
+```
+
+Các `response_type` hay dùng: `INTEGRATION_TIMEOUT`, `INTEGRATION_FAILURE`,
+`UNAUTHORIZED` (authorizer từ chối — mặc định body **rỗng**), `ACCESS_DENIED`,
+`THROTTLED`, `MISSING_AUTHENTICATION_TOKEN` (gọi sai path), `DEFAULT_4XX`,
+`DEFAULT_5XX`.
+
+> Đáng làm ngay từ đầu vì lý do rất thực tế: mặc định API Gateway trả **body
+> rỗng** cho 401/403 của authorizer. Client gọi API bị từ chối sẽ nhận một
+> response không nói gì cả, và người tích hợp phía bên kia sẽ nhắn tin hỏi bạn.
+
 ### 4.5. Deployment & Stage
 ```hcl
 resource "aws_api_gateway_deployment" "order_api_deployment" {
