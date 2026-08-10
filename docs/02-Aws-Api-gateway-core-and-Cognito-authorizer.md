@@ -468,22 +468,53 @@ EOF
 }
 
 resource "aws_api_gateway_method_response" "get_order_200" { ... }
+resource "aws_api_gateway_method_response" "get_order_502" { ... }
 
+# Nhánh default: KHÔNG có selection_pattern
 resource "aws_api_gateway_integration_response" "get_order_200" {
   ...
-  response_templates = {
-    "application/json" = <<EOF
-$input.body
-EOF
-  }
+  status_code = "200"
+}
 
-  depends_on = [
-    aws_api_gateway_integration.get_order_integration,
-    aws_api_gateway_method_response.get_order_200
-  ]
+# Với HTTP integration, selection_pattern khớp với STATUS CODE của backend
+resource "aws_api_gateway_integration_response" "get_order_502" {
+  ...
+  status_code       = "502"
+  selection_pattern = "5\\d{2}"
+
+  response_templates = {
+    "application/json" = jsonencode({ message = "Upstream service unavailable" })
+  }
 }
 
 ```
+
+> **Lỗi rất dễ mắc: chỉ khai một integration response.**
+>
+> Một `aws_api_gateway_integration_response` **không có `selection_pattern`**
+> chính là nhánh **default** — mọi status code từ backend đều rơi vào nó. Nếu
+> bạn chỉ khai đúng một cái với `status_code = "200"`, thì backend trả 503,
+> 500 hay 404 đều bị viết lại thành **200** gửi về client, kèm nguyên body lỗi
+> (có thể là HTML) dán nhãn `Content-Type: application/json`.
+>
+> Hậu quả không chỉ là response xấu:
+>
+> - Client không có cách nào phát hiện backend chết → retry logic, circuit
+>   breaker đều mù.
+> - Metric `5XXError` của API Gateway vẫn bằng **0**, nên alarm không bao giờ
+>   kêu.
+> - Body lỗi của backend đi thẳng ra ngoài, có thể lộ stack trace hoặc thông
+>   tin nội bộ.
+>
+> Đây là điểm khác biệt lớn giữa non-proxy và proxy integration: với
+> `AWS_PROXY`/`HTTP_PROXY`, status code của backend được truyền thẳng và bạn
+> không phải khai gì cả. Với non-proxy, **mỗi status code muốn trả về đều phải
+> khai tường minh**.
+>
+> Lưu ý thêm về `selection_pattern`: với **HTTP integration** nó là regex khớp
+> với **status code** của backend; với **Lambda integration** nó khớp với
+> **error message** mà function ném ra. Cùng một thuộc tính, hai ngữ nghĩa
+> hoàn toàn khác nhau.
 
 ### 4.5. Deployment & Stage
 ```hcl
@@ -492,6 +523,8 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
 
   # KHÔNG dùng timestamp(): sẽ tạo deployment mới mỗi lần apply kể cả khi
   # không có gì thay đổi. Hash cấu hình để chỉ redeploy khi API thực sự đổi.
+  #
+  # Phải liệt kê CẢ method_response và integration_response — xem cảnh báo dưới.
   triggers = {
     redeploy = sha1(jsonencode([
       aws_api_gateway_resource.orders,
@@ -503,6 +536,12 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
       aws_api_gateway_integration.post_orders_integration,
       aws_api_gateway_integration.post_notify_integration,
       aws_api_gateway_integration.get_order_integration,
+      aws_api_gateway_integration_response.post_orders_200,
+      aws_api_gateway_integration_response.post_notify_200,
+      aws_api_gateway_integration_response.get_order_200,
+      aws_api_gateway_integration_response.get_order_502,
+      aws_api_gateway_method_response.get_order_200,
+      aws_api_gateway_method_response.get_order_502,
     ]))
   }
 
@@ -518,6 +557,16 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
 }
 
 ```
+
+> **Thiếu resource trong `triggers` là một bug im lặng.** Nếu hash không chứa
+> `integration_response`, thì khi bạn sửa mapping response rồi chạy `apply`,
+> Terraform cập nhật cấu hình API nhưng **không tạo deployment mới**. Stage
+> `prod` vẫn phục vụ snapshot cũ, endpoint trả kết quả y hệt như trước — trong
+> khi Console hiển thị cấu hình mới toanh. Rất dễ mất nửa buổi debug vì tưởng
+> template viết sai.
+>
+> Nguyên tắc: mọi resource ảnh hưởng tới hành vi runtime của API đều phải có
+> mặt trong hash.
 
 ### 4.6. Usage Plan & API Key
 ```hcl

@@ -100,6 +100,27 @@ Kiểm tra từng lớp bảo vệ:
 
 > Cognito authorizer mặc định nhận token **không có** tiền tố `Bearer `.
 
+### Khi backend trả lỗi
+
+`httpbin.org` hay trả **503** do quá tải. Kiểm tra xem API Gateway có ánh xạ
+đúng không:
+
+```bash
+curl -i "$API_URL/orders/ord-999" \
+  -H "x-api-key: $API_KEY" -H "Authorization: $ID_TOKEN"
+```
+
+- **502** + `{"message":"Upstream service unavailable"}` → đúng như thiết kế.
+- **200** + trang HTML `503 Service Temporarily Unavailable` → integration
+  response đang thiếu `selection_pattern`, mọi status của backend bị viết lại
+  thành 200. Xem mục 4.4.c trong doc để hiểu vì sao.
+
+Đổi backend nếu httpbin chết hẳn:
+
+```bash
+terraform apply -var="http_backend_url=https://postman-echo.com/get"
+```
+
 ## Dọn dẹp
 
 ```bash

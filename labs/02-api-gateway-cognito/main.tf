@@ -32,6 +32,16 @@ variable "callback_url" {
   default     = "http://localhost:3000/callback"
 }
 
+variable "http_backend_url" {
+  description = <<-EOT
+    Backend HTTP demo cho GET /orders/{id}.
+    httpbin.org hay trả 503 do bị dùng quá tải. Nếu gặp, thử:
+      -var="http_backend_url=https://postman-echo.com/get"
+  EOT
+  type        = string
+  default     = "https://httpbin.org/get"
+}
+
 resource "random_id" "suffix" {
   byte_length = 4
 }
@@ -410,12 +420,17 @@ resource "aws_api_gateway_integration" "get_order_integration" {
   http_method             = aws_api_gateway_method.get_order.http_method
   integration_http_method = "GET"
   type                    = "HTTP"
-  uri                     = "https://httpbin.org/get"
+  uri                     = var.http_backend_url
 
   request_parameters = {
     "integration.request.querystring.order_id" = "method.request.path.id"
   }
 }
+
+
+# Với non-proxy integration, mỗi status code muốn trả về client phải được khai
+# tường minh. Nếu chỉ khai 200, mọi response từ backend (kể cả 503) đều bị viết
+# lại thành 200 và client không có cách nào biết backend đã chết.
 
 resource "aws_api_gateway_method_response" "get_order_200" {
   rest_api_id = aws_api_gateway_rest_api.order_api.id
@@ -428,6 +443,30 @@ resource "aws_api_gateway_method_response" "get_order_200" {
   }
 }
 
+resource "aws_api_gateway_method_response" "get_order_502" {
+  rest_api_id = aws_api_gateway_rest_api.order_api.id
+  resource_id = aws_api_gateway_resource.order_id.id
+  http_method = aws_api_gateway_method.get_order.http_method
+  status_code = "502"
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+resource "aws_api_gateway_method_response" "get_order_404" {
+  rest_api_id = aws_api_gateway_rest_api.order_api.id
+  resource_id = aws_api_gateway_resource.order_id.id
+  http_method = aws_api_gateway_method.get_order.http_method
+  status_code = "404"
+
+  response_models = {
+    "application/json" = "Empty"
+  }
+}
+
+# Nhánh default: KHÔNG có selection_pattern. Bắt mọi response không khớp
+# pattern nào bên dưới — tức là các mã 2xx/3xx.
 resource "aws_api_gateway_integration_response" "get_order_200" {
   rest_api_id = aws_api_gateway_rest_api.order_api.id
   resource_id = aws_api_gateway_resource.order_id.id
@@ -437,6 +476,48 @@ resource "aws_api_gateway_integration_response" "get_order_200" {
   depends_on = [
     aws_api_gateway_integration.get_order_integration,
     aws_api_gateway_method_response.get_order_200,
+  ]
+}
+
+# Với HTTP integration, selection_pattern là regex khớp với STATUS CODE của
+# backend (khác Lambda integration, nơi nó khớp với error message).
+resource "aws_api_gateway_integration_response" "get_order_502" {
+  rest_api_id       = aws_api_gateway_rest_api.order_api.id
+  resource_id       = aws_api_gateway_resource.order_id.id
+  http_method       = aws_api_gateway_method.get_order.http_method
+  status_code       = aws_api_gateway_method_response.get_order_502.status_code
+  selection_pattern = "5\\d{2}"
+
+  # Không trả nguyên body lỗi của backend cho client — nó có thể là HTML,
+  # stack trace, hoặc lộ thông tin nội bộ.
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Upstream service unavailable"
+    })
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.get_order_integration,
+    aws_api_gateway_method_response.get_order_502,
+  ]
+}
+
+resource "aws_api_gateway_integration_response" "get_order_404" {
+  rest_api_id       = aws_api_gateway_rest_api.order_api.id
+  resource_id       = aws_api_gateway_resource.order_id.id
+  http_method       = aws_api_gateway_method.get_order.http_method
+  status_code       = aws_api_gateway_method_response.get_order_404.status_code
+  selection_pattern = "4\\d{2}"
+
+  response_templates = {
+    "application/json" = jsonencode({
+      message = "Order not found"
+    })
+  }
+
+  depends_on = [
+    aws_api_gateway_integration.get_order_integration,
+    aws_api_gateway_method_response.get_order_404,
   ]
 }
 
@@ -450,6 +531,9 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
   # KHÔNG dùng timestamp(): sẽ tạo deployment mới mỗi lần apply kể cả khi
   # không có gì thay đổi.
   triggers = {
+    # Phải liệt kê CẢ integration_response và method_response. Thiếu chúng thì
+    # sửa mapping response sẽ được apply lên API nhưng không bao giờ được
+    # deploy sang stage — bạn sửa xong mà endpoint vẫn trả kết quả cũ.
     redeploy = sha1(jsonencode([
       aws_api_gateway_resource.orders,
       aws_api_gateway_resource.order_id,
@@ -460,6 +544,16 @@ resource "aws_api_gateway_deployment" "order_api_deployment" {
       aws_api_gateway_integration.post_orders_integration,
       aws_api_gateway_integration.post_notify_integration,
       aws_api_gateway_integration.get_order_integration,
+      aws_api_gateway_integration_response.post_orders_200,
+      aws_api_gateway_integration_response.post_notify_200,
+      aws_api_gateway_integration_response.get_order_200,
+      aws_api_gateway_integration_response.get_order_502,
+      aws_api_gateway_integration_response.get_order_404,
+      aws_api_gateway_method_response.post_orders_200,
+      aws_api_gateway_method_response.post_notify_200,
+      aws_api_gateway_method_response.get_order_200,
+      aws_api_gateway_method_response.get_order_502,
+      aws_api_gateway_method_response.get_order_404,
     ]))
   }
 
