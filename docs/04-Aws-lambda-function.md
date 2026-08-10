@@ -19,7 +19,14 @@ Lab này minh họa:
 - Tính phí theo:
   - Số lần gọi (invocations).
   - Thời gian chạy (duration) × bộ nhớ (memory).
-    
+
+> **Runtime có hạn sử dụng.** AWS deprecate runtime theo lịch riêng, bám sát
+> vòng đời upstream của ngôn ngữ. Khi runtime hết hạn: không tạo được function
+> mới, rồi không update được code, và cuối cùng không còn nhận security patch.
+> `nodejs18.x` đã hết hỗ trợ từ 9/2025 — lab này dùng `nodejs22.x`.
+> Kiểm tra định kỳ trang "Lambda runtimes" trong AWS docs trước khi bắt đầu
+> project mới.
+
 ### 0.2. Invocation (Cách Lambda được gọi)
 
 3 kiểu chính:
@@ -40,7 +47,7 @@ Lab này minh họa:
 
     - Lambda chủ động poll dữ liệu từ nguồn:
       - SQS, Kinesis, DynamoDB Streams, Kafka…
-    - Mỗi batch data đọc được → 1 lần invoke Lambd
+    - Mỗi batch data đọc được → 1 lần invoke Lambda.
 
 ### 0.3. Concurrency (Đồng thời)
 
@@ -89,102 +96,40 @@ Các loại concurrency:
 
 ### 0.5. Dead Letter Queue (DLQ) & Event Destinations
 
-- DLQ (Dead Letter Queue):
+Đây là **hai cơ chế khác nhau**, hay bị gọi lẫn lộn là "DLQ":
 
-  - Thường là SQS hoặc SNS.
-  - Lưu các event mà Lambda xử lý thất bại sau khi đã retry.
-  - Dùng để:
-    - Debug, kiểm tra lỗi.
-    - Hoặc có 1 worker khác đọc & xử lý lại.
-      
-- Event Destinations (cho async invoke):
+- **DLQ của Lambda** (`dead_letter_config` — cơ chế cũ):
+
+  - Đích đến là SQS hoặc SNS.
+  - Chỉ áp dụng cho **async invoke** (S3, SNS, EventBridge).
+  - Gửi đi **payload gốc của event**, không kèm thông tin lỗi.
+  - AWS khuyến nghị dùng Event Destinations thay thế.
+
+- **Event Destinations** (`function_event_invoke_config` — cơ chế hiện tại):
 
   - Cấu hình điểm đến cho:
-    - on_failure: khi Lambda lỗi sau retry.
-    - on_success: khi Lambda xử lý thành công.
+    - `on_failure`: khi Lambda lỗi sau khi hết retry.
+    - `on_success`: khi Lambda xử lý thành công.
   - Destination có thể là: SQS, SNS, Lambda khác, EventBridge.
+  - Gửi đi **payload gốc + request/response context + error message** → debug
+    dễ hơn hẳn so với DLQ cũ.
+
+- **DLQ của SQS** (redrive policy) — hoàn toàn khác hai cái trên:
+
+  - Là thuộc tính của **queue**, không phải của Lambda.
+  - Áp dụng khi Lambda đọc SQS qua event source mapping.
+  - Message chuyển sang DLQ sau `maxReceiveCount` lần nhận không thành công.
+
+> Lab trong tài liệu này dùng `on_failure` destination trỏ tới một SQS queue.
+> Về mặt kỹ thuật đó là **Event Destination**, không phải `dead_letter_config`,
+> dù tên queue là `async-s3-lambda-dlq`.
 
 
-### 0.6. Monitoring & Observability cho Lambda
+### 0.6. SQS → Lambda & xử lý đồng thời nhiều message
 
-Monitoring giúp bạn hiểu:
+> Phần monitoring (CloudWatch Logs, Metrics) nằm ở [mục 6](#6-monitoring--observability-cho-lambda).
 
-  - Lambda đang chạy tốt hay không?
-  - Concurrency có bị full không?
-  - Có bị throttle, lỗi nhiều không?
-  - Thời gian chạy (duration) và lỗi (error) như thế nào?
-    
-AWS cung cấp các công cụ chính:
-
-  - CloudWatch Logs – log chi tiết từng invoke.
-  - CloudWatch Metrics – metric tổng quan (Invocations, Errors, Duration,…).
-  - X-Ray – trace, profiling chi tiết (tuỳ chọn).
-    
-#### 0.6.1. CloudWatch Logs
-
-Mỗi Lambda function mặc định log vào CloudWatch Logs (nhờ policy AWSLambdaBasicExecutionRole):
-
-  - Log group: /aws/lambda/<function_name>.
-  - Mỗi container/instance có log stream riêng.
-
-Dùng CLI:
-
-```bash
-aws logs tail "/aws/lambda/sync-api-lambda" --since 5m
-
-```
-
-Trong log bạn thường thấy:
-
-  - START RequestId: ...
-  - Log của bạn: console.log(...), console.error(...).
-  - END RequestId: ...
-  - REPORT RequestId: ... Duration: ... ms ...
-
-
-#### 0.6.2. CloudWatch Metrics – Những metric quan trọng
-
-Vào CloudWatch → Metrics → Lambda → chọn theo FunctionName.
-
-Các metric chính:
-
-  - Invocations  
-
-    - Số lần function được invoke (kể cả thành công hay lỗi).
-      
-  - Errors  
-
-    - Số lần invoke trả lỗi (không tính retry async nội bộ).
-      
-  - Throttles  
-
-    - Số lần bị throttle (Rate Exceeded / TooManyRequests) do:
-      - Vượt account concurrency.
-      - Vượt reserved_concurrent_executions.
-
-  - ConcurrentExecutions  
-
-    - Số instance đang chạy cùng lúc cho function.
-      
-  - Duration  
-
-    - Thời gian chạy (ms).
-    - Có thể xem P50, P90, P95,… để hiểu latency.
-      
-  - ProvisionedConcurrentExecutions / ProvisionedConcurrencyUtilization (nếu dùng PC)  
-
-    - Theo dõi mức độ sử dụng Provisioned Concurrency.
-      
-Bạn có thể dùng các metric này để:
-
-  - Vẽ biểu đồ concurrency theo thời gian.
-  - Phát hiện khi nào function bị throttle.
-  - Tối ưu memory / timeout / provisioned concurrency.
-
-
-#### 0.6.3 Lý thuyết: SQS → Lambda & xử lý đồng thời nhiều message
-
-##### 1. SQS → Lambda hoạt động thế nào?
+#### 0.6.1. SQS → Lambda hoạt động thế nào?
 
 Bạn cấu hình Event Source Mapping giữa SQS và Lambda:
 ```text
@@ -196,7 +141,7 @@ Bạn cấu hình Event Source Mapping giữa SQS và Lambda:
   - Gom message theo batch_size.
   - Mỗi batch → 1 lần invoke Lambda (1 execution).
 
-##### 2. batch_size và Records
+#### 0.6.2. batch_size và Records
 
 - batch_size = N → mỗi execution Lambda nhận tối đa N message:
 ```json
@@ -219,7 +164,7 @@ for (const record of event.Records) {
 
 ```
 
-##### 3. Xử lý đồng thời nhiều message
+#### 0.6.3. Xử lý đồng thời nhiều message
 
 - Concurrency Lambda = số execution đang chạy cùng lúc.
 
@@ -236,13 +181,13 @@ for (const record of event.Records) {
     - 5 execution × 5 message/batch.
     - Mỗi execution xử lý 5 record trong event.Records (thường là lần lượt).
 
-##### 4. Các “núm vặn” để giới hạn song song
+#### 0.6.4. Các “núm vặn” để giới hạn song song
 
 - batch_size trong Event Source Mapping:
 
-  - 1 → mỗi execution 1 message.
-_  -   1 → mỗi execution nhiều message.
-_
+  - `= 1` → mỗi execution nhận đúng 1 message.
+  - `> 1` → mỗi execution nhận nhiều message trong `event.Records`.
+
 - reserved_concurrent_executions trên Lambda:
 
   - Giới hạn số execution tối đa chạy cùng lúc cho function.
@@ -256,7 +201,7 @@ Kết hợp:
     - Đặt batch_size = 1.
     - Đặt reserved_concurrent_executions = N (và/hoặc maximum_concurrency = N).
 
-##### 5. Retry với SQS (khác với async S3/SNS)
+#### 0.6.5. Retry với SQS (khác với async S3/SNS)
 - Với SQS:
   - Retry không dùng maximum_retry_attempts của Lambda async.
   - Khi execution fail (throw error):
@@ -272,7 +217,7 @@ Kết hợp:
 
 **1. Lambda A – sync-api-lambda**
 
-  - Ngôn ngữ: Node.js 18.
+  - Ngôn ngữ: Node.js 22.
   - Invoke: synchronous qua HTTP API Gateway.
   - Route: GET /test.
   - Cấu hình:
@@ -283,7 +228,7 @@ Kết hợp:
       
 **2. Lambda B – async-s3-lambda**
 
-  - Ngôn ngữ: Node.js 18.
+  - Ngôn ngữ: Node.js 22.
   - Invoke: asynchronous từ S3 bucket.
   - Trigger: s3:ObjectCreated:*.
   - Cấu hình:
@@ -379,10 +324,27 @@ Workflow lỗi + DLQ (khi cố tình throw new Error("Simulated processing error
 
 project/
   main.tf
-  lambda_sync.js
-  lambda_async.js
-  test_concurrency.py   # (tùy chọn, để benchmark concurrency)
+  lambda_sync.mjs       # Lambda A – sync qua API Gateway
+  lambda_async.mjs      # Lambda B – async từ S3
+  test_concurrency.py   # bắn tải song song để quan sát concurrency
 ```
+
+> Code chạy được của lab này nằm ở [`labs/04-lambda-concurrency/`](../labs/04-lambda-concurrency/).
+
+**Vì sao `.mjs` chứ không phải `.js`?**
+
+Runtime Node.js của Lambda quyết định module type theo đuôi file và trường
+`type` trong `package.json`:
+
+| Đuôi file | Module type |
+|-----------|-------------|
+| `.mjs`    | Luôn là ES module |
+| `.cjs`    | Luôn là CommonJS |
+| `.js`     | Phụ thuộc `"type"` trong `package.json`; mặc định CommonJS |
+
+Lab này zip đúng một file, không có `package.json`, nên `.js` sẽ được coi là
+CommonJS và cú pháp `export const handler` báo lỗi. Dùng `.mjs` là cách tường
+minh nhất. (Handler vẫn khai là `lambda_sync.handler` — không kèm đuôi file.)
 
 ---
 
@@ -560,11 +522,11 @@ Trong lab này chúng ta dùng Terraform, nhưng dưới đây là so sánh ng�
 
 Giả sử:
 
-  - Code nằm trong lambda_sync.js.
+  - Code nằm trong lambda_sync.mjs.
   - Bạn zip lại thành lambda_sync.zip.
     
 ```bash
-zip lambda_sync.zip lambda_sync.js
+zip lambda_sync.zip lambda_sync.mjs
 
 ```
 
@@ -573,7 +535,7 @@ Tạo function lần đầu:
 ```bash
 aws lambda create-function \
   --function-name my-sync-lambda \
-  --runtime nodejs18.x \
+  --runtime nodejs22.x \
   --role arn:aws:iam::<ACCOUNT_ID>:role/demo-lambda-exec-role \
   --handler lambda_sync.handler \
   --zip-file fileb://lambda_sync.zip \
@@ -585,16 +547,16 @@ aws lambda create-function \
 Update code (mỗi lần sửa):
 
 ```bash
-zip lambda_sync.zip lambda_sync.js
+zip lambda_sync.zip lambda_sync.mjs
 
 aws lambda update-function-code \
   --function-name my-sync-lambda \
   --zip-file fileb://lambda_sync.zip \
   --publish
-
-_"--publish sẽ tạo một version mới của Lambda (VD: 1, 2, 3,…)."_
-
 ```
+
+> `--publish` tạo một version bất biến mới của Lambda (v1, v2, v3,…).
+> Không có flag này thì chỉ `$LATEST` được cập nhật.
 
 **c) Ví dụ bằng SDK Node.js (tự động deploy từ script)**
 ```js
@@ -638,7 +600,7 @@ Ví dụ khai báo Lambda bằng Terraform (đã dùng trong lab):
 ```hcl
 data "archive_file" "lambda_sync_zip" {
   type        = "zip"
-  source_file = "${path.module}/lambda_sync.js"
+  source_file = "${path.module}/lambda_sync.mjs"
   output_path = "${path.module}/lambda_sync.zip"
 }
 
@@ -646,7 +608,7 @@ resource "aws_lambda_function" "sync_api_lambda" {
   function_name = "sync-api-lambda"
   role          = aws_iam_role.lambda_exec_role.arn
   handler       = "lambda_sync.handler"
-  runtime       = "nodejs18.x"
+  runtime       = "nodejs22.x"
 
   filename         = data.archive_file.lambda_sync_zip.output_path
   source_code_hash = data.archive_file.lambda_sync_zip.output_base64sha256
@@ -660,7 +622,7 @@ resource "aws_lambda_function" "sync_api_lambda" {
 
 ```
 
-Khi sửa code lambda_sync.js:
+Khi sửa code lambda_sync.mjs:
 
 Chỉ cần chạy:
 ```bash
@@ -668,7 +630,40 @@ terraform apply
 
 ```
 
-**So sánh nhanh SDK vs Terraform**
+### 5.4. So sánh nhanh SDK/CLI vs Terraform
+
+| Tiêu chí | SDK / CLI (imperative) | Terraform (declarative) |
+|----------|------------------------|--------------------------|
+| Phạm vi quản lý | Chỉ code + config của function | Toàn bộ hạ tầng: IAM role, trigger, API GW, S3, SQS, alarm… |
+| Trạng thái | Không lưu state; bạn tự biết đang có gì trên AWS | State file ghi nhận thực tế, `plan` cho biết trước thay đổi |
+| Tạo lần đầu | Phải phân biệt `create-function` vs `update-function-code` | `apply` — Terraform tự quyết định tạo hay sửa |
+| Xoá tài nguyên | Tự nhớ và xoá tay từng thứ | `terraform destroy` |
+| Nhiều môi trường | Copy script, sửa biến, dễ lệch | Workspace / module / tfvars |
+| Rollback | Gọi lại API với version cũ | `git revert` + `apply` |
+| Tốc độ vòng lặp | Nhanh — vài giây/lần deploy | Chậm hơn — phải refresh state |
+| Rủi ro drift | Cao: sửa tay trên Console không ai biết | `plan` phát hiện drift |
+
+**Chọn cái nào?**
+
+- **SDK/CLI**: bước "deploy code" bên trong CI/CD, script nội bộ, thử nghiệm
+  nhanh. Đặc biệt hợp khi hạ tầng đã ổn định và chỉ có code thay đổi mỗi ngày.
+- **Terraform**: dựng và quản lý hạ tầng, môi trường production, nhiều môi
+  trường song song.
+
+Thực tế nhiều team dùng **cả hai**: Terraform tạo function + IAM + trigger một
+lần, sau đó pipeline dùng `aws lambda update-function-code --publish` cho mỗi
+commit (nhanh hơn nhiều so với chạy `terraform apply` mỗi lần). Khi đó nhớ đặt
+`ignore_changes` để Terraform không ghi đè ngược code:
+
+```hcl
+resource "aws_lambda_function" "sync_api_lambda" {
+  # ...
+
+  lifecycle {
+    ignore_changes = [filename, source_code_hash, last_modified]
+  }
+}
+```
 
 ---
 
