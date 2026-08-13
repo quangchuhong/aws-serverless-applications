@@ -1123,7 +1123,7 @@ aws configure sso
 aws sts get-caller-identity --profile app-dev
 ```
 
-Nếu công ty đã có Okta / Entra ID / Google Workspace, cấu hình **external identity provider** với SCIM sync thay vì tạo group thủ công như trên.
+Nếu công ty đã có Okta / Entra ID / Google Workspace, cấu hình **external identity provider** với SCIM sync thay vì tạo group thủ công như trên. Chi tiết đồng bộ user/group từ AD on-premise: [08 – Đồng bộ user AD sang Identity Center](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md).
 
 ---
 
@@ -1527,4 +1527,5 @@ Cách cắt chi phí nhanh:
 - **Backup tập trung**: AWS Backup với backup policy ở mức org, vault khoá ở account riêng.
 - **Detective controls**: EventBridge rule bắt Security Hub finding severity CRITICAL → SNS → Slack (dùng lại pattern DLQ alert ở ví dụ 01).
 - **DNS tập trung + hybrid AD + Microsoft 365**: xem [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md).
+- **Đồng bộ user/group từ AD on-premise**: xem [08 – Đồng bộ user AD sang Identity Center](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md).
 - **Deploy workload lên trên**: các ví dụ 01–05 giờ deploy vào account `app-dev` / `app-prod`, dùng profile SSO thay vì access key.

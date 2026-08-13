@@ -972,6 +972,8 @@ Get-ADUser -Filter * -SearchBase "OU=Staff,DC=corp,DC=acme,DC=local" |
 
 Nếu đặt trên EC2, server đó cần resolver rule `corp.acme.local` ở mục 4 (đã có sẵn) và phải join domain.
 
+Phần đồng bộ user/group từ AD lên AWS IAM Identity Center (và vì sao **không** map được AD OU sang AWS Organizations OU) nằm ở [08 – Đồng bộ user AD sang Identity Center](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md).
+
 ### 10.3. Đừng hairpin traffic M365 qua NAT tập trung
 
 Ở doc 06 mục 11 ta dựng **centralized egress**: mọi traffic ra Internet đi qua NAT Gateway ở network account. Với M365 thì đây là anti-pattern – Microsoft khuyến nghị **local breakout** cho nhóm endpoint "Optimize" (Exchange Online, Teams media, SharePoint). Đẩy traffic Teams qua TGW → NAT tập trung → Internet sẽ làm tăng latency, vỡ chất lượng thoại/video, và tốn phí NAT.
