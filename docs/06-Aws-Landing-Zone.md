@@ -1243,6 +1243,8 @@ resource "aws_vpc_ipam" "this" {
 
 > Với workload thuần serverless như ví dụ 01–05 (Lambda không đặt trong VPC), bạn **chưa cần** TGW. Chỉ dựng phần này khi có RDS/ElastiCache/EC2 hoặc Lambda cần chạy trong VPC.
 
+Phần **DNS tập trung** (Route 53 Resolver, hybrid với AD on-premise, Microsoft 365) tách riêng sang [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md).
+
 ---
 
 ## 12. Account baseline – áp cho mọi account
@@ -1524,4 +1526,5 @@ Cách cắt chi phí nhanh:
 - **Tag policy + cost allocation**: bắt buộc tag `CostCenter`, `Owner`, `Environment`; bật cost allocation tag để chia bill theo team.
 - **Backup tập trung**: AWS Backup với backup policy ở mức org, vault khoá ở account riêng.
 - **Detective controls**: EventBridge rule bắt Security Hub finding severity CRITICAL → SNS → Slack (dùng lại pattern DLQ alert ở ví dụ 01).
+- **DNS tập trung + hybrid AD + Microsoft 365**: xem [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md).
 - **Deploy workload lên trên**: các ví dụ 01–05 giờ deploy vào account `app-dev` / `app-prod`, dùng profile SSO thay vì access key.
