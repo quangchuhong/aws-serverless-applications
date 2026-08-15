@@ -1521,9 +1521,9 @@ Cách cắt chi phí nhanh:
 
 ## 16. Hướng mở rộng
 
-- **Account vending tự động**: Service Catalog hoặc AFT để team tự request account mới qua ticket, LZ tự apply baseline.
-- **CI/CD cho LZ**: chạy `terraform plan` trên PR bằng GitHub Actions + OIDC (không dùng access key), yêu cầu approval cho `apply` ở tầng organization.
-- **Tag policy + cost allocation**: bắt buộc tag `CostCenter`, `Owner`, `Environment`; bật cost allocation tag để chia bill theo team.
+- **Account vending tự động**: team tự request account mới qua ticket, LZ tự apply baseline → [09 – Account Vending tự động](./09-Account-Vending-Tu-Dong.md).
+- **CI/CD cho LZ**: `terraform plan` trên PR bằng GitHub Actions + OIDC (không dùng access key), approval cho `apply` ở tầng organization → [10 – CI/CD cho Landing Zone](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md).
+- **Tag policy + cost allocation**: bắt buộc tag `CostCenter`, `Owner`, `Environment`; chia bill theo team → [11 – Tag Policy và Cost Allocation](./11-Tag-Policy-va-Cost-Allocation.md).
 - **Backup tập trung**: AWS Backup với backup policy ở mức org, vault khoá ở account riêng.
 - **Detective controls**: EventBridge rule bắt Security Hub finding severity CRITICAL → SNS → Slack (dùng lại pattern DLQ alert ở ví dụ 01).
 - **DNS tập trung + hybrid AD + Microsoft 365**: xem [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md).
