@@ -1243,7 +1243,14 @@ resource "aws_vpc_ipam" "this" {
 
 > Với workload thuần serverless như ví dụ 01–05 (Lambda không đặt trong VPC), bạn **chưa cần** TGW. Chỉ dựng phần này khi có RDS/ElastiCache/EC2 hoặc Lambda cần chạy trong VPC.
 
-Mô hình đầy đủ cho enterprise — khoá Internet ở mọi account, tách **ingress VPC** và **egress VPC** trong network account, thiết kế TGW route table và SCP đi kèm — nằm ở [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md).
+Mô hình đầy đủ cho enterprise gồm bốn doc, đọc theo thứ tự:
+
+| Doc | Nội dung |
+|---|---|
+| [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md) | Khoá Internet ở mọi account, tách ingress VPC và egress VPC, SCP đi kèm |
+| [14 – Ingress Chain](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | Chuỗi CDN → Palo Alto (GWLB) → F5 WAF → App |
+| [15 – Security VPC](./15-Security-VPC-Network-Firewall.md) | Mọi traffic (ra, vào, và giữa các account) qua AWS Network Firewall |
+| [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | 3rd-party VPC và Site-to-Site VPN cho mạng bên ngoài |
 
 Phần **DNS tập trung** tách riêng thành hai bản tuỳ theo môi trường:
 

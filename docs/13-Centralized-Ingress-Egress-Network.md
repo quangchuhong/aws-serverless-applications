@@ -808,6 +808,8 @@ Ba điều phải biết trước khi bật:
 
 Phương án rẻ hơn cho phần lớn nhu cầu: **VPC endpoint (doc 12) + Route 53 DNS Firewall**. Endpoint kéo traffic tới AWS service ra khỏi đường NAT hoàn toàn, DNS Firewall chặn domain xấu ở tầng phân giải tên. Cộng lại khoảng $30/tháng thay vì $576, và xử lý được đa số tình huống thực tế.
 
+> Nếu yêu cầu là **mọi traffic của mọi account** phải qua Network Firewall — gồm cả luồng giữa các account với nhau — thì firewall nên nằm ở một **security VPC riêng** thay vì nhét vào egress VPC. Thiết kế đầy đủ, gồm TGW route table giữ tính đối xứng và runbook bypass, ở [15 – Security VPC](./15-Security-VPC-Network-Firewall.md).
+
 ---
 
 ## 10. Những gì mô hình này **không** chặn được
