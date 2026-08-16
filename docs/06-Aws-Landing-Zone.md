@@ -1243,7 +1243,10 @@ resource "aws_vpc_ipam" "this" {
 
 > Với workload thuần serverless như ví dụ 01–05 (Lambda không đặt trong VPC), bạn **chưa cần** TGW. Chỉ dựng phần này khi có RDS/ElastiCache/EC2 hoặc Lambda cần chạy trong VPC.
 
-Phần **DNS tập trung** (Route 53 Resolver, hybrid với AD on-premise, Microsoft 365) tách riêng sang [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md).
+Phần **DNS tập trung** tách riêng thành hai bản tuỳ theo môi trường:
+
+- Thuần AWS, không on-premise → [12 – DNS và VPC Endpoint tập trung](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) (rẻ hơn ~$360/tháng, bỏ được resolver endpoint)
+- Có AD on-premise và Microsoft 365 → [07 – Centralized DNS hybrid](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md)
 
 ---
 

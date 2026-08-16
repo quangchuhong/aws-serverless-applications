@@ -9,6 +9,8 @@ Bài toán thực tế:
 - Công ty dùng **Microsoft 365** (Exchange Online, Teams, Entra ID) – phần này là **DNS public**, hoàn toàn khác với DNS nội bộ.
 - Yêu cầu: EC2 trong AWS join được domain và resolve được tên on-prem; server on-prem resolve được tên trong AWS; M365 hoạt động bình thường; log DNS query tập trung để audit.
 
+> **Chưa có on-premise?** Nếu hạ tầng của bạn hoàn toàn nằm trên AWS (không AD on-prem, không Microsoft 365), đọc [12 – DNS và VPC Endpoint tập trung, thuần AWS](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) thay cho doc này. Thiết kế ở đó bỏ được cả hai resolver endpoint, tiết kiệm ~$360/tháng. Quay lại doc 07 khi nào đấu nối on-premise.
+
 Stack trong bài:
 
 - **Route 53 Resolver** – inbound + outbound endpoint (hybrid DNS)
