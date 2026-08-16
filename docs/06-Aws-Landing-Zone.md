@@ -1243,6 +1243,8 @@ resource "aws_vpc_ipam" "this" {
 
 > Với workload thuần serverless như ví dụ 01–05 (Lambda không đặt trong VPC), bạn **chưa cần** TGW. Chỉ dựng phần này khi có RDS/ElastiCache/EC2 hoặc Lambda cần chạy trong VPC.
 
+Mô hình đầy đủ cho enterprise — khoá Internet ở mọi account, tách **ingress VPC** và **egress VPC** trong network account, thiết kế TGW route table và SCP đi kèm — nằm ở [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md).
+
 Phần **DNS tập trung** tách riêng thành hai bản tuỳ theo môi trường:
 
 - Thuần AWS, không on-premise → [12 – DNS và VPC Endpoint tập trung](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) (rẻ hơn ~$360/tháng, bỏ được resolver endpoint)

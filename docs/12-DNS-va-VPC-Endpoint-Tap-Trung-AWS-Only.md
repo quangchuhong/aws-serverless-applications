@@ -691,4 +691,6 @@ Vài chỗ trong [doc 06](./06-Aws-Landing-Zone.md) có thể đơn giản hoá:
 | Mục 15 – Chi phí | Bỏ dòng TGW + NAT, LZ còn khoảng $40–100/tháng |
 | Mục 16 – DNS | Trỏ sang doc này thay vì doc 07 |
 
+Ngoại lệ: nếu yêu cầu tuân thủ bắt buộc **khoá Internet ở mọi account** và dồn traffic qua network account, thì TGW là bắt buộc chứ không phải tuỳ chọn — xem [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md). Khi đó VPC endpoint tập trung ở mục 5 cũng trở nên đáng làm hơn, vì TGW đã có sẵn.
+
 Một LZ thuần serverless, không TGW, không NAT, không resolver endpoint có chi phí nền tảng rất thấp — phần lớn hoá đơn sẽ là Config + GuardDuty + Security Hub, tức là tiền mua khả năng quan sát và tuân thủ. Đó là khoản đáng chi.
