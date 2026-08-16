@@ -932,7 +932,24 @@ Bẫy đầu bảng chiếm phần lớn số ca gỡ rối trong mô hình này
 
 ---
 
-## 14. Lộ trình triển khai
+## 14. Code demo chạy được
+
+Hai bộ Terraform dựng lên xem rồi xoá, không đụng tới Organizations:
+
+| Demo | Dùng khi | Chi phí |
+|---|---|---|
+| [`demo/centralized-network`](../demo/centralized-network/) | Học routing, một account, nhiều VPC | ~$0.21/giờ |
+| [`demo/centralized-network-multiaccount`](../demo/centralized-network-multiaccount/) | Ba account có sẵn, RAM share TGW, PHZ cross-account | ~$0.22/giờ |
+
+Cả hai **không tạo AWS account mới** — account không xoá được, chỉ đóng được, và email không tái sử dụng được. Bản multi-account dùng account đã có; `terraform destroy` chỉ xoá resource, account giữ nguyên để dùng lại.
+
+Buổi thực hành 4 tiếng khoảng $1. Quên xoá một tháng khoảng $150 — mỗi README có phần kiểm tra sau khi destroy để không sót EIP.
+
+Ba thứ demo cố tình **không** làm, vì chúng cản trở việc `destroy`: SCP chặn IGW/NAT, deletion protection, và NAT nhiều AZ.
+
+---
+
+## 15. Lộ trình triển khai
 
 ```text
 Giai đoạn 1 – Dựng hạ tầng (chưa khoá gì)

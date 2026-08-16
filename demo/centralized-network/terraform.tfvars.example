@@ -1,0 +1,40 @@
+########################################
+# Copy sang terraform.tfvars roi chinh
+#   cp terraform.tfvars.example terraform.tfvars
+########################################
+
+region = "ap-southeast-1"
+azs    = ["ap-southeast-1a", "ap-southeast-1b"]
+
+########################################
+# BUOC 1 - Chi xem luong EGRESS (re nhat, ~$0.16/gio)
+########################################
+
+enable_ingress             = false
+enable_interface_endpoints = false
+enable_test_instance       = true
+
+########################################
+# BUOC 2 - Them VPC endpoint tap trung (~$0.19/gio)
+# Bo comment ba dong duoi, chay lai terraform apply,
+# roi so sanh: truoc do SSM di qua NAT, gio di qua endpoint.
+########################################
+
+# enable_interface_endpoints  = true
+# interface_endpoint_services = ["ssm", "ssmmessages", "ec2messages"]
+
+########################################
+# BUOC 3 - Them luong INGRESS tu Internet (~$0.26/gio)
+# Bo comment de dung ingress VPC + ALB.
+########################################
+
+# enable_ingress = true
+
+########################################
+# Giam chi phi: bot spoke con mot cai
+# Moi spoke ton ~$0.05/gio phi TGW attachment.
+########################################
+
+# spokes = {
+#   "app-dev" = { cidr = "10.10.0.0/16" }
+# }
