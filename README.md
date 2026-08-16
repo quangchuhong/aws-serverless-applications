@@ -50,7 +50,8 @@ Terraform dựng lên xem rồi xoá. **Không tạo AWS account** — account k
 
 | Demo | Nội dung | Chi phí |
 |---|---|---|
-| [`demo/centralized-network`](./demo/centralized-network/) | Một account: TGW, egress tập trung, cách ly spoke | ~$0.21/giờ |
+| **[`demo/network-lz-full`](./demo/network-lz-full/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, spoke. Kịch bản 5 bước. Chưa có Palo Alto/F5 | ~$0.34–0.77/giờ |
+| [`demo/centralized-network`](./demo/centralized-network/) | Bản tối giản: TGW, egress tập trung, cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](./demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, PHZ cross-account | ~$0.22/giờ |
 
 Mỗi demo có `README.md` với kịch bản từng bước, script kiểm chứng, và phần xác nhận đã xoá sạch.

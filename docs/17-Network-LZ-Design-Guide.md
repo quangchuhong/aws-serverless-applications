@@ -103,6 +103,95 @@ Bốn VPC trong network account, mỗi cái một vai duy nhất:
 
 ---
 
+## 2.1. Giai đoạn 1 – kiến trúc khi chưa có Palo Alto và F5
+
+Palo Alto và F5 cần license Marketplace, thường mất vài tuần tới vài tháng để mua và cấp phát. Trong thời gian đó **vẫn dựng được phần lớn thiết kế** — và nên dựng, vì phần khó nhất không nằm ở appliance.
+
+### Cái gì đổi, cái gì không
+
+```text
+GIAI ĐOẠN 1 (bây giờ)                    GIAI ĐOẠN 2 (khi có license)
+
+  Internet                                  Internet
+     │                                         │
+     ▼                                         ▼
+  CloudFront + AWS WAF  ← tạm thời          CloudFront + AWS WAF
+     │                                         │
+     ▼                                         ▼
+┌─────────────────────┐                  ┌─────────────────────┐
+│ INGRESS VPC         │                  │ INGRESS VPC         │
+│                     │                  │                     │
+│  IGW                │                  │  IGW                │
+│   │                 │                  │   │ edge route      │
+│   ▼                 │                  │   ▼                 │
+│  ALB (+ AWS WAF)    │      ═══>        │  GWLBe → Palo Alto  │
+│   │                 │                  │   │                 │
+│   │                 │                  │  NLB → F5 WAF       │
+│   ▼                 │                  │   │                 │
+│  TGW attachment     │                  │  TGW attachment     │
+└─────────┬───────────┘                  └─────────┬───────────┘
+          │                                        │
+          ▼                                        ▼
+   ══════════════ KHÔNG ĐỔI ══════════════════════════
+     TGW (4 route table) → SECURITY VPC (Network Firewall)
+     → EGRESS VPC (NAT) → SPOKE (không IGW/NAT)
+   ═══════════════════════════════════════════════════
+```
+
+Chỉ **phần trên của ingress VPC** thay đổi. Toàn bộ định tuyến TGW, security VPC, egress VPC và spoke **giữ nguyên từng dòng**.
+
+Đó là lý do làm giai đoạn 1 trước có ý nghĩa thật: bạn kiểm chứng được chỗ khó nhất và dễ sai nhất (bảng định tuyến ở mục 4) mà không phải chờ license.
+
+### Khoảng trống bảo mật – cần biết rõ
+
+Đừng nghĩ giai đoạn 1 là "an toàn, chỉ thiếu vài thứ". Thiếu PA và F5 nghĩa là:
+
+| Mất gì | Hệ quả |
+|---|---|
+| **WAF tầng ứng dụng** | Không chặn SQLi, XSS, path traversal, các lỗi OWASP Top 10 |
+| **IPS / chữ ký mối đe doạ** | Không phát hiện khai thác lỗ hổng đã biết (Log4Shell, lỗi web server) |
+| **Bot defense** | Không phân biệt bot xấu với người dùng thật |
+| **TLS termination có kiểm soát** | Không thanh tra được nội dung HTTPS ở tầng ingress |
+
+Còn giữ được gì: Network Firewall **vẫn nằm trong đường đi** của luồng ingress → spoke (mục 5, luồng 5–6), nên vẫn có L3/L4, SNI allowlist và log tập trung. Không phải là không có gì, nhưng **không phải WAF**.
+
+### Bù tạm bằng AWS WAF
+
+Cách rẻ và nhanh nhất để lấp phần lớn khoảng trống trong lúc chờ:
+
+| Việc | Chi phí | Bù được gì |
+|---|---|---|
+| **AWS WAF + managed rule groups** trên ALB hoặc CloudFront | ~$10–40/tháng | OWASP Top 10, bot cơ bản, rate limit |
+| AWS Shield Standard | $0 (tự động) | DDoS L3/L4 |
+| CloudFront | Theo lưu lượng | Hấp thụ DDoS thể tích, TLS đầu vào |
+
+Ba managed rule group nên bật ngay:
+
+```hcl
+# AWSManagedRulesCommonRuleSet          - OWASP co ban
+# AWSManagedRulesKnownBadInputsRuleSet  - payload khai thac da biet
+# AWSManagedRulesSQLiRuleSet            - SQL injection
+```
+
+> **Quyết định kiến trúc quan trọng cho giai đoạn 1: dùng ALB, không dùng NLB.**
+>
+> AWS WAF **không gắn được vào NLB**. Nếu giai đoạn 1 dùng NLB thì bạn không có WAF nào cả. Dùng ALB để gắn được AWS WAF.
+>
+> Sang giai đoạn 2, kiến trúc quay lại NLB (vì NLB làm TCP passthrough cho F5 terminate TLS — doc 14 mục 7). Đây là một thay đổi có chủ đích giữa hai giai đoạn, không phải thiết kế lại.
+
+### Giai đoạn 1 có đủ để chạy production không?
+
+| Loại ứng dụng | Giai đoạn 1 có đủ? |
+|---|---|
+| Nội bộ, không ra Internet | ✅ Đủ — không có bề mặt tấn công từ ngoài |
+| Public, không xử lý dữ liệu nhạy cảm | ⚠️ Tạm được với AWS WAF, chấp nhận rủi ro có ý thức |
+| Public, có dữ liệu cá nhân/thanh toán | ❌ Không — chờ đủ PA + F5, hoặc nâng AWS WAF lên mức đầy đủ |
+| Chịu ràng buộc tuân thủ (PCI-DSS…) | ❌ Không — kiểm toán sẽ hỏi về WAF và IPS |
+
+Ghi lại quyết định này thành ADR, kèm ngày dự kiến có license. Khoảng trống tạm thời được chấp nhận có thời hạn là chuyện bình thường; khoảng trống bị quên mới là vấn đề.
+
+---
+
 ## 3. Quy hoạch CIDR – bảng chuẩn
 
 **Bảng này thay thế mọi bảng CIDR trong docs 12–16.**
@@ -445,26 +534,35 @@ GIAI ĐOẠN 4 — Thanh tra thật
   □ Viết rule allow cho luồng hợp lệ đã phát hiện
   □ Chuyển firewall sang DROP: Sandbox → NonProd → Prod
 
-GIAI ĐOẠN 5 — Ingress chain
-  □ 5d-ingress-vpc với stand-in (nginx) — kiểm chứng định tuyến trước
-  □ Subscribe Marketplace, thay AMI thật cho PA và F5
-  □ CDN + khoá origin
+GIAI ĐOẠN 5 — Ingress, phần làm được ngay (xem mục 2.1)
+  □ 5d-ingress-vpc: IGW + ALB
+  □ AWS WAF + 3 managed rule group gắn vào ALB  ← lấp khoảng trống tạm
+  □ Kiểm chứng: ingress → TGW → firewall → spoke, và đường về
+  → Public app chạy được với mức bảo vệ chấp nhận tạm
 
-GIAI ĐOẠN 6 — Đối tác
+GIAI ĐOẠN 6 — Ingress, phần chờ license
+  □ Subscribe Marketplace cho Palo Alto và F5
+  □ Chèn GWLB + PA vào giữa IGW và NLB
+  □ Đổi ALB sang NLB, thêm F5 phía sau
+  □ CDN + khoá origin
+  → Định tuyến TGW/security/egress/spoke KHÔNG đổi ở bước này
+
+GIAI ĐOẠN 7 — Đối tác
   □ 5e-partner-vpc
   □ Đối tác đầu tiên = đối tác **ít quan trọng nhất**
 
-GIAI ĐOẠN 7 — Vận hành
+GIAI ĐOẠN 8 — Vận hành
   □ Alarm: firewall endpoint, VPN tunnel, NAT
   □ Runbook bypass firewall + DIỄN TẬP
   □ Drift detection
 ```
 
-Ba nguyên tắc xuyên suốt:
+Bốn nguyên tắc xuyên suốt:
 
 1. **Alert trước, drop sau.** Áp dụng cho cả Network Firewall, DNS Firewall và SCP.
 2. **Sandbox → NonProd → Prod.** Mỗi bậc sống ít nhất 1–2 tuần.
 3. **Dọn resource cũ trước khi khoá.** Ngược lại là gây sự cố cho các team.
+4. **Không chờ license mới bắt đầu.** Giai đoạn 1–5 chiếm phần lớn công sức và toàn bộ rủi ro định tuyến; Palo Alto và F5 chèn vào sau mà không đụng tới chúng.
 
 ---
 
@@ -476,18 +574,33 @@ Mục tiêu: kiểm chứng **định tuyến** với chi phí tối thiểu, r�
 
 | Demo | Nội dung | Chi phí |
 |---|---|---|
-| [`demo/centralized-network`](../demo/centralized-network/) | Một account, TGW + egress + spoke isolation | ~$0.21/giờ |
-| [`demo/centralized-network-multiaccount`](../demo/centralized-network-multiaccount/) | Ba account, RAM share, cross-account PHZ | ~$0.22/giờ |
+| **[`demo/network-lz-full`](../demo/network-lz-full/)** | **Giai đoạn 1 đầy đủ**: TGW 4 route table, security VPC + Network Firewall, egress VPC, ingress NLB, spoke, gateway endpoint | **~$0.34–0.77/giờ** |
+| [`demo/centralized-network`](../demo/centralized-network/) | Bản tối giản: TGW + egress + cách ly spoke | ~$0.21/giờ |
+| [`demo/centralized-network-multiaccount`](../demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, cross-account PHZ | ~$0.22/giờ |
 
-### 12.2. Cần bổ sung
+`network-lz-full` là bộ chính. Nó có kịch bản 5 bước, mỗi bước bật thêm một phần bằng biến:
 
-| Thành phần | Cách demo | Ước tính |
+| Bước | Bật gì | ~$/giờ | Kiểm chứng được |
+|---|---|---|---|
+| 1 | Chưa có firewall | $0.34 | Spoke không IGW/NAT, egress tập trung, ingress |
+| 2 | Firewall chế độ `alert` | $0.74 | Mọi luồng qua security VPC, đọc được log |
+| 3 | Firewall chế độ `drop` | $0.74 | Chặn thật: port có rule vs không có rule |
+| 4 | Sửa `east_west_rules` | $0.74 | **Mở/đóng luồng VPC-to-VPC mà không đụng route** |
+| 5 | Interface endpoint | $0.77 | Endpoint trong security VPC, vẫn được thanh tra |
+
+Kèm `verify.sh` (8 nhóm kiểm tra, chạy lệnh thật trên EC2 qua SSM) và `teardown.sh` (destroy + xác nhận không còn gì tính tiền).
+
+### 12.2. Chưa có trong demo
+
+| Thành phần | Vì sao | Khi nào thêm |
 |---|---|---|
-| security-vpc + Network Firewall | **Thật** — Network Firewall tính theo giờ, chấp nhận được cho vài giờ | +~$1.10/giờ |
-| Ingress chain | **Stand-in** nginx thay PA và F5 | +~$0.10/giờ |
-| 3rd-party VPC + VPN | VPN tới một VPC khác đóng vai đối tác | +~$0.10/giờ |
+| **Palo Alto (GWLB)** | Cần license Marketplace | Giai đoạn 2 |
+| **F5 BIG-IP** | Cần license Marketplace | Giai đoạn 2 |
+| CloudFront + khoá origin | Cần domain và ACM cert | Giai đoạn 2 |
+| 3rd-party VPC + VPN | Cần customer gateway thật | Sau khi xong giai đoạn 1 |
+| SCP khoá Internet | Làm `terraform destroy` kẹt | Chỉ áp ở môi trường thật |
 
-Demo đầy đủ ước tính **~$1,5/giờ**. Buổi thực hành 4 tiếng ≈ **$6**. Quên xoá một tháng ≈ **$1.100** — nên phần kiểm tra sau khi destroy là bắt buộc, không phải tuỳ chọn.
+Buổi thực hành 4 tiếng ≈ **$3**. Quên xoá một tháng ≈ **$540** — nên phần kiểm tra sau khi destroy là bắt buộc, không phải tuỳ chọn.
 
 ### 12.3. Nguyên tắc cho code demo
 
@@ -509,21 +622,24 @@ Phần đã xong và phần cần làm tiếp:
 | Hạng mục | Trạng thái |
 |---|---|
 | Thiết kế network (tài liệu này + 12–16) | ✅ Xong |
-| Demo TGW + egress + spoke isolation | ✅ Xong |
+| **Demo giai đoạn 1: TGW + security VPC + firewall + egress + ingress** | ✅ **Xong** — [`demo/network-lz-full`](../demo/network-lz-full/) |
+| **Script verify (8 nhóm, chạy lệnh thật qua SSM)** | ✅ Xong |
+| **Script teardown + xác nhận sạch** | ✅ Xong |
 | Demo multi-account, RAM share | ✅ Xong |
-| **Demo security-vpc + Network Firewall** | ⬜ Cần làm |
-| **Demo ingress chain (stand-in)** | ⬜ Cần làm |
-| **Demo 3rd-party VPC + VPN** | ⬜ Cần làm |
-| **Script kiểm chứng đầy đủ theo mục 8** | ⬜ Cần làm |
-| **Script teardown + xác nhận sạch** | ⬜ Cần làm |
+| Demo 3rd-party VPC + VPN | ⬜ Cần làm |
+| AWS WAF + ALB cho giai đoạn 1 (mục 2.1) | ⬜ Cần làm |
+| Palo Alto + F5 | ⏸ **Chờ license** |
+| CloudFront + khoá origin | ⏸ Chờ domain và ACM cert |
 | Terraform layer `1-organization` → `4-identity-center` | ⬜ Mới có trong doc, chưa thành code chạy được |
 | `6-account-baseline` thành module dùng được | ⬜ Cần làm |
 | `7-scp-network` | ⬜ Cần làm |
 
 Đề xuất thứ tự làm tiếp:
 
-1. **Demo network đầy đủ** — gộp security-vpc + ingress chain stand-in + partner VPN vào một bộ Terraform destroy được. Đây là thứ kiểm chứng được toàn bộ thiết kế ở tài liệu này.
-2. **Script verify + teardown** — chạy checklist mục 8 tự động, rồi xác nhận không sót resource nào.
+1. **Chạy demo giai đoạn 1** — 5 bước trong [`demo/network-lz-full/README.md`](../demo/network-lz-full/README.md), xác nhận `verify.sh` xanh hết. Đây là lúc phát hiện sai sót thiết kế rẻ nhất.
+2. **Thay NLB bằng ALB + AWS WAF** — lấp phần lớn khoảng trống bảo mật trong lúc chờ PA/F5 (mục 2.1).
 3. **Các layer LZ còn lại** — organization, logging, security, identity center thành code chạy được.
+4. **3rd-party VPC + VPN** — khi có thông tin customer gateway của đối tác.
+5. **Palo Alto + F5** — khi có license. Phần định tuyến không đổi, chỉ thêm vào giữa IGW và TGW attachment của ingress VPC.
 
-Bắt đầu từ mục 1 sẽ cho kết quả nhìn thấy được sớm nhất, và cũng là chỗ dễ phát hiện sai sót thiết kế nhất.
+Mục 1 nên làm trước tiên vì nó kiểm chứng bảng định tuyến ở mục 4 — chỗ mà một ô sai sẽ gây ra sự cố rất khó lần ra nguyên nhân khi đã lên môi trường thật.
