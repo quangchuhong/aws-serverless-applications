@@ -2,6 +2,8 @@
 
 Ví dụ 12: Phiên bản **không có on-premise, không có AD, không có Microsoft 365** của [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md). Toàn bộ hạ tầng nằm trên AWS.
 
+> Tài liệu chi tiết. Thiết kế tổng thể, quy hoạch CIDR chuẩn và bảng định tuyến Transit Gateway ở [17 – Network LZ Design Guide](./17-Network-LZ-Design-Guide.md).
+
 Đọc doc này thay cho doc 07 nếu bạn đang ở tình huống đó. Doc 07 vẫn hữu ích khi nào công ty đấu nối on-premise.
 
 ---

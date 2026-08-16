@@ -2,6 +2,8 @@
 
 Ví dụ 16: Cho đối tác bên ngoài kết nối vào hệ thống mà không đưa họ vào mạng nội bộ, dùng một **3rd-party VPC** riêng và VPN.
 
+> Tài liệu chi tiết. Thiết kế tổng thể, quy hoạch CIDR chuẩn và bảng định tuyến Transit Gateway ở [17 – Network LZ Design Guide](./17-Network-LZ-Design-Guide.md).
+
 Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md) và [15 – Security VPC](./15-Security-VPC-Network-Firewall.md).
 
 ---

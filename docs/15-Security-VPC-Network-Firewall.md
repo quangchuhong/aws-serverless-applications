@@ -2,6 +2,8 @@
 
 Ví dụ 15: Một **security VPC** chuyên trách thanh tra, mọi traffic của mọi account trong Landing Zone đều phải đi qua nó — chiều ra, chiều vào, và giữa các account với nhau.
 
+> Tài liệu chi tiết. Thiết kế tổng thể, quy hoạch CIDR chuẩn và bảng định tuyến Transit Gateway ở [17 – Network LZ Design Guide](./17-Network-LZ-Design-Guide.md).
+
 Mở rộng [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md) và [14 – Ingress Chain](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md).
 
 ---

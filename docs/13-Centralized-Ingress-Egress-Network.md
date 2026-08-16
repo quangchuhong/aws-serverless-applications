@@ -2,6 +2,8 @@
 
 Ví dụ 13: Chặn hoàn toàn đường ra Internet ở mọi account workload, dồn toàn bộ traffic in/out qua **hai VPC chuyên trách** trong network account.
 
+> Tài liệu chi tiết. Thiết kế tổng thể, quy hoạch CIDR chuẩn và bảng định tuyến Transit Gateway ở [17 – Network LZ Design Guide](./17-Network-LZ-Design-Guide.md).
+
 Tiếp nối [06 – Landing Zone](./06-Aws-Landing-Zone.md) (mục 11, TGW) và [12 – DNS và VPC Endpoint](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md).
 
 ---
@@ -84,16 +86,19 @@ Nhiều tài liệu gộp inbound và outbound vào một "inspection VPC". Tác
      └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
-Quy hoạch CIDR (điều chỉnh từ [doc 06 mục 11.2](./06-Aws-Landing-Zone.md)):
+Quy hoạch CIDR — **bảng chuẩn ở [17 – Design Guide mục 3](./17-Network-LZ-Design-Guide.md)**:
 
 | Vùng | CIDR |
 |---|---|
 | Ingress VPC | `10.0.0.0/16` |
-| Egress VPC | `10.1.0.0/16` |
-| Shared services (VPC endpoint, doc 12) | `10.2.0.0/16` |
+| Security VPC (doc 15) | `10.1.0.0/16` |
+| Egress VPC | `10.2.0.0/16` |
+| 3rd-party VPC (doc 16) | `10.9.0.0/16` |
 | NonProd | `10.10.0.0/14` |
 | Prod | `10.20.0.0/14` |
 | Sandbox | `10.60.0.0/14` |
+
+> Bản đầu của doc này gán `10.1.0.0/16` cho egress VPC. Khi security VPC được chèn vào ([doc 15](./15-Security-VPC-Network-Firewall.md)), `10.1.0.0/16` dành cho security và egress chuyển sang `10.2.0.0/16`. Ví dụ Terraform bên dưới vẫn ghi `10.1.0.0/16` cho egress — đổi thành `10.2.0.0/16` nếu bạn triển khai cả security VPC.
 
 ---
 

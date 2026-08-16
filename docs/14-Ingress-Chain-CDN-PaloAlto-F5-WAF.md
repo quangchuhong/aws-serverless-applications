@@ -2,6 +2,8 @@
 
 Ví dụ 14: Chuỗi thanh tra nhiều tầng cho luồng vào, mở rộng phần ingress của [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md).
 
+> Tài liệu chi tiết. Thiết kế tổng thể, quy hoạch CIDR chuẩn và bảng định tuyến Transit Gateway ở [17 – Network LZ Design Guide](./17-Network-LZ-Design-Guide.md).
+
 Egress vẫn giữ nguyên: spoke → TGW → egress VPC → NAT Gateway → Internet. Bài này chỉ nói về chiều **vào**.
 
 ---
