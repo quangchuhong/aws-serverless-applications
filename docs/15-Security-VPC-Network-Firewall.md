@@ -58,7 +58,9 @@ Tách như vậy có một cái giá cụ thể cần biết trước: **traffic
               │      TRANSIT GATEWAY           │
               │                                │
               │  rtb-spokes    0/0 → security  │
-              │  rtb-security  0/0 → egress    │
+              │  rtb-security  ingress → ingress│
+              │                partner → partner│
+              │                0/0 → egress    │
               │                + học mọi spoke │
               │  rtb-egress    spoke → security│
               │  rtb-ingress   spoke → security│
@@ -306,11 +308,19 @@ Bốn route table, và **tính đối xứng** là yêu cầu bắt buộc: gói
 | Route table | Associate với | Propagate | Route tĩnh |
 |---|---|---|---|
 | `rtb-spokes` | Mọi spoke | — | `0.0.0.0/0` → **security** |
-| `rtb-security` | security attachment | **Mọi spoke** | `0.0.0.0/0` → **egress** |
+| `rtb-security` | security attachment | **Mọi spoke** | `ingress_vpc_cidr` → **ingress**<br>`partner_vpc_cidr` → **partner**<br>`0.0.0.0/0` → **egress** |
 | `rtb-egress` | egress attachment | — | `spoke_supernet` → **security** |
 | `rtb-ingress` | ingress attachment | — | `spoke_supernet` → **security** |
 
-Chú ý `rtb-egress` và `rtb-ingress` dùng **route tĩnh trỏ về security**, không propagate từ spoke. Nếu propagate, gói trả về sẽ đi thẳng từ egress VPC tới spoke, **bỏ qua firewall** — luồng bất đối xứng và firewall stateful sẽ drop.
+Hai quy tắc quyết định tính đúng đắn của bảng này:
+
+**1. `rtb-egress` và `rtb-ingress` dùng route tĩnh trỏ về security, không propagate từ spoke.** Nếu propagate, gói trả về sẽ đi thẳng từ egress VPC tới spoke, **bỏ qua firewall** — luồng bất đối xứng và firewall stateful sẽ drop.
+
+**2. `rtb-security` phải có route tĩnh cho *mọi* đích không phải spoke, đặt trước `0.0.0.0/0`.** Đây là chỗ dễ sót nhất:
+
+> Nếu `rtb-security` chỉ có `0.0.0.0/0 → egress` và propagation từ spoke, thì gói trả lời từ app gửi cho F5 (đích `10.0.0.0/16`) sẽ khớp `0.0.0.0/0` và **bị đẩy sang egress VPC** thay vì quay về ingress VPC. Triệu chứng: request từ Internet vào tới app, app xử lý xong, nhưng client không bao giờ nhận được phản hồi.
+
+Mỗi khi thêm một VPC mới vào network account (shared services, partner, DR…), phải thêm một route tĩnh tương ứng vào `rtb-security`. Route mặc định `0.0.0.0/0 → egress` chỉ dành cho Internet thật.
 
 ```hcl
 # 5-network/tgw-routing.tf
@@ -357,6 +367,18 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "spokes_to_security" 
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.security.id
 }
 
+# Duong VE ingress VPC - BAT BUOC.
+# Thieu route nay, goi tra loi cua app gui cho F5 se khop 0.0.0.0/0
+# va bi day sang egress VPC -> client khong bao gio nhan duoc phan hoi.
+resource "aws_ec2_transit_gateway_route" "security_to_ingress" {
+  provider = aws.network
+
+  destination_cidr_block         = var.ingress_vpc_cidr # 10.0.0.0/16
+  transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.ingress.id
+  transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.security.id
+}
+
+# Chi nhung gi con lai - Internet that - moi di ra egress VPC
 resource "aws_ec2_transit_gateway_route" "security_to_egress" {
   provider = aws.network
 
@@ -431,6 +453,219 @@ Về:
 ```
 
 Cả ba luồng đều đối xứng. Đó là điều kiện để firewall stateful hoạt động đúng.
+
+---
+
+## 6.2. Ma trận luồng – kiểm chứng không sót đường nào
+
+Yêu cầu "mọi traffic in/out và VPC-to-VPC đều qua firewall" chỉ đạt được nếu **liệt kê hết** các cặp nguồn-đích rồi kiểm tra từng cái. Bảng dưới là danh sách đầy đủ:
+
+| # | Từ | Tới | Đi qua firewall? | Nhờ đâu |
+|---|---|---|---|---|
+| 1 | Spoke | Internet | ✅ | `rtb-spokes` 0/0 → security |
+| 2 | Internet | Spoke (trả lời) | ✅ | `rtb-egress` spoke → security |
+| 3 | Spoke A | Spoke B | ✅ | `rtb-spokes` 0/0 → security |
+| 4 | Spoke B | Spoke A (trả lời) | ✅ | `rtb-spokes` 0/0 → security |
+| 5 | Ingress VPC (F5) | Spoke | ✅ | `rtb-ingress` spoke → security |
+| 6 | Spoke | Ingress VPC (trả lời) | ✅ | `rtb-spokes` 0/0 → security + `rtb-security` ingress_cidr → ingress |
+| 7 | Partner VPC | Spoke | ✅ | `rtb-partner` 0/0 → security |
+| 8 | Spoke | Partner VPC | ✅ | `rtb-spokes` 0/0 → security + `rtb-security` partner_cidr → partner |
+| 9 | Spoke | Interface endpoint | ✅ | Endpoint đặt **trong security VPC** — xem 6.3 |
+| 10 | Spoke | Gateway endpoint (S3/DynamoDB) | ❌ **Không** | Không rời VPC — xem 6.4 |
+| 11 | Subnet A | Subnet B (**cùng** một VPC) | ❌ **Không** | Không đi qua TGW — xem 6.4 |
+| 12 | Lambda ngoài VPC | Bất kỳ đâu | ❌ **Không** | Hạ tầng AWS quản lý — xem 6.4 |
+
+Chín trong mười hai luồng được thanh tra. Ba luồng còn lại **về mặt kỹ thuật không thể** ép qua Network Firewall — mục 6.4 nói cách xử lý chúng.
+
+Kiểm tra bảng này bằng lệnh, đừng tin vào sơ đồ:
+
+```bash
+#!/usr/bin/env bash
+# Xac nhan MOI route table cua TGW deu tro ve security attachment.
+# Chay sau moi lan thay doi ha tang mang.
+set -uo pipefail
+
+REGION=ap-southeast-1
+SEC_ATT=$(aws ec2 describe-transit-gateway-attachments --region $REGION \
+  --filters "Name=tag:Name,Values=acme-tgwa-security" \
+  --query 'TransitGatewayAttachments[0].TransitGatewayAttachmentId' --output text)
+
+for rtb_name in acme-rtb-spokes acme-rtb-egress acme-rtb-ingress acme-rtb-partner; do
+  RTB=$(aws ec2 describe-transit-gateway-route-tables --region $REGION \
+    --filters "Name=tag:Name,Values=$rtb_name" \
+    --query 'TransitGatewayRouteTables[0].TransitGatewayRouteTableId' --output text)
+
+  [[ "$RTB" == "None" ]] && continue
+
+  echo "=== $rtb_name ==="
+  aws ec2 search-transit-gateway-routes --region $REGION \
+    --transit-gateway-route-table-id "$RTB" \
+    --filters "Name=state,Values=active" \
+    --query "Routes[].[DestinationCidrBlock,TransitGatewayAttachments[0].TransitGatewayAttachmentId]" \
+    --output text | while read -r cidr att; do
+
+      if [[ "$att" == "$SEC_ATT" ]]; then
+        printf '  \033[32mOK\033[0m    %-18s -> security\n' "$cidr"
+      else
+        printf '  \033[31mBYPASS\033[0m %-18s -> %s\n' "$cidr" "$att"
+      fi
+    done
+done
+```
+
+Mọi dòng `BYPASS` trong `rtb-spokes`, `rtb-egress`, `rtb-ingress`, `rtb-partner` là một đường lọt firewall. Ngoại lệ duy nhất hợp lệ: `rtb-security` (đương nhiên không trỏ về chính nó).
+
+---
+
+## 6.3. Đặt VPC endpoint ở đâu để vẫn được thanh tra
+
+Doc 12 đề xuất đặt interface endpoint tập trung ở một shared services VPC. Với yêu cầu "mọi VPC-to-VPC qua firewall", cách đó tạo thêm một chặng TGW nữa và tốn tiền vô ích.
+
+**Đặt interface endpoint ngay trong security VPC** là cách gọn hơn:
+
+```hcl
+resource "aws_subnet" "security_endpoints" {
+  provider = aws.network
+  for_each = toset(["a", "b"])
+
+  vpc_id            = aws_vpc.security.id
+  cidr_block        = each.key == "a" ? "10.1.30.0/24" : "10.1.31.0/24"
+  availability_zone = local.azs[each.key]
+
+  tags = { Name = "${var.project}-security-vpce-${each.key}", Tier = "endpoints" }
+}
+
+resource "aws_vpc_endpoint" "interface" {
+  provider = aws.network
+  for_each = toset(var.interface_endpoint_services)
+
+  vpc_id              = aws_vpc.security.id
+  service_name        = "com.amazonaws.${var.region}.${each.value}"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [for k in ["a", "b"] : aws_subnet.security_endpoints[k].id]
+  security_group_ids  = [aws_security_group.endpoints.id]
+  private_dns_enabled = false
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = "*"
+      Action    = "*"
+      Resource  = "*"
+      Condition = {
+        StringEquals = { "aws:PrincipalOrgID" = var.organization_id }
+      }
+    }]
+  })
+}
+
+# Subnet endpoint dung route table rieng: chi co local route.
+# Traffic den day da qua firewall roi, khong can di dau nua.
+resource "aws_route_table" "security_endpoints" {
+  provider = aws.network
+  for_each = toset(["a", "b"])
+  vpc_id   = aws_vpc.security.id
+
+  tags = { Name = "${var.project}-sec-vpce-rt-${each.key}" }
+}
+
+resource "aws_route" "sec_vpce_to_tgw" {
+  provider = aws.network
+  for_each = toset(["a", "b"])
+
+  route_table_id         = aws_route_table.security_endpoints[each.key].id
+  destination_cidr_block = var.spoke_supernet
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
+}
+```
+
+Đường đi trở thành:
+
+```text
+spoke → TGW → security tgw subnet → firewall endpoint → firewall subnet
+     → route local 10.1.30.0/24 → interface endpoint
+```
+
+Traffic **được thanh tra** và **không tốn thêm chặng TGW** nào. Gọn hơn hẳn so với để endpoint ở shared services VPC.
+
+Đổi lại: PHZ của các endpoint này phải associate với mọi spoke VPC (cross-account authorization như [doc 12 mục 6](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md)), và security VPC giờ mang thêm một vai trò nữa ngoài thanh tra.
+
+---
+
+## 6.4. Ba luồng không thể ép qua firewall
+
+Đây là giới hạn kỹ thuật, không phải thiếu sót cấu hình. Cần biết để không báo cáo sai lên lãnh đạo.
+
+### Luồng 10 – Gateway endpoint (S3, DynamoDB)
+
+Gateway endpoint là một mục trong route table, traffic **không bao giờ rời khỏi VPC**. Không có cách nào đưa nó qua Network Firewall.
+
+| Xử lý | Cách làm |
+|---|---|
+| Endpoint policy | Chỉ cho phép bucket/table trong org, chặn `s3:*` tới bucket lạ |
+| SCP | Chặn `s3:PutBucketPolicy` mở public |
+| CloudTrail data event | Ghi log truy cập S3 để audit sau |
+
+```hcl
+resource "aws_vpc_endpoint" "s3_gateway" {
+  # ...
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowOrgBucketsOnly"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
+        Resource  = "*"
+        Condition = {
+          StringEquals = { "aws:ResourceOrgID" = var.organization_id }
+        }
+      }
+    ]
+  })
+}
+```
+
+`aws:ResourceOrgID` là lớp chống exfil quan trọng nhất ở đây: nhân viên nội bộ không copy được dữ liệu sang bucket S3 của tài khoản cá nhân, dù traffic không qua firewall.
+
+### Luồng 11 – Traffic trong cùng một VPC
+
+Gói tin giữa hai subnet của cùng một VPC đi qua router nội bộ của VPC, không chạm TGW. Ba cách xử lý:
+
+| Cách | Mô tả | Đánh đổi |
+|---|---|---|
+| **Security group** (thực tế nhất) | SG tham chiếu SG, chặt chẽ theo tier | Không có IPS, không có log nội dung |
+| **GWLB endpoint trong spoke VPC** | Chèn appliance ngay trong VPC | Rất tốn kém, nhân theo số VPC |
+| **Một tier một VPC** | Tách app/data thành VPC riêng → thành east-west | Nhiều VPC hơn, nhiều attachment hơn |
+
+Cách thứ ba đáng cân nhắc nếu yêu cầu tuân thủ nghiêm ngặt: tách `app-prod` và `data-prod` thành hai VPC (đúng như thiết kế ở doc này) thì traffic giữa chúng **tự động** trở thành east-west và được firewall thanh tra. Đây là lý do kiến trúc chia VPC theo tier, không chỉ theo môi trường.
+
+Bổ sung **VPC Flow Logs** cho traffic nội bộ VPC, đẩy về log-archive — không thanh tra được nhưng ít nhất có dấu vết.
+
+### Luồng 12 – Lambda không đặt trong VPC
+
+Chạy trên hạ tầng mạng do AWS quản lý, có Internet mặc định, SCP không chạm tới.
+
+| Xử lý | Cách làm |
+|---|---|
+| Bắt buộc Lambda vào VPC | SCP chặn `lambda:CreateFunction` khi thiếu `lambda:VpcIds` |
+| Chấp nhận có kiểm soát | Giới hạn IAM role của Lambda, ghi log CloudTrail |
+
+```json
+{
+  "Sid": "DenyLambdaWithoutVpc",
+  "Effect": "Deny",
+  "Action": ["lambda:CreateFunction", "lambda:UpdateFunctionConfiguration"],
+  "Resource": "*",
+  "Condition": {
+    "Null": { "lambda:VpcIds": "true" }
+  }
+}
+```
+
+Cân nhắc kỹ trước khi bật SCP này: đưa Lambda vào VPC làm cold start lâu hơn, cần VPC endpoint cho mọi service Lambda gọi, và tốn thêm tiền. Với các ví dụ 01–05 trong repo này, toàn bộ Lambda đang chạy ngoài VPC. Đây là quyết định kiến trúc nên ghi thành ADR, không phải quyết định vặt.
 
 ---
 
@@ -805,6 +1040,8 @@ Lệnh 8 và 9 là hai kiểm tra quan trọng nhất — cả hai đều bắt 
 | Không xoá được firewall | `delete_protection = true` (đúng thiết kế) |
 | Rule không theo thứ tự | Thiếu `rule_order = "STRICT_ORDER"` ở **cả** policy lẫn rule group |
 | Vòng lặp route | firewall subnet trỏ `0/0 → TGW` mà TGW lại trỏ về security — kiểm tra `rtb-security` có `0/0 → egress` |
+| **Request vào tới app nhưng client không nhận phản hồi** | `rtb-security` thiếu route tĩnh `ingress_vpc_cidr → ingress`; gói trả lời khớp `0/0` và bị đẩy sang egress VPC |
+| Thêm VPC mới thì luồng tới nó gãy | Mỗi VPC mới trong network account cần một route tĩnh trong `rtb-security` (mục 6) |
 
 ---
 

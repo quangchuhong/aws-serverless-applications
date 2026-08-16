@@ -693,4 +693,6 @@ Vài chỗ trong [doc 06](./06-Aws-Landing-Zone.md) có thể đơn giản hoá:
 
 Ngoại lệ: nếu yêu cầu tuân thủ bắt buộc **khoá Internet ở mọi account** và dồn traffic qua network account, thì TGW là bắt buộc chứ không phải tuỳ chọn — xem [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress-Network.md). Khi đó VPC endpoint tập trung ở mục 5 cũng trở nên đáng làm hơn, vì TGW đã có sẵn.
 
+Và nếu thêm yêu cầu **mọi luồng VPC-to-VPC phải qua Network Firewall**, thì đặt interface endpoint ngay trong **security VPC** thay vì shared services VPC — traffic vẫn được thanh tra mà không tốn thêm chặng TGW nào. Xem [15 mục 6.3](./15-Security-VPC-Network-Firewall.md).
+
 Một LZ thuần serverless, không TGW, không NAT, không resolver endpoint có chi phí nền tảng rất thấp — phần lớn hoá đơn sẽ là Config + GuardDuty + Security Hub, tức là tiền mua khả năng quan sát và tuân thủ. Đó là khoản đáng chi.
