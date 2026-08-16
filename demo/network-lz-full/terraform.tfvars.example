@@ -1,0 +1,75 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+########################################
+
+region = "ap-southeast-1"
+az     = "ap-southeast-1a"
+
+########################################
+# BUOC 1 — CHE DO RE (~$0.34/gio)
+# Kiem chung: egress tap trung, spoke khong co IGW/NAT, ingress NLB.
+# Chua co firewall nen chua kiem chung duoc east-west.
+########################################
+
+enable_firewall       = false
+enable_ingress        = true
+enable_test_instances = true
+
+########################################
+# BUOC 2 — BAT FIREWALL, che do ALERT (~$0.74/gio)
+# Firewall thanh tra va GHI LOG nhung KHONG chan.
+# Day la che do phai dung dau tien khi trien khai that.
+########################################
+
+# enable_firewall = true
+# firewall_mode   = "alert"
+
+########################################
+# BUOC 3 — CHUYEN SANG DROP
+# Gio firewall chan that. Kiem chung:
+#   - port 80 giua hai spoke: THONG  (co rule)
+#   - port 22 giua hai spoke: CHAN   (khong co rule, du SG da mo)
+#   - domain ngoai allowlist: CHAN
+########################################
+
+# enable_firewall = true
+# firewall_mode   = "drop"
+
+########################################
+# BUOC 4 — Thu mo/dong ket noi VPC-to-VPC
+#
+# Them mot dong vao day = mo them mot luong.
+# Xoa mot dong = dong luong do.
+# KHONG can sua route nao ca.
+########################################
+
+# east_west_rules = [
+#   {
+#     from_cidr = "10.10.0.0/16"
+#     to_cidr   = "10.20.0.0/16"
+#     port      = 80
+#     note      = "app-dev goi app-prod qua HTTP"
+#   },
+#   {
+#     from_cidr = "10.10.0.0/16"
+#     to_cidr   = "10.20.0.0/16"
+#     port      = 22
+#     note      = "them dong nay thi SSH cung thong"
+#   },
+# ]
+
+########################################
+# BUOC 5 — Interface endpoint trong security VPC (+$0.03/gio)
+########################################
+
+# enable_interface_endpoints  = true
+# interface_endpoint_services = ["ssm", "ssmmessages", "ec2messages"]
+
+########################################
+# GIAM CHI PHI: bot con mot spoke (-$0.05/gio)
+# Nhung se khong demo duoc east-west nua.
+########################################
+
+# spokes = {
+#   "app-dev" = { cidr = "10.10.0.0/16" }
+# }
