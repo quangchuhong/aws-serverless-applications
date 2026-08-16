@@ -393,6 +393,116 @@ Xếp theo hiệu quả:
 
 ---
 
+### 7.5. Chi phí cho mô hình dựng – xoá – dựng lại
+
+Nếu bạn không chạy LZ thường trực mà **dựng khi cần rồi xoá đi**, bài toán chi phí khác hẳn mục 7.1–7.3.
+
+#### Không có chi phí khởi tạo
+
+| Hạng mục | Phí ban đầu |
+|---|---|
+| Tạo AWS account, OU, SCP | **$0** |
+| IAM Identity Center | **$0** |
+| Subscribe Marketplace (Palo Alto, F5) | **$0** — chỉ tính tiền khi instance chạy |
+| Transit Gateway (bản thân nó) | **$0** — chỉ tính phí attachment |
+| Internet Gateway | **$0** |
+| Gateway endpoint (S3, DynamoDB) | **$0** |
+| Terraform, code | **$0** |
+
+Gần như **toàn bộ** hạ tầng network tính theo **giờ**. Xoá xong là ngừng tính tiền ngay. Không có phí cam kết, không có phí thiết lập.
+
+#### Chi phí một phiên làm việc
+
+Giai đoạn 1 (chưa có Palo Alto/F5, 1 AZ, 2 spoke):
+
+| Thời lượng phiên | Không firewall<br>$0.34/giờ | Có firewall<br>$0.74/giờ |
+|---|---|---|
+| 2 giờ | $0.7 | $1.5 |
+| **4 giờ** (điển hình) | **$1.4** | **$3.0** |
+| 8 giờ (một ngày làm việc) | $2.7 | $5.9 |
+| 24 giờ | $8 | $18 |
+| **Quên xoá 3 ngày cuối tuần** | $25 | **$53** |
+| **Quên xoá 1 tháng** | $248 | **$540** |
+
+Mỗi phiên có khoảng **30 phút hao phí**: `apply` ~10–15 phút (Network Firewall chiếm ~5 phút), `destroy` ~10–15 phút. Nên phiên ngắn hơn 1 tiếng thì phần lớn thời gian là chờ.
+
+Khi có Palo Alto và F5, license tính theo giờ sẽ đẩy con số lên **~$3–6/giờ** — phiên 4 tiếng thành $12–25. Lúc đó nên cân nhắc `terraform apply -target` để chỉ dựng phần đang cần thử.
+
+#### Cái gì nên giữ, cái gì nên xoá
+
+Đây là phần quan trọng nhất. **Đừng xoá hết** — có những lớp gần như miễn phí để giữ nhưng rất phiền khi dựng lại.
+
+| Lớp | Giữ hay xoá | Chi phí nếu giữ | Lý do |
+|---|---|---|---|
+| Organizations, OU, SCP | **Giữ** | $0 | Miễn phí, và SCP không tốn gì |
+| AWS account | **Giữ** (không xoá được) | $0 | Đóng account có hạn mức, email không tái dùng |
+| IAM Identity Center | **Giữ** | $0 | Đổi identity source làm mất hết assignment |
+| S3 state bucket + DynamoDB lock | **Giữ** | ~$0.10/tháng | Mất state là mất khả năng destroy |
+| CloudTrail org trail | Tuỳ | ~$1–3/tháng | Chỉ tốn phí lưu S3 |
+| **AWS Config** | **Xoá khi rảnh** | ~$10–30/tháng | Tính theo configuration item |
+| **GuardDuty** | **Xoá khi rảnh** | ~$15–40/tháng | |
+| **Security Hub** | **Xoá khi rảnh** | ~$10–25/tháng | |
+| **Toàn bộ lớp network** | **Xoá** | **~$540/tháng** | Khoản lớn nhất, và thuần theo giờ |
+
+Hai cấu hình nền:
+
+```text
+Giu nen tang + xoa network:        ~$35–100/thang
+Xoa het tru Organizations/SSO/S3:  ~$1–3/thang
+```
+
+Khuyến nghị: **giữ Organizations + Identity Center + S3 state, xoá phần còn lại.** Dựng lại lớp network chỉ mất 15 phút; dựng lại Identity Center và account thì không.
+
+#### Bốn cái bẫy của mô hình dựng–xoá
+
+| Bẫy | Chi tiết | Cách tránh |
+|---|---|---|
+| **Route 53 hosted zone** | ~$0.50/zone và **không tính theo giờ** | AWS không tính phí nếu xoá trong vòng 12 giờ kể từ khi tạo — phiên ngắn thì miễn phí, phiên dài thì mất $0.50/zone |
+| **KMS CMK** | ~$1/tháng, và **xoá phải chờ 7–30 ngày** | Vẫn tính tiền trong thời gian chờ. Dùng key AWS-managed cho demo |
+| **AWS Config ghi lại từ đầu** | Mỗi lần dựng lại là ghi lại toàn bộ configuration item | ~$0.30–0.60 mỗi lần rebuild. Nhỏ nhưng khác 0 |
+| **EIP mồ côi** | Destroy fail giữa chừng để lại EIP | ~$3.6/tháng âm thầm. `teardown.sh` có kiểm tra mục này |
+
+Bẫy Route 53 đáng nhớ nhất vì nó phá vỡ giả định "mọi thứ tính theo giờ": một PHZ tạo lúc sáng và xoá lúc tối cùng ngày thì miễn phí, nhưng để qua đêm thành $0.50 cho cả tháng đó.
+
+#### Rủi ro thật không phải là giá theo giờ
+
+$0.74/giờ là rẻ. Rủi ro là **quên xoá**: một tháng là $540 cho thứ bạn không dùng.
+
+Ba lớp bảo vệ:
+
+1. **`teardown.sh`** — destroy xong tự kiểm tra không còn NAT, EIP, firewall, TGW, endpoint, load balancer nào sót.
+2. **Budget cảnh báo** — đặt ngưỡng thấp, ví dụ $20/tháng, cảnh báo qua email:
+
+```hcl
+resource "aws_budgets_budget" "demo_guard" {
+  name         = "lz-demo-guard"
+  budget_type  = "COST"
+  limit_amount = "20"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 50
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = ["ban@example.com"]
+  }
+}
+```
+
+3. **Quét theo tag** — mọi resource demo gắn `Ephemeral=true`, quét định kỳ:
+
+```bash
+aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
+  --tag-filters "Key=Ephemeral,Values=true" \
+  --query 'length(ResourceTagMappingList)' --output text
+```
+
+Đặt lệnh này vào một cron hằng ngày trên máy bạn, khác 0 thì nhắc. Rẻ hơn nhiều so với đọc hoá đơn cuối tháng.
+
+---
+
 ## 8. Checklist kiểm chứng
 
 Chạy sau mỗi lần thay đổi hạ tầng mạng.
