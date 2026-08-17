@@ -15,6 +15,66 @@ Khi có mâu thuẫn giữa tài liệu này và docs 12–16, **tài liệu nà
 
 ---
 
+## 0. Trạng thái triển khai
+
+Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới có trên giấy.*
+
+| Ký hiệu | Nghĩa |
+|---|---|
+| ✅ | Code chạy được, đã `apply` và `destroy` được |
+| ⏸ | Code viết sẵn, `plan` kiểm chứng được, **chưa bật** (chờ license) |
+| ⬜ | Mới có thiết kế trong doc, chưa thành code |
+
+### Tầng network
+
+| Thành phần | Thiết kế | Code | Trạng thái |
+|---|---|---|---|
+| Transit Gateway + 4 route table | [17 mục 4](#4-transit-gateway--bảng-chân-lý-duy-nhất) | `tgw.tf` | ✅ |
+| security VPC + Network Firewall | [15](./15-Security-VPC-Network-Firewall.md) | `vpc-security.tf`, `firewall.tf` | ✅ |
+| egress VPC + NAT Gateway | [13](./13-Centralized-Ingress-Egress-Network.md) | `vpc-egress.tf` | ✅ |
+| Spoke không IGW/NAT | [13](./13-Centralized-Ingress-Egress-Network.md) | `vpc-spokes.tf` | ✅ |
+| Gateway endpoint S3/DynamoDB | [12](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | `vpc-spokes.tf` | ✅ |
+| Interface endpoint trong security VPC | [15 mục 6.3](./15-Security-VPC-Network-Firewall.md) | `vpc-security.tf` | ✅ |
+| ingress VPC + NLB | [14](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | `vpc-ingress.tf` | ✅ |
+| CloudFront + AWS WAF + khoá origin | [14 mục 5](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | `cdn.tf` | ✅ |
+| **Palo Alto qua GWLB** | [14 mục 6](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | `appliances.tf` | **⏸ chờ license** |
+| **F5 BIG-IP Advanced WAF** | [14 mục 7](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md), [18](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) | `appliances.tf`, `templates/` | **⏸ chờ license** |
+| 3rd-party VPC + Site-to-Site VPN | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | — | ⬜ |
+| SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
+| Route 53 PHZ + Profile | [12 mục 4](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | — | ⬜ |
+
+¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
+
+### Tầng nền tảng LZ
+
+| Thành phần | Thiết kế | Trạng thái |
+|---|---|---|
+| Organizations, OU, SCP, account | [06](./06-Aws-Landing-Zone.md) | ⬜ |
+| Org CloudTrail → log-archive | [06 mục 8](./06-Aws-Landing-Zone.md) | ⬜ |
+| GuardDuty, Security Hub, Config | [06 mục 9](./06-Aws-Landing-Zone.md) | ⬜ |
+| IAM Identity Center + đồng bộ AD | [06 mục 10](./06-Aws-Landing-Zone.md), [08](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | ⬜ |
+| Account vending | [09](./09-Account-Vending-Tu-Dong.md) | ⬜ |
+| CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⬜ |
+| Tag policy + cost allocation | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ⬜ |
+
+### Script kiểm chứng
+
+| Script | Làm gì | Trạng thái |
+|---|---|---|
+| `plan-check.sh` | `terraform plan` cho 9 tổ hợp biến (gồm cả appliance), kiểm tra plan đúng hành vi. **Không tạo gì** | ✅ |
+| `verify.sh` | 8 nhóm kiểm chứng sau khi apply, gồm chạy lệnh thật trên EC2 qua SSM | ✅ |
+| `teardown.sh` | Destroy + xác nhận không còn resource nào tính tiền | ✅ |
+
+Toàn bộ code ở [`demo/network-lz-full/`](../demo/network-lz-full/).
+
+### Đọc bảng này thế nào
+
+- **Phần ✅** dựng lên chạy thử được ngay, ~$0.78/giờ. Đây là toàn bộ xương sống network.
+- **Phần ⏸** đã có code và `plan` kiểm chứng được; khi có license chỉ đổi `enable_appliances = true`. Phần định tuyến TGW/security/egress/spoke **không đổi** khi bật.
+- **Phần ⬜** còn ở dạng thiết kế trong doc, chưa thành Terraform chạy được.
+
+---
+
 ## 1. Yêu cầu thiết kế
 
 Chốt từ trao đổi, đây là ràng buộc đầu vào:
@@ -688,7 +748,7 @@ Mục tiêu: kiểm chứng **định tuyến** với chi phí tối thiểu, r�
 | [`demo/centralized-network`](../demo/centralized-network/) | Bản tối giản: TGW + egress + cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](../demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, cross-account PHZ | ~$0.22/giờ |
 
-`network-lz-full` là bộ chính. Nó có kịch bản 5 bước, mỗi bước bật thêm một phần bằng biến:
+`network-lz-full` là bộ chính. Kịch bản **6 bước**, mỗi bước bật thêm một phần bằng biến:
 
 | Bước | Bật gì | ~$/giờ | Kiểm chứng được |
 |---|---|---|---|
@@ -697,22 +757,44 @@ Mục tiêu: kiểm chứng **định tuyến** với chi phí tối thiểu, r�
 | 3 | Firewall chế độ `drop` | $0.74 | Chặn thật: port có rule vs không có rule |
 | 4 | Sửa `east_west_rules` | $0.74 | **Mở/đóng luồng VPC-to-VPC mà không đụng route** |
 | 5 | Interface endpoint | $0.77 | Endpoint trong security VPC, vẫn được thanh tra |
+| 6 | CloudFront + AWS WAF | $0.78 | Khoá origin, WAF chặn SQLi |
 
-Kèm `verify.sh` (8 nhóm kiểm tra, chạy lệnh thật trên EC2 qua SSM) và `teardown.sh` (destroy + xác nhận không còn gì tính tiền).
+Ba script đi kèm:
 
-### 12.2. Chưa có trong demo
+| Script | Khi nào chạy |
+|---|---|
+| `plan-check.sh` | **Trước khi apply** — 9 tổ hợp biến, không tạo gì |
+| `verify.sh` | Sau khi apply |
+| `teardown.sh` | Khi xong |
 
-| Thành phần | Vì sao | Khi nào thêm |
+### 12.2. Palo Alto và F5 – code sẵn, chưa bật
+
+`appliances.tf` đã có đầy đủ Terraform cho GWLB + Palo Alto + F5, `enable_appliances = false` mặc định.
+
+Bật lên là **rewire đường ingress**, không phải chỉ thêm resource:
+
+| | Tắt | Bật |
 |---|---|---|
-| **Palo Alto (GWLB)** | Cần license Marketplace | Giai đoạn 2 |
-| **F5 BIG-IP** | Cần license Marketplace | Giai đoạn 2 |
-| CloudFront + khoá origin | Cần domain và ACM cert | Giai đoạn 2 |
-| 3rd-party VPC + VPN | Cần customer gateway thật | Sau khi xong giai đoạn 1 |
-| SCP khoá Internet | Làm `terraform destroy` kẹt | Chỉ áp ở môi trường thật |
+| Public subnet `0.0.0.0/0` | → IGW | → **GWLBe** (gói về cũng bị PA thanh tra) |
+| NLB `target_type` | `ip` (app trong spoke) | `instance` (F5) |
+| Edge route table gắn vào IGW | không có | có |
 
-Buổi thực hành 4 tiếng ≈ **$3**. Quên xoá một tháng ≈ **$540** — nên phần kiểm tra sau khi destroy là bắt buộc, không phải tuỳ chọn.
+`plan-check.sh` kiểm chứng được phần này **ngay bây giờ** mà chưa cần subscribe Marketplace — nó lấy một AMI Amazon Linux làm AMI giả, vì `plan` chỉ cần một AMI ID hợp lệ. Script còn kiểm tra plan có chứa đúng các thiết lập dễ sai: `appliance_mode_support = enable`, `source_dest_check = false`, edge route table, và NLB trỏ vào F5 chứ không trỏ thẳng app.
 
-### 12.3. Nguyên tắc cho code demo
+Chi phí khi bật: **~$3–6/giờ** (license Marketplace tính theo giờ chiếm phần lớn).
+
+### 12.3. Còn thiếu trong demo
+
+| Thành phần | Vì sao |
+|---|---|
+| 3rd-party VPC + VPN | Cần customer gateway thật của đối tác |
+| SCP khoá Internet | Làm `terraform destroy` kẹt — chỉ áp ở môi trường thật |
+| Domain riêng + ACM | Demo dùng hostname mặc định `*.cloudfront.net` |
+| NAT/firewall nhiều AZ | Demo 1 AZ để tiết kiệm |
+
+Buổi thực hành 4 tiếng ≈ **$3**. Quên xoá một tháng ≈ **$550** — nên phần kiểm tra sau khi destroy là bắt buộc, không phải tuỳ chọn.
+
+### 12.4. Nguyên tắc cho code demo
 
 | Nguyên tắc | Lý do |
 |---|---|
@@ -721,36 +803,40 @@ Buổi thực hành 4 tiếng ≈ **$3**. Quên xoá một tháng ≈ **$540** �
 | **Không bật deletion protection** | Chặn destroy |
 | **Tag `Ephemeral=true` mọi thứ** | Tìm được resource sót |
 | **1 AZ thay vì 2** | Giảm nửa chi phí NAT và firewall endpoint |
-| **Stand-in cho appliance Marketplace** | PA/F5 tính license theo giờ, rất đắt |
+| **Appliance mặc định tắt** | License PA/F5 tính theo giờ, rất đắt |
+| **Mọi phần đắt tiền đều có công tắc** | Bật đúng thứ đang cần thử |
 
 ---
 
 ## 13. Việc còn lại
 
-Phần đã xong và phần cần làm tiếp:
+Trạng thái đầy đủ ở [mục 0](#0-trạng-thái-triển-khai). Phần này là **thứ tự nên làm tiếp**.
 
-| Hạng mục | Trạng thái |
-|---|---|
-| Thiết kế network (tài liệu này + 12–16) | ✅ Xong |
-| **Demo giai đoạn 1: TGW + security VPC + firewall + egress + ingress** | ✅ **Xong** — [`demo/network-lz-full`](../demo/network-lz-full/) |
-| **Script verify (8 nhóm, chạy lệnh thật qua SSM)** | ✅ Xong |
-| **Script teardown + xác nhận sạch** | ✅ Xong |
-| Demo multi-account, RAM share | ✅ Xong |
-| Demo 3rd-party VPC + VPN | ⬜ Cần làm |
-| AWS WAF + ALB cho giai đoạn 1 (mục 2.1) | ⬜ Cần làm |
-| Cấu hình F5 (DO, AS3, WAF policy) | ✅ Xong — [18](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) |
-| Palo Alto + F5 chạy thật | ⏸ Chờ license BYOL — **hoặc học ngay bằng bản PAYG, xem [18 mục 0](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md)** |
-| CloudFront + khoá origin | ⏸ Chờ domain và ACM cert |
-| Terraform layer `1-organization` → `4-identity-center` | ⬜ Mới có trong doc, chưa thành code chạy được |
-| `6-account-baseline` thành module dùng được | ⬜ Cần làm |
-| `7-scp-network` | ⬜ Cần làm |
+```text
+1. CHAY DEMO GIAI DOAN 1                          ← lam truoc tien
+   ./plan-check.sh   -> kiem chung code, khong tao gi
+   terraform apply   -> 6 buoc trong demo/network-lz-full/README.md
+   ./verify.sh       -> phai xanh het
+   ./teardown.sh
+   Chi phi: ~$3 cho buoi 4 tieng
 
-Đề xuất thứ tự làm tiếp:
+2. THAY NLB BANG ALB + AWS WAF cho giai doan 1
+   Ly do: AWS WAF khong gan duoc vao NLB (muc 2.1).
+   Lap phan lon khoang trong bao mat trong luc cho PA/F5.
 
-1. **Chạy demo giai đoạn 1** — 5 bước trong [`demo/network-lz-full/README.md`](../demo/network-lz-full/README.md), xác nhận `verify.sh` xanh hết. Đây là lúc phát hiện sai sót thiết kế rẻ nhất.
-2. **Thay NLB bằng ALB + AWS WAF** — lấp phần lớn khoảng trống bảo mật trong lúc chờ PA/F5 (mục 2.1).
-3. **Các layer LZ còn lại** — organization, logging, security, identity center thành code chạy được.
-4. **3rd-party VPC + VPN** — khi có thông tin customer gateway của đối tác.
-5. **Palo Alto + F5** — khi có license. Phần định tuyến không đổi, chỉ thêm vào giữa IGW và TGW attachment của ingress VPC.
+3. CAC LAYER LZ CON LAI thanh code chay duoc
+   1-organization, 2-logging, 3-security, 4-identity-center,
+   6-account-baseline, 7-scp-network
 
-Mục 1 nên làm trước tiên vì nó kiểm chứng bảng định tuyến ở mục 4 — chỗ mà một ô sai sẽ gây ra sự cố rất khó lần ra nguyên nhân khi đã lên môi trường thật.
+4. 3RD-PARTY VPC + VPN
+   Khi co thong tin customer gateway cua doi tac.
+
+5. PALO ALTO + F5
+   Code da san (appliances.tf). Khi co license chi doi
+   enable_appliances = true.
+   Hoac hoc ngay bang ban PAYG theo gio - doc 18 muc 0.
+```
+
+**Vì sao mục 1 trước tiên:** nó kiểm chứng bảng định tuyến ở [mục 4](#4-transit-gateway--bảng-chân-lý-duy-nhất) — chỗ mà một ô sai gây ra sự cố rất khó lần ra nguyên nhân khi đã lên môi trường thật. Phát hiện lúc demo tốn $3; phát hiện lúc production tốn nhiều hơn thế rất nhiều.
+
+**Vì sao mục 5 để cuối:** bật Palo Alto và F5 **không đụng** tới định tuyến TGW, security VPC, egress VPC hay spoke. Chúng chỉ chèn vào phần trên của ingress VPC ([mục 2.1](#21-giai-đoạn-1--kiến-trúc-khi-chưa-có-palo-alto-và-f5)). Làm sau không phải trả giá bằng việc sửa lại phần đã dựng.

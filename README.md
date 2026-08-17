@@ -33,7 +33,9 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 
 ## Landing Zone – network
 
-**Bắt đầu từ [17 – Design Guide](./docs/17-Network-LZ-Design-Guide.md).** Đó là tài liệu thiết kế chuẩn; 12–16 là chi tiết từng thành phần.
+**Bắt đầu từ [17 – Design Guide](./docs/17-Network-LZ-Design-Guide.md).** Đó là tài liệu thiết kế chuẩn; 12–16 và 18 là chi tiết từng thành phần.
+
+Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code chạy được, phần nào mới có trên giấy.
 
 | # | Nội dung |
 |---|---|
