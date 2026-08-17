@@ -692,6 +692,8 @@ resource "aws_route" "f5_default_to_gwlbe" {
 }
 ```
 
+> **Cấu hình bên trong F5** — Declarative Onboarding, AS3, WAF policy, vòng đời transparent → blocking — nằm ở [18 – Cấu hình F5 BIG-IP Advanced WAF](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md). Doc đó cũng chỉ cách **học F5 bằng bản PAYG theo giờ (~$10/buổi) mà không cần mua license trước**.
+
 ### 7.1. Kiểm tra header bí mật tại F5
 
 Đặt trong AS3 declaration hoặc iRule, chặn request không đi qua CDN:

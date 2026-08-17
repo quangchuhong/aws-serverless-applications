@@ -738,7 +738,8 @@ Phần đã xong và phần cần làm tiếp:
 | Demo multi-account, RAM share | ✅ Xong |
 | Demo 3rd-party VPC + VPN | ⬜ Cần làm |
 | AWS WAF + ALB cho giai đoạn 1 (mục 2.1) | ⬜ Cần làm |
-| Palo Alto + F5 | ⏸ **Chờ license** |
+| Cấu hình F5 (DO, AS3, WAF policy) | ✅ Xong — [18](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) |
+| Palo Alto + F5 chạy thật | ⏸ Chờ license BYOL — **hoặc học ngay bằng bản PAYG, xem [18 mục 0](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md)** |
 | CloudFront + khoá origin | ⏸ Chờ domain và ACM cert |
 | Terraform layer `1-organization` → `4-identity-center` | ⬜ Mới có trong doc, chưa thành code chạy được |
 | `6-account-baseline` thành module dùng được | ⬜ Cần làm |

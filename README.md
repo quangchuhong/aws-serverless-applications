@@ -43,6 +43,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | [14](./docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | Ingress chain: CDN → Palo Alto → F5 WAF → App |
 | [15](./docs/15-Security-VPC-Network-Firewall.md) | Security VPC – mọi traffic qua AWS Network Firewall |
 | [16](./docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Kết nối đối tác – 3rd-party VPC và Site-to-Site VPN |
+| [18](./docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) | Cấu hình F5 BIG-IP Advanced WAF – DO, AS3, WAF policy |
 
 ## Demo chạy được
 
