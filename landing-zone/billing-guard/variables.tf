@@ -3,6 +3,18 @@ variable "project" {
   default = "acme-lz"
 }
 
+variable "cost_center" {
+  description = "Tag CostCenter cho chinh ha tang quan tri nay"
+  type        = string
+  default     = "CC-0000"
+}
+
+variable "owner" {
+  description = "Tag Owner - email doi platform"
+  type        = string
+  default     = "platform@example.com"
+}
+
 variable "alert_emails" {
   description = "Email nhan canh bao. Moi email phai XAC NHAN qua link SNS gui toi."
   type        = list(string)

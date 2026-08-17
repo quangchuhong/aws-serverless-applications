@@ -6,6 +6,22 @@ region = "ap-southeast-1"
 az     = "ap-southeast-1a"
 
 ########################################
+# TAG CHUAN
+#
+# Bon tag nay duoc gan vao MOI resource qua default_tags, va la
+# nhung tag duoc bat cost allocation o landing-zone/billing-guard.
+#
+# Gan tag ma khong bat cost allocation -> Cost Explorer khong group duoc.
+# Bat cost allocation ma khong gan tag -> khong co du lieu de group.
+# Phai co CA HAI.
+########################################
+
+project     = "lz-net"
+cost_center = "CC-0000"                # doi thanh ma phong ban that
+owner       = "platform@example.com"   # doi thanh email that
+environment = "sandbox"                # dev | staging | prod | sandbox
+
+########################################
 # BUOC 1 — CHE DO RE (~$0.34/gio)
 # Kiem chung: egress tap trung, spoke khong co IGW/NAT, ingress NLB.
 # Chua co firewall nen chua kiem chung duoc east-west.

@@ -5,7 +5,9 @@
 # Cost allocation tag va budget chi bat duoc o day.
 ########################################
 
-project = "acme-lz"
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
 
 # PHAI xac nhan qua link SNS gui toi email nay, neu khong se
 # khong nhan duoc canh bao nao.

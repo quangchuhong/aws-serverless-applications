@@ -9,10 +9,27 @@ terraform {
   }
 }
 
+########################################
+# TAG CHUAN - dung chung cho CA BA account
+#
+# Bon tag dau la tag bat buoc theo doc 11 muc 2, va la nhung tag
+# duoc bat cost allocation o landing-zone/billing-guard.
+#
+# Multi-account co diem dang chu y: cost allocation tag bat MOT LAN
+# o management account nhung ap dung cho MOI account con. Nen ca ba
+# provider ben duoi deu phai gan cung bo tag, neu khong se co account
+# lot khoi bao cao chi phi theo tag.
+########################################
+
 locals {
   common_tags = {
-    Project   = var.project
+    CostCenter  = var.cost_center
+    Owner       = var.owner
+    Environment = var.environment
+    Project     = var.project
+
     ManagedBy = "terraform"
+    Repo      = "aws-serverless-applications/demo/centralized-network-multiaccount"
     Ephemeral = "true"
   }
 }

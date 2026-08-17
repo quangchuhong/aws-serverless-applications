@@ -10,10 +10,38 @@ variable "azs" {
   default     = ["ap-southeast-1a", "ap-southeast-1b"]
 }
 
+########################################
+# Tag chuan - xem doc 11 muc 2.
+# Bon tag nay duoc bat cost allocation o landing-zone/billing-guard.
+########################################
+
 variable "project" {
-  description = "Tien to dat ten resource"
+  description = "Tag Project, dong thoi la tien to dat ten resource"
   type        = string
   default     = "lz-net-demo"
+}
+
+variable "cost_center" {
+  description = "Tag CostCenter - ma phong ban chiu chi phi"
+  type        = string
+  default     = "CC-0000"
+}
+
+variable "owner" {
+  description = "Tag Owner - email nguoi chiu trach nhiem"
+  type        = string
+  default     = "platform@example.com"
+}
+
+variable "environment" {
+  description = "Tag Environment"
+  type        = string
+  default     = "sandbox"
+
+  validation {
+    condition     = contains(["dev", "staging", "prod", "sandbox"], var.environment)
+    error_message = "environment phai la dev, staging, prod hoac sandbox."
+  }
 }
 
 ########################

@@ -97,6 +97,51 @@ aws budgets describe-budgets --account-id $(aws sts get-caller-identity --query 
 
 ---
 
+## Hai nửa của một việc
+
+Bật cost allocation tag chỉ là **một nửa**. Nửa kia là **gắn tag lên resource**.
+
+| Làm gì | Ở đâu | Thiếu thì sao |
+|---|---|---|
+| Bật cost allocation tag | Layer này | Có tag trên resource nhưng Cost Explorer không group được |
+| Gắn tag lên resource | `default_tags` của mọi layer | Bật tag mà không có dữ liệu để group |
+
+Cả ba demo và chính layer này đều đã gắn đủ bốn tag chuẩn qua `default_tags`:
+
+```hcl
+locals {
+  common_tags = {
+    CostCenter  = var.cost_center
+    Owner       = var.owner
+    Environment = var.environment
+    Project     = var.project
+    # ...
+  }
+}
+
+provider "aws" {
+  default_tags { tags = local.common_tags }
+}
+```
+
+Ba chỗ dễ sót khi thêm layer mới:
+
+1. **Provider alias thứ hai.** Ví dụ `cdn.tf` có provider `us_east_1` riêng cho WAF — phải gắn cùng `local.common_tags`, nếu không Web ACL lọt khỏi báo cáo.
+2. **Multi-account.** Cost allocation tag bật **một lần** ở management account nhưng áp cho **mọi** account con. Cả ba provider trong demo multi-account đều dùng chung một bộ tag.
+3. **Resource không hỗ trợ `default_tags`.** Một số resource có cơ chế tag riêng — kiểm tra sau khi apply bằng lệnh dưới.
+
+Kiểm tra resource nào thiếu tag:
+
+```bash
+aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
+  --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])].ResourceARN' \
+  --output table
+```
+
+Rỗng là đủ tag. Có kết quả thì đó là những resource sẽ hiện dưới nhãn `No CostCenter` trong Cost Explorer.
+
+---
+
 ## Nếu apply lỗi ở cost allocation tag
 
 Nguyên nhân gần như luôn là: **chưa có resource nào mang tag đó**. AWS chỉ cho bật tag đã xuất hiện ít nhất một lần.

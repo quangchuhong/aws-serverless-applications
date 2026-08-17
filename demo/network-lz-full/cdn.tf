@@ -19,16 +19,14 @@ locals {
 }
 
 # WAF cho CloudFront BAT BUOC tao o us-east-1, du CloudFront la global.
+# Dung CUNG bo tag voi provider chinh - neu khong, WAF Web ACL se
+# thieu tag CostCenter/Owner/Environment va lot khoi bao cao chi phi.
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
 
   default_tags {
-    tags = {
-      Project   = var.project
-      ManagedBy = "terraform"
-      Ephemeral = "true"
-    }
+    tags = local.common_tags
   }
 }
 

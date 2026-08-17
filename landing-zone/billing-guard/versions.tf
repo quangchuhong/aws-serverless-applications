@@ -17,17 +17,33 @@ terraform {
 # Dat provider o region khac se loi hoac khong thay du lieu.
 ########################################
 
+########################################
+# Layer nay cung phai mang chinh nhung tag no bat cost allocation.
+# Khong thi resource cua no lot khoi bao cao - nghe nho nhung la
+# loi logic kho chiu khi doc bao cao sau nay.
+#
+# KHONG co Ephemeral=true: layer nay dung mot lan roi de do,
+# khong nam trong pham vi teardown cua demo.
+########################################
+
+locals {
+  common_tags = {
+    CostCenter  = var.cost_center
+    Owner       = var.owner
+    Environment = "prod" # ha tang quan tri, khong phai sandbox
+    Project     = var.project
+
+    ManagedBy = "terraform"
+    Layer     = "billing-guard"
+    Repo      = "aws-serverless-applications/landing-zone/billing-guard"
+  }
+}
+
 provider "aws" {
   region = "us-east-1"
 
   default_tags {
-    tags = {
-      Project   = var.project
-      ManagedBy = "terraform"
-      Layer     = "billing-guard"
-      # KHONG co Ephemeral=true: layer nay dung mot lan roi de do,
-      # khong nam trong pham vi teardown cua demo.
-    }
+    tags = local.common_tags
   }
 }
 

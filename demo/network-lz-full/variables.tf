@@ -9,9 +9,40 @@ variable "az" {
   default     = "ap-southeast-1a"
 }
 
+########################################
+# Tag chuan - xem doc 11 muc 2
+#
+# Bon tag nay duoc bat cost allocation o landing-zone/billing-guard.
+# Gan chung o day thi Cost Explorer moi group duoc theo tag.
+########################################
+
 variable "project" {
-  type    = string
-  default = "lz-net"
+  description = "Tag Project, dong thoi la tien to dat ten resource"
+  type        = string
+  default     = "lz-net"
+}
+
+variable "cost_center" {
+  description = "Tag CostCenter - ma phong ban chiu chi phi. Dung MA, khong dung ten (doc 11 muc 2)."
+  type        = string
+  default     = "CC-0000"
+}
+
+variable "owner" {
+  description = "Tag Owner - email nguoi chiu trach nhiem"
+  type        = string
+  default     = "platform@example.com"
+}
+
+variable "environment" {
+  description = "Tag Environment"
+  type        = string
+  default     = "sandbox"
+
+  validation {
+    condition     = contains(["dev", "staging", "prod", "sandbox"], var.environment)
+    error_message = "environment phai la dev, staging, prod hoac sandbox."
+  }
 }
 
 ########################################
