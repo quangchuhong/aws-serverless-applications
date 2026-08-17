@@ -64,12 +64,16 @@ resource "aws_route_table" "ingress_public" {
   tags   = { Name = "${var.project}-ingress-public-rt" }
 }
 
+# Khong co appliance: ra thang IGW.
+# Co appliance: ra GWLBe de goi TRA VE cung bi Palo Alto thanh tra.
+# De thang IGW khi da co GWLB la loi lam luong bat doi xung -> PA drop.
 resource "aws_route" "ingress_public_default" {
   count = local.ing
 
   route_table_id         = aws_route_table.ingress_public[0].id
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.ingress[0].id
+  gateway_id             = local.app_on > 0 ? null : aws_internet_gateway.ingress[0].id
+  vpc_endpoint_id        = local.app_on > 0 ? aws_vpc_endpoint.gwlbe[0].id : null
 }
 
 # NLB can voi toi target la IP private trong spoke VPC
@@ -201,13 +205,15 @@ locals {
   first_spoke = sort(keys(var.spokes))[0]
 }
 
+# Khong co appliance: target la IP cua app trong spoke (qua TGW)
+# Co appliance:       target la instance F5, F5 moi goi xuong app
 resource "aws_lb_target_group" "app" {
   count = local.ing
 
   name        = "${var.project}-tg"
-  port        = 80
+  port        = var.nlb_listener_port
   protocol    = "TCP"
-  target_type = "ip"
+  target_type = local.app_on > 0 ? "instance" : "ip"
   vpc_id      = aws_vpc.ingress[0].id
 
   # QUAN TRONG: target nam O VPC KHAC, di qua TGW.
@@ -231,7 +237,7 @@ resource "aws_lb_listener" "http" {
   count = local.ing
 
   load_balancer_arn = aws_lb.ingress[0].arn
-  port              = 80
+  port              = var.nlb_listener_port
   protocol          = "TCP"
 
   default_action {
@@ -240,12 +246,22 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# availability_zone = "all" BAT BUOC khi IP target nam ngoai VPC cua LB
-resource "aws_lb_target_group_attachment" "app" {
-  count = var.enable_ingress && var.enable_test_instances ? 1 : 0
+# KHONG co appliance: NLB tro thang vao app trong spoke.
+# availability_zone = "all" BAT BUOC khi IP target nam ngoai VPC cua LB.
+resource "aws_lb_target_group_attachment" "app_direct" {
+  count = var.enable_ingress && var.enable_test_instances && !var.enable_appliances ? 1 : 0
 
   target_group_arn  = aws_lb_target_group.app[0].arn
   target_id         = aws_instance.test[local.first_spoke].private_ip
-  port              = 80
+  port              = var.nlb_listener_port
   availability_zone = "all"
+}
+
+# CO appliance: NLB tro vao F5, F5 moi goi xuong app.
+resource "aws_lb_target_group_attachment" "app_via_f5" {
+  count = local.app_on
+
+  target_group_arn = aws_lb_target_group.app[0].arn
+  target_id        = aws_instance.f5[0].id
+  port             = var.nlb_listener_port
 }

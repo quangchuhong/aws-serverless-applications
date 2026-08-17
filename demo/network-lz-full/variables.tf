@@ -147,6 +147,88 @@ variable "interface_endpoint_services" {
   default = ["ssm", "ssmmessages", "ec2messages"]
 }
 
+########################################
+# Palo Alto + F5 — PHASE SAU
+#
+# Mac dinh TAT. Code viet san de terraform plan kiem chung duoc,
+# khi co license chi bat bien nay len.
+########################################
+
+variable "enable_appliances" {
+  description = <<-EOT
+    Palo Alto (qua GWLB) + F5 BIG-IP. Can enable_ingress = true.
+
+    false (mac dinh) -> khong tao gi. IGW -> NLB -> app.
+    true             -> IGW -> GWLBe -> PA -> NLB -> F5 -> TGW -> app.
+
+    CHUA APPLY DUOC neu chua subscribe AMI tren Marketplace.
+
+    Muon PLAN ma chua subscribe: dat pa_ami_id va f5_ami_id bang
+    mot AMI bat ky, plan se bo qua data source tim AMI Marketplace.
+
+    Chi phi khi bat: ~$3-6/gio (license tinh theo gio).
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "pa_ami_id" {
+  description = "AMI cua Palo Alto. De trong = tu tim tren Marketplace theo pa_ami_name_pattern."
+  type        = string
+  default     = ""
+}
+
+variable "pa_ami_name_pattern" {
+  description = "Mau ten AMI Palo Alto tren Marketplace"
+  type        = string
+  default     = "PA-VM-AWS-11.1*"
+}
+
+variable "pa_instance_type" {
+  description = "Palo Alto can toi thieu m5.xlarge"
+  type        = string
+  default     = "m5.xlarge"
+}
+
+variable "pa_health_check_port" {
+  description = "Port health check cua GWLB toi PA. Kiem tra tai lieu PA cho phien ban ban dung."
+  type        = number
+  default     = 80
+}
+
+variable "pa_health_check_protocol" {
+  type    = string
+  default = "TCP"
+}
+
+variable "f5_ami_id" {
+  description = "AMI cua F5. De trong = tu tim tren Marketplace theo f5_ami_name_pattern."
+  type        = string
+  default     = ""
+}
+
+variable "f5_ami_name_pattern" {
+  description = <<-EOT
+    Mau ten AMI F5. Ban PAYG tinh theo gio (khong can mua license truoc)
+    thuong co chu 'PAYG' trong ten; ban BYOL co chu 'BYOL'.
+    Xem doc 18 muc 0.
+  EOT
+  type        = string
+  default     = "F5 BIGIP-17.1*PAYG-Adv WAF Plus 25Mbps*"
+}
+
+variable "f5_instance_type" {
+  description = "F5 Advanced WAF can toi thieu m5.xlarge"
+  type        = string
+  default     = "m5.xlarge"
+}
+
+variable "nlb_listener_port" {
+  description = "Port NLB nghe. Demo dung 80; production dung 443 voi F5 terminate TLS."
+  type        = number
+  default     = 80
+}
+
 variable "enable_test_instances" {
   description = "EC2 nginx trong moi spoke de kiem chung (~$0.012/gio moi cai)"
   type        = bool

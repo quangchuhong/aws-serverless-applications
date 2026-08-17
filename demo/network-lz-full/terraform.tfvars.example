@@ -90,6 +90,29 @@ enable_test_instances = true
 # cdn_price_class = "PriceClass_200" # gom chau A, do tre tot hon tu VN
 
 ########################################
+# PHASE SAU — Palo Alto + F5
+#
+# Code da viet san trong appliances.tf, mac dinh TAT.
+#
+# Kiem chung code ngay bay gio ma khong tao gi:
+#   ./plan-check.sh
+#
+# Khi co license Marketplace thi bo comment ba dong duoi.
+# Chi phi khi bat: ~$3-6/gio (license tinh theo gio).
+########################################
+
+# enable_appliances = true
+# pa_ami_id         = ""   # de trong = tu tim tren Marketplace
+# f5_ami_id         = ""
+
+# Muon PLAN ma chua subscribe Marketplace: dat AMI bat ky
+# pa_ami_id = "ami-xxxxxxxxxxxx"
+# f5_ami_id = "ami-xxxxxxxxxxxx"
+
+# Production dung 443 (F5 terminate TLS), demo dung 80
+# nlb_listener_port = 443
+
+########################################
 # GIAM CHI PHI: bot con mot spoke (-$0.05/gio)
 # Nhung se khong demo duoc east-west nua.
 ########################################

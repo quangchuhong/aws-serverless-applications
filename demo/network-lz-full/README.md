@@ -18,13 +18,25 @@ Dựng lên chạy thử rồi xoá. Buổi thực hành 4 tiếng khoảng **$3
 | Interface endpoint trong security VPC | ✅ (tuỳ chọn) | [15 mục 6.3](../../docs/15-Security-VPC-Network-Firewall.md) |
 | ingress-vpc + NLB | ✅ | [14](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **CloudFront + AWS WAF + khoá origin** | ✅ (tuỳ chọn) | [14 mục 5](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
-| **Palo Alto (GWLB)** | ❌ **chưa** | [14 mục 6](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
-| **F5 BIG-IP WAF** | ❌ **chưa** | [14 mục 7](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
+| **Palo Alto (GWLB)** | ⏸ **code sẵn, mặc định tắt** | [14 mục 6](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
+| **F5 BIG-IP WAF** | ⏸ **code sẵn, mặc định tắt** | [18](../../docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) |
 | 3rd-party VPC + VPN | ❌ chưa | [16](../../docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) |
 
-Demo dùng NLB trỏ thẳng xuống app. Khi có license Palo Alto và F5, chúng chèn vào **giữa IGW và NLB** — phần định tuyến TGW, security VPC và spoke **giữ nguyên không đổi**. Đó là lý do làm phần này trước có ý nghĩa: nó kiểm chứng đúng chỗ dễ sai nhất.
-
 Demo cũng **không tạo AWS account** và **không attach SCP** — cả hai đều làm `terraform destroy` không chạy được.
+
+### Palo Alto và F5: code viết sẵn, chưa bật
+
+`appliances.tf` có đầy đủ Terraform cho GWLB + Palo Alto + F5, nhưng `enable_appliances = false` mặc định. Lý do: cần license Marketplace, để phase sau.
+
+Code viết trước để **kiểm chứng bằng `terraform plan` ngay bây giờ**, khi có license chỉ bật biến lên:
+
+```bash
+./plan-check.sh
+```
+
+Script này chạy `terraform plan` cho **9 tổ hợp biến**, gồm cả phần appliance, và kiểm tra plan có đúng hành vi mong đợi không (`appliance_mode_support = enable`, `source_dest_check = false`, NLB trỏ vào F5 chứ không trỏ thẳng app…). **Không tạo resource nào.**
+
+Để plan được phần appliance mà chưa subscribe Marketplace, script tự lấy một AMI Amazon Linux làm AMI giả — `plan` chỉ cần một AMI ID hợp lệ.
 
 ---
 
@@ -33,11 +45,14 @@ Demo cũng **không tạo AWS account** và **không attach SCP** — cả hai �
 ```bash
 cd demo/network-lz-full
 cp terraform.tfvars.example terraform.tfvars
+chmod +x plan-check.sh verify.sh teardown.sh
+
+# Kiem chung toan bo code truoc, khong tao gi
+./plan-check.sh
 
 terraform init
 terraform apply          # ~8 phút (firewall mất ~5 phút)
 
-chmod +x verify.sh teardown.sh
 ./verify.sh              # đợi ~2 phút cho EC2 boot xong rồi chạy
 ```
 
@@ -268,8 +283,11 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | `vpc-security.tf` | Security VPC, TGW attachment (appliance mode), interface endpoint |
 | `firewall.tf` | Network Firewall, policy, rule group east-west + egress, logging |
 | `vpc-egress.tf` | IGW, NAT, và **đường về** hay bị quên |
-| `vpc-ingress.tf` | IGW, NLB (chỗ Palo Alto và F5 sẽ chèn vào), security group khoá origin |
+| `vpc-ingress.tf` | IGW, NLB, security group khoá origin |
 | `cdn.tf` | CloudFront, AWS WAF (ở us-east-1), header bí mật |
+| `appliances.tf` | **Phase sau** — GWLB + Palo Alto + F5, edge routing. Mặc định tắt |
+| `templates/f5-runtime-init.yaml` | Bootstrap F5: DO + AS3 + WAF policy transparent |
+| `plan-check.sh` | Chạy `terraform plan` cho 9 tổ hợp biến, không apply |
 | `vpc-spokes.tf` | Spoke VPC, route một dòng, gateway endpoint |
 | `instances.tf` | EC2 nginx, vào bằng SSM |
 | `verify.sh` | 8 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM |

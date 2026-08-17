@@ -1,5 +1,9 @@
 output "mode" {
-  value = var.enable_firewall ? "DAY DU - Network Firewall (${var.firewall_mode})" : "RE - khong co firewall, khong co east-west"
+  value = join(" | ", compact([
+    var.enable_firewall ? "Network Firewall (${var.firewall_mode})" : "khong firewall",
+    var.enable_cdn ? "CloudFront + WAF (${var.waf_mode})" : "",
+    var.enable_appliances ? "Palo Alto + F5" : "",
+  ]))
 }
 
 output "nat_public_ip" {
@@ -30,6 +34,18 @@ output "cloudfront_domain" {
 
 output "waf_web_acl_arn" {
   value = one(aws_wafv2_web_acl.cdn[*].arn)
+}
+
+output "appliances" {
+  description = "Palo Alto va F5 - null khi enable_appliances = false"
+  value = {
+    palo_alto_id    = one(aws_instance.palo_alto[*].id)
+    f5_id           = one(aws_instance.f5[*].id)
+    f5_private_ip   = one(aws_instance.f5[*].private_ip)
+    gwlb_endpoint   = one(aws_vpc_endpoint.gwlbe[*].id)
+    f5_config_s3    = one(aws_s3_bucket.f5_config[*].id)
+    f5_admin_secret = one(aws_secretsmanager_secret.f5_admin[*].name)
+  }
 }
 
 output "firewall_log_bucket" {
@@ -63,6 +79,14 @@ locals {
   c_waf_acl  = 5.0 / 730
   c_waf_rule = 1.0 / 730
 
+  # Appliance: EC2 + license Marketplace tinh theo gio.
+  # Gia license dao dong RAT LON theo bundle - day chi la uoc tinh tho,
+  # kiem tra gia that tren trang Marketplace cho dung bundle ban dung.
+  c_gwlb      = 0.0125
+  c_gwlbe     = 0.01
+  c_palo_alto = 1.50 # EC2 m5.xlarge (~$0.24) + license (~$1.3)
+  c_f5        = 1.50 # EC2 m5.xlarge (~$0.24) + license (~$1.3)
+
   n_attach = length(var.spokes) + 1 + local.fw + local.ing
 
   hourly = (
@@ -73,6 +97,7 @@ locals {
     + (var.enable_firewall && var.enable_interface_endpoints ? length(var.interface_endpoint_services) * local.c_vpce : 0)
     + (var.enable_test_instances ? length(var.spokes) * local.c_ec2 : 0)
     + (local.cdn > 0 ? local.c_waf_acl + (length(var.waf_managed_rule_groups) + 1) * local.c_waf_rule : 0)
+    + (local.app_on > 0 ? local.c_gwlb + local.c_gwlbe + local.c_palo_alto + local.c_f5 : 0)
   )
 }
 

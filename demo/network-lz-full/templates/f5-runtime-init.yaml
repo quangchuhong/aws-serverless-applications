@@ -1,0 +1,140 @@
+#cloud-config
+#
+# F5 BIG-IP Runtime Init - chay luc boot lan dau qua user_data.
+# Giai thich tung phan o doc 18 muc 2.
+#
+# LUU Y: schema cua Runtime Init, DO va AS3 thay doi theo phien ban.
+# Doi chieu voi tai lieu cua dung version extension truoc khi apply that.
+
+runtime_parameters:
+  # Mat khau admin lay tu Secrets Manager, khong hardcode o dau
+  - name: ADMIN_PASS
+    type: secret
+    secretProvider:
+      type: SecretsManager
+      environment: aws
+      version: AWSCURRENT
+      secretId: ${admin_secret_name}
+
+pre_onboard_enabled: []
+
+extension_packages:
+  install_operations:
+    - extensionType: do
+      extensionVersion: 1.40.0
+    - extensionType: as3
+      extensionVersion: 3.45.0
+    - extensionType: ts
+      extensionVersion: 1.32.0
+
+extension_services:
+  service_operations:
+    # 1. Cau hinh he thong
+    - extensionType: do
+      type: inline
+      value:
+        schemaVersion: 1.40.0
+        class: Device
+        async: true
+        label: "${hostname} onboarding"
+        Common:
+          class: Tenant
+          mySystem:
+            class: System
+            hostname: ${hostname}
+            autoPhonehome: false
+          myDns:
+            class: DNS
+            nameServers:
+              - 169.254.169.253 # Route 53 Resolver cua VPC
+          myNtp:
+            class: NTP
+            servers:
+              - 169.254.169.123 # Amazon Time Sync Service
+            timezone: UTC
+          admin:
+            class: User
+            userType: regular
+            password: "{{{ADMIN_PASS}}}"
+            shell: bash
+
+    # 2. Cau hinh ung dung: virtual server -> pool -> app trong spoke
+    #
+    # De inline cho demo de doc. Production nen de tren S3
+    # (type: url) de sua policy khong phai thay instance - doc 18 muc 2.2.
+    - extensionType: as3
+      type: inline
+      value:
+        class: AS3
+        action: deploy
+        persist: true
+        declaration:
+          class: ADC
+          schemaVersion: 3.45.0
+          id: ${hostname}
+          AcmeTenant:
+            class: Tenant
+            PublicApp:
+              class: Application
+              template: generic
+
+              serviceMain:
+                class: Service_HTTP
+                virtualAddresses:
+                  - 0.0.0.0
+                virtualPort: ${listener_port}
+                pool: app_pool
+                policyWAF:
+                  use: acme_waf_policy
+                profileHTTP:
+                  use: http_profile
+                # BAT BUOC khi target o VPC khac qua TGW.
+                # Thieu SNAT thi app tra loi thang ve client -> luong
+                # bat doi xung -> dut ket noi. Doi lai app thay IP cua F5,
+                # nen phai doc X-Forwarded-For.
+                snat: auto
+
+              app_pool:
+                class: Pool
+                monitors:
+                  - http
+                members:
+                  - servicePort: 80
+                    serverAddresses:
+%{ for ip in app_pool_members ~}
+                      - ${ip}
+%{ endfor ~}
+                    shareNodes: true
+
+              http_profile:
+                class: HTTP_Profile
+                xForwardedFor: true
+
+              # WAF policy - BAT DAU O CHE DO TRANSPARENT.
+              # Chi ghi log, chua chan. Doc 18 muc 5 giai thich vong doi
+              # transparent -> tune -> blocking (4-6 tuan).
+              acme_waf_policy:
+                class: WAF_Policy
+                enforcementMode: transparent
+                ignoreChanges: true
+                policy:
+                  policy:
+                    name: acme-waf
+                    template:
+                      name: POLICY_TEMPLATE_RAPID_DEPLOYMENT
+                    enforcementMode: transparent
+                    signature-settings:
+                      signatureStaging: true
+                    blocking-settings:
+                      violations:
+                        - name: VIOL_ATTACK_SIGNATURE
+                          alarm: true
+                          block: true
+                        - name: VIOL_HTTP_PROTOCOL
+                          alarm: true
+                          block: true
+                        - name: VIOL_EVASION
+                          alarm: true
+                          block: true
+
+post_onboard_enabled: []
