@@ -14,10 +14,22 @@ echo "Se xoa toan bo resource cua demo trong region $REGION."
 read -r -p "Go 'yes' de tiep tuc: " ans
 [[ "$ans" == "yes" ]] || { echo "Da huy."; exit 0; }
 
+HAS_CDN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "")
+
 echo
-echo "── terraform destroy (mat ~10-15 phut) ──"
-echo "   NAT Gateway ~2 phut, TGW attachment ~3-5 phut moi cai,"
-echo "   Network Firewall ~5 phut."
+if [[ -n "$HAS_CDN" ]]; then
+  echo "── terraform destroy (mat ~25-35 phut) ──"
+  echo "   CloudFront phai DISABLE truoc roi moi DELETE duoc:"
+  echo "     disable ~15 phut, delete ~5 phut. Terraform tu lam ca hai."
+  echo "   Cong them: NAT ~2 phut, TGW attachment ~3-5 phut moi cai,"
+  echo "   Network Firewall ~5 phut."
+  echo
+  echo "   Cu de no chay, dung Ctrl-C giua chung."
+else
+  echo "── terraform destroy (mat ~10-15 phut) ──"
+  echo "   NAT Gateway ~2 phut, TGW attachment ~3-5 phut moi cai,"
+  echo "   Network Firewall ~5 phut."
+fi
 echo
 
 terraform destroy -auto-approve
@@ -68,6 +80,14 @@ check "Interface endpoint" "$(aws ec2 describe-vpc-endpoints --region "$REGION" 
 
 check "Load balancer" "$(aws elbv2 describe-load-balancers --region "$REGION" \
   --query 'LoadBalancers[].LoadBalancerName' --output text 2>/dev/null)"
+
+check "CloudFront distribution" "$(aws cloudfront list-distributions \
+  --query "DistributionList.Items[?Comment!=null]|[?contains(Comment, 'lz-net')].Id" \
+  --output text 2>/dev/null)"
+
+# WAF cho CloudFront nam o us-east-1, khong phai region cua ban
+check "WAF Web ACL (us-east-1)" "$(aws wafv2 list-web-acls --scope CLOUDFRONT --region us-east-1 \
+  --query 'WebACLs[].Name' --output text 2>/dev/null)"
 
 check "EC2 dang chay" "$(aws ec2 describe-instances --region "$REGION" \
   --filters "Name=tag:Ephemeral,Values=true" "Name=instance-state-name,Values=running,pending,stopped" \

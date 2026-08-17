@@ -23,6 +23,15 @@ output "nlb_dns_name" {
   value = one(aws_lb.ingress[*].dns_name)
 }
 
+output "cloudfront_domain" {
+  description = "Hostname mac dinh cua CloudFront - khong can mua domain"
+  value       = one(aws_cloudfront_distribution.main[*].domain_name)
+}
+
+output "waf_web_acl_arn" {
+  value = one(aws_wafv2_web_acl.cdn[*].arn)
+}
+
 output "firewall_log_bucket" {
   value = one(aws_s3_bucket.fw_logs[*].id)
 }
@@ -49,6 +58,11 @@ locals {
   c_vpce       = 0.01
   c_ec2        = 0.0116
 
+  # WAF: Web ACL ~$5/thang + ~$1/thang moi rule group, chia theo gio.
+  # CloudFront: $0 trong free tier (1 TB + 10 trieu request/thang).
+  c_waf_acl  = 5.0 / 730
+  c_waf_rule = 1.0 / 730
+
   n_attach = length(var.spokes) + 1 + local.fw + local.ing
 
   hourly = (
@@ -58,6 +72,7 @@ locals {
     + (var.enable_ingress ? local.c_nlb : 0)
     + (var.enable_firewall && var.enable_interface_endpoints ? length(var.interface_endpoint_services) * local.c_vpce : 0)
     + (var.enable_test_instances ? length(var.spokes) * local.c_ec2 : 0)
+    + (local.cdn > 0 ? local.c_waf_acl + (length(var.waf_managed_rule_groups) + 1) * local.c_waf_rule : 0)
   )
 }
 
@@ -81,11 +96,13 @@ output "next_steps" {
     3. Chay kiem chung tu dong:
        ./verify.sh
 
-    4. Ingress qua NLB:
-       curl http://${try(aws_lb.ingress[0].dns_name, "<bat enable_ingress>")}
+    4. Ingress:
+    ${local.cdn > 0 ?
+  "   curl https://${aws_cloudfront_distribution.main[0].domain_name}\n       (goi thang vao NLB se bi CHAN - origin da khoa theo CloudFront)" :
+"   curl http://${try(aws_lb.ingress[0].dns_name, "<bat enable_ingress>")}"}
 
     5. XOA khi xong:
-       ./teardown.sh
+       ./teardown.sh${local.cdn > 0 ? "   ← CloudFront lam destroy cham ~15-20 phut" : ""}
 
     ════════════════════════════════════════════════
     Chi phi hien tai: ${format("~$%.3f/gio", local.hourly)}

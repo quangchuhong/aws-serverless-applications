@@ -66,6 +66,30 @@ enable_test_instances = true
 # interface_endpoint_services = ["ssm", "ssmmessages", "ec2messages"]
 
 ########################################
+# BUOC 6 — CloudFront + AWS WAF (+~$0.01/gio, gan nhu mien phi)
+#
+# Dung hostname mac dinh *.cloudfront.net:
+#   KHONG can mua domain, KHONG can Route 53, KHONG can ACM.
+#
+# Bat len cung KHOA ORIGIN: goi thang vao NLB se bi chan,
+# chi CloudFront moi vao duoc.
+#
+# LUU Y: apply cham them ~5-15 phut, destroy cham them ~15-20 phut
+#        vi CloudFront phai disable truoc khi delete.
+########################################
+
+# enable_cdn = true
+# waf_mode   = "count"    # chi dem, chua chan - dung dau tien
+
+# Sau khi xem CloudWatch metric thay khong chan nham thi doi sang:
+# waf_mode = "block"      # gio moi chan that
+#   -> test: curl "https://<cloudfront>/?id=1%27%20OR%20%271%27=%271"
+#      phai tra ve 403
+
+# waf_rate_limit  = 2000            # request/5 phut moi IP
+# cdn_price_class = "PriceClass_200" # gom chau A, do tre tot hon tu VN
+
+########################################
 # GIAM CHI PHI: bot con mot spoke (-$0.05/gio)
 # Nhung se khong demo duoc east-west nua.
 ########################################

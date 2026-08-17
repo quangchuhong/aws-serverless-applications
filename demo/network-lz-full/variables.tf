@@ -85,6 +85,57 @@ variable "enable_ingress" {
   default     = true
 }
 
+variable "enable_cdn" {
+  description = <<-EOT
+    CloudFront + AWS WAF truoc NLB. Can enable_ingress = true.
+
+    Chi phi gan nhu $0 (CloudFront free tier 1TB + 10 trieu req/thang;
+    WAF ~$5/thang Web ACL + ~$1/thang moi rule group, chia theo gio).
+    Phien 4 tieng khoang $0.05.
+
+    CAI GIA THAT: apply cham ~5-15 phut, destroy cham ~15-20 phut
+    vi CloudFront phai disable truoc khi delete.
+
+    Bat len cung KHOA ORIGIN: NLB chi nhan traffic tu CloudFront.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "waf_mode" {
+  description = "count = chi dem, khong chan (dung dau tien). block = chan that."
+  type        = string
+  default     = "count"
+
+  validation {
+    condition     = contains(["count", "block"], var.waf_mode)
+    error_message = "waf_mode phai la 'count' hoac 'block'."
+  }
+}
+
+variable "waf_managed_rule_groups" {
+  description = "Managed rule group cua AWS. Moi cai ~$1/thang."
+  type        = list(string)
+
+  default = [
+    "AWSManagedRulesCommonRuleSet",         # OWASP co ban
+    "AWSManagedRulesKnownBadInputsRuleSet", # payload khai thac da biet
+    "AWSManagedRulesSQLiRuleSet",           # SQL injection
+  ]
+}
+
+variable "waf_rate_limit" {
+  description = "So request toi da tu mot IP trong 5 phut. Toi thieu 100."
+  type        = number
+  default     = 2000
+}
+
+variable "cdn_price_class" {
+  description = "PriceClass_100 = US/EU (re nhat). PriceClass_200 = them chau A (do tre tot hon tu VN). PriceClass_All = toan cau."
+  type        = string
+  default     = "PriceClass_200"
+}
+
 variable "enable_interface_endpoints" {
   description = "Interface endpoint trong security VPC (~$0.01/gio moi cai). Can enable_firewall=true."
   type        = bool

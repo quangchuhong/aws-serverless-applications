@@ -124,6 +124,65 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "ingress" {
 # O day NLB tro thang vao app de kiem chung dinh tuyen.
 ########################################
 
+########################################
+# Security group cua NLB - khoa origin
+#
+# CDN TAT : cho phep 80 tu moi noi (goi thang vao NLB de test)
+# CDN BAT : CHI cho phep prefix list cua CloudFront
+#           -> goi thang vao NLB se bi chan, phai di qua CDN
+#
+# Doi enable_cdn chi doi RULE, khong tao lai NLB.
+########################################
+
+data "aws_ec2_managed_prefix_list" "cloudfront_origin" {
+  count = local.cdn
+  name  = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
+resource "aws_security_group" "nlb" {
+  count = local.ing
+
+  name        = "${var.project}-nlb"
+  description = "NLB ingress"
+  vpc_id      = aws_vpc.ingress[0].id
+
+  egress {
+    description = "Toi app trong spoke qua TGW"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.internal_supernet]
+  }
+
+  tags = { Name = "${var.project}-nlb" }
+}
+
+# Khong bat CDN: mo cho moi noi
+resource "aws_security_group_rule" "nlb_open" {
+  count = var.enable_ingress && !var.enable_cdn ? 1 : 0
+
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.nlb[0].id
+  description       = "HTTP tu moi noi (chua bat CDN)"
+}
+
+# Bat CDN: CHI CloudFront. Day la lop chan di vong qua CDN.
+resource "aws_security_group_rule" "nlb_cdn_only" {
+  count = local.cdn
+
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  prefix_list_ids   = [data.aws_ec2_managed_prefix_list.cloudfront_origin[0].id]
+  security_group_id = aws_security_group.nlb[0].id
+  description       = "CHI CloudFront duoc goi vao origin"
+}
+
 resource "aws_lb" "ingress" {
   count = local.ing
 
@@ -131,6 +190,7 @@ resource "aws_lb" "ingress" {
   load_balancer_type = "network"
   internal           = false
   subnets            = [aws_subnet.ingress_public[0].id]
+  security_groups    = [aws_security_group.nlb[0].id]
 
   enable_deletion_protection = false # DEMO: phai tat de destroy duoc
 

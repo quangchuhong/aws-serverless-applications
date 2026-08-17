@@ -228,17 +228,43 @@ else
 fi
 
 ########################################
-hdr "8. Ingress qua NLB"
+hdr "8. Ingress"
 ########################################
 
 NLB=$(tfout nlb_dns_name)
-if [[ -n "$NLB" ]]; then
+CDN=$(tfout cloudfront_domain)
+
+if [[ -z "$NLB" ]]; then
+  skip "Ingress tat"
+elif [[ -n "$CDN" ]]; then
+  # Co CDN: phai vao qua CloudFront, goi thang NLB phai bi chan
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "https://$CDN/" || echo 000)
+  [[ "$code" == "200" ]] \
+    && ok "CloudFront → NLB → TGW → (firewall) → app: HTTP $code" \
+    || bad "CloudFront tra ve $code (distribution co the dang deploy, doi vai phut)"
+
+  # Khoa origin: goi thang vao NLB phai timeout hoac bi tu choi
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "http://$NLB/" || echo TIMEOUT)
+  [[ "$code" == "TIMEOUT" || "$code" == "000" ]] \
+    && ok "Goi THANG vao NLB bi chan (origin khoa theo prefix list CloudFront)" \
+    || bad "Goi thang vao NLB van vao duoc (HTTP $code) - origin chua khoa"
+
+  # WAF: payload SQLi phai bi chan khi waf_mode = block
+  WAF_MODE=$(grep -E '^\s*waf_mode' terraform.tfvars 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' || echo count)
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+    "https://$CDN/?id=1%27%20OR%20%271%27=%271" || echo 000)
+  if [[ "$WAF_MODE" == "block" ]]; then
+    [[ "$code" == "403" ]] \
+      && ok "WAF chan payload SQLi (HTTP 403)" \
+      || bad "WAF chua chan SQLi (HTTP $code)"
+  else
+    skip "WAF dang o che do count, chua chan (HTTP $code) - doi waf_mode=\"block\" de test"
+  fi
+else
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://$NLB/" || echo 000)
   [[ "$code" == "200" ]] \
     && ok "NLB → TGW → (firewall) → app: HTTP $code" \
     || bad "NLB tra ve $code (target group co the chua healthy, doi 1-2 phut roi chay lai)"
-else
-  skip "Ingress tat"
 fi
 
 ########################################

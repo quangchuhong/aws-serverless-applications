@@ -17,9 +17,9 @@ Dựng lên chạy thử rồi xoá. Buổi thực hành 4 tiếng khoảng **$3
 | Gateway endpoint S3/DynamoDB | ✅ | [12](../../docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) |
 | Interface endpoint trong security VPC | ✅ (tuỳ chọn) | [15 mục 6.3](../../docs/15-Security-VPC-Network-Firewall.md) |
 | ingress-vpc + NLB | ✅ | [14](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
+| **CloudFront + AWS WAF + khoá origin** | ✅ (tuỳ chọn) | [14 mục 5](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **Palo Alto (GWLB)** | ❌ **chưa** | [14 mục 6](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **F5 BIG-IP WAF** | ❌ **chưa** | [14 mục 7](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
-| CDN (CloudFront) | ❌ chưa | [14 mục 5](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | 3rd-party VPC + VPN | ❌ chưa | [16](../../docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) |
 
 Demo dùng NLB trỏ thẳng xuống app. Khi có license Palo Alto và F5, chúng chèn vào **giữa IGW và NLB** — phần định tuyến TGW, security VPC và spoke **giữ nguyên không đổi**. Đó là lý do làm phần này trước có ý nghĩa: nó kiểm chứng đúng chỗ dễ sai nhất.
@@ -140,6 +140,40 @@ dig +short ssm.ap-southeast-1.amazonaws.com    # trả về 10.1.30.x
 
 Traffic tới AWS API giờ đi `spoke → TGW → firewall → local route → endpoint`. Được thanh tra mà **không tốn thêm chặng TGW** nào.
 
+### Bước 6 — CloudFront + AWS WAF
+
+```hcl
+enable_cdn = true
+waf_mode   = "count"    # chỉ đếm, chưa chặn
+```
+
+> `apply` chậm thêm **5–15 phút**, `destroy` chậm thêm **15–20 phút** — CloudFront phải disable trước rồi mới delete được. Terraform tự làm cả hai, cứ để nó chạy.
+
+Dùng hostname mặc định `*.cloudfront.net`, nên **không cần mua domain, không cần Route 53, không cần ACM**.
+
+```bash
+CDN=$(terraform output -raw cloudfront_domain)
+NLB=$(terraform output -raw nlb_dns_name)
+
+curl -sI "https://$CDN/"        # 200 — đi qua CDN
+curl -sm 8 "http://$NLB/"       # timeout — origin đã khoá
+```
+
+**Khoá origin** là điểm đáng xem nhất: bật `enable_cdn` cũng đổi security group của NLB sang chỉ nhận traffic từ prefix list `com.amazonaws.global.cloudfront.origin-facing`. Không khoá thì kẻ tấn công gọi thẳng NLB, bỏ qua toàn bộ WAF.
+
+Đổi sang chặn thật:
+
+```hcl
+waf_mode = "block"
+```
+
+```bash
+# Payload SQLi → phải trả về 403
+curl -s -o /dev/null -w '%{http_code}\n' "https://$CDN/?id=1%27%20OR%20%271%27=%271"
+```
+
+**Luôn chạy `count` trước.** Managed rule group hay chặn nhầm request hợp lệ; xem CloudWatch metric vài ngày rồi mới chuyển sang `block`. Nguyên tắc y hệt Network Firewall ở bước 2–3.
+
 ---
 
 ## Ba tầng kiểm soát – đừng lẫn
@@ -177,6 +211,7 @@ Thêm spoke mới cũng theo đúng khuôn: attach → associate vào `rtb-spoke
 | Bước 1 (không firewall) | $0.34 | $8 | ~$1.4 |
 | Bước 2–4 (có firewall) | $0.74 | $18 | ~$3.0 |
 | Bước 5 (thêm 3 endpoint) | $0.77 | $18 | ~$3.1 |
+| **Bước 6 (thêm CDN + WAF)** | **$0.78** | $19 | **~$3.2** |
 
 `terraform output estimated_cost` in con số cho cấu hình hiện tại.
 
@@ -189,9 +224,16 @@ Chi tiết:
 | NAT Gateway | ~$0.045/giờ | |
 | NLB | ~$0.0225/giờ | |
 | EC2 t3.micro × 2 | ~$0.023/giờ | |
+| **CloudFront** | **$0** | Free tier 1 TB + 10 triệu request/tháng |
+| WAF Web ACL | ~$5/tháng chia theo giờ | ~$0.007/giờ |
+| WAF rule group × 4 | ~$1/tháng mỗi cái | ~$0.005/giờ |
 | **Gateway endpoint** | **$0** | Luôn bật |
 
-**Quên xoá một tháng ≈ $540.** Đó là lý do `teardown.sh` có phần xác nhận, và tại sao mọi resource đều gắn tag `Ephemeral=true`.
+CloudFront + WAF chỉ thêm khoảng **5 cent cho cả phiên 4 tiếng**. Cái giá thật là **30–35 phút** thêm vào thời gian apply và destroy.
+
+**Quên xoá một tháng ≈ $550.** Đó là lý do `teardown.sh` có phần xác nhận, và tại sao mọi resource đều gắn tag `Ephemeral=true`.
+
+> `teardown.sh` kiểm tra cả **WAF Web ACL ở us-east-1** — WAF cho CloudFront bắt buộc nằm ở region đó, không phải region bạn đang làm việc. Đây là chỗ dễ sót nhất khi dọn thủ công.
 
 ---
 
@@ -226,7 +268,8 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | `vpc-security.tf` | Security VPC, TGW attachment (appliance mode), interface endpoint |
 | `firewall.tf` | Network Firewall, policy, rule group east-west + egress, logging |
 | `vpc-egress.tf` | IGW, NAT, và **đường về** hay bị quên |
-| `vpc-ingress.tf` | IGW, NLB (chỗ Palo Alto và F5 sẽ chèn vào) |
+| `vpc-ingress.tf` | IGW, NLB (chỗ Palo Alto và F5 sẽ chèn vào), security group khoá origin |
+| `cdn.tf` | CloudFront, AWS WAF (ở us-east-1), header bí mật |
 | `vpc-spokes.tf` | Spoke VPC, route một dòng, gateway endpoint |
 | `instances.tf` | EC2 nginx, vào bằng SSM |
 | `verify.sh` | 8 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM |
@@ -242,10 +285,13 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | Một account | Nhiều account, TGW share qua RAM |
 | Không SCP | SCP chặn IGW/NAT/EIP ở OU workload |
 | Không Palo Alto / F5 | Chuỗi đầy đủ (doc 14) |
-| Không CDN | CloudFront + khoá origin |
+| Hostname `*.cloudfront.net` | Domain riêng + ACM cert |
+| Origin khoá bằng prefix list | Thêm kiểm tra header bí mật ở F5 |
 | `delete_protection = false` | Bật cho firewall và NLB |
 | NLB nghe HTTP:80 | HTTPS:443 + ACM |
 | Không đối tác | 3rd-party VPC + VPN (doc 16) |
+
+> Header `X-Origin-Verify` đã được sinh và gửi đi từ CloudFront, nhưng demo dùng nginx nên **chưa ai kiểm tra nó**. Trong thiết kế thật, F5 kiểm tra header này và trả 403 nếu thiếu — lớp thứ hai phòng khi ai đó qua được tầng mạng. Xem [doc 14 mục 7.1](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md).
 
 ---
 
