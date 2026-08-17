@@ -1,0 +1,64 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# Chay o MANAGEMENT ACCOUNT.
+# Cost allocation tag va budget chi bat duoc o day.
+########################################
+
+project = "acme-lz"
+
+# PHAI xac nhan qua link SNS gui toi email nay, neu khong se
+# khong nhan duoc canh bao nao.
+alert_emails = ["ban@example.com"]
+
+########################################
+# Nguong canh bao
+#
+# Voi mo hinh dung-xoa (demo ~$3/buoi), dat THAP.
+# Cham nguong = co gi do dang chay ma ban khong biet.
+########################################
+
+org_monthly_budget_usd = "20"
+budget_thresholds      = [50, 80, 100]
+anomaly_threshold_usd  = "10"
+
+########################################
+# Cost allocation tag
+#
+# QUAN TRONG: chi bat duoc SAU KHI da co it nhat mot resource
+# mang tag do. Lan dau chua co gi -> dat false, dung LZ truoc,
+# roi quay lai bat.
+########################################
+
+enable_cost_allocation_tags = true
+
+cost_allocation_tags = [
+  "CostCenter",
+  "Environment",
+  "Project",
+  "Owner",
+]
+
+########################################
+# Budget rieng tung account (tuy chon)
+########################################
+
+# account_budgets = {
+#   network  = { account_id = "111111111111", limit_usd = "50" }
+#   app-dev  = { account_id = "222222222222", limit_usd = "30" }
+#   app-prod = { account_id = "333333333333", limit_usd = "200" }
+# }
+
+########################################
+# Dashboard CloudWatch (tuy chon)
+#
+# CAN BAT THU CONG TRUOC: Billing console -> Billing preferences
+#                         -> Receive Billing Alerts
+#
+# Khong bat thi metric AWS/Billing khong ton tai, dashboard trong tron.
+#
+# Cost Explorer manh hon nhieu - chi bat cai nay neu ban muon
+# chi phi nam canh cac dashboard van hanh khac.
+########################################
+
+# enable_cloudwatch_dashboard = true

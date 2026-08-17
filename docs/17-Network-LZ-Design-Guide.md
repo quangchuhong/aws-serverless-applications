@@ -55,7 +55,8 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | IAM Identity Center + đồng bộ AD | [06 mục 10](./06-Aws-Landing-Zone.md), [08](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | ⬜ |
 | Account vending | [09](./09-Account-Vending-Tu-Dong.md) | ⬜ |
 | CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⬜ |
-| Tag policy + cost allocation | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ⬜ |
+| **Billing guard** (cost allocation tag, budget, anomaly) | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ✅ [`landing-zone/billing-guard/`](../landing-zone/billing-guard/) |
+| Tag policy + SCP + Cost Categories + CUR | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ⬜ |
 
 ### Script kiểm chứng
 
@@ -550,6 +551,8 @@ resource "aws_budgets_budget" "demo_guard" {
   }
 }
 ```
+
+Cả ba đã có code chạy được ở [`landing-zone/billing-guard/`](../landing-zone/billing-guard/) — dựng một lần ở management account, tốn ~$0, **không nằm trong teardown của demo**.
 
 3. **Quét theo tag** — mọi resource demo gắn `Ephemeral=true`, quét định kỳ:
 

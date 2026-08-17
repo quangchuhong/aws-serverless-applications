@@ -2,6 +2,8 @@
 
 Ví dụ 11: Bắt buộc tag chuẩn trên toàn org và biến tag đó thành báo cáo chi phí theo team, tiếp nối [06 – Landing Zone](./06-Aws-Landing-Zone.md).
 
+> **Phần phải làm sớm đã có code chạy được:** [`landing-zone/billing-guard/`](../landing-zone/billing-guard/) — bật cost allocation tag (không hồi tố), budget cảnh báo, và anomaly detection. Chi phí ~$0, chạy một lần rồi để đó. Phần còn lại của doc này (tag policy, SCP, Cost Categories, CUR) làm sau khi đã có nhiều account thật.
+
 Câu hỏi cần trả lời được sau bài này: **"Tháng trước team Payments tiêu bao nhiêu, cho service nào?"** — trả lời trong 30 giây, không cần hỏi ai.
 
 ---

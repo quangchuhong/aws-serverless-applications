@@ -47,6 +47,14 @@ Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code ch�
 | [16](./docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Kết nối đối tác – 3rd-party VPC và Site-to-Site VPN |
 | [18](./docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) | Cấu hình F5 BIG-IP Advanced WAF – DO, AS3, WAF policy |
 
+## Hạ tầng thường trực
+
+Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
+
+| Layer | Nội dung | Chi phí |
+|---|---|---|
+| [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
+
 ## Demo chạy được
 
 Terraform dựng lên xem rồi xoá. **Không tạo AWS account** — account không xoá được, chỉ đóng được.
