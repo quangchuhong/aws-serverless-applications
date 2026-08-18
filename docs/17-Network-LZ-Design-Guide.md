@@ -828,8 +828,10 @@ Trạng thái đầy đủ ở [mục 0](#0-trạng-thái-triển-khai). Phần 
    Lap phan lon khoang trong bao mat trong luc cho PA/F5.
 
 3. CAC LAYER LZ CON LAI thanh code chay duoc
-   1-organization, 2-logging, 3-security, 4-identity-center,
-   6-account-baseline, 7-scp-network
+   DA XONG: tf-backend (state), organization (OU + 4 SCP),
+            permission-sets (17 set), billing-guard
+            + ban Control Tower de doi chieu, mac dinh tat
+   CON LAI: logging, security tooling, account-baseline
 
 4. 3RD-PARTY VPC + VPN
    Khi co thong tin customer gateway cua doi tac.
@@ -839,6 +841,10 @@ Trạng thái đầy đủ ở [mục 0](#0-trạng-thái-triển-khai). Phần 
    enable_appliances = true.
    Hoac hoc ngay bang ban PAYG theo gio - doc 18 muc 0.
 ```
+
+> **Cập nhật mục 3:** bốn layer nền tảng đã thành code chạy được trong [`landing-zone/`](../landing-zone/) — xem [doc 20](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) (state, quy trình thay đổi), [doc 19](./19-Permission-Set-cho-Landing-Zone.md) (permission set) và [doc 21](./21-Control-Tower-vs-DIY.md) (OU + SCP, cả hai hướng). Kiểm chứng cả 5 layer: `cd landing-zone && ./plan-all.sh`.
+>
+> Riêng **network vẫn chỉ có bản demo** — `demo/network-lz-full` gắn `Ephemeral = "true"` và được thiết kế để xoá. Nâng nó thành layer thường trực multi-account là việc còn lại lớn nhất của tài liệu này.
 
 **Vì sao mục 1 trước tiên:** nó kiểm chứng bảng định tuyến ở [mục 4](#4-transit-gateway--bảng-chân-lý-duy-nhất) — chỗ mà một ô sai gây ra sự cố rất khó lần ra nguyên nhân khi đã lên môi trường thật. Phát hiện lúc demo tốn $3; phát hiện lúc production tốn nhiều hơn thế rất nhiều.
 

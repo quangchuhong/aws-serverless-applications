@@ -649,6 +649,9 @@ aws organizations close-account --account-id 555555555555
 
 ## 9. Nếu bạn dùng Control Tower: AFT
 
+> **Chọn hướng nào trước đã.** Repo này có code cho **cả hai**: [`landing-zone/organization/`](../landing-zone/organization/) (DIY, bản dùng thật) và [`landing-zone/control-tower/`](../landing-zone/control-tower/) (mặc định tắt, plan ra 0 resource). So sánh chi phí và khi nào chọn cái nào: [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md).
+
+
 AFT là account vending do AWS dựng sẵn, chạy trên bốn repo:
 
 | Repo | Nội dung |

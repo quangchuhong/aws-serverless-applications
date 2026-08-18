@@ -104,6 +104,11 @@ Quy hoạch CIDR — **bảng chuẩn ở [17 – Design Guide mục 3](./17-Net
 
 ## 4. Lớp 1: SCP khoá đường ra
 
+> **Đã có code chạy được:** SCP này hiện thực thành `network_lock` trong [`landing-zone/organization/scp.tf`](../landing-zone/organization/scp.tf), gắn vào `Workloads`, `Data Analytics`, `Sandbox` — **không** gắn vào `Infrastructure`, vì network account sống ở đó và cần đúng những action bị chặn.
+>
+> Khác biệt so với file JSON dưới đây: layer đó **gộp** vào 4 SCP tổng thay vì mỗi guardrail một policy, vì AWS chỉ cho **5 policy/target** và `FullAWSAccess` đã chiếm 1. Xem [doc 21 mục 4](./21-Control-Tower-vs-DIY.md).
+
+
 Đây là phần "khoá". Không có nó thì mọi thứ còn lại chỉ là gợi ý.
 
 ### 4.1. policies/deny-internet-paths.json

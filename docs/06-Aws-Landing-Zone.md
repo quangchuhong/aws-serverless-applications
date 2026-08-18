@@ -146,23 +146,39 @@ Hai đường, chọn theo team:
 | Tạo account mới | Account Factory / AFT | `aws_organizations_account` + module baseline |
 | Mức kiểm soát | Bị giới hạn theo khuôn AWS | Toàn quyền |
 | Drift / gỡ bỏ | Khó gỡ, hay bị "drift detected" | Chỉ là Terraform, dễ đổi |
-| Chi phí | Không tính phí Control Tower, chỉ trả cho service bên dưới | Tương tự |
+| **Chi phí nền** | **AWS Config chạy liên tục** ở mọi account × mọi governed region | **$0** — SCP miễn phí, chỉ đánh giá lúc gọi API |
+
+> **Đính chính so với bản trước của tài liệu này:** bảng cũ ghi chi phí hai bên "tương tự". Không đúng. Control Tower **bắt buộc bật AWS Config** để chạy các control dạng phát hiện, và Config tính tiền theo configuration item + rule evaluation — chạy liên tục bất kể bạn có gọi API hay không. Đó là khác biệt quyết định với mô hình dựng–xoá.
+
+Đổi lại, control dựa trên Config làm được thứ SCP không làm được: **phát hiện** vi phạm đã xảy ra. SCP chỉ **ngăn** hành động, nó không cho bạn biết "hiện có 3 security group đang mở port 22 ra Internet".
+
+| | SCP (tự build) | Config rule (Control Tower) |
+|---|---|---|
+| Ngăn hành động | ✅ | ❌ |
+| Phát hiện vi phạm đã có | ❌ | ✅ |
+| Chi phí | $0 | Theo lượng |
 
 Gợi ý thực tế:
 
 - Team nhỏ, chưa có người chuyên platform → **Control Tower** rồi mở rộng bằng Terraform sau.
-- Team đã quen Terraform, cần custom nhiều (multi-region, network riêng) → **tự build** như dưới đây.
+- Team đã quen Terraform, cần custom nhiều, hoặc cần dựng–xoá theo buổi → **tự build**.
 
-Nếu muốn Control Tower nhưng vẫn quản bằng code, có resource:
+### Cả hai hướng đều đã có code chạy được
 
-```hcl
-resource "aws_controltower_landing_zone" "this" {
-  manifest_json = file("${path.module}/manifest.json")
-  version       = "3.3"
-}
+Không phải chọn trên giấy — repo này có **cả hai bản**, đối chiếu được bằng `terraform plan`:
+
+| | Code | Trạng thái |
+|---|---|---|
+| **Tự build (DIY)** | [`landing-zone/organization/`](../landing-zone/organization/) | Bản dùng thật — Organization, cây OU 2 cấp, 4 SCP |
+| **Control Tower** | [`landing-zone/control-tower/`](../landing-zone/control-tower/) | **Mặc định tắt** — plan ra 0 resource |
+
+```bash
+cd landing-zone && ./plan-all.sh --no-plan    # init + validate ca 5 layer
 ```
 
-và dùng **AFT (Account Factory for Terraform)** để vending account. Phần còn lại của bài đi theo hướng tự build.
+So sánh đầy đủ, bảng chi phí, và **những SCP vẫn phải giữ nếu chuyển sang Control Tower**: [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md).
+
+Phần còn lại của bài đi theo hướng tự build.
 
 ---
 
@@ -201,6 +217,8 @@ Thứ tự apply: `0 → 1 → 2 → 3 → 4 → 5`. Mỗi thư mục là một 
 ---
 
 ## 5. Bootstrap – nơi để state
+
+> **Đã có code chạy được:** [`landing-zone/tf-backend/`](../landing-zone/tf-backend/) — S3 + versioning + mã hoá + khoá, `wire-backends.sh` sinh `backend.hcl` cho mọi layer, và runbook chuyển state an toàn. Ba thứ layer đó có mà ví dụ dưới đây không nói tới: **`BucketOwnerEnforced`** (thiếu là state cross-account không đọc được), **`prevent_destroy`**, và lựa chọn khoá DynamoDB vs S3 native lockfile. Chi tiết: [doc 20](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md).
 
 Chạy ở **management account**, bằng credential admin (lần duy nhất dùng access key thủ công).
 
@@ -280,6 +298,11 @@ terraform {
 ---
 
 ## 6. Organization – OU và accounts
+
+> **Đã có code chạy được:** [`landing-zone/organization/`](../landing-zone/organization/) hiện thực đúng mục 6 và mục 7 này — Organization, cây OU 2 cấp, và 4 SCP. Phần dưới là **giải thích từng mảnh**; layer kia là bản ráp lại, có `check` block bắt giới hạn của AWS và `scp_dry_run` để thử trước khi chặn thật.
+>
+> Cây OU trong layer đó khớp với phạm vi của [`landing-zone/permission-sets`](../landing-zone/permission-sets/): `Workloads/Non-Production` → scope `nonprod`, `Workloads/Production` → `prod`, `Data Analytics` → `analytics`.
+
 
 ### 6.1. 1-organization/main.tf
 
@@ -468,6 +491,16 @@ provider "aws" {
 ---
 
 ## 7. SCP – guardrails
+
+> **Hai giới hạn của AWS quyết định cách viết SCP thật**, và phần dưới không nói tới vì nó trình bày từng policy riêng lẻ:
+>
+> | Giới hạn | Hệ quả |
+> |---|---|
+> | **5 policy/target** (`FullAWSAccess` chiếm 1 → còn 4) | Không viết 10 SCP nhỏ, phải **gom** thành vài SCP lớn |
+> | **5120 ký tự/SCP** | Dùng `jsonencode` chứ không phải file JSON định dạng đẹp |
+>
+> [`landing-zone/organization/scp.tf`](../landing-zone/organization/scp.tf) gom thành đúng **4 SCP** vì lý do đó: `baseline`, `region_lock`, `network_lock`, `prod_guard` — lần lượt 1511 / 709 / 1013 / 649 ký tự. Có `check` block bắt cả hai giới hạn ngay lúc `plan`.
+
 
 SCP là **giới hạn trần quyền**, không cấp quyền. Một action chỉ chạy được khi **cả** IAM policy lẫn SCP cho phép. SCP không áp dụng cho management account – đó là lý do management account phải "sạch".
 
