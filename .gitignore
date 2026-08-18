@@ -1,0 +1,63 @@
+########################################
+# Terraform
+########################################
+
+# Thu muc provider - vai tram MB, tai lai duoc bang terraform init
+.terraform/
+
+# LOCK FILE - CO Y XU LY KHAC NHAU GIUA HAI LOAI STACK
+#
+# .terraform.lock.hcl ghim chinh xac phien ban provider. COMMIT no
+# nghia la moi nguyen chay cung mot phien ban; khong commit thi
+# nguoi apply sau co the dung provider moi hon va tao ra diff khong
+# ai chu dich.
+#
+#   landing-zone/*  -> COMMIT. Day la ha tang thuong truc, nhieu
+#                      nguoi cham vao, phai lap lai duoc.
+#   demo/*          -> bo qua. Dung xong xoa, khong can lap lai.
+demo/**/.terraform.lock.hcl
+
+# STATE - KHONG BAO GIO COMMIT
+#
+# State chua toan bo mo ta ha tang, va voi nhieu resource no chua ca
+# gia tri nhay cam o dang RO (mat khau RDS, khoa API). Commit len
+# GitHub la lo het.
+#
+# Sau khi dung remote state (landing-zone/tf-backend) thi may local
+# khong con file nay nua.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Gia tri that - thuong co account ID, email, ma phong ban
+terraform.tfvars
+*.auto.tfvars
+!terraform.tfvars.example
+
+# Do wire-backends.sh sinh ra. Khong phai bi mat, nhung khac nhau
+# theo tung nguoi/moi truong nen khong commit.
+backend.hcl
+
+# Plan file - co the chua gia tri nhay cam
+*.tfplan
+plan.out
+
+# Crash log
+crash.log
+crash.*.log
+
+# Override cuc bo
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+########################################
+# Khac
+########################################
+
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

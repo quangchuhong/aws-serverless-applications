@@ -1,0 +1,76 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# Chay o MANAGEMENT ACCOUNT.
+# Day la layer DAU TIEN phai dung - moi layer khac cat state vao day.
+########################################
+
+region = "ap-southeast-1"
+
+# Ten bucket cuoi cung: <prefix>-tfstate-<account_id>
+# Kem account ID vi ten bucket S3 phai duy nhat TOAN CAU.
+prefix = "acme-lz"
+
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Khoa state
+#
+# "dynamodb" - chay voi moi phien ban Terraform.  <- mac dinh
+# "s3"       - khoa bang chinh S3, CAN Terraform >= 1.10,
+#              khong ton them resource nao.
+# "both"     - dung khi dang chuyen doi dan.
+#
+# Kiem tra phien ban: terraform version
+########################################
+
+lock_mode = "dynamodb"
+
+########################################
+# 2. Ma hoa
+#
+# false = SSE-S3 (AES256), MIEN PHI.       <- mac dinh
+# true  = KMS customer-managed key, ~$1/thang.
+#
+# Ca hai deu ma hoa that. Khac biet la quyen quan ly khoa:
+# voi KMS, thu hoi quyen tren key la chan duoc doc state ngay ca khi
+# con quyen S3, va co CloudTrail rieng cho tung lan dung khoa.
+#
+# Bat khi state bat dau chua bi mat (mat khau RDS, khoa API).
+# Hai layer hien tai (billing-guard, permission-sets) thi khong.
+########################################
+
+use_kms_cmk = false
+
+########################################
+# 3. Giu ban state cu bao nhieu ngay
+#
+# Versioning cuu ban khi apply nham. 90 ngay la can bang hop ly.
+########################################
+
+noncurrent_version_retention_days = 90
+
+########################################
+# 4. Account duoc ghi state
+#
+# Chi khai khi co layer chay o ACCOUNT KHAC management.
+# Vi du layer network chay o account network.
+#
+# Moi account chi ghi duoc vao prefix cua chinh no:
+#   account 2222 -> s3://<bucket>/network/*  va khong doc duoc cho khac
+#
+# De rong neu moi layer deu chay o management account.
+########################################
+
+state_writer_accounts = {
+  # network  = "222222222222"
+  # security = "333333333333"
+}
+
+########################################
+# 5. Ghi log truy cap bucket state
+########################################
+
+enable_access_logging = true

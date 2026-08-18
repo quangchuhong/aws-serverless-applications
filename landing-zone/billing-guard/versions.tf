@@ -7,6 +7,22 @@ terraform {
       version = "~> 5.0"
     }
   }
+
+  ########################################
+  # Remote state
+  #
+  # Khai rong o day, gia tri that nam trong backend.hcl - file do
+  # landing-zone/tf-backend/wire-backends.sh sinh ra.
+  #
+  #   cd landing-zone/tf-backend && ./wire-backends.sh
+  #   cd landing-zone/billing-guard
+  #   terraform init -migrate-state -backend-config=backend.hcl
+  #
+  # Chua dung remote state thi cu de comment - state se nam local,
+  # chap nhan duoc khi chi mot nguoi lam.
+  ########################################
+
+  # backend "s3" {}
 }
 
 ########################################
