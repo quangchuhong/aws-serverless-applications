@@ -1,0 +1,114 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# Chay o MANAGEMENT ACCOUNT.
+#
+# YEU CAU TRUOC: IAM Identity Center da duoc BAT THU CONG mot lan
+# trong console. Terraform khong tao duoc instance.
+#   aws sso-admin list-instances
+########################################
+
+# PHAI la region dat instance Identity Center, khong phai region workload
+region = "ap-southeast-1"
+
+management_account_id = "111111111111"
+
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Ban do account theo pham vi
+#
+# Pham vi "all" tu suy ra tu Organizations - khong khai o day.
+#
+# Identity Center KHONG gan duoc cho OU, phai liet ke account ID.
+# Tao account moi trong OU nao thi THEM VAO DAY va apply lai,
+# neu khong khong ai vao duoc account do.
+########################################
+
+accounts_by_scope = {
+  analytics = []
+
+  nonprod = [
+    # "222222222222",   # app-dev
+    # "333333333333",   # app-staging
+  ]
+
+  prod = [
+    # "444444444444",   # app-prod
+  ]
+}
+
+# Management account KHONG nhan cac set pham vi "all".
+# Ly do: SCP khong ap dung cho management account nen moi quyen cap
+# o do la quyen that, khong co tran chan.
+exclude_management_from_all = true
+
+########################################
+# 2. Set operator co duoc doc du lieu khong
+#
+# FALSE (mac dinh) = them Deny chan s3:GetObject, dynamodb:Scan,
+# secretsmanager:GetSecretValue, kms:Decrypt...
+#
+# Day la khac biet quan trong nhat so voi viec dung thang
+# AWS ReadOnlyAccess. Doc doc 19 muc 3.1 truoc khi doi thanh true.
+########################################
+
+operator_can_read_data = false
+
+########################################
+# 3. Chan duong leo thang qua PassRole
+#
+# Role nao workload duoc phep nhan thi dat tien to tuong ung.
+# Role admin/network/security KHONG mang tien to nay -> khong pass duoc.
+########################################
+
+passrole_prefixes = {
+  server    = "lz-workload-"
+  app       = "lz-workload-"
+  analytics = "lz-analytics-"
+}
+
+########################################
+# 4. Permissions boundary cho lz-security-admin
+#
+# TAT (false) thi lz-security-admin TUONG DUONG lz-account-admin:
+# co iam:* nghia la tu tao duoc role admin roi assume.
+#
+# Chi bat SAU KHI policy "lz-boundary" da duoc StackSet day xuong
+# MOI account (doc 06 muc 12). Bat truoc do -> security-admin khong
+# tao duoc gi ca.
+########################################
+
+permission_boundary_name        = "lz-boundary"
+enforce_security_admin_boundary = false
+
+########################################
+# 5. User trong Identity Center directory
+#
+# CHI dung khi khong co AD / IdP ngoai.
+# Neu dung SCIM tu Entra/Okta: dat manage_groups = false va de
+# users = {} - luc do SCIM lam chu, Terraform chi doc (doc 08).
+#
+# Email o day chi de nhan thu dat password, KHONG can duy nhat
+# toan cau. Rat khac email root account.
+########################################
+
+manage_groups = true
+
+users = {
+  quang = {
+    given_name  = "Quang"
+    family_name = "Chu Hong"
+    email       = "ban@example.com"
+    groups      = ["lz-platform-admins"]
+  }
+
+  # ops1 = {
+  #   given_name  = "Ops"
+  #   family_name = "One"
+  #   email       = "ban+ops1@example.com"
+  #   groups      = ["lz-network-operators", "lz-server-operators"]
+  # }
+}

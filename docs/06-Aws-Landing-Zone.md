@@ -1125,6 +1125,40 @@ aws sts get-caller-identity --profile app-dev
 
 Nếu công ty đã có Okta / Entra ID / Google Workspace, cấu hình **external identity provider** với SCIM sync thay vì tạo group thủ công như trên. Chi tiết đồng bộ user/group từ AD on-premise: [08 – Đồng bộ user AD sang Identity Center](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md).
 
+### Ba permission set ở trên chỉ là ví dụ tối thiểu
+
+Đủ để bắt đầu, nhưng thiếu hai thứ khi LZ lớn lên:
+
+**1. Chưa có phần tạo user.** Đoạn code trên chỉ có group. Nếu bạn **không có AD và không có IdP ngoài** thì identity source là Identity Center directory, và Terraform tạo user được luôn:
+
+```hcl
+resource "aws_identitystore_user" "quang" {
+  identity_store_id = local.identity_store_id
+  user_name         = "quang"
+  display_name      = "Quang Chu Hong"
+
+  name {
+    given_name  = "Quang"
+    family_name = "Chu Hong"
+  }
+
+  emails {
+    value   = "ban@example.com"   # chi de nhan thu dat password,
+    primary = true                # KHONG can duy nhat toan cau
+  }
+}
+
+resource "aws_identitystore_group_membership" "quang_platform" {
+  identity_store_id = local.identity_store_id
+  group_id          = aws_identitystore_group.platform.group_id
+  member_id         = aws_identitystore_user.quang.user_id
+}
+```
+
+> **Khác biệt quan trọng với doc 08:** ở đó dùng `data "aws_identitystore_group"` chứ không phải `resource`, vì SCIM từ AD làm chủ user/group nên Terraform chỉ được **đọc**. Không có AD thì ngược lại: Terraform **làm chủ**, dùng `resource`. Đừng trộn hai kiểu — SCIM ghi đè, Terraform thấy drift, apply lại, lặp vô tận.
+
+**2. Ba set `admin`/`developer`/`readonly` không đủ để tách quyền theo miền.** Bộ đầy đủ cho enterprise — 17 set chia theo (network / security / server / database / analytics / app) × (admin / operator), kèm chốt `iam:PassRole`, permissions boundary, và chính sách break-glass — ở [19 – Permission set cho LZ](./19-Permission-Set-cho-Landing-Zone.md), code chạy được tại [`landing-zone/permission-sets/`](../landing-zone/permission-sets/).
+
 ---
 
 ## 11. Network baseline – TGW hub và centralized egress

@@ -28,6 +28,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 
 | # | Nội dung |
 |---|---|
+| **[19](./docs/19-Permission-Set-cho-Landing-Zone.md)** | **Permission set** – 17 set, gán theo group, chặn đường leo thang quyền |
 | [07](./docs/07-Aws-Centralized-DNS-Hybrid-AD-M365.md) | DNS hybrid với AD on-premise và Microsoft 365 |
 | [08](./docs/08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | Đồng bộ user/group từ AD sang IAM Identity Center |
 
@@ -54,6 +55,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | Layer | Nội dung | Chi phí |
 |---|---|---|
 | [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
+| [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
 
 ## Demo chạy được
 

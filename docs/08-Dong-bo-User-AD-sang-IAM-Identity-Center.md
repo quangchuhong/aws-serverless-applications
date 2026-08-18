@@ -2,6 +2,10 @@
 
 Ví dụ 08: Nối identity từ **Active Directory on-premise** vào **AWS IAM Identity Center**, tiếp nối [06 – Landing Zone](./06-Aws-Landing-Zone.md) (mục 10, permission sets) và [07 – Centralized DNS](./07-Aws-Centralized-DNS-Hybrid-AD-M365.md) (mục 10.2, Entra Connect).
 
+> **Không có AD on-premise?** Bài này vẫn đáng đọc phần mục 1 (AD OU ≠ AWS OU), nhưng phần đồng bộ thì không cần. Môi trường thuần AWS dùng Identity Center directory và Terraform làm chủ user/group — xem [19 – Permission set cho LZ](./19-Permission-Set-cho-Landing-Zone.md).
+>
+> **Khác biệt cốt lõi giữa hai bài:** ở đây SCIM làm chủ nên Terraform chỉ được **đọc** group (`data "aws_identitystore_group"`). Không có AD thì Terraform **làm chủ** (`resource`). Đừng trộn hai kiểu.
+
 ---
 
 ## 1. Trước hết: "OU" của AD và "OU" của AWS là hai thứ khác nhau
@@ -322,6 +326,7 @@ variable "account_ids" {
 locals {
   # account_key phải khớp key trong var.account_ids
   # permission_set phải khớp tên permission set ở doc 06 mục 10
+  # (hoặc bộ 17 set đầy đủ ở doc 19 — lz-network-admin, lz-app-admin...)
   grants = [
     { account_key = "app_dev",  permission_set = "DeveloperAccess"    },
     { account_key = "app_dev",  permission_set = "ReadOnlyAccess"     },

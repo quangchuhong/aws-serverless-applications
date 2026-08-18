@@ -1,0 +1,317 @@
+########################################
+# CAC MANH POLICY DUNG CHUNG
+#
+# Nhac lai mot quy tac IAM quyet dinh cach doc file nay:
+#   Deny tuong minh LUON THANG Allow, bat ke thu tu hay do cu the.
+# Nen moi statement Deny o day la chan tuyet doi, khong the mo lai
+# bang mot Allow o cho khac.
+########################################
+
+locals {
+
+  ########################################
+  # 1. EC2 tru network API va security API
+  #
+  # IAM khong co cu phap \"cho phep ec2:* TRU nhom X\". Phai
+  # Allow ec2:* roi Deny liet ke tay.
+  #
+  # VA CHAM VAN HANH THAT: chan ca *SecurityGroup* thi server-admin
+  # khong launch duoc EC2 hay tao ELB moi, vi hai viec do gan nhu
+  # luon can tao SG.
+  #
+  # Can bang duoc chon o day: CHO tao/xoa SG, CAM sua rule
+  # (Authorize*/Revoke*). Tao duoc vo container rong, nhung khong tu
+  # mo duoc port - viec mo port thuoc ve network/security team.
+  ########################################
+  deny_ec2_network = {
+    Sid    = "DenyEc2NetworkApis"
+    Effect = "Deny"
+    Action = [
+      "ec2:*Vpc*",
+      "ec2:*Subnet*",
+      "ec2:*Route*",
+      "ec2:*Gateway*",
+      "ec2:*TransitGateway*",
+      "ec2:*Vpn*",
+      "ec2:*Peering*",
+      "ec2:*NetworkAcl*",
+      "ec2:*DhcpOptions*",
+      "ec2:*Address*", # Elastic IP
+      "ec2:*ClientVpn*",
+      "ec2:*CarrierGateway*",
+      "ec2:*PrefixList*",
+      "ec2:*TrafficMirror*",
+    ]
+    Resource = "*"
+  }
+
+  deny_ec2_security = {
+    Sid    = "DenyEc2SecurityGroupRuleChanges"
+    Effect = "Deny"
+    Action = [
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:AuthorizeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupEgress",
+      "ec2:ModifySecurityGroupRules",
+    ]
+    Resource = "*"
+  }
+
+  ########################################
+  # 2. Chot PassRole
+  #
+  # Duong leo thang quyen quan trong nhat trong ca bang:
+  #
+  #   server-admin -> tao Lambda, gan execution role = mot role admin
+  #                -> invoke -> chay code voi quyen admin
+  #
+  # SageMaker con thang hon: notebook instance la shell that.
+  # EMR: cluster launch EC2 voi instance profile.
+  # CloudFormation: deploy stack voi service role admin.
+  #
+  # Chan bang cach chi cho pass role co TIEN TO da dinh, va chi
+  # pass duoc SANG DUNG SERVICE can thiet.
+  ########################################
+
+  passrole_workload = {
+    Sid      = "PassRoleOnlyWorkloadRoles"
+    Effect   = "Allow"
+    Action   = "iam:PassRole"
+    Resource = "arn:aws:iam::*:role/${lookup(var.passrole_prefixes, "workload", "lz-workload-")}*"
+    Condition = {
+      StringEquals = {
+        "iam:PassedToService" = [
+          "lambda.amazonaws.com",
+          "ec2.amazonaws.com",
+          "ecs-tasks.amazonaws.com",
+          "ecs.amazonaws.com",
+          "eks.amazonaws.com",
+          "states.amazonaws.com",
+          "events.amazonaws.com",
+          "apigateway.amazonaws.com",
+          "cloudformation.amazonaws.com",
+          "ssm.amazonaws.com",
+          "application-autoscaling.amazonaws.com",
+        ]
+      }
+    }
+  }
+
+  passrole_analytics = {
+    Sid      = "PassRoleOnlyAnalyticsRoles"
+    Effect   = "Allow"
+    Action   = "iam:PassRole"
+    Resource = "arn:aws:iam::*:role/${lookup(var.passrole_prefixes, "analytics", "lz-analytics-")}*"
+    Condition = {
+      StringEquals = {
+        "iam:PassedToService" = [
+          "sagemaker.amazonaws.com",
+          "glue.amazonaws.com",
+          "elasticmapreduce.amazonaws.com",
+          "lakeformation.amazonaws.com",
+          "athena.amazonaws.com",
+          "redshift.amazonaws.com",
+          "lambda.amazonaws.com",
+          "firehose.amazonaws.com",
+        ]
+      }
+    }
+  }
+
+  # Quyen IAM toi thieu de doc/tao service-linked role. Khong co
+  # dong nay thi rat nhieu service khong khoi tao duoc lan dau.
+  iam_minimal_for_workload = {
+    Sid    = "IamReadAndServiceLinkedRoles"
+    Effect = "Allow"
+    Action = [
+      "iam:Get*",
+      "iam:List*",
+      "iam:CreateServiceLinkedRole",
+      "iam:CreateInstanceProfile",
+      "iam:AddRoleToInstanceProfile",
+      "iam:RemoveRoleFromInstanceProfile",
+      "iam:DeleteInstanceProfile",
+    ]
+    Resource = "*"
+  }
+
+  # Chan tuyet doi moi duong sua IAM khac. Dat cung cho tat ca set
+  # KHONG phai security-admin / account-admin.
+  deny_iam_writes = {
+    Sid    = "DenyIamWritesOutsideSecurityDomain"
+    Effect = "Deny"
+    Action = [
+      "iam:CreateUser",
+      "iam:CreateRole",
+      "iam:CreateAccessKey",
+      "iam:CreateLoginProfile",
+      "iam:UpdateLoginProfile",
+      "iam:AttachUserPolicy",
+      "iam:AttachRolePolicy",
+      "iam:AttachGroupPolicy",
+      "iam:PutUserPolicy",
+      "iam:PutRolePolicy",
+      "iam:PutGroupPolicy",
+      "iam:UpdateAssumeRolePolicy",
+      "iam:DeleteRolePermissionsBoundary",
+      "iam:DeleteUserPermissionsBoundary",
+      "iam:CreatePolicyVersion",
+      "iam:SetDefaultPolicyVersion",
+    ]
+    Resource = "*"
+  }
+
+  ########################################
+  # 3. Chan doc du lieu cho cac set operator / auditor
+  #
+  # Day la khac biet quan trong nhat so voi AWS ReadOnlyAccess.
+  # Chi tiet o doc 19 muc 3.1.
+  #
+  # KHONG chan logs:* - app team phai doc duoc log cua minh o prod.
+  ########################################
+  deny_data_plane = {
+    Sid    = "DenyDataPlaneReads"
+    Effect = "Deny"
+    Action = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetObjectTorrent",
+      "dynamodb:GetItem",
+      "dynamodb:BatchGetItem",
+      "dynamodb:Query",
+      "dynamodb:Scan",
+      "dynamodb:PartiQLSelect",
+      "secretsmanager:GetSecretValue",
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "ssm:GetParametersByPath",
+      "kms:Decrypt",
+      "kms:GenerateDataKey*",
+      "lambda:GetFunction", # tra ve pre-signed URL tai duoc ca source
+      "athena:GetQueryResults",
+      "redshift-data:GetStatementResult",
+      "sqs:ReceiveMessage",
+    ]
+    Resource = "*"
+  }
+
+  ########################################
+  # 4. Chan truy cap phien dieu khien (interactive) cho operator
+  #
+  # SSM Session Manager = shell that tren EC2 -> quyen cua instance
+  # profile tro thanh quyen cua nguoi dung. Khong phai read-only.
+  ########################################
+  deny_interactive_access = {
+    Sid    = "DenyInteractiveShellForOperators"
+    Effect = "Deny"
+    Action = [
+      "ssm:StartSession",
+      "ssm:SendCommand",
+      "ssm:CreateAssociation",
+      "ssm:StartAutomationExecution",
+      "ec2-instance-connect:*",
+      "ec2:GetPasswordData",
+      "sagemaker:CreatePresignedNotebookInstanceUrl",
+      "sagemaker:CreatePresignedDomainUrl",
+    ]
+    Resource = "*"
+  }
+
+  ########################################
+  # 5. Lake Formation - he thong phan quyen SONG SONG voi IAM
+  #
+  # lakeformation:PutDataLakeSettings cho phep tu dat minh lam
+  # Data Lake Administrator, roi GrantPermissions cho chinh minh
+  # tren MOI bang Glue catalog -> doc toan bo data lake, bo qua
+  # bucket policy cua S3.
+  #
+  # Nghia la lakeformation:* ~= quyen doc toan bo du lieu, bat ke
+  # ban siet S3 the nao.
+  #
+  # Ba action nay tach ra thanh set rieng lz-datalake-admin.
+  ########################################
+  deny_lakeformation_grants = {
+    Sid    = "DenyLakeFormationSelfGrant"
+    Effect = "Deny"
+    Action = [
+      "lakeformation:PutDataLakeSettings",
+      "lakeformation:GrantPermissions",
+      "lakeformation:BatchGrantPermissions",
+      "lakeformation:RegisterResource",
+    ]
+    Resource = "*"
+  }
+
+  ########################################
+  # 6. Boundary bat buoc cho lz-security-admin
+  #
+  # Khong co dong nay thi lz-security-admin TUONG DUONG
+  # lz-account-admin: IAM full quyen = tu tao role admin roi assume.
+  #
+  # LUU Y CU PHAP: phai dung ArnNotLike chu khong phai StringNotEquals.
+  # StringNotEquals so sanh CHINH XAC, khong hieu dau * trong ARN,
+  # nen dieu kien se khong bao gio khop va statement thanh vo dung.
+  ########################################
+  deny_create_without_boundary = var.enforce_security_admin_boundary ? [
+    {
+      Sid    = "DenyCreatePrincipalWithoutBoundary"
+      Effect = "Deny"
+      Action = [
+        "iam:CreateRole",
+        "iam:CreateUser",
+      ]
+      Resource = "*"
+      Condition = {
+        ArnNotLike = {
+          "iam:PermissionsBoundary" = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
+        }
+      }
+    },
+    {
+      Sid    = "DenyRemovingOrEditingTheBoundaryItself"
+      Effect = "Deny"
+      Action = [
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:DeleteUserPermissionsBoundary",
+        "iam:CreatePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+      ]
+      Resource = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
+    },
+  ] : []
+
+  ########################################
+  # 7. Bao ve nen tang - dat cho MOI set tru account-admin
+  #
+  # Khong ai duoc pha chinh co che kiem soat:
+  #   - roi khoi Organization
+  #   - tat CloudTrail / GuardDuty / Config
+  #   - sua permission set cua chinh minh
+  ########################################
+  deny_guardrails = {
+    Sid    = "DenyTamperingWithGuardrails"
+    Effect = "Deny"
+    Action = [
+      "organizations:LeaveOrganization",
+      "organizations:DeleteOrganization",
+      "organizations:RemoveAccountFromOrganization",
+      "cloudtrail:StopLogging",
+      "cloudtrail:DeleteTrail",
+      "cloudtrail:UpdateTrail",
+      "guardduty:DeleteDetector",
+      "guardduty:DisassociateFromMasterAccount",
+      "config:DeleteConfigurationRecorder",
+      "config:StopConfigurationRecorder",
+      "config:DeleteDeliveryChannel",
+      "sso:Delete*",
+      "sso:Detach*",
+      "sso:Put*",
+      "sso:Update*",
+      "account:CloseAccount",
+    ]
+    Resource = "*"
+  }
+}
