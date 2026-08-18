@@ -83,6 +83,57 @@ Lớp SCP và StackSet chạy **tự động không cần pipeline** — đây l
 
 ---
 
+## 3b. Quy ước email account
+
+Ràng buộc cứng của AWS, quyết định mọi thứ khác trong mục này:
+
+> Mỗi AWS account phải có một email **duy nhất trên toàn cầu**, **vĩnh viễn**. Email đã gắn một account thì không tái sử dụng được — kể cả sau khi đóng account đó.
+
+### Không có domain công ty: dùng plus-addressing
+
+Phần còn lại của tài liệu này giả định domain công ty (`aws+<ten>@acme.com`). Với lab cá nhân thì Gmail hỗ trợ `+`, và AWS chấp nhận `+` trong email account — **một** hộp thư, **vô hạn** địa chỉ:
+
+```
+quang.hong.0991+lz-network-01@gmail.com
+quang.hong.0991+lz-security-01@gmail.com
+quang.hong.0991+lz-app-dev-01@gmail.com
+```
+
+Tất cả về đúng một inbox. Đây là email **thật** — AWS gửi được, reset password root được.
+
+> **Thêm hậu tố phiên bản (`-01`) ngay từ đầu.** Đóng account rồi muốn dựng lại với cùng email → `EMAIL_ALREADY_EXISTS`. Lần dựng lại dùng `-02`. Rẻ hơn nhiều so với lúc kẹt mới nghĩ ra.
+
+### Dùng email không có thật thì sao
+
+Với lab thì **chạy được**, nhưng biết trước cái gì hỏng vĩnh viễn:
+
+| | Với email giả |
+|---|---|
+| Tạo account qua Organizations | ✅ Chạy — AWS **không** bắt verify cho member account |
+| Vào account làm việc | ✅ Chạy — qua `OrganizationAccountAccessRole` |
+| Identity Center / permission set | ✅ Chạy — không liên quan email root |
+| Đóng account | ✅ `aws organizations close-account` từ management, không cần root |
+| **Đăng nhập root của account đó** | ❌ **Không bao giờ** — reset password cần email |
+| **Đổi email của account về sau** | ❌ Cần root → **kẹt vĩnh viễn với email giả** |
+| Nhận cảnh báo bảo mật | ❌ Thư đi vào hư không |
+
+Bốn dòng đầu là thứ bạn dùng 99% thời gian, nên lab vẫn dựng được. Dòng đáng cân nhắc nhất là **đổi email về sau**: account đó không nâng lên dùng thật được.
+
+Vì plus-addressing tốn **đúng bằng** công sức gõ một email giả, gần như không có lý do chọn cái giả.
+
+Nếu vẫn dùng: **tránh domain có thật mà bạn không sở hữu**. Dùng `example.com` / `example.org` / `invalid` — các domain được RFC dành riêng, đảm bảo không thuộc về ai.
+
+> Có cơ chế mới hơn — **centralized root access management** trong Organizations — cho phép management account xoá credential root của account con và thực hiện vài thao tác đặc quyền tập trung. Nếu tài khoản bạn có, nó bù được phần lớn rủi ro "không vào được root". Kiểm chứng ở console IAM → *Root access management* trước khi dựa vào.
+
+### Sau khi tạo account: hai việc làm ngay
+
+Account con tạo qua Organizations **không có password root** và cũng không tự khoá.
+
+1. **Giành lại root từng account** — *Forgot password* với email account đó, đặt password, **bật MFA ngay**. Bỏ qua bước này thì root account con đang ở trạng thái không ai kiểm soát. *(Không làm được nếu dùng email giả — đó chính là cái giá.)*
+2. **Việc hằng ngày dùng `OrganizationAccountAccessRole`**, rồi chuyển sang permission set khi Identity Center sẵn sàng ([doc 19](./19-Permission-Set-cho-Landing-Zone.md)).
+
+---
+
 ## 4. Account request as code
 
 ### 4.1. Schema file request

@@ -132,6 +132,54 @@ Dòng thứ ba quan trọng ngang ba dòng kia: siết quá tay cũng là lỗi.
 
 ---
 
+## Lỗi hay gặp khi apply
+
+| Lỗi | Nguyên nhân | Xử lý |
+|---|---|---|
+| `AlreadyInOrganizationException` | Org đã có mà đặt `create_organization = true` | Đổi thành `false`, hoặc `terraform import` |
+| `ConstraintViolationException: POLICY_TYPE_NOT_ENABLED` | Chưa bật `SERVICE_CONTROL_POLICY` ở root | `aws organizations enable-policy-type --root-id <id> --policy-type SERVICE_CONTROL_POLICY` |
+| `DuplicateOrganizationalUnitException` | OU trùng tên đã tồn tại | `terraform import aws_organizations_organizational_unit.level1[\"Security\"] ou-xxxx` |
+| SCP apply xong mà **không thấy tác dụng** | `scp_dry_run = true` | Đúng thiết kế — policy đã tạo nhưng chưa gắn |
+| `AccessDeniedException` khi tạo OU | Đang chạy bằng credential account con | Phải là **management account** |
+| `ConcurrentModificationException` | Hai thao tác Organizations cùng lúc | Chạy lại; Organizations xử lý gần như tuần tự |
+
+---
+
+## Tạo account và đặt vào OU
+
+Layer này **không tạo account** — nó chỉ quản Organization, OU và SCP. Tạo account bằng CLI:
+
+```bash
+aws organizations create-account \
+  --email "quang.hong.0991+lz-network-01@gmail.com" \
+  --account-name "lz-network" \
+  --role-name OrganizationAccountAccessRole
+
+# theo doi - tao account mat vai phut
+aws organizations list-create-account-status --states IN_PROGRESS
+```
+
+Rồi chuyển vào OU:
+
+```bash
+terraform output ou_ids     # lay OU id
+
+aws organizations move-account \
+  --account-id <account-id> \
+  --source-parent-id $(terraform output -raw root_id) \
+  --destination-parent-id <ou-id>
+```
+
+Ba điều về email, đầy đủ ở [doc 09 mục 3b](../../docs/09-Account-Vending-Tu-Dong.md):
+
+- Email phải **duy nhất toàn cầu, vĩnh viễn** — không tái dùng được kể cả sau khi đóng account
+- Không có domain công ty thì dùng **plus-addressing** (`ban+lz-network-01@gmail.com`) — một inbox, vô hạn địa chỉ
+- Thêm hậu tố `-01` ngay từ đầu, để lần dựng lại còn `-02`
+
+> **`OrganizationAccountAccessRole` mới là đường vào account con**, không phải root email của management account. Root của management chỉ là root của chính nó. Xem [doc 06 mục 1b](../../docs/06-Aws-Landing-Zone.md).
+
+---
+
 ## Ba điều dễ vấp
 
 **1. SCP không áp dụng cho management account.** Mọi quyền ở đó là quyền thật, không có trần chặn. Đó là lý do management account phải "sạch".

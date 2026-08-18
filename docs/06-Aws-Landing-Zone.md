@@ -40,6 +40,58 @@ Nguyên tắc thiết kế xuyên suốt:
 
 ---
 
+## 1b. "Root" trong AWS có hai nghĩa — gỡ trước khi đi tiếp
+
+Đây là nhập nhằng làm nhiều người hiểu sai mô hình truy cập ngay từ đầu:
+
+| Thuật ngữ | Là cái gì | Có email không |
+|---|---|---|
+| **Root user** | Danh tính đăng nhập bằng email + password của **một** AWS account. **Mọi** account đều có, kể cả account con | Có — chính là email của account đó |
+| **Organization root** (`r-xxxx`) | Nút gốc của cây OU. Là một **container**, không phải người dùng | Không |
+
+```text
+Management Account (111122223333)
+│
+├── Root user  ← email + password + MFA
+│               chỉ là root của CHÍNH account này
+│
+└── Organization root  r-a1b2   ← không có email, chỉ là nút gốc cây OU
+    ├── OU Security
+    ├── OU Infrastructure
+    └── OU Workloads
+```
+
+### Root của management account KHÔNG cho bạn vào account con
+
+Hiểu nhầm hay gặp: *"tôi dùng root email cho management account rồi thì vào được hết account LZ khác"*.
+
+Không có cơ chế "một root vào mọi account". Mỗi account có root user riêng gắn với **email riêng của nó**. Đường vào account con là thứ khác:
+
+```text
+Management account
+   └─ assume ─→ OrganizationAccountAccessRole  (trong từng account con)
+```
+
+Role này Organizations **tự tạo** khi account được tạo qua `CreateAccount`, và trust management account:
+
+```bash
+aws sts assume-role \
+  --role-arn arn:aws:iam::<ACCOUNT_CON>:role/OrganizationAccountAccessRole \
+  --role-session-name lz-setup
+```
+
+> **Ngoại lệ đáng nhớ:** account được **mời** (invite) vào org thì **không** có role này — chỉ account **tạo mới** qua Organizations mới có. Đó là lý do doc 09 cho StackSet tạo thêm một execution role, lấp đúng khoảng trống đó.
+
+### Ba đường vào một account con, theo thứ tự nên dùng
+
+| Đường | Khi nào | Ghi chú |
+|---|---|---|
+| **Permission set** (Identity Center) | Việc hằng ngày | Xem [doc 19](./19-Permission-Set-cho-Landing-Zone.md) |
+| **`OrganizationAccountAccessRole`** | Dựng LZ ban đầu, sự cố Identity Center | Không cần root |
+| **Root của chính account con** | Vài việc chỉ root làm được | Cần email của account đó — xem [doc 09](./09-Account-Vending-Tu-Dong.md) mục quy ước email |
+
+---
+
 ## 2. Kiến trúc tổng quan
 
 ```text
