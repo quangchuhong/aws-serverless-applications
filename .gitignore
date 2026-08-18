@@ -53,6 +53,16 @@ override.tf.json
 *_override.tf.json
 
 ########################################
+# Python (lambda source)
+########################################
+
+__pycache__/
+*.pyc
+
+# Zip do archive_file sinh ra khi apply
+.build/
+
+########################################
 # Khac
 ########################################
 

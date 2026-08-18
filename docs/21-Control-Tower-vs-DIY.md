@@ -17,10 +17,12 @@ Ví dụ 21: Hai cách dựng nền tảng Landing Zone, code cả hai để đ�
 | DIY: `check` bắt vượt giới hạn ký tự/số lượng | ✅ Đã viết |
 | CT: landing zone + version + manifest | ✅ Đã viết, **mặc định tắt** |
 | CT: hai account lõi, controls theo OU | ✅ Đã viết, **mặc định tắt** |
-| `plan-all.sh` chạy cả 5 layer | ✅ Đã viết |
+| `plan-all.sh` chạy cả 6 layer | ✅ Đã viết |
 | Kiểm chứng kích thước SCP | ✅ Đã chạy — lớn nhất 29% giới hạn |
-| Kiểm chứng tham chiếu `var.`/`local.` | ✅ Đã chạy — 0 lỗi trên 5 layer |
+| Kiểm chứng tham chiếu `var.`/`local.` | ✅ Đã chạy — 0 lỗi trên 6 layer |
 | `terraform validate` / `plan` | ⏸ Chưa chạy được — `registry.terraform.io` bị chặn (403 ở gateway) |
+| Lớp phát hiện DIY (`config-detective`) | ✅ Đã viết, **mặc định tắt** |
+| Delegated administrator (layer organization) | ✅ Đã viết |
 | Control identifier của CT | ⬜ Phải tự liệt kê bằng `aws controltower list-controls` |
 
 ---
@@ -52,7 +54,7 @@ DIY dùng SCP — **SCP miễn phí và chỉ đánh giá lúc gọi API**. Cont
 | Phát hiện vi phạm đã có | ❌ | ✅ |
 | Chi phí | $0 | Theo lượng |
 
-Muốn cả hai mà vẫn DIY: bật AWS Config riêng ở những account cần, thay vì bật toàn bộ qua CT. Bạn kiểm soát được phạm vi và chi phí.
+Muốn cả hai mà vẫn DIY: bật AWS Config **riêng ở những account cần**, thay vì bật toàn bộ qua CT. Cách làm cụ thể ở [mục 5](#5-lớp-phát-hiện-diy-config-detective).
 
 ---
 
@@ -129,7 +131,55 @@ Cả hai giới hạn đều có `check` block trong `scp.tf` bắt tự động
 
 ---
 
-## 5. Rà chéo: SCP của DIY vs controls của CT
+## 5. Lớp phát hiện DIY: `config-detective`
+
+> Code: [`landing-zone/config-detective/`](../landing-zone/config-detective/), **mặc định tắt**.
+
+Khác biệt với Control Tower nằm ở chỗ **bạn chọn phạm vi**. Bốn cần gạt, theo thứ tự tác động:
+
+| # | Cần gạt | Mặc định của layer | Vì sao |
+|---|---|---|---|
+| 1 | `recording_frequency` | **`DAILY`** | Lớn nhất — CT để `CONTINUOUS` |
+| 2 | Account nào ghi | Bạn khai OU — **bỏ Sandbox/Dev** | Dev đổi nhiều nhất = đắt nhất, mà vi phạm ở đó là bình thường |
+| 3 | Region nào | 1 region | Config là per-region |
+| 4 | Loại resource | 13 loại, **không** `all_supported` | CT ghi tất cả |
+
+Danh sách 13 loại được chọn **đối xứng với 4 SCP** ở mục 4 — SCP ngăn, Config phát hiện cái đã tồn tại:
+
+| SCP | Config ghi loại gì |
+|---|---|
+| `network_lock` | `InternetGateway`, `NatGateway`, `SecurityGroup`, `VPC`, `RouteTable` |
+| `baseline` | `IAM::Role`, `IAM::User`, `IAM::Policy`, `CloudTrail::Trail` |
+| `prod_guard` | `S3::Bucket`, `KMS::Key`, `RDS::DBInstance` |
+
+**Một quyết định kiến trúc đáng nói:** layer này **không** làm EventBridge fan-in cross-account. Config managed rule tự đẩy finding vào Security Hub, và Security Hub đã gom sẵn cross-account + cross-region qua delegated admin — làm thêm đường riêng là làm lại đúng việc đó, và phải triển khai rule + IAM role ở mỗi account × mỗi region.
+
+```
+Config rule vi phạm
+   └─► Security Hub (tự gom mọi account/region)
+         └─► EventBridge rule TẠI security account ─► SNS / Slack
+```
+
+Lợi thêm: cùng đường này gom luôn GuardDuty, Inspector, Macie.
+
+**Cái bẫy im lặng nhất:** rule kiểm tra loại resource mà recorder **không ghi** sẽ nằm mãi ở trạng thái `INSUFFICIENT_DATA` — không báo gì, và rất dễ nhầm là "mọi thứ đều ổn". Layer có `check` block bắt trường hợp này.
+
+**Điều kiện tiên quyết** — hai service principal, đều cần:
+
+```hcl
+# landing-zone/organization/terraform.tfvars
+delegated_administrators = {
+  "config.amazonaws.com"                   = "<security-account-id>"
+  "config-multiaccountsetup.amazonaws.com" = "<security-account-id>"   # de quen
+  "securityhub.amazonaws.com"              = "<security-account-id>"
+}
+```
+
+Thiếu dòng thứ hai thì organization rule báo `AccessDeniedException` mà không nói rõ thiếu gì.
+
+---
+
+## 6. Rà chéo: SCP của DIY vs controls của CT
 
 Nếu sau này chuyển sang CT, đây là chỗ trùng lặp cần biết:
 
@@ -146,7 +196,7 @@ Kết luận thực dụng: chuyển sang CT thì vẫn **giữ SCP riêng cho `
 
 ---
 
-## 6. Kiểm chứng cả hai bản
+## 7. Kiểm chứng cả hai bản
 
 ```bash
 cd landing-zone
@@ -181,7 +231,7 @@ Dòng thứ ba quan trọng ngang ba dòng kia — siết quá tay cũng là l�
 
 ---
 
-## 7. Bật SCP từng cái một
+## 8. Bật SCP từng cái một
 
 ```hcl
 enable_scp = {
@@ -200,7 +250,7 @@ Thứ tự: `baseline` → `region_lock` → `network_lock` → `prod_guard`. Sa
 
 ---
 
-## 8. Sổ quyết định
+## 9. Sổ quyết định
 
 | # | Quyết định | Lý do | Đánh đổi |
 |---|---|---|---|
@@ -216,7 +266,7 @@ Thứ tự: `baseline` → `region_lock` → `network_lock` → `prod_guard`. Sa
 
 ---
 
-## 9. Việc còn lại
+## 10. Việc còn lại
 
 | # | Việc | Chặn bởi |
 |---|---|---|

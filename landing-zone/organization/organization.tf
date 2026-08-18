@@ -25,6 +25,11 @@ resource "aws_organizations_organization" "this" {
   aws_service_access_principals = [
     "cloudtrail.amazonaws.com",
     "config.amazonaws.com",
+
+    # HAI service principal khac nhau va DEU CAN.
+    # Thieu dong duoi thi aws_config_organization_managed_rule bao
+    # AccessDeniedException ma khong noi ro thieu gi.
+    "config-multiaccountsetup.amazonaws.com",
     "guardduty.amazonaws.com",
     "securityhub.amazonaws.com",
     "access-analyzer.amazonaws.com",

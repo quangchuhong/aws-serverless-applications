@@ -8,10 +8,11 @@ locals {
   # Them layer moi thi them mot dong o day.
   ########################################
   layers = {
-    "landing-zone/tf-backend"      = "bootstrap/terraform.tfstate"
-    "landing-zone/organization"    = "organization/terraform.tfstate"
-    "landing-zone/billing-guard"   = "billing-guard/terraform.tfstate"
-    "landing-zone/permission-sets" = "permission-sets/terraform.tfstate"
+    "landing-zone/tf-backend"       = "bootstrap/terraform.tfstate"
+    "landing-zone/organization"     = "organization/terraform.tfstate"
+    "landing-zone/config-detective" = "config-detective/terraform.tfstate"
+    "landing-zone/billing-guard"    = "billing-guard/terraform.tfstate"
+    "landing-zone/permission-sets"  = "permission-sets/terraform.tfstate"
 
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do

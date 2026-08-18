@@ -1,0 +1,122 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# LOP PHAT HIEN - AWS Config.
+# Chay o MANAGEMENT ACCOUNT (assume role sang security + log archive).
+#
+# MAC DINH TAT. Bat khi da co du:
+#   - account security tooling + log archive
+#   - delegated administrator (ben landing-zone/organization)
+########################################
+
+enable = false
+
+region      = "ap-southeast-1"
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Account
+########################################
+
+security_account_id    = ""   # "333333333333"
+log_archive_account_id = ""   # "444444444444"
+
+cross_account_role = "OrganizationAccountAccessRole"
+
+# OU duoc trien khai recorder.
+# KHONG dua Sandbox / Dev vao - do la noi nhieu resource thay doi
+# nhat, tuc la dat nhat, ma vi pham o do lai binh thuong.
+#
+# Lay ID: cd ../organization && terraform output ou_ids
+recorder_target_ous = [
+  # "ou-xxxx-infrastructure",
+  # "ou-xxxx-production",
+  # "ou-xxxx-security",
+]
+
+########################################
+# 2. Pham vi ghi - BON CAN GAT CHI PHI
+#
+# Thu tu tac dong: (1) tan suat  (2) account  (3) region  (4) loai
+# Mac dinh duoi day da dat ca bon o muc tiet kiem.
+########################################
+
+# (1) DAILY thay vi CONTINUOUS - can gat lon nhat
+recording_frequency = "DAILY"
+
+# Tru vai loai van can biet ngay
+continuous_recording_types = [
+  "AWS::EC2::SecurityGroup",
+  "AWS::IAM::Role",
+  "AWS::IAM::Policy",
+]
+
+# (3) Region aggregator gom du lieu. Khong dung all_regions.
+aggregator_regions = ["ap-southeast-1", "us-east-1"]
+
+# (4) Loai resource - mac dinh 13 loai, chon doi xung voi 4 SCP.
+# Xem variables.tf. Them mot loai = them chi phi.
+# resource_types = [...]
+
+########################################
+# 3. Rule
+#
+# Mac dinh 8 rule. MOI RULE LA MOT KHOAN CHI PHI.
+#
+# Dung bat ca conformance pack "cho chac" - vai chuc rule, va ban
+# se khong doc het findings.
+#
+# Rule kiem tra loai resource ma recorder KHONG ghi se mai o trang
+# thai INSUFFICIENT_DATA: im lang, va rat de nham la moi thu deu on.
+########################################
+
+# organization_rules = { ... }   # xem variables.tf
+
+# Sandbox: vi pham la binh thuong, bao dong chi tao nhieu
+excluded_accounts = [
+  # "555555555555",
+]
+
+########################################
+# 4. Log archive
+#
+# OBJECT LOCK CHI BAT DUOC LUC TAO BUCKET. Quyet dinh ngay bay gio.
+#
+# Ca ly do tach rieng account log archive la de account bi xam nhap
+# KHONG XOA DUOC bang chung. Lifecycle policy khong lam duoc viec do.
+#
+# COMPLIANCE mode: khong ai go duoc, KE CA ROOT. Doi lai, object da
+# ghi thi phai tra tien luu tru du het han - khong xoa som duoc bang
+# bat ky cach nao.
+########################################
+
+enable_object_lock         = true
+object_lock_retention_days = 90
+
+# PHAI lon hon object_lock_retention_days
+snapshot_retention_days = 365
+
+snapshot_delivery_frequency = "TwentyFour_Hours"
+
+########################################
+# 5. Canh bao
+#
+# KHONG lam EventBridge fan-in cross-account: Config rule tu day
+# finding vao Security Hub, va Security Hub da gom san cross-account
+# + cross-region. Chi can MOT rule tai security account.
+########################################
+
+# PHAI xac nhan qua link SNS gui toi, neu khong se khong nhan duoc gi
+alert_emails = [
+  # "ban@example.com",
+]
+
+# Bao het moi muc = khong ai doc nua
+alert_severities = ["CRITICAL", "HIGH"]
+
+# Can secret DA TON TAI trong Secrets Manager cua account security.
+# KHONG dat webhook URL vao bien Terraform - no se vao state dang ro.
+enable_slack              = false
+slack_webhook_secret_name = "lz/slack/security-alerts"

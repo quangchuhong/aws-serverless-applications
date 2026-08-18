@@ -1,0 +1,185 @@
+########################################
+# CONFIG RECORDER - trien khai qua STACKSET
+#
+# Recorder phai ton tai o TUNG account x TUNG region. Khong co API
+# nao bat no cho ca to chuc mot lan (tru Control Tower).
+#
+# StackSet voi auto_deployment: account MOI vao OU se tu duoc trien
+# khai, khong can chay lai Terraform. Day chinh la co che baseline
+# o doc 09.
+#
+# Template viet bang jsonencode chu khong phai file YAML rieng -
+# tranh hoan toan bay thut le cua YAML, va duoc kiem kieu.
+########################################
+
+locals {
+  recorder_template = jsonencode({
+    AWSTemplateFormatVersion = "2010-09-09"
+    Description              = "LZ Config recorder - quan ly boi Terraform (config-detective)"
+
+    Resources = {
+      ConfigRole = {
+        Type = "AWS::IAM::Role"
+        Properties = {
+          RoleName = "${var.project}-config-recorder"
+          AssumeRolePolicyDocument = {
+            Version = "2012-10-17"
+            Statement = [{
+              Effect    = "Allow"
+              Principal = { Service = "config.amazonaws.com" }
+              Action    = "sts:AssumeRole"
+            }]
+          }
+          ManagedPolicyArns = [
+            "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWS_ConfigRole"
+          ]
+          Policies = [{
+            PolicyName = "DeliverToCentralBucket"
+            PolicyDocument = {
+              Version = "2012-10-17"
+              Statement = [{
+                Effect = "Allow"
+                Action = ["s3:PutObject", "s3:GetBucketAcl"]
+                Resource = [
+                  "arn:${data.aws_partition.current.partition}:s3:::${local.bucket_name}",
+                  "arn:${data.aws_partition.current.partition}:s3:::${local.bucket_name}/*",
+                ]
+              }]
+            }
+          }]
+        }
+      }
+
+      ConfigRecorder = {
+        Type      = "AWS::Config::ConfigurationRecorder"
+        DependsOn = "ConfigRole"
+        Properties = {
+          Name    = "${var.project}-recorder"
+          RoleARN = { "Fn::GetAtt" = ["ConfigRole", "Arn"] }
+
+          RecordingGroup = {
+            # KHONG dung AllSupported = true. Do la cach dat nhat.
+            AllSupported = false
+
+            # Chi bat duoc khi AllSupported = true. De false va liet ke
+            # thang loai IAM trong ResourceTypes.
+            IncludeGlobalResourceTypes = false
+
+            ResourceTypes = var.resource_types
+          }
+
+          RecordingMode = merge(
+            { RecordingFrequency = var.recording_frequency },
+
+            # Chi co y nghia khi tan suat chinh la DAILY
+            var.recording_frequency == "DAILY" && length(var.continuous_recording_types) > 0 ? {
+              RecordingModeOverrides = [{
+                ResourceTypes      = var.continuous_recording_types
+                RecordingFrequency = "CONTINUOUS"
+                Description        = "Thay doi ve quyen va port phai biet ngay, cham mot ngay la qua lau"
+              }]
+            } : {},
+          )
+        }
+      }
+
+      DeliveryChannel = {
+        Type      = "AWS::Config::DeliveryChannel"
+        DependsOn = "ConfigRecorder"
+        Properties = {
+          Name         = "${var.project}-delivery"
+          S3BucketName = local.bucket_name
+          ConfigSnapshotDeliveryProperties = {
+            DeliveryFrequency = var.snapshot_delivery_frequency
+          }
+        }
+      }
+    }
+  })
+}
+
+resource "aws_cloudformation_stack_set" "recorder" {
+  count = local.enabled ? 1 : 0
+
+  name        = "${var.project}-config-recorder"
+  description = "Config recorder cho moi account trong OU dich"
+
+  # SERVICE_MANAGED = Organizations tu lo IAM role hai dau,
+  # khong phai tu tao AWSCloudFormationStackSetExecutionRole
+  permission_model = "SERVICE_MANAGED"
+
+  auto_deployment {
+    enabled = true
+
+    # Account roi khoi OU thi go luon recorder - neu giu lai no se
+    # tiep tuc ghi va tiep tuc tinh tien ma khong ai quan.
+    retain_stacks_on_account_removal = false
+  }
+
+  capabilities  = ["CAPABILITY_NAMED_IAM"]
+  template_body = local.recorder_template
+
+  operation_preferences {
+    # Trien khai tung it mot: sai thi dung lai som, khong lam hong
+    # ca to chuc mot luot
+    failure_tolerance_percentage = 10
+    max_concurrent_percentage    = 25
+    region_concurrency_type      = "PARALLEL"
+  }
+
+  lifecycle {
+    ignore_changes = [administration_role_arn]
+  }
+}
+
+resource "aws_cloudformation_stack_set_instance" "recorder" {
+  count = local.enabled && length(var.recorder_target_ous) > 0 ? 1 : 0
+
+  stack_set_name = aws_cloudformation_stack_set.recorder[0].name
+
+  deployment_targets {
+    organizational_unit_ids = var.recorder_target_ous
+  }
+
+  # Config la per-region. Moi region them vao nhan chi phi len
+  # theo so account.
+  stack_set_instance_region = var.region
+
+  operation_preferences {
+    failure_tolerance_percentage = 10
+    max_concurrent_percentage    = 25
+  }
+}
+
+########################################
+# KIEM TRA CHEO
+########################################
+
+check "recorder_targets_declared" {
+  assert {
+    condition     = !local.enabled || length(var.recorder_target_ous) > 0
+    error_message = "enable = true nhung recorder_target_ous rong -> khong account nao duoc trien khai recorder. Lay OU ID bang: terraform output ou_ids (layer organization)."
+  }
+}
+
+check "accounts_declared" {
+  assert {
+    condition     = !local.enabled || (var.security_account_id != "" && var.log_archive_account_id != "")
+    error_message = "Phai dien security_account_id va log_archive_account_id truoc khi bat."
+  }
+}
+
+check "global_resources_recorded_once" {
+  assert {
+    condition = !anytrue([
+      for t in var.resource_types : startswith(t, "AWS::IAM::")
+    ]) || length(var.aggregator_regions) <= 2
+
+    error_message = join(" ", [
+      "resource_types co loai IAM (toan cau).",
+      "Neu ban trien khai recorder o NHIEU region thi moi region se ghi lai",
+      "cung mot resource IAM -> tra tien nhieu lan cho cung mot thu.",
+      "Chi trien khai recorder o MOT region, hoac bo loai IAM khoi cac region con lai.",
+    ])
+  }
+}

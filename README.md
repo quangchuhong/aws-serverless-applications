@@ -59,6 +59,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | **[`landing-zone/tf-backend`](./landing-zone/tf-backend/)** | **Dựng đầu tiên.** S3 + khoá state cho mọi layer thường trực | ~$0 |
 | [`landing-zone/organization`](./landing-zone/organization/) | **DIY** – Organizations, cây OU, 4 SCP. Bản dùng thật | $0 |
 | [`landing-zone/control-tower`](./landing-zone/control-tower/) | Bản Control Tower để đối chiếu. **Mặc định tắt** | $0 khi tắt |
+| [`landing-zone/config-detective`](./landing-zone/config-detective/) | AWS Config: lớp **phát hiện** bù cho SCP. **Mặc định tắt** | $0 khi tắt |
 | [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
 | [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
 
