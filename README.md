@@ -21,6 +21,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 |---|---|
 | [06](./docs/06-Aws-Landing-Zone.md) | **Landing Zone** – Organizations, OU, SCP, logging, Identity Center |
 | **[20](./docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md)** | **Vận hành LZ** – remote state, khoá state, quy trình thay đổi hằng ngày |
+| **[21](./docs/21-Control-Tower-vs-DIY.md)** | **Control Tower vs DIY** – hai cách dựng nền tảng, code cả hai để đối chiếu |
 | [09](./docs/09-Account-Vending-Tu-Dong.md) | Account vending tự động – request as code, StackSet baseline |
 | [10](./docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | CI/CD cho LZ – GitHub Actions + OIDC, không dùng access key |
 | [11](./docs/11-Tag-Policy-va-Cost-Allocation.md) | Tag policy và cost allocation – chia bill theo team |
@@ -56,6 +57,8 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | Layer | Nội dung | Chi phí |
 |---|---|---|
 | **[`landing-zone/tf-backend`](./landing-zone/tf-backend/)** | **Dựng đầu tiên.** S3 + khoá state cho mọi layer thường trực | ~$0 |
+| [`landing-zone/organization`](./landing-zone/organization/) | **DIY** – Organizations, cây OU, 4 SCP. Bản dùng thật | $0 |
+| [`landing-zone/control-tower`](./landing-zone/control-tower/) | Bản Control Tower để đối chiếu. **Mặc định tắt** | $0 khi tắt |
 | [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
 | [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
 

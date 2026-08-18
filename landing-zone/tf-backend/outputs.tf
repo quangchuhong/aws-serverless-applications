@@ -9,12 +9,17 @@ locals {
   ########################################
   layers = {
     "landing-zone/tf-backend"      = "bootstrap/terraform.tfstate"
+    "landing-zone/organization"    = "organization/terraform.tfstate"
     "landing-zone/billing-guard"   = "billing-guard/terraform.tfstate"
     "landing-zone/permission-sets" = "permission-sets/terraform.tfstate"
 
+    # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
+    # ban bat no. KHONG dung chung key voi organization: hai layer do
+    # thay the nhau, dung chung state se giam len nhau.
+    "landing-zone/control-tower" = "control-tower/terraform.tfstate"
+
     # Chua co code - them khi dung toi
-    # "landing-zone/organization" = "organization/terraform.tfstate"
-    # "landing-zone/network"      = "network/terraform.tfstate"
+    # "landing-zone/network" = "network/terraform.tfstate"
   }
 
   # Dong khoa trong backend config, khac nhau theo lock_mode

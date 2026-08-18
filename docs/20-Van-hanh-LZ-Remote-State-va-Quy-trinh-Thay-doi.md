@@ -14,7 +14,7 @@ Ví dụ 20: Chuyển từ "code Terraform chạy được" sang "hạ tầng v�
 | Khoá state (DynamoDB / S3 lockfile) | ✅ Đã viết, chọn qua biến |
 | Bucket policy tách prefix theo account | ✅ Đã viết |
 | `wire-backends.sh` sinh `backend.hcl` | ✅ Đã viết |
-| `backend "s3" {}` cho 2 layer thường trực | ✅ Đã thêm (còn comment, bật khi chuyển) |
+| `backend "s3" {}` cho các layer thường trực | ✅ Đã thêm (còn comment, bật khi chuyển) |
 | `.gitignore` chặn commit state | ✅ Đã thêm |
 | `terraform validate` / `plan` | ⏸ Chưa chạy được — registry Terraform bị chặn trong môi trường soạn tài liệu |
 | MFA Delete | ⬜ Thủ công, cần credential root |
@@ -47,9 +47,10 @@ Và đây là việc **độc lập với mọi quyết định kiến trúc kh�
 ```
 s3://acme-lz-tfstate-111122223333/
 ├── bootstrap/terraform.tfstate           ← chính layer tf-backend
+├── organization/terraform.tfstate        ← DIY: OU + SCP
+├── control-tower/terraform.tfstate       ← bản đối chiếu, mặc định tắt
 ├── billing-guard/terraform.tfstate
 ├── permission-sets/terraform.tfstate
-├── organization/terraform.tfstate        ← chưa có code
 └── network/terraform.tfstate             ← chưa có code
 
 DynamoDB: acme-lz-tfstate-lock   (hash key: LockID)
@@ -233,9 +234,9 @@ Rà lại thực trạng repo:
 | Cấp quyền cho account mới | ⚠️ Bán tự động | Sửa `accounts_by_scope` rồi apply |
 | Networking day-2 | ⚠️ Cơ chế đúng, nhưng nằm trong demo | `demo/network-lz-full` |
 | Tạo/đóng account | ❌ | Doc 09 mới là thiết kế |
-| Sửa OU | ❌ | Doc 06 có ví dụ, chưa thành layer |
-| Sửa SCP | ❌ | Doc 13 có JSON, chưa có Terraform quản |
-| Upgrade Control Tower | ❌ | **Repo không dùng Control Tower** — xem mục 7 |
+| Sửa OU | ✅ | `landing-zone/organization` |
+| Sửa SCP | ✅ | `landing-zone/organization` — 4 SCP |
+| Upgrade Control Tower | ⚠️ Code sẵn, mặc định tắt | `landing-zone/control-tower` — xem mục 7 |
 
 ### Demo không phải layer vận hành
 
@@ -247,9 +248,11 @@ Demo **cố ý không** nối vào remote state: chúng không cần lịch sử
 
 ---
 
-## 7. Control Tower: quyết định còn treo
+## 7. Control Tower: đã chốt — DIY
 
-Toàn bộ LZ này là **DIY** — Organizations thuần + Terraform. **Không dùng Control Tower.** Nên "upgrade Control Tower" hiện là khái niệm không tồn tại trong repo.
+> **Cập nhật:** quyết định này đã chốt. Lab dùng **DIY**, và bản Control Tower vẫn được viết sẵn để đối chiếu (mặc định tắt). Chi tiết đầy đủ: [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md). Code: [`landing-zone/organization/`](../landing-zone/organization/) và [`landing-zone/control-tower/`](../landing-zone/control-tower/).
+
+Nền tảng LZ này là **DIY** — Organizations thuần + Terraform. Nên "upgrade Control Tower" là khái niệm chỉ tồn tại ở layer `control-tower` đang tắt.
 
 | | DIY *(repo hiện tại)* | Control Tower |
 |---|---|---|
@@ -261,9 +264,7 @@ Toàn bộ LZ này là **DIY** — Organizations thuần + Terraform. **Không d
 
 Nếu đưa Control Tower vào sau, **bốn chỗ va nhau**: đăng ký OU sẵn có vào CT sẽ đẩy StackSet baseline xuống mọi account trong đó; SCP hai nguồn cùng áp; CT tự bật Identity Center; và drift detection của CT báo động với thay đổi Terraform làm ngoài nó.
 
-Tin tốt: **`tf-backend`, `permission-sets`, `billing-guard` sống chung với Control Tower được.**
-
-Tin cần lưu ý: **hai layer sắp làm tiếp lại đúng hai chỗ va nặng nhất** — OU và SCP. Nên chốt hướng trước khi xây chúng.
+Tin tốt: **`tf-backend`, `permission-sets`, `billing-guard` sống chung với cả hai bản.** Chỉ `organization` và `control-tower` là thay thế nhau — dùng cái này **hoặc** cái kia, không dùng cả hai.
 
 ---
 
@@ -320,10 +321,10 @@ Chắc chắn rồi mới `copy-object` đè lên. Versioning tồn tại chính
 | 2 | Bật MFA Delete cho bucket state | Cần credential root, thủ công |
 | 3 | CI/CD: plan trong PR, apply sau approve | Doc 10 mới là thiết kế |
 | 4 | Drift detection định kỳ (`plan -detailed-exitcode` theo lịch) | Cần (3) |
-| 5 | **Chốt Control Tower hay DIY** | Quyết định của bạn |
-| 6 | Layer `organization` — OU + SCP | Cần (5) |
+| 5 | ~~Chốt Control Tower hay DIY~~ | ✅ Đã chốt: DIY |
+| 6 | ~~Layer `organization` — OU + SCP~~ | ✅ Đã xong |
 | 7 | Nâng network từ demo thành layer thường trực | — |
-| 8 | Account vending có code thật | Cần (5), (6) |
+| 8 | Account vending có code thật | Cần (6) |
 
 ---
 

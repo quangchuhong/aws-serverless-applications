@@ -1,0 +1,101 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# BAN DIY - ban dung that cho lab.
+# Ban Control Tower de doi chieu o ../control-tower/.
+#
+# Chay o MANAGEMENT ACCOUNT.
+########################################
+
+region      = "ap-southeast-1"
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Organization da co chua
+#
+# Kiem tra truoc khi chon:
+#   aws organizations describe-organization
+#
+# Ra ket qua  -> de false (Terraform chi doc)
+# Bao loi     -> dat true (Terraform tao moi)
+#
+# Da co ma dat true = AlreadyInOrganizationException.
+########################################
+
+create_organization = false
+
+########################################
+# 2. Region duoc phep
+#
+# PHAI co us-east-1 - CloudFront, WAF scope CLOUDFRONT, ACM cho
+# CloudFront va nhieu API billing chi ton tai o day.
+#
+# Cang it region cang tot: resource o region ban khong nhin toi la
+# thu de bi bo quen nhat.
+########################################
+
+allowed_regions = ["ap-southeast-1", "us-east-1"]
+
+########################################
+# 3. Account mang
+#
+# Chi account nay duoc tao IGW / NAT / EIP / TGW.
+# De rong o giai doan dau khi chua tach account.
+########################################
+
+network_account_id = ""
+# network_account_id = "222222222222"
+
+########################################
+# 4. Bat SCP
+#
+# KHUYEN NGHI: bat TUNG CAI MOT.
+#
+# Buoc 1 - chi baseline, apply, thu lai thao tac binh thuong
+# Buoc 2 - them region_lock
+# Buoc 3 - them network_lock
+# Buoc 4 - them prod_guard
+#
+# Bat het mot luot roi co gi hong thi khong biet do cai nao.
+########################################
+
+enable_scp = {
+  baseline     = true
+  region_lock  = false
+  network_lock = false
+  prod_guard   = false
+}
+
+# TAO policy nhung KHONG GAN vao dau.
+# Dung de doc noi dung tren console truoc khi that su chan.
+scp_dry_run = true
+
+########################################
+# 5. Mien tru
+#
+# Role duoc mien khoi baseline va region lock.
+#
+# De RONG neu chua chac. Them sau de hon la go ra sau - go mot
+# mien tru nghia la co thu dang chay se hong.
+########################################
+
+scp_exempt_role_names = []
+# scp_exempt_role_names = ["lz-cicd-deploy", "AWSControlTowerExecution"]
+
+########################################
+# 6. Cay OU
+#
+# Mac dinh da khop voi pham vi cua landing-zone/permission-sets.
+# Doi o day thi phai doi ca accounts_by_scope ben do.
+########################################
+
+# ou_structure = {
+#   "Security"       = []
+#   "Infrastructure" = []
+#   "Workloads"      = ["Non-Production", "Production"]
+#   "Data Analytics" = []
+#   "Sandbox"        = []
+#   "Suspended"      = []
+# }

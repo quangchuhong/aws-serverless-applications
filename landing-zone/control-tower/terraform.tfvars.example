@@ -1,0 +1,108 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# BAN CONTROL TOWER - DE DOI CHIEU. Mac dinh TAT.
+# Ban dung that cho lab la ../organization/ (DIY).
+#
+# Chay o MANAGEMENT ACCOUNT.
+########################################
+
+# CHON MOT LAN, KHONG DOI DUOC.
+region = "ap-southeast-1"
+
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# CONG TAC CHINH
+#
+# false = khong tao gi. plan van chay, dung de kiem chung cu phap.
+#
+# Truoc khi doi thanh true, biet ba dieu:
+#   1. Chi phi thuong truc (AWS Config o moi account x moi region)
+#   2. Khong xoa duoc theo buoi demo
+#   3. Dang ky OU san co se day StackSet xuong moi account trong do
+########################################
+
+enable_landing_zone = false
+
+########################################
+# Hai account loi
+#
+# Control Tower doi ACCOUNT ID CO SAN - no khong tu tao.
+#
+# Email PHAI duy nhat toan cau va PHAI that. Dung plus-addressing:
+#   ban+lz-logarchive-01@gmail.com
+#
+# Them hau to -01 ngay tu dau: email da dung cho mot AWS account thi
+# khong tai su dung duoc, ke ca sau khi dong account.
+########################################
+
+create_core_accounts = true
+
+core_account_emails = {
+  log_archive = ""   # ban+lz-logarchive-01@gmail.com
+  audit       = ""   # ban+lz-audit-01@gmail.com
+}
+
+# Chi dien khi create_core_accounts = false
+# log_archive_account_id = "333333333333"
+# audit_account_id       = "444444444444"
+
+########################################
+# Manifest
+#
+# governed_regions LA BIEN QUYET DINH CHI PHI.
+# Config chay o moi account x moi region trong danh sach nay.
+# Giu it nhat co the.
+########################################
+
+landing_zone_version = "3.3"
+governed_regions     = ["ap-southeast-1"]
+
+security_ou_name = "Security"
+sandbox_ou_name  = "Sandbox"
+
+# Mac dinh cua CT la 365 ngay - voi lab thi qua dai
+log_retention_days        = 90
+access_log_retention_days = 90
+
+# true = CT tu bat Identity Center va tao bo permission set rieng.
+# 17 set o landing-zone/permission-sets van dung duoc, nhung se co
+# HAI BO song song. Da tu quan Identity Center thi cannhac false.
+enable_access_management = true
+
+########################################
+# Controls
+#
+# PHAI TU KIEM CHUNG identifier truoc khi dien - chung thay doi theo
+# thoi gian va theo phien ban landing zone:
+#
+#   aws controltower list-controls --region ap-southeast-1
+#
+# Dien identifier khong ton tai = apply loi ValidationException.
+#
+# De rong de bat bang tay tren console truoc, roi moi dua vao code.
+########################################
+
+controls = {}
+
+# controls = {
+#   "Workloads" = [
+#     "AWS-GR_RESTRICT_ROOT_USER",
+#     "AWS-GR_ENCRYPTED_VOLUMES",
+#   ]
+# }
+
+# ARN cua OU - lay bang:
+#   aws organizations list-organizational-units-for-parent \
+#     --parent-id <root-id> --query 'OrganizationalUnits[].[Name,Arn]'
+#
+# Phai khai tay vi OU do Control Tower tao, khong phai Terraform,
+# nen khong tham chieu bang resource duoc.
+control_target_ou_arns = {}
+
+# control_target_ou_arns = {
+#   "Workloads" = "arn:aws:organizations::111111111111:ou/o-xxxx/ou-yyyy-zzzzzzzz"
+# }
