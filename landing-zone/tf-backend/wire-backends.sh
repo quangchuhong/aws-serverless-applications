@@ -36,6 +36,42 @@ if [ ! -d .terraform ]; then
 fi
 
 ########################################
+# PHUC HOI: backend.tf mat nhung state van o S3
+#
+# Xay ra khi backend.tf bi xoa (no gitignore nen git reset/clean hay
+# quet phai), trong khi .terraform van nho backend s3.
+#
+# Vong lap: script can DOC STATE de sinh backend.tf, ma doc state lai
+# CAN backend.tf. Go bang cach dung backend.hcl da co san - no cung
+# gitignore nhung nam o cho khac, thuong con nguyen.
+########################################
+
+BACKEND_TF_BODY='# File nay do wire-backends.sh sinh ra - dung sua tay, dung commit.
+# Gia tri that nam trong backend.hcl:
+#   terraform init -backend-config=backend.hcl
+
+terraform {
+  backend "s3" {}
+}'
+
+if [ ! -f backend.tf ] && [ -f backend.hcl ]; then
+  if ! terraform state list >/dev/null 2>&1; then
+    amber "backend.tf khong co nhung backend.hcl van con, va state doc"
+    amber "khong duoc -> nhieu kha nang backend.tf bi xoa nham."
+    echo
+    echo "$BACKEND_TF_BODY" > backend.tf
+    green "Da dung lai backend.tf."
+    echo
+    echo "Chay lai hai lenh nay roi goi lai script:"
+    echo
+    echo "  terraform init -reconfigure -backend-config=backend.hcl"
+    echo "  ./wire-backends.sh"
+    echo
+    exit 0
+  fi
+fi
+
+########################################
 # Phan biet ba tinh huong khac nhau, thay vi bao chung mot cau.
 #
 # 1. State rong          -> chua apply (hoac apply that bai)
@@ -139,18 +175,6 @@ while read -r layer; do
 #
 $body"
 
-  # backend.tf: khai backend rong. Tach khoi versions.tf (duoc git
-  # track) de bat backend khong con la mot thay doi phai commit.
-  # Khong co file nay -> Terraform dung state local, dung cai can cho
-  # lan chay dau tien.
-  backend_tf="# File nay do wire-backends.sh sinh ra - dung sua tay, dung commit.
-# Gia tri that nam trong backend.hcl:
-#   terraform init -backend-config=backend.hcl
-
-terraform {
-  backend \"s3\" {}
-}"
-
   if [ "$DRY_RUN" = "1" ]; then
     echo "--- $layer/backend.hcl ---"
     echo "$content"
@@ -165,8 +189,8 @@ terraform {
     green "ghi        $layer/backend.hcl"
   fi
 
-  if [ ! -f "$target_dir/backend.tf" ] || [ "$(cat "$target_dir/backend.tf")" != "$backend_tf" ]; then
-    echo "$backend_tf" > "$target_dir/backend.tf"
+  if [ ! -f "$target_dir/backend.tf" ] || [ "$(cat "$target_dir/backend.tf")" != "$BACKEND_TF_BODY" ]; then
+    echo "$BACKEND_TF_BODY" > "$target_dir/backend.tf"
     green "ghi        $layer/backend.tf"
   fi
 

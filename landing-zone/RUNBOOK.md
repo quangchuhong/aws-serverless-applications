@@ -431,6 +431,8 @@ Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đ
 | `InvalidInputException: unrecognized service principal` | Một service principal sai làm hỏng cả resource, và AWS **không nói cái nào**. Bỏ bớt `aws_service_access_principals` về danh sách tối thiểu, apply lại, rồi thêm dần |
 | `AlreadyInOrganizationException` sau khi apply lỗi | Org **đã được tạo** trước khi bước sau lỗi. `terraform import aws_organizations_organization.this[0] <org-id>` |
 | `Backend initialization required` | Có `backend.tf` nhưng layer chưa apply lần nào — `rm backend.tf`, `init -reconfigure`, apply, rồi `./wire-backends.sh` |
+| `Unsetting the previously set backend "s3"` | `backend.tf` bị xoá (nó gitignore nên `git reset --hard`/`clean` hay quét phải) trong khi `.terraform` vẫn nhớ s3. **State vẫn an toàn trong S3.** Chạy `./wire-backends.sh` — script tự dựng lại `backend.tf` từ `backend.hcl` — rồi `terraform init -reconfigure -backend-config=backend.hcl` |
+| `-backend-config was used without a "backend" block` | Thiếu `backend.tf`. Như trên |
 | `terraform init` hỏi nhập bucket/key | Có `backend.tf` mà thiếu `-backend-config=backend.hcl` |
 | `tolist(...)[0]` index out of range | Chưa bật Identity Center (giai đoạn 4) |
 | `EMAIL_ALREADY_EXISTS` | Email đã dùng cho account khác, kể cả đã đóng |
