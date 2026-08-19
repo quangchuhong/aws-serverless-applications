@@ -125,6 +125,8 @@ Chỉ khi `plan` ra **"No changes"** mới xoá state local:
 rm terraform.tfstate terraform.tfstate.backup
 ```
 
+> **Dấu hiệu tainted:** plan in `# ... is tainted, so must be replaced` và số resource được tạo **ít bất thường** — vì thứ phụ thuộc vào nó (OU phụ thuộc `roots[0].id`) trở thành *known after apply* nên không plan được. `untaint` xong là hiện đủ.
+
 > **DỪNG nếu** `plan` ra diff hoặc `state list` rỗng. State chưa chuyển đủ — `terraform.tfstate.backup` là bản sao lưu duy nhất, đừng xoá.
 
 > **Năm layer còn lại chưa apply bao giờ** nên không có state để chuyển. Khi dùng tới chúng chỉ cần `terraform init -backend-config=backend.hcl`, **không** có `-migrate-state`. `wire-backends.sh` tự phân biệt hai nhóm này.
@@ -431,7 +433,8 @@ Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đ
 | `DuplicateOrganizationalUnitException` | OU trùng tên — cần `terraform import` |
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
 | `InvalidInputException: unrecognized service principal` | Một service principal sai làm hỏng cả resource, và AWS **không nói cái nào**. Bỏ bớt `aws_service_access_principals` về danh sách tối thiểu, apply lại, rồi thêm dần |
-| `Instance cannot be destroyed` trên `aws_organizations_organization` | Đổi `create_organization` từ `true` về `false` sau khi đã apply — Terraform hiểu là xoá org. Đặt lại `true`. Muốn chuyển sang chỉ đọc thật thì `terraform state rm 'aws_organizations_organization.this[0]'` trước |
+| `is tainted, so must be replaced` + `Instance cannot be destroyed` | Apply trước lỗi giữa chừng → Terraform đánh dấu tainted. Resource thật vẫn tốt (refresh được): `terraform untaint '"'"'aws_organizations_organization.this[0]'"'"'` rồi plan lại. **Đây là nguyên nhân hay gặp hơn cả biến bên dưới** |
+| `Instance cannot be destroyed` (không có chữ tainted) trên `aws_organizations_organization` | Đổi `create_organization` từ `true` về `false` sau khi đã apply — Terraform hiểu là xoá org. Đặt lại `true`. Muốn chuyển sang chỉ đọc thật thì `terraform state rm 'aws_organizations_organization.this[0]'` trước |
 | `AlreadyInOrganizationException` sau khi apply lỗi | Org **đã được tạo** trước khi bước sau lỗi. `terraform import aws_organizations_organization.this[0] <org-id>` |
 | `Backend initialization required` | Có `backend.tf` nhưng layer chưa apply lần nào — `rm backend.tf`, `init -reconfigure`, apply, rồi `./wire-backends.sh` |
 | `Unsetting the previously set backend "s3"` | `backend.tf` bị xoá (nó gitignore nên `git reset --hard`/`clean` hay quét phải) trong khi `.terraform` vẫn nhớ s3. **State vẫn an toàn trong S3.** Chạy `./wire-backends.sh` — script tự dựng lại `backend.tf` từ `backend.hcl` — rồi `terraform init -reconfigure -backend-config=backend.hcl` |
