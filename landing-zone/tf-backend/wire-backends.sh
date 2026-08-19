@@ -165,11 +165,53 @@ echo
 amber "backend.hcl chua ten bucket - KHONG phai bi mat, nhung cung"
 amber "khong can commit. Da co trong .gitignore."
 echo
-echo "Buoc tiep theo, lam TUNG layer mot va doc ky truoc khi dong y:"
+########################################
+# HAI TRUONG HOP KHAC NHAU - dung nham la mat cong
+#
+#   Layer DA apply       -> can -migrate-state (chuyen state cu len S3)
+#   Layer CHUA apply bao gio -> chi can init, khong co gi de chuyen
+#
+# Phan biet bang su ton tai cua file state local.
+########################################
+
+echo "Buoc tiep theo - HAI NHOM khac nhau:"
 echo
+
+has_state=""; no_state=""
+
 while read -r layer; do
   [ -d "$REPO_ROOT/$layer" ] || continue
-  echo "  cd $layer && terraform init -migrate-state -backend-config=backend.hcl"
+  if [ -f "$REPO_ROOT/$layer/terraform.tfstate" ]; then
+    has_state="$has_state$layer"$'\n'
+  else
+    no_state="$no_state$layer"$'\n'
+  fi
 done < <(echo "$configs" | jq -r 'keys[]')
-echo
-echo "Sau moi lan: terraform state list   (phai con nguyen resource)"
+
+if [ -n "$has_state" ]; then
+  green "  Da co state local -> CAN chuyen len S3:"
+  echo
+  while read -r l; do
+    [ -z "$l" ] && continue
+    echo "    cd $l && terraform init -migrate-state -backend-config=backend.hcl"
+  done <<<"$has_state"
+  echo
+  amber "  Lam TUNG layer mot. Sau moi lan:"
+  echo "    terraform state list    # phai con nguyen resource"
+  echo "    terraform plan          # PHAI ra \"No changes\""
+  echo
+  amber "  Ra diff thi DUNG LAI - state chua chuyen du. Dung apply."
+  amber "  Chi xoa terraform.tfstate SAU KHI plan da ra \"No changes\"."
+  echo
+fi
+
+if [ -n "$no_state" ]; then
+  grey "  Chua apply bao gio -> khong co gi de chuyen, chi init:"
+  echo
+  while read -r l; do
+    [ -z "$l" ] && continue
+    echo "    cd $l && terraform init -backend-config=backend.hcl"
+  done <<<"$no_state"
+  echo
+  grey "  Khong dung -migrate-state cho nhom nay."
+fi

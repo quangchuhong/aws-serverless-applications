@@ -103,12 +103,24 @@ aws s3 ls | grep tfstate
 ```bash
 terraform init -migrate-state -backend-config=backend.hcl
 #   -> hoi "copy existing state?" -> yes
+```
 
-terraform state list             # PHAI con nguyen resource
+Kiểm tra **trước khi xoá** — đừng gõ cả ba lệnh một lượt:
+
+```bash
+terraform state list        # phai con nguyen resource
+terraform plan              # PHAI ra "No changes"  <- bang chung that
+```
+
+Chỉ khi `plan` ra **"No changes"** mới xoá state local:
+
+```bash
 rm terraform.tfstate terraform.tfstate.backup
 ```
 
-> **DỪNG nếu** `terraform state list` ra rỗng. State chưa chuyển — khôi phục từ `terraform.tfstate.backup` rồi thử lại.
+> **DỪNG nếu** `plan` ra diff hoặc `state list` rỗng. State chưa chuyển đủ — `terraform.tfstate.backup` là bản sao lưu duy nhất, đừng xoá.
+
+> **Năm layer còn lại chưa apply bao giờ** nên không có state để chuyển. Khi dùng tới chúng chỉ cần `terraform init -backend-config=backend.hcl`, **không** có `-migrate-state`. `wire-backends.sh` tự phân biệt hai nhóm này.
 
 ☑ Xong giai đoạn 1 khi: `terraform state list` còn đủ resource và không còn file state local.
 
