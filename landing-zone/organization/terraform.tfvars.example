@@ -13,15 +13,26 @@ cost_center = "CC-0000"
 owner       = "platform@example.com"
 
 ########################################
-# 1. Organization da co chua
+# 1. Terraform co quan ly organization khong
 #
-# Kiem tra truoc khi chon:
+# LAN DAU, kiem tra truoc khi chon:
 #   aws organizations describe-organization
 #
-# Ra ket qua  -> de false (Terraform chi doc)
-# Bao loi     -> dat true (Terraform tao moi)
+#   Bao loi     -> dat true  (chua co, Terraform tao moi)
+#   Ra ket qua  -> de false  (da co, Terraform chi doc)
 #
 # Da co ma dat true = AlreadyInOrganizationException.
+#
+# ---------------------------------------------------------------
+# SAU KHI DA APPLY VOI true THI GIU true MAI MAI.
+#
+# Doi ve false luc organization da nam trong state = Terraform len
+# ke hoach XOA organization (count 1 -> 0). prevent_destroy se chan
+# lai voi "Instance cannot be destroyed" - do la chan dung.
+#
+# That su muon chuyen sang chi doc thi go khoi state truoc:
+#   terraform state rm 'aws_organizations_organization.this[0]'
+# ---------------------------------------------------------------
 ########################################
 
 create_organization = false

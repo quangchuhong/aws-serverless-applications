@@ -25,17 +25,40 @@ variable "owner" {
 
 variable "create_organization" {
   description = <<-EOT
-    false = Organization DA CO, Terraform chi doc (data source).
-    true  = Terraform tao Organization moi.
+    Ten bien de gay hieu nham. Y nghia THAT:
 
-    QUAN TRONG: neu account cua ban da bat Organizations roi ma dat
-    true thi apply se loi AlreadyInOrganizationException.
+      true  = Terraform QUAN LY resource organization
+              (tao no neu chua co, va giu quyen quan ly ve sau)
+      false = Terraform CHI DOC organization qua data source
 
-    Da co san va muon Terraform quan ly thi phai IMPORT:
-      terraform import aws_organizations_organization.this o-xxxxxxxxxx
+    ---------------------------------------------------------------
+    MOT LAN DAT TRUE VA APPLY XONG THI PHAI GIU TRUE MAI MAI.
 
-    Kiem tra hien trang:
+    Doi ve false khi organization da nam trong state nghia la count
+    tu 1 xuong 0 -> Terraform hieu la "khong quan nua, XOA DI" va se
+    len ke hoach DESTROY organization.
+
+    Xoa organization = moi account con bi tach ra. Vi vay resource co
+    prevent_destroy, va plan se dung lai voi:
+      "Instance cannot be destroyed"
+
+    Do la chan dung, khong phai loi. Cach sua: dat lai true.
+
+    Neu THAT SU muon chuyen sang che do chi doc, khong duoc doi bien
+    khong. Phai go khoi state TRUOC - lenh nay khong dung toi
+    organization that:
+      terraform state rm 'aws_organizations_organization.this[0]'
+    roi moi dat create_organization = false.
+    ---------------------------------------------------------------
+
+    LAN DAU chon the nao:
       aws organizations describe-organization
+
+      Bao AWSOrganizationsNotInUseException -> true  (chua co, tao moi)
+      Ra thong tin org                       -> false (da co, chi doc)
+
+    Da co san ma van muon Terraform quan ly thi dat true VA import:
+      terraform import 'aws_organizations_organization.this[0]' o-xxxxxxxxxx
   EOT
   type        = bool
   default     = false

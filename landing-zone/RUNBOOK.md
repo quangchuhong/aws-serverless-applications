@@ -146,6 +146,8 @@ Sửa:
 
 ```hcl
 create_organization = false        # hoac true, tuy giai doan 0
+                                   # DAT ROI THI GIU NGUYEN - doi ve false
+                                   # sau khi apply = Terraform doi xoa org
 allowed_regions     = ["ap-southeast-1", "us-east-1"]
 network_account_id  = ""           # chua co account network thi de rong
 
@@ -429,6 +431,7 @@ Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đ
 | `DuplicateOrganizationalUnitException` | OU trùng tên — cần `terraform import` |
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
 | `InvalidInputException: unrecognized service principal` | Một service principal sai làm hỏng cả resource, và AWS **không nói cái nào**. Bỏ bớt `aws_service_access_principals` về danh sách tối thiểu, apply lại, rồi thêm dần |
+| `Instance cannot be destroyed` trên `aws_organizations_organization` | Đổi `create_organization` từ `true` về `false` sau khi đã apply — Terraform hiểu là xoá org. Đặt lại `true`. Muốn chuyển sang chỉ đọc thật thì `terraform state rm 'aws_organizations_organization.this[0]'` trước |
 | `AlreadyInOrganizationException` sau khi apply lỗi | Org **đã được tạo** trước khi bước sau lỗi. `terraform import aws_organizations_organization.this[0] <org-id>` |
 | `Backend initialization required` | Có `backend.tf` nhưng layer chưa apply lần nào — `rm backend.tf`, `init -reconfigure`, apply, rồi `./wire-backends.sh` |
 | `Unsetting the previously set backend "s3"` | `backend.tf` bị xoá (nó gitignore nên `git reset --hard`/`clean` hay quét phải) trong khi `.terraform` vẫn nhớ s3. **State vẫn an toàn trong S3.** Chạy `./wire-backends.sh` — script tự dựng lại `backend.tf` từ `backend.hcl` — rồi `terraform init -reconfigure -backend-config=backend.hcl` |
