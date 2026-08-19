@@ -54,6 +54,8 @@ Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code ch�
 
 Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
+**Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
+
 | Layer | Nội dung | Chi phí |
 |---|---|---|
 | **[`landing-zone/tf-backend`](./landing-zone/tf-backend/)** | **Dựng đầu tiên.** S3 + khoá state cho mọi layer thường trực | ~$0 |

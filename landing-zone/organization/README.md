@@ -63,6 +63,8 @@ Còn nhiều chỗ để thêm.
 
 ## Chạy
 
+> **Lần đầu dựng cả LZ?** Đọc [RUNBOOK.md](../RUNBOOK.md) — layer này là giai đoạn 2 trong chuỗi 7 giai đoạn, và có vài bước thủ công trước/sau nó.
+
 ```bash
 cd landing-zone/organization
 cp terraform.tfvars.example terraform.tfvars
