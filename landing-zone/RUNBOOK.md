@@ -421,6 +421,8 @@ Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đ
 | `POLICY_TYPE_NOT_ENABLED` | `aws organizations enable-policy-type --root-id <id> --policy-type SERVICE_CONTROL_POLICY` |
 | `DuplicateOrganizationalUnitException` | OU trùng tên — cần `terraform import` |
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
+| `InvalidInputException: unrecognized service principal` | Một service principal sai làm hỏng cả resource, và AWS **không nói cái nào**. Bỏ bớt `aws_service_access_principals` về danh sách tối thiểu, apply lại, rồi thêm dần |
+| `AlreadyInOrganizationException` sau khi apply lỗi | Org **đã được tạo** trước khi bước sau lỗi. `terraform import aws_organizations_organization.this[0] <org-id>` |
 | `Backend initialization required` | Bỏ comment `backend "s3" {}` trước khi apply — comment lại, `init -reconfigure`, apply, rồi mới migrate |
 | `terraform init` hỏi nhập bucket/key | Như trên — backend block đang bật mà chưa có `backend.hcl` |
 | `tolist(...)[0]` index out of range | Chưa bật Identity Center (giai đoạn 4) |

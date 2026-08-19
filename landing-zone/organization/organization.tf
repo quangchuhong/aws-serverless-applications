@@ -22,24 +22,17 @@ resource "aws_organizations_organization" "this" {
   # Cho phep cac dich vu hoat dong o pham vi to chuc. Thieu mot dong
   # o day thi dich vu tuong ung khong bat duoc delegated admin hay
   # khong doc duoc cay OU.
-  aws_service_access_principals = [
-    "cloudtrail.amazonaws.com",
-    "config.amazonaws.com",
-
-    # HAI service principal khac nhau va DEU CAN.
-    # Thieu dong duoi thi aws_config_organization_managed_rule bao
-    # AccessDeniedException ma khong noi ro thieu gi.
-    "config-multiaccountsetup.amazonaws.com",
-    "guardduty.amazonaws.com",
-    "securityhub.amazonaws.com",
-    "access-analyzer.amazonaws.com",
-    "sso.amazonaws.com",
-    "ram.amazonaws.com",
-    "member.org.stacksets.cloudformation.amazonaws.com",
-    "backup.amazonaws.com",
-    "malware-protection.guardduty.amazonaws.com",
-    "reports.billing.amazonaws.com",
-  ]
+  #
+  # CANH BAO: CHI MOT service principal sai la HONG CA RESOURCE.
+  # AWS tra ve InvalidInputException "You specified an unrecognized
+  # service principal" va khong noi CAI NAO sai. Organization co the
+  # da duoc tao roi moi loi o buoc nay - khi do phai import.
+  #
+  # => Chi them principal khi da kiem chung. Danh sach hop le:
+  #      https://docs.aws.amazon.com/organizations/latest/userguide/orgs_integrate_services_list.html
+  #    hoac xem cai dang bat:
+  #      aws organizations list-aws-service-access-for-organization
+  aws_service_access_principals = var.aws_service_access_principals
 
   # Xoa organization = moi account con bi tach ra, va cac dich vu
   # pham vi to chuc (CloudTrail org trail, SCP, RAM share) ngung

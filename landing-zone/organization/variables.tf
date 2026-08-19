@@ -41,6 +41,39 @@ variable "create_organization" {
   default     = false
 }
 
+variable "aws_service_access_principals" {
+  description = <<-EOT
+    Dich vu duoc phep hoat dong o pham vi to chuc.
+
+    CANH BAO: CHI MOT principal sai la HONG CA RESOURCE. AWS tra ve
+      InvalidInputException: You specified an unrecognized service principal
+    va KHONG noi cai nao sai. To chuc co the da duoc tao truoc khi
+    buoc nay loi -> lan apply sau bao AlreadyInOrganizationException
+    va phai import.
+
+    Danh sach mac dinh duoi day chi gom nhung principal can cho LZ nay.
+    Truoc khi them, kiem chung tai:
+      https://docs.aws.amazon.com/organizations/latest/userguide/orgs_integrate_services_list.html
+
+    Xem cai dang bat trong to chuc hien tai:
+      aws organizations list-aws-service-access-for-organization
+  EOT
+  type        = list(string)
+
+  default = [
+    "cloudtrail.amazonaws.com",               # org trail
+    "config.amazonaws.com",                   # Config aggregator
+    "config-multiaccountsetup.amazonaws.com", # organization managed rule
+    "guardduty.amazonaws.com",
+    "securityhub.amazonaws.com",
+    "access-analyzer.amazonaws.com",
+    "sso.amazonaws.com",                                 # Identity Center
+    "ram.amazonaws.com",                                 # share TGW cross-account
+    "member.org.stacksets.cloudformation.amazonaws.com", # StackSet auto-deploy
+    "backup.amazonaws.com",
+  ]
+}
+
 ########################################
 # 2. Cay OU
 #
