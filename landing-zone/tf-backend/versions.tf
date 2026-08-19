@@ -21,7 +21,29 @@ terraform {
   # la mat quyen quan ly bucket state cua ca to chuc.
   ########################################
 
-  # backend "s3" {}   <- bo comment o BUOC 3, khong phai bay gio
+  #####################################################################
+  #                                                                   #
+  #   DUNG BO COMMENT DONG DUOI KHI CHUA CHAY terraform apply         #
+  #                                                                   #
+  #   Bo som -> terraform init doi ban nhap bucket name, va moi lenh  #
+  #   sau do bao "Backend initialization required".                   #
+  #                                                                   #
+  #   Bucket duoc tao BOI CHINH layer nay. Chua apply thi no chua     #
+  #   ton tai.                                                        #
+  #                                                                   #
+  #   Thu tu dung:                                                    #
+  #     1. terraform init          (state local)                      #
+  #     2. terraform apply         <- bucket ra doi o day             #
+  #     3. ./wire-backends.sh      (sinh backend.hcl)                 #
+  #     4. BO COMMENT dong duoi                                       #
+  #     5. terraform init -migrate-state -backend-config=backend.hcl  #
+  #                                                                   #
+  #   Li o buoc nao thi: comment lai, terraform init -reconfigure,    #
+  #   roi lam lai tu buoc 2. Khong mat gi.                            #
+  #                                                                   #
+  #####################################################################
+
+  # backend "s3" {}
 }
 
 provider "aws" {

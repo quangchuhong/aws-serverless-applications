@@ -45,6 +45,30 @@ fi
 echo "Kiem tra state..."
 
 if ! state_out=$(terraform state list 2>&1); then
+
+  # Tinh huong rieng, va la tinh huong hay gap nhat: nguoi dung bo
+  # comment backend "s3" {} TRUOC khi apply. Bucket chua ton tai ma
+  # da bao Terraform cat state vao do.
+  if echo "$state_out" | grep -q "Backend initialization required"; then
+    red "Da bo comment  backend \"s3\" {}  QUA SOM."
+    echo
+    echo "Vong lap con ga - qua trung: layer nay TAO RA bucket chua state,"
+    echo "nen lan dau BAT BUOC chay bang state LOCAL."
+    echo
+    amber "Cach sua (khong mat gi - chua co state nao de mat):"
+    echo
+    echo "  1. Comment lai dong nay trong versions.tf:"
+    echo "         # backend \"s3\" {}"
+    echo
+    echo "  2. terraform init -reconfigure"
+    echo "  3. terraform apply"
+    echo "  4. ./wire-backends.sh"
+    echo "  5. GIO moi bo comment, roi:"
+    echo "         terraform init -migrate-state -backend-config=backend.hcl"
+    echo
+    exit 1
+  fi
+
   red "Khong doc duoc state. Terraform bao:"
   echo
   echo "$state_out" | sed 's/^/    /'
