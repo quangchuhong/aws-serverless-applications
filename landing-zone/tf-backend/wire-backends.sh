@@ -28,20 +28,66 @@ for cmd in terraform jq; do
   command -v "$cmd" >/dev/null 2>&1 || { red "Thieu $cmd"; exit 1; }
 done
 
-if [ ! -f terraform.tfstate ] && [ ! -d .terraform ]; then
-  red "Chua apply tf-backend."
-  echo "  terraform init && terraform apply"
+if [ ! -d .terraform ]; then
+  red "Chua chay terraform init trong thu muc nay."
+  echo "  terraform init"
   exit 1
 fi
 
-echo "Doc output tu tf-backend..."
-if ! configs=$(terraform output -json backend_hcl 2>/dev/null); then
-  red "Khong doc duoc output backend_hcl. Da apply chua?"
+########################################
+# Phan biet ba tinh huong khac nhau, thay vi bao chung mot cau.
+#
+# 1. State rong          -> chua apply (hoac apply that bai)
+# 2. Co state, khong co output -> apply mot phan
+# 3. Co output           -> chay tiep binh thuong
+########################################
+
+echo "Kiem tra state..."
+
+if ! state_out=$(terraform state list 2>&1); then
+  red "Khong doc duoc state. Terraform bao:"
+  echo
+  echo "$state_out" | sed 's/^/    /'
+  exit 1
+fi
+
+if [ -z "$state_out" ]; then
+  red "State RONG - chua co resource nao."
+  echo
+  echo "Nghia la terraform apply chua chay, hoac chay that bai giua chung."
+  echo
+  echo "  terraform plan     # xem se tao gi"
+  echo "  terraform apply    # tao that"
+  echo
+  echo "Roi quay lai chay ./wire-backends.sh"
+  exit 1
+fi
+
+echo "  $(echo "$state_out" | wc -l | tr -d ' ') resource trong state"
+echo
+echo "Doc output backend_hcl..."
+
+# KHONG nuot stderr - neu loi thi phai thay Terraform noi gi
+if ! configs=$(terraform output -json backend_hcl 2>&1); then
+  red "Khong doc duoc output backend_hcl. Terraform bao:"
+  echo
+  echo "$configs" | sed 's/^/    /'
+  echo
+  echo "State co resource nhung khong co output nay - thuong la apply"
+  echo "dung giua chung. Chay lai:"
+  echo
+  echo "  terraform apply"
+  exit 1
+fi
+
+if ! echo "$configs" | jq empty >/dev/null 2>&1; then
+  red "Output khong phai JSON hop le:"
+  echo "$configs" | head -5 | sed 's/^/    /'
   exit 1
 fi
 
 if [ "$(echo "$configs" | jq 'length')" = "0" ]; then
-  red "Output rong."
+  red "Output backend_hcl rong - local.layers khong co layer nao."
   exit 1
 fi
 
