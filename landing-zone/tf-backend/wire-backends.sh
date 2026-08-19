@@ -23,6 +23,7 @@ DRY_RUN=0
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
 green() { printf '\033[32m%s\033[0m\n' "$*"; }
 amber() { printf '\033[33m%s\033[0m\n' "$*"; }
+grey()  { printf '\033[90m%s\033[0m\n' "$*"; }
 
 for cmd in terraform jq; do
   command -v "$cmd" >/dev/null 2>&1 || { red "Thieu $cmd"; exit 1; }
@@ -50,21 +51,18 @@ if ! state_out=$(terraform state list 2>&1); then
   # comment backend "s3" {} TRUOC khi apply. Bucket chua ton tai ma
   # da bao Terraform cat state vao do.
   if echo "$state_out" | grep -q "Backend initialization required"; then
-    red "Da bo comment  backend \"s3\" {}  QUA SOM."
+    red "Co backend.tf nhung chua apply lan nao."
     echo
     echo "Vong lap con ga - qua trung: layer nay TAO RA bucket chua state,"
     echo "nen lan dau BAT BUOC chay bang state LOCAL."
     echo
     amber "Cach sua (khong mat gi - chua co state nao de mat):"
     echo
-    echo "  1. Comment lai dong nay trong versions.tf:"
-    echo "         # backend \"s3\" {}"
-    echo
-    echo "  2. terraform init -reconfigure"
-    echo "  3. terraform apply"
-    echo "  4. ./wire-backends.sh"
-    echo "  5. GIO moi bo comment, roi:"
-    echo "         terraform init -migrate-state -backend-config=backend.hcl"
+    echo "  rm backend.tf"
+    echo "  terraform init -reconfigure"
+    echo "  terraform apply"
+    echo "  ./wire-backends.sh          # sinh lai backend.tf"
+    echo "  terraform init -migrate-state -backend-config=backend.hcl"
     echo
     exit 1
   fi
@@ -141,6 +139,18 @@ while read -r layer; do
 #
 $body"
 
+  # backend.tf: khai backend rong. Tach khoi versions.tf (duoc git
+  # track) de bat backend khong con la mot thay doi phai commit.
+  # Khong co file nay -> Terraform dung state local, dung cai can cho
+  # lan chay dau tien.
+  backend_tf="# File nay do wire-backends.sh sinh ra - dung sua tay, dung commit.
+# Gia tri that nam trong backend.hcl:
+#   terraform init -backend-config=backend.hcl
+
+terraform {
+  backend \"s3\" {}
+}"
+
   if [ "$DRY_RUN" = "1" ]; then
     echo "--- $layer/backend.hcl ---"
     echo "$content"
@@ -154,6 +164,12 @@ $body"
     echo "$content" > "$target"
     green "ghi        $layer/backend.hcl"
   fi
+
+  if [ ! -f "$target_dir/backend.tf" ] || [ "$(cat "$target_dir/backend.tf")" != "$backend_tf" ]; then
+    echo "$backend_tf" > "$target_dir/backend.tf"
+    green "ghi        $layer/backend.tf"
+  fi
+
   written=$((written + 1))
 done < <(echo "$configs" | jq -r 'keys[]')
 

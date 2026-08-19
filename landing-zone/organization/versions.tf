@@ -8,10 +8,8 @@ terraform {
     }
   }
 
-  # Xem landing-zone/tf-backend. Bo comment sau khi da chay
-  # ./wire-backends.sh va them "landing-zone/organization" vao
-  # local.layers cua tf-backend.
-  # backend "s3" {}
+  # Backend nam trong backend.tf, do landing-zone/tf-backend/wire-backends.sh
+  # sinh ra va nam trong .gitignore. Khong co file do -> state local.
 }
 
 ########################################

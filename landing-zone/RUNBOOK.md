@@ -89,16 +89,23 @@ aws s3 ls | grep tfstate
 
 ### Chuyển chính layer này vào bucket vừa tạo
 
-> **Chỉ làm phần này SAU KHI `terraform apply` đã xong.** Bỏ comment `backend "s3" {}` sớm là lỗi hay gặp nhất ở giai đoạn này: bucket do **chính layer này** tạo ra, chưa apply thì nó chưa tồn tại, và mọi lệnh sau đó sẽ báo `Backend initialization required`.
->
-> Lỡ làm sớm rồi thì: comment lại → `terraform init -reconfigure` → `terraform apply`. Không mất gì, vì chưa có state nào để mất.
+> **Chỉ làm phần này SAU KHI `terraform apply` đã xong.** Bucket do **chính layer này** tạo ra — chưa apply thì nó chưa tồn tại.
 
 ```bash
 ./wire-backends.sh --dry-run     # xem truoc
-./wire-backends.sh               # ghi backend.hcl cho moi layer
+./wire-backends.sh               # sinh backend.hcl + backend.tf cho moi layer
 ```
 
-**Giờ mới** bỏ comment dòng `backend "s3" {}` trong `versions.tf`, rồi:
+Script sinh **hai** file mỗi layer, cả hai đều nằm trong `.gitignore`:
+
+| File | Nội dung |
+|---|---|
+| `backend.tf` | Khai `backend "s3" {}` rỗng — bật remote state |
+| `backend.hcl` | Giá trị thật: bucket, key, region, khoá |
+
+> Không phải sửa file nào được git track. Thư mục chưa có `backend.tf` thì Terraform tự dùng state local — đúng cái cần cho lần chạy đầu.
+
+Rồi:
 
 ```bash
 terraform init -migrate-state -backend-config=backend.hcl
@@ -423,8 +430,8 @@ Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đ
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
 | `InvalidInputException: unrecognized service principal` | Một service principal sai làm hỏng cả resource, và AWS **không nói cái nào**. Bỏ bớt `aws_service_access_principals` về danh sách tối thiểu, apply lại, rồi thêm dần |
 | `AlreadyInOrganizationException` sau khi apply lỗi | Org **đã được tạo** trước khi bước sau lỗi. `terraform import aws_organizations_organization.this[0] <org-id>` |
-| `Backend initialization required` | Bỏ comment `backend "s3" {}` trước khi apply — comment lại, `init -reconfigure`, apply, rồi mới migrate |
-| `terraform init` hỏi nhập bucket/key | Như trên — backend block đang bật mà chưa có `backend.hcl` |
+| `Backend initialization required` | Có `backend.tf` nhưng layer chưa apply lần nào — `rm backend.tf`, `init -reconfigure`, apply, rồi `./wire-backends.sh` |
+| `terraform init` hỏi nhập bucket/key | Có `backend.tf` mà thiếu `-backend-config=backend.hcl` |
 | `tolist(...)[0]` index out of range | Chưa bật Identity Center (giai đoạn 4) |
 | `EMAIL_ALREADY_EXISTS` | Email đã dùng cho account khác, kể cả đã đóng |
 | Đăng nhập portal không thấy account nào | Quên cập nhật `accounts_by_scope` rồi apply |

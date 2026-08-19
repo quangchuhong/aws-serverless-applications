@@ -8,18 +8,8 @@ terraform {
     }
   }
 
-  ########################################
-  # Remote state
-  #
-  # Khai rong o day, gia tri that nam trong backend.hcl - file do
-  # landing-zone/tf-backend/wire-backends.sh sinh ra.
-  #
-  #   cd landing-zone/tf-backend && ./wire-backends.sh
-  #   cd landing-zone/permission-sets
-  #   terraform init -migrate-state -backend-config=backend.hcl
-  ########################################
-
-  # backend "s3" {}
+  # Backend nam trong backend.tf, do landing-zone/tf-backend/wire-backends.sh
+  # sinh ra va nam trong .gitignore. Khong co file do -> state local.
 }
 
 ########################################

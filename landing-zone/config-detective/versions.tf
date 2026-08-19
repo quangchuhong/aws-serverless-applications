@@ -12,7 +12,8 @@ terraform {
     }
   }
 
-  # backend "s3" {}
+  # Backend nam trong backend.tf, do landing-zone/tf-backend/wire-backends.sh
+  # sinh ra va nam trong .gitignore. Khong co file do -> state local.
 }
 
 ########################################

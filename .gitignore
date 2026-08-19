@@ -36,7 +36,12 @@ terraform.tfvars
 
 # Do wire-backends.sh sinh ra. Khong phai bi mat, nhung khac nhau
 # theo tung nguoi/moi truong nen khong commit.
+#
+# backend.tf tach khoi versions.tf CO Y: bat remote state khong con
+# la mot thay doi phai commit, va lan clone dau tien tu dong dung
+# state local - dung cai can cho vong lap con ga - qua trung.
 backend.hcl
+backend.tf
 
 # Plan file - co the chua gia tri nhay cam
 *.tfplan
