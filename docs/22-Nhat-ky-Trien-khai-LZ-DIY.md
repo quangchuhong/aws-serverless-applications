@@ -1,0 +1,246 @@
+# Nhật ký triển khai LZ bản DIY
+
+Ví dụ 22: Ghi lại **lần dựng thật đầu tiên** — làm gì, vấp ở đâu, sửa thế nào.
+
+> Khác với [RUNBOOK](../landing-zone/RUNBOOK.md) (*làm gì, theo thứ tự nào*) và các doc thiết kế (*vì sao*). File này ghi **cái đã thật sự xảy ra** — thứ mà không tài liệu thiết kế nào bắt được, vì phải chạy mới biết.
+>
+> Mọi lỗi dưới đây đều đã sửa và push. Cột "Commit" là bằng chứng.
+
+---
+
+## 0. Kết quả
+
+Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm chứng được.
+
+| Thành phần | Kết quả |
+|---|---|
+| Organization | `o-tvkzhcq3yh`, root `r-o5ci` |
+| Cây OU | 8 OU — 6 cấp 1 + 2 cấp 2 |
+| SCP | `baseline` (1.316 B) + `region_lock` (709 B), gắn vào root |
+| Remote state | S3 + versioning + Object Lock + khoá DynamoDB, 16 resource |
+| Account con đầu tiên | `lz-network` trong OU `Infrastructure` |
+| Kiểm chứng SCP | 3/3 đúng — 2 chặn, 1 cho qua |
+
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 9 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+
+**Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
+
+---
+
+## 1. Bảng lỗi
+
+Xếp theo thứ tự gặp phải.
+
+| # | Lỗi | Nguyên nhân | Loại | Commit sửa |
+|---|---|---|---|---|
+| 1 | `InvalidInputException: unrecognized service principal` | `reports.billing.amazonaws.com` không hợp lệ | **Lỗi code** | `fd49be8` |
+| 2 | `Backend initialization required` | Bật backend trước khi apply | Thiết kế bẫy người dùng | `977f057`, `5434ea7` |
+| 3 | `Khong doc duoc output backend_hcl` | Script nuốt stderr của Terraform | **Lỗi code** | `1e5a39a` |
+| 4 | Git branch diverged | Bắt sửa file được git track để bật backend | **Lỗi thiết kế** | `5434ea7` |
+| 5 | `Unsetting the previously set backend "s3"` | `backend.tf` mất, state vẫn ở S3 | Vòng lặp thứ hai do #4 | `27dfc65` |
+| 6 | `grey: command not found` | Hàm được gọi mà chưa khai | **Lỗi code** | `5434ea7` |
+| 7 | Script bảo migrate cả 6 layer | Không phân biệt layer đã/chưa có state | Lỗi logic | `df67624`, `15abb10` |
+| 8 | `Instance cannot be destroyed` | `create_organization` đổi `true`→`false` | Tên biến gây hiểu nhầm | `cad896f` |
+| 9 | `is tainted, so must be replaced` | Apply lỗi giữa chừng để lại taint | Hệ quả của #1 | `3410e1a` |
+
+**5/9 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+---
+
+## 2. Bốn lỗi đáng học nhất
+
+### 2.1. Một service principal sai làm hỏng cả resource
+
+```
+Error: enabling AWS Service Access (reports.billing.amazonaws.com):
+InvalidInputException: You specified an unrecognized service principal.
+```
+
+`aws_organizations_organization` nhận một **danh sách** service principal. Sai một phần tử là AWS từ chối cả lời gọi — và **không nói cái nào sai**.
+
+Tệ hơn: **organization đã được tạo** trước khi bước bật service access lỗi. Nên lần plan sau ra `AlreadyInOrganizationException`, và resource bị đánh dấu **tainted** (lỗi #9).
+
+Bài học: với resource có danh sách "bật/tắt dịch vụ", giữ danh sách **tối thiểu và đã kiểm chứng**. Nay nó là biến, sửa `terraform.tfvars` chứ không sửa resource:
+
+```bash
+aws organizations list-aws-service-access-for-organization
+```
+
+### 2.2. Vòng lặp con gà – quả trứng, và cái thứ hai tôi tự tạo ra
+
+Layer `tf-backend` **tạo ra chính cái bucket** nó dùng để cất state. Lần đầu bắt buộc chạy state local.
+
+Ban đầu tôi giải bằng một dòng comment trong `versions.tf`, kèm ghi chú *"bỏ comment ở bước 3"*. Ba thứ hỏng theo:
+
+| | |
+|---|---|
+| Bỏ comment sớm | `terraform init` hỏi nhập bucket, mọi lệnh sau báo `Backend initialization required` |
+| `versions.tf` được git track | Bật backend thành một commit riêng của máy — **branch diverged ngay lần pull đầu** |
+| Clone mới | Có sẵn backend đang bật — sai hoàn toàn cho lần chạy đầu |
+
+Sửa gốc: backend chuyển sang **`backend.tf` do script sinh**, gitignore.
+
+```
+Khong co backend.tf  ->  Terraform tu dung state local
+Chay wire-backends   ->  backend.tf xuat hien  ->  remote state
+```
+
+Thứ tự tự đúng, không phải nhớ. **Không còn file track nào phải sửa.**
+
+Nhưng nó đẻ ra vòng lặp thứ hai: script cần **đọc state** để biết tên bucket, mà đọc state lại **cần `backend.tf`**. Mất `backend.tf` (nó gitignore nên `git reset --hard` quét phải) là không có đường quay lại.
+
+Gỡ bằng cách nhận diện đúng hình dạng — *không có `backend.tf`, còn `backend.hcl`, state đọc không được* — rồi dựng lại từ `backend.hcl`, file sống sót qua cùng những thao tác đó.
+
+> **Bài học chung:** mỗi lần "giải quyết" một phụ thuộc vòng bằng cách dời nó đi, kiểm tra xem có tạo ra vòng mới không.
+
+### 2.3. Thông báo lỗi đoán mò tệ hơn không có thông báo
+
+Script cũ:
+
+```bash
+if ! configs=$(terraform output -json backend_hcl 2>/dev/null); then
+  red "Khong doc duoc output backend_hcl. Da apply chua?"
+```
+
+`2>/dev/null` vứt đi thứ duy nhất hữu ích — Terraform nói gì. Ba tình huống rất khác nhau (state rỗng / apply dở dang / backend chưa init) đều ra **một câu đoán mò**.
+
+Sửa: tách ba nhánh, và **in nguyên văn** Terraform nói gì.
+
+```bash
+if ! state_out=$(terraform state list 2>&1); then
+  if echo "$state_out" | grep -q "Backend initialization required"; then
+    # tinh huong cu the -> huong dan cu the
+```
+
+### 2.4. `create_organization` — tên biến nói dối
+
+Bảng preflight ghi: *`describe-organization` ra kết quả → đặt `false`*. Đúng cho **lần chạy đầu**.
+
+Nhưng sau khi Terraform đã tạo org, đổi về `false` nghĩa là `count` 1 → 0 → **Terraform lên kế hoạch xoá organization**, kéo theo mọi account con ra khỏi tổ chức.
+
+`prevent_destroy` chặn được — đúng lúc, đúng việc. Nhưng thông báo `Instance cannot be destroyed` đọc như lỗi, không như lưới an toàn.
+
+Tên biến sai ngay từ đầu: nó không phải *"có tạo mới không"* mà là **"Terraform có quản lý resource này không"** — và một khi đã `true` thì phải giữ `true`.
+
+> Muốn thật sự chuyển sang chỉ đọc thì gỡ khỏi state trước, **không** đổi biến:
+> ```bash
+> terraform state rm 'aws_organizations_organization.this[0]'
+> ```
+
+---
+
+## 3. Ba lưới an toàn đã cứu bài
+
+Những thứ này chặn đúng lúc — đáng giữ lại trong mọi thiết kế sau:
+
+| Lưới | Chặn gì |
+|---|---|
+| `prevent_destroy` trên organization | Kế hoạch xoá org (2 lần) |
+| `scp_dry_run = true` mặc định | SCP gắn nhầm trước khi kịp đọc nội dung |
+| Kiểm tra **"phải chạy được"** cạnh "phải bị chặn" | Siết quá tay — lỗi im lặng nhất |
+
+Cái thứ ba đáng nói riêng. Ba lệnh kiểm chứng SCP đầu tiên đều là *"phải bị từ chối"*. Nếu chỉ có chúng thì một SCP chặn **quá tay** vẫn "pass" hết. Nên phải luôn có ít nhất một lệnh *"phải chạy được"*:
+
+```bash
+aws ec2 describe-vpcs --region ap-southeast-1 --profile lz-network   # PHAI THANH CONG
+```
+
+---
+
+## 4. Phát hiện không phải lỗi: default VPC
+
+Lệnh kiểm chứng "phải chạy được" lộ ra thứ đáng chú ý:
+
+```json
+"VpcId": "vpc-0f37e24fbed5a5b38",
+"CidrBlock": "172.31.0.0/16",
+"IsDefault": true
+```
+
+AWS tạo **default VPC ở mọi region** cho mọi account mới, và nó **có sẵn Internet Gateway**.
+
+Đây đúng là thứ phá vỡ thiết kế *"không account nào ra Internet trực tiếp"* ở [doc 13](./13-Centralized-Ingress-Egress-Network.md): SCP chặn **tạo mới** IGW, nhưng cái có sẵn từ lúc account ra đời thì không.
+
+Phải xoá cho **mọi region** trong `allowed_regions`, và lặp lại cho **mọi account mới**:
+
+```bash
+REGION=ap-southeast-1; PROFILE=lz-network; VPC=vpc-xxxx
+
+for s in $(aws ec2 describe-subnets --region $REGION --profile $PROFILE \
+    --filters Name=vpc-id,Values=$VPC --query 'Subnets[].SubnetId' --output text); do
+  aws ec2 delete-subnet --subnet-id $s --region $REGION --profile $PROFILE
+done
+
+IGW=$(aws ec2 describe-internet-gateways --region $REGION --profile $PROFILE \
+  --filters Name=attachment.vpc-id,Values=$VPC \
+  --query 'InternetGateways[0].InternetGatewayId' --output text)
+aws ec2 detach-internet-gateway --internet-gateway-id $IGW --vpc-id $VPC --region $REGION --profile $PROFILE
+aws ec2 delete-internet-gateway --internet-gateway-id $IGW --region $REGION --profile $PROFILE
+
+aws ec2 delete-vpc --vpc-id $VPC --region $REGION --profile $PROFILE
+```
+
+Đây chính là việc [doc 09](./09-Account-Vending-Tu-Dong.md) gọi là **account baseline** và giao cho StackSet làm tự động. Layer đó **chưa có code** — nên tạm thời làm tay, và nó là ứng viên số một cho lần bổ sung tiếp theo.
+
+---
+
+## 5. Kiểm chứng cuối
+
+Ba lệnh, chạy từ account con đầu tiên:
+
+```bash
+aws ec2 describe-vpcs --region eu-west-1 --profile lz-network
+# UnauthorizedOperation ... explicit deny in a service control policy: p-93vo2yro   <- region_lock
+
+aws ec2 describe-vpcs --region ap-southeast-1 --profile lz-network
+# tra ve VPC  <- dung, khong siet qua tay
+
+aws iam create-user --user-name test --profile lz-network
+# AccessDenied ... explicit deny in a service control policy: p-2oni53yp   <- baseline
+```
+
+Thông báo lỗi của AWS **chỉ đích danh policy ID** — rất hữu ích khi có nhiều SCP chồng nhau. Ghi lại ID lúc `terraform output scp_summary` để đối chiếu.
+
+---
+
+## 6. Sổ tay rút gọn
+
+Nếu chỉ đọc một mục của file này, đọc mục này.
+
+| Triệu chứng | Làm gì |
+|---|---|
+| `unrecognized service principal` | Rút `aws_service_access_principals` về tối thiểu, apply, thêm dần |
+| `Backend initialization required` | Có `backend.tf` mà layer chưa apply → `rm backend.tf`, `init -reconfigure`, apply |
+| `Unsetting the previously set backend` | Mất `backend.tf` → chạy `./wire-backends.sh`, nó tự dựng lại |
+| `-backend-config was used without a "backend" block` | Như trên |
+| `is tainted, so must be replaced` | `terraform untaint '<address>'` rồi plan lại |
+| `Instance cannot be destroyed` (không có "tainted") | `create_organization` bị đổi về `false` → đặt lại `true` |
+| Plan ra số resource **ít bất thường** | Thường là taint: thứ phụ thuộc nó thành *known after apply* nên rơi khỏi plan |
+| SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
+| Branch diverged sau `git pull` | Đã commit file môi trường? Nay không cần sửa file track nào nữa |
+
+---
+
+## 7. Việc còn lại sau lần dựng này
+
+| # | Việc | Vì sao |
+|---|---|---|
+| 1 | 4 account còn lại + chuyển vào OU | Mới có `lz-network` |
+| 2 | Xoá default VPC mọi account × mọi region | Mục 4 |
+| 3 | Bật `network_lock` + `prod_guard` | Cần account tương ứng mới kiểm chứng được |
+| 4 | Identity Center + `permission-sets` | Giai đoạn 4–5 của runbook |
+| 5 | `billing-guard` | Giai đoạn 6 |
+| 6 | **Layer `account-baseline`** | Tự động hoá mục 4 — ứng viên số một |
+| 7 | `config-detective` | Chỉ khi cần lớp phát hiện; đây là layer duy nhất tốn tiền |
+
+---
+
+## Liên quan
+
+| | |
+|---|---|
+| [RUNBOOK](../landing-zone/RUNBOOK.md) | Làm gì, theo thứ tự nào — bảng lỗi ở cuối |
+| [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md) | Vì sao chọn DIY, 4 SCP |
+| [20 – Vận hành LZ](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | Remote state, quy trình thay đổi |
+| [09 – Account vending](./09-Account-Vending-Tu-Dong.md) | Quy ước email, account baseline |
+| [06 mục 1b](./06-Aws-Landing-Zone.md) | Root user vs organization root |
