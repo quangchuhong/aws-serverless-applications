@@ -209,7 +209,8 @@ echo
 # HAI TRUONG HOP KHAC NHAU - dung nham la mat cong
 #
 #   Layer DA apply       -> can -migrate-state (chuyen state cu len S3)
-#   Layer CHUA apply bao gio -> chi can init, khong co gi de chuyen
+#   Layer KHONG co state local -> chi can init. Hai truong hop:
+#     chua apply bao gio, HOAC da chuyen len S3 tu truoc.
 #
 # Phan biet bang su ton tai cua file state local.
 ########################################
@@ -246,7 +247,7 @@ if [ -n "$has_state" ]; then
 fi
 
 if [ -n "$no_state" ]; then
-  grey "  Chua apply bao gio -> khong co gi de chuyen, chi init:"
+  grey "  Khong co state local de chuyen (chua apply, hoac da chuyen roi):"
   echo
   while read -r l; do
     [ -z "$l" ] && continue
