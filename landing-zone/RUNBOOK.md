@@ -237,19 +237,21 @@ aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <dev>
 |---|---|---|
 | 1 | Tham số **hợp lệ về định dạng** | Request dừng ở tầng kiểm tham số, không bao giờ chạm tới phân quyền |
 | 2 | Principal **vốn được phép** nếu không có SCP | Đang đo identity policy của chính mình, không đo SCP |
-| 3 | Service **nêu tên policy** trong thông báo lỗi | Không phân biệt được deny đến từ SCP hay từ identity |
+| 3 | Service **phân biệt được** "không có quyền" với "không tồn tại", và **nêu tên policy** | Không phân biệt được deny đến từ SCP hay từ đâu khác |
 
 **Ba lần vấp:**
 
 | Lệnh | Kết quả | Vi phạm |
 |---|---|---|
 | `kms schedule-key-deletion --key-id alias/aws/ebs` | `InvalidArnException` | #1 — KMS từ chối alias trước khi tới SCP; AWS-managed key vốn không xoá được |
-| `ec2 delete-snapshot --snapshot-id snap-00000000000000000` | `InvalidSnapshotID.Malformed` | #1 — ID toàn số 0 không qua kiểm tra định dạng |
-| `backup delete-backup-vault` chạy bằng `lz-app-admin` | `AccessDeniedException` ở **cả hai** account | #2 và #3 — `lz-app-admin` không cấp `backup:*` nên deny đến từ identity; AWS Backup lại không nêu tên policy |
+| `ec2 delete-snapshot --snapshot-id snap-00000000000000000` | `InvalidSnapshotID.Malformed` ở **cả hai** | #1 — ID toàn số 0 không qua kiểm tra định dạng |
+| `backup delete-backup-vault --backup-vault-name khong-ton-tai-test` | `AccessDeniedException` ở **cả hai**, dù principal là `OrganizationAccountAccessRole` | #3 — AWS Backup trả `AccessDenied` cho vault **không tồn tại** thay vì `NotFound`, và không nêu tên policy |
 
-**Dấu hiệu phép thử hỏng — kiểm cái này trước tiên:** hai account cho ra **cùng một** thông báo lỗi. Cặp lệnh chỉ khác nhau ở OU, nên kết quả giống nhau nghĩa là chưa cái nào chạm tới SCP.
+Lần thứ ba đáng chú ý nhất: nó phá vỡ giả định *"gọi API lên tài nguyên không tồn tại thì ra NotFound"*. Nhiều service cố ý **không tiết lộ** tài nguyên có tồn tại hay không, nên trả `AccessDenied` cho cả hai trường hợp.
 
-Service nêu tên policy: EC2, IAM, S3. Không nêu: AWS Backup, và nhiều service mới hơn. Ưu tiên chọn action thuộc nhóm đầu.
+**Dấu hiệu phép thử hỏng — kiểm cái này trước tiên:** hai account cho ra **cùng một** thông báo lỗi. Cặp lệnh chỉ khác nhau ở OU, nên kết quả giống nhau nghĩa là chưa cái nào chạm tới SCP. Dấu hiệu này bắt được cả ba lần vấp.
+
+Phân biệt `NotFound` với `AccessDenied` và nêu tên policy: EC2, IAM, S3. Không phân biệt: AWS Backup và nhiều service mới hơn. Ưu tiên chọn action thuộc nhóm đầu.
 
 ☑ Xong giai đoạn 2 khi: `terraform output ou_ids` ra đủ cây OU, và SCP đã gắn ở mức bạn muốn.
 

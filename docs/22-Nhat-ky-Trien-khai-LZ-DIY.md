@@ -326,7 +326,7 @@ Cái sai nằm ở việc chọn lệnh.
 |---|---|---|---|
 | 1 | `kms schedule-key-deletion --key-id alias/aws/ebs` | `InvalidArnException` | KMS từ chối alias trước khi tới phân quyền; AWS-managed key vốn không xoá được |
 | 2 | `ec2 delete-snapshot --snapshot-id snap-00000000000000000` | `InvalidSnapshotID.Malformed` ở **cả hai** | ID toàn số 0 không qua kiểm tra định dạng |
-| 3 | `backup delete-backup-vault` chạy bằng `lz-app-admin` | `AccessDeniedException` ở **cả hai** | `lz-app-admin` không cấp `backup:*` → deny đến từ identity policy; AWS Backup lại không nêu tên SCP |
+| 3 | `backup delete-backup-vault --backup-vault-name khong-ton-tai-test` | `AccessDeniedException` ở **cả hai**, dù principal là `OrganizationAccountAccessRole` | AWS Backup trả `AccessDenied` cho vault **không tồn tại** thay vì `ResourceNotFoundException` — nó không tiết lộ tài nguyên có tồn tại hay không. Thông báo cũng không nêu tên policy |
 
 Rút ra ba điều kiện, thiếu cái nào cũng hỏng:
 
@@ -334,13 +334,15 @@ Rút ra ba điều kiện, thiếu cái nào cũng hỏng:
 |---|---|---|
 | 1 | Tham số **hợp lệ về định dạng** | Request dừng ở tầng kiểm tham số, không bao giờ chạm tới phân quyền |
 | 2 | Principal **vốn được phép** nếu không có SCP | Đang đo identity policy của chính mình, không đo SCP |
-| 3 | Service **nêu tên policy** trong thông báo lỗi | Không phân biệt được deny đến từ SCP hay từ identity |
+| 3 | Service **phân biệt được** "không có quyền" với "không tồn tại", và **nêu tên policy** | Không phân biệt được deny đến từ SCP hay từ đâu khác |
 
-Điều kiện 2 là cái tinh vi nhất. Ba phép thử ở mục 5 chạy đúng **nhờ may**: lúc đó chưa có Identity Center nên phải dùng `OrganizationAccountAccessRole` — quyền admin thật. Sang giai đoạn 5, đăng nhập bằng permission set hẹp, cùng một lệnh cho ra cùng một lỗi ở mọi account và chẳng chứng minh gì.
+Điều kiện 3 là cái tinh vi nhất, và là cái đã lừa được lần thứ ba. Ai cũng ngầm giả định rằng gọi API lên một tài nguyên không tồn tại thì sẽ ra `NotFound`. **AWS Backup thì không**: nó trả `AccessDenied` cho vault không tồn tại, cố ý không tiết lộ tài nguyên có tồn tại hay không. Cả hai account ra cùng một câu, dù ở dev chẳng có SCP nào chặn `backup:` — chỉ `prod_guard` nhắc tới nó trong toàn bộ 4 SCP.
+
+Điều kiện 2 thì chưa vấp lần nào, nhưng vẫn phải nhớ: ba phép thử ở mục 5 chạy đúng một phần **nhờ hoàn cảnh** — lúc đó chưa có Identity Center nên buộc phải dùng `OrganizationAccountAccessRole`. Sau giai đoạn 5, nếu đăng nhập bằng permission set hẹp thì cùng một lệnh sẽ cho cùng một lỗi ở mọi account và chẳng chứng minh gì. Chạy `aws sts get-caller-identity` trước để biết mình đang là ai.
 
 > **Dấu hiệu nhận biết, kiểm trước tiên:** hai account cho ra **cùng một** thông báo lỗi. Cặp lệnh chỉ khác nhau ở OU — kết quả giống nhau nghĩa là chưa cái nào chạm tới SCP. Dấu hiệu này bắt được cả ba lần hỏng, kể cả lần đầu nếu lúc đó tôi chạy đủ cả cặp.
 
-Nêu tên policy trong lỗi: EC2, IAM, S3. Không nêu: AWS Backup và nhiều service mới hơn. Ưu tiên nhóm đầu.
+Nêu tên policy trong lỗi và phân biệt `NotFound` với `AccessDenied`: EC2, IAM, S3. Không phân biệt: AWS Backup, và nhiều service mới hơn cũng theo hướng không tiết lộ sự tồn tại. Ưu tiên nhóm đầu.
 
 Lệnh cuối cùng dùng được:
 
