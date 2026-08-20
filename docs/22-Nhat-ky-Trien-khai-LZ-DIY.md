@@ -19,10 +19,11 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | SCP | 4 policy: `baseline` + `region_lock` ở root, `network_lock` ở 3 OU, `prod_guard` ở `Production` |
 | Remote state | S3 + versioning + Object Lock + khoá DynamoDB, 16 resource |
 | Account | 6 ACTIVE — management, network, security, logarchive, app-dev, app-prod |
-| Kiểm chứng SCP | 3/3 đúng — 2 chặn, 1 cho qua |
+| Kiểm chứng SCP | 4/4 policy — kể cả `prod_guard`, sau 3 lần phép thử hỏng (mục 5c) |
 | Identity Center | `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62` |
 | Permission set | 17 set, 15 group, 53 assignment — 115 resource |
-| Billing guard | Budget $20, SNS alert, anomaly detection — us-east-1 |
+| Billing guard | Budget $20, SNS alert (đã xác nhận), anomaly detection — us-east-1 |
+| Default VPC | Đã xoá ở mọi account × mọi region |
 
 **Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 13 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
@@ -428,16 +429,68 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 
 ## 7. Việc còn lại sau lần dựng này
 
+Bảy giai đoạn của runbook đã đi hết, trừ giai đoạn 7 cố ý để sau.
+
 | # | Việc | Trạng thái |
 |---|---|---|
-| 1 | 6 account + chuyển vào đúng OU | Account xong; **phải kiểm `list-parents`** — `create-account` luôn thả vào root, không vào OU |
-| 2 | Xoá default VPC mọi account × mọi region | Còn — mục 4 |
-| 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử — xem mục 5c |
+| 1 | 6 account + chuyển vào đúng OU | **Xong** — `list-parents` xác nhận cả 5 account thành viên đúng OU |
+| 2 | 4 SCP | **Xong** — kiểm chứng 4/4, kể cả `prod_guard` |
+| 3 | Xoá default VPC mọi account × mọi region | **Xong** — làm tay; sẽ phải làm lại cho account thứ 7 |
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
-| 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b. Còn 3 việc thủ công trong console |
-| 6 | `billing-guard` | **Xong** — budget, SNS, anomaly. Còn xác nhận email SNS và `enable_cost_allocation_tags` |
-| 7 | **Layer `account-baseline`** | Còn — tự động hoá việc 2 và việc 1; ứng viên số một |
+| 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b |
+| 6 | `billing-guard` | **Xong** — budget, SNS đã xác nhận, anomaly. Còn `enable_cost_allocation_tags` khi có resource mang tag |
+| 7 | **Layer `account-baseline`** | **Còn** — tự động hoá việc 1 và 3; ứng viên số một |
 | 8 | `config-detective` | Còn — chỉ khi cần lớp phát hiện; layer duy nhất tốn tiền |
+
+### Vì sao `account-baseline` là việc tiếp theo
+
+Việc 1 và việc 3 đều đã làm xong **bằng tay**, và cả hai đều sẽ phải làm lại nguyên vẹn cho account thứ bảy:
+
+| Việc tay | Quên thì hậu quả |
+|---|---|
+| `move-account` vào OU | Account chỉ còn SCP ở root — mất `network_lock` và `prod_guard` |
+| Xoá default VPC ở mọi region | Một Internet Gateway mở sẵn, `network_lock` không đụng tới được |
+| Thêm account ID vào `accounts_by_scope` | Không ai vào được account đó qua Identity Center |
+
+Ba việc, không việc nào báo lỗi khi quên. Account vẫn chạy, chỉ là không có guardrail — đúng loại sai lệch lặng lẽ mà một landing zone sinh ra để ngăn.
+
+Đó là lý do [doc 09](./09-Account-Vending-Tu-Dong.md) gọi đây là **account vending** và giao cho tự động hoá. Layer đó chưa có code.
+
+### Lệnh kiểm lại toàn bộ
+
+Chạy từ management account. Ba câu hỏi: account nào sai OU, region nào còn default VPC, đường cảnh báo có thông không.
+
+```bash
+ORG_REGIONS="ap-southeast-1 us-east-1"
+
+for id in $(aws organizations list-accounts \
+              --query 'Accounts[?Status==`ACTIVE`].Id' --output text); do
+  name=$(aws organizations describe-account --account-id "$id" \
+           --query 'Account.Name' --output text)
+  parent=$(aws organizations list-parents --child-id "$id" \
+             --query 'Parents[0].[Type,Id]' --output text)
+  printf '%-14s %-16s %s\n' "$id" "$name" "$parent"
+
+  # Bo qua management account - khong assume vao chinh minh duoc
+  [ "$id" = "$(aws sts get-caller-identity --query Account --output text)" ] && continue
+
+  creds=$(aws sts assume-role \
+    --role-arn "arn:aws:iam::$id:role/OrganizationAccountAccessRole" \
+    --role-session-name vpc-audit \
+    --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+    --output text 2>/dev/null) || { echo "    (khong assume duoc)"; continue; }
+
+  read -r AK SK ST <<<"$creds"
+  for r in $ORG_REGIONS; do
+    n=$(AWS_ACCESS_KEY_ID=$AK AWS_SECRET_ACCESS_KEY=$SK AWS_SESSION_TOKEN=$ST \
+        aws ec2 describe-vpcs --region "$r" --filters Name=isDefault,Values=true \
+          --query 'length(Vpcs)' --output text 2>/dev/null)
+    [ "$n" != "0" ] && echo "    $r: CON $n default VPC"
+  done
+done
+```
+
+Không in dòng `CON ... default VPC` nào, và cột cuối không có `ROOT` nào ngoài management account, là sạch.
 
 ### Cái bẫy của việc 1
 
