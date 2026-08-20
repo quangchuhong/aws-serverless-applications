@@ -62,11 +62,14 @@ operator_can_read_data = false
 #
 # Role nao workload duoc phep nhan thi dat tien to tuong ung.
 # Role admin/network/security KHONG mang tien to nay -> khong pass duoc.
+#
+# CHI CO HAI KHOA. Dat them khoa khac se bi validation chan:
+#   workload  -> lz-server-admin, lz-db-admin, lz-app-admin dung chung
+#   analytics -> lz-analytics-admin
 ########################################
 
 passrole_prefixes = {
-  server    = "lz-workload-"
-  app       = "lz-workload-"
+  workload  = "lz-workload-"
   analytics = "lz-analytics-"
 }
 

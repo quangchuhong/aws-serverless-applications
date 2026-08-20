@@ -116,6 +116,21 @@ variable "passrole_prefixes" {
     workload  = "lz-workload-"
     analytics = "lz-analytics-"
   }
+
+  validation {
+    condition = alltrue([
+      for k in keys(var.passrole_prefixes) :
+      contains(["workload", "analytics"], k)
+    ])
+    error_message = "Chi chap nhan hai khoa: workload, analytics. Khoa khac bi bo qua im lang - policy van dung default, ban tuong da doi ma khong doi."
+  }
+
+  validation {
+    condition = alltrue([
+      for _, p in var.passrole_prefixes : p != "" && !strcontains(p, "*")
+    ])
+    error_message = "Tien to phai khac rong va khong chua dau *. Tien to rong -> policy thanh role/* = PassRole moi role = mat sach tac dung chan leo thang quyen."
+  }
 }
 
 variable "permission_boundary_name" {
