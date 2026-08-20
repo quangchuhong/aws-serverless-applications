@@ -95,6 +95,52 @@ variable "anomaly_threshold_usd" {
   default     = "10"
 }
 
+variable "anomaly_alert_mode" {
+  description = <<-EOT
+    Cach gui canh bao bat thuong chi phi. Hai tuy chon:
+
+      sns_immediate  Bao NGAY khi phat hien, qua SNS topic cua layer nay.
+                     Topic la diem phan phoi - sau nay them Slack, Lambda,
+                     PagerDuty ma khong phai dung toi Cost Explorer.
+
+      email_daily    Ban tong hop MOI NGAY, Cost Explorer gui THANG toi
+                     tung dia chi trong var.alert_emails. KHONG di qua
+                     SNS topic.
+
+    ---------------------------------------------------------------
+    VI SAO PHAI LA MOT BIEN, KHONG PHAI HAI:
+
+    frequency va subscriber.type cua aws_ce_anomaly_subscription
+    khong doc lap nhau:
+
+      DAILY / WEEKLY  ->  CHI nhan subscriber kieu EMAIL
+      IMMEDIATE       ->  nhan SNS
+
+    Ghep sai thi apply moi bao:
+      ValidationException: Daily or weekly frequencies only support
+      Email subscriptions
+
+    Mot bien dat ca hai truong cung luc thi khong ghep sai duoc.
+    ---------------------------------------------------------------
+
+    Khuyen nghi sns_immediate: voi canh bao chi phi, biet muon mot ngay
+    la da ton them mot ngay. Nguong var.anomaly_threshold_usd da loc
+    nhieu roi nen khong so bi lam phien.
+  EOT
+  type        = string
+  default     = "sns_immediate"
+
+  validation {
+    condition     = contains(["sns_immediate", "email_daily"], var.anomaly_alert_mode)
+    error_message = "Chi chap nhan: sns_immediate hoac email_daily."
+  }
+
+  validation {
+    condition     = var.anomaly_alert_mode != "email_daily" || length(var.alert_emails) > 0
+    error_message = "email_daily can it nhat mot dia chi trong alert_emails - khong thi subscription sinh ra khong co nguoi nhan nao va khong ai biet."
+  }
+}
+
 variable "service_anomaly_monitor_arn" {
   description = <<-EOT
     ARN cua DIMENSIONAL anomaly monitor da co san. De RONG de Terraform

@@ -176,15 +176,43 @@ locals {
   )
 }
 
+########################################
+# RANG BUOC CUA AWS - hai truong nay KHONG doc lap nhau:
+#
+#   DAILY / WEEKLY  ->  CHI nhan subscriber kieu EMAIL
+#   IMMEDIATE       ->  nhan SNS (va EMAIL)
+#
+# Ghep sai:
+#   ValidationException: Daily or weekly frequencies only support
+#   Email subscriptions
+#
+# var.anomaly_alert_mode dat ca hai truong cung luc de khong ghep sai
+# duoc. Xem mo ta bien de chon.
+########################################
+
 resource "aws_ce_anomaly_subscription" "alerts" {
   name      = "${var.project}-anomaly-alerts"
-  frequency = "DAILY"
+  frequency = var.anomaly_alert_mode == "email_daily" ? "DAILY" : "IMMEDIATE"
 
   monitor_arn_list = [local.service_anomaly_monitor_arn]
 
-  subscriber {
-    type    = "SNS"
-    address = aws_sns_topic.billing_alerts.arn
+  # Qua SNS: mot subscriber duy nhat, fan-out o tang topic
+  dynamic "subscriber" {
+    for_each = var.anomaly_alert_mode == "sns_immediate" ? [aws_sns_topic.billing_alerts.arn] : []
+    content {
+      type    = "SNS"
+      address = subscriber.value
+    }
+  }
+
+  # Qua email: Cost Explorer gui THANG, khong di qua topic - nen
+  # phai liet ke tung dia chi o day.
+  dynamic "subscriber" {
+    for_each = var.anomaly_alert_mode == "email_daily" ? toset(var.alert_emails) : toset([])
+    content {
+      type    = "EMAIL"
+      address = subscriber.value
+    }
   }
 
   # Chi bao khi anh huong vuot nguong - tranh nhieu tu dao dong nho

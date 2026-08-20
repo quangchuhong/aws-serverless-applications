@@ -46,6 +46,17 @@ anomaly_threshold_usd  = "10"
 ########################################
 
 service_anomaly_monitor_arn = ""
+
+# Cach gui canh bao bat thuong. AWS rang buoc frequency va kieu
+# subscriber di voi nhau, nen mot bien dat ca hai:
+#
+#   sns_immediate  IMMEDIATE + SNS   - bao ngay, qua topic (khuyen nghi)
+#   email_daily    DAILY + EMAIL     - ban tong hop, gui thang, khong qua topic
+#
+# Ghep tay sai se ra:
+#   ValidationException: Daily or weekly frequencies only support Email subscriptions
+
+anomaly_alert_mode = "sns_immediate"
 # service_anomaly_monitor_arn = "arn:aws:ce::609320954321:anomalymonitor/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 ########################################
