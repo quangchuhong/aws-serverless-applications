@@ -96,7 +96,33 @@ scp_exempt_role_names = []
 # scp_exempt_role_names = ["lz-cicd-deploy", "AWSControlTowerExecution"]
 
 ########################################
-# 6. Cay OU
+# 6. Delegated administrator
+#
+# DIEU KIEN TIEN QUYET CUA landing-zone/config-detective.
+# De RONG cho den khi thuc su dung toi layer do.
+#
+# ---------------------------------------------------------------
+# GAN NHU KHONG DAO NGUOC: moi dich vu chi co MOT delegated admin,
+# va doi sang account khac khi da co member dang enable la rat kho
+# (voi GuardDuty thi khong doi duoc). Chon MOT LAN, chon dung.
+# ---------------------------------------------------------------
+#
+# HAI DONG config LA HAI SERVICE PRINCIPAL KHAC NHAU va deu can.
+# Thieu config-multiaccountsetup thi
+# aws_config_organization_managed_rule bao AccessDeniedException ma
+# KHONG noi ro thieu gi. Co check block bat viec nay.
+########################################
+
+delegated_administrators = {}
+
+# delegated_administrators = {
+#   "config.amazonaws.com"                   = "333333333333"  # security account
+#   "config-multiaccountsetup.amazonaws.com" = "333333333333"  # PHAI co ca dong nay
+#   "securityhub.amazonaws.com"              = "333333333333"
+# }
+
+########################################
+# 7. Cay OU
 #
 # Mac dinh da khop voi pham vi cua landing-zone/permission-sets.
 # Doi o day thi phai doi ca accounts_by_scope ben do.

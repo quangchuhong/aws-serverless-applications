@@ -563,11 +563,79 @@ aws sns publish --topic-arn <sns_topic_arn> \
 
 ---
 
-## Giai đoạn 7 — `config-detective` *(để sau)*
+## Giai đoạn 7 — `config-detective`
 
-**Chưa cần bây giờ.** Đây là lớp duy nhất **tốn tiền thật**, và SCP đã lo phần ngăn chặn — phần quan trọng hơn.
+Lớp **phát hiện**: SCP trả lời *"ai được làm gì"*, Config trả lời *"hiện có bao nhiêu thứ đang sai"*.
 
-Bật khi đã có account prod thật và cần trả lời "hiện có bao nhiêu resource đang sai". Xem [README của layer](./config-detective/README.md).
+> **Đây là lớp duy nhất tốn tiền thật.** SCP đã lo phần ngăn chặn — phần quan trọng hơn — nên hoãn giai đoạn này là lựa chọn hợp lý cho tới khi thật sự cần trả lời câu hỏi trên.
+
+### 7a. Ba điều kiện tiên quyết — thiếu cái nào cũng hỏng lặng lẽ
+
+**(1) Delegated administrator** — làm ở layer `organization`, không phải ở đây:
+
+```hcl
+# landing-zone/organization/terraform.tfvars
+delegated_administrators = {
+  "config.amazonaws.com"                   = "<security-account-id>"
+  "config-multiaccountsetup.amazonaws.com" = "<security-account-id>"   # PHAI co
+  "securityhub.amazonaws.com"              = "<security-account-id>"
+}
+```
+
+```bash
+cd ../organization && terraform apply
+aws organizations list-delegated-administrators --output table
+```
+
+Thiếu `config-multiaccountsetup` thì organization rule báo `AccessDeniedException` **không nói rõ thiếu gì**. Có `check` block bắt.
+
+**(2) Security Hub** — layer này **đọc** findings từ Security Hub chứ không bật nó:
+
+```bash
+aws securityhub enable-security-hub --profile <security> --region ap-southeast-1
+aws securityhub update-organization-configuration --auto-enable \
+  --profile <security> --region ap-southeast-1
+```
+
+Chưa bật thì recorder vẫn ghi, rule vẫn đánh giá, S3 vẫn có file — **và không một cảnh báo nào được gửi**. Không lỗi, không cảnh báo.
+
+**(3) Object Lock** — quyết định **trước** khi tạo bucket, không sửa được sau:
+
+```hcl
+enable_object_lock         = true
+object_lock_retention_days = 90
+snapshot_retention_days    = 365   # PHAI lon hon retention
+```
+
+COMPLIANCE mode: không ai xoá được, **kể cả root**. Đổi lại, object đã ghi thì phải trả tiền lưu trữ tới hết hạn. Đó cũng chính là lý do tách account log archive — account bị xâm nhập không xoá được bằng chứng.
+
+### 7b. Chạy
+
+```bash
+cd ../config-detective
+cp terraform.tfvars.example terraform.tfvars
+
+terraform init -backend-config=backend.hcl
+terraform plan            # enable = false -> 0 resource, xac nhan truoc
+```
+
+Điền account ID và OU ID (`cd ../organization && terraform output ou_ids`), **đừng đưa Sandbox/Dev vào `recorder_target_ous`** — đó là nơi resource đổi nhiều nhất, tức đắt nhất, mà vi phạm ở đó lại là chuyện bình thường.
+
+Rồi `enable = true` và `terraform apply`.
+
+### 7c. Kiểm chứng — bước 3 quan trọng nhất
+
+```bash
+aws configservice describe-configuration-recorder-status --profile <account>
+aws configservice describe-aggregate-compliance-by-config-rules \
+  --configuration-aggregator-name <project>-org --profile <security>
+```
+
+Rule ở trạng thái **`INSUFFICIENT_DATA`** nghĩa là recorder **không ghi** loại resource mà rule đó kiểm — nó im lặng và rất dễ nhầm thành "mọi thứ đều ổn". Có `check` block bắt trường hợp rule `s3-*` mà không ghi `AWS::S3::Bucket`.
+
+Sau ~24 giờ, đo chi phí thật trước khi mở rộng: Cost Explorer → lọc Service = *AWS Config* → group by Linked Account.
+
+Chi tiết đầy đủ ở [README của layer](./config-detective/README.md).
 
 ---
 

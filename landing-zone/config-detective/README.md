@@ -95,6 +95,39 @@ delegated_administrators = {
 
 > **Hai dòng `config` là hai service principal khác nhau và đều cần.** Thiếu dòng thứ hai thì `aws_config_organization_managed_rule` báo `AccessDeniedException` mà **không nói rõ thiếu gì** — đây là lỗi mất nhiều thời gian nhất trong cả layer. Layer `organization` có `check` block bắt việc này.
 
+### Và phải bật Security Hub — nếu không thì không có cảnh báo nào
+
+`notify.tf` lọc sự kiện theo `source = ["aws.securityhub"]`. Layer này **không bật Security Hub**, nó chỉ đọc findings từ đó.
+
+```
+Config rule vi pham  ──►  Security Hub  ──►  EventBridge  ──►  SNS
+                            ▲
+                     CHUA BAT = day dut o day
+```
+
+Security Hub chưa bật thì mọi thứ khác vẫn chạy đúng: recorder ghi, rule đánh giá, file vào S3, aggregator gom dữ liệu. **Chỉ là không một cảnh báo nào được gửi** — không lỗi, không cảnh báo, chỉ im lặng.
+
+Bật ở **security account** (đã là delegated admin của Security Hub), một lần mỗi region trong `aggregator_regions`:
+
+```bash
+aws securityhub enable-security-hub --profile <security> --region ap-southeast-1
+aws securityhub enable-security-hub --profile <security> --region us-east-1
+
+# Gom findings tu moi account trong to chuc
+aws securityhub update-organization-configuration \
+  --auto-enable --profile <security> --region ap-southeast-1
+```
+
+Kiểm chứng đường ống trước khi tin nó:
+
+```bash
+aws securityhub get-findings --max-items 1 \
+  --profile <security> --region ap-southeast-1 \
+  --query 'Findings[0].[Title,Compliance.Status]'
+```
+
+> **Security Hub có chi phí riêng**, tính theo số lần kiểm tra và số finding nạp vào — không nằm trong ước tính chi phí của Config bên trên. Bật kèm security standard (CIS, AWS FSBP) sẽ tốn thêm đáng kể; layer này **không cần** standard nào, chỉ cần Security Hub bật để nhận findings từ Config.
+
 ---
 
 ## Chạy
