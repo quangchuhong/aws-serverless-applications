@@ -215,17 +215,41 @@ Lệnh thứ ba quan trọng ngang ba lệnh kia — siết quá tay cũng là l
 
 **Kiểm chứng `prod_guard`** — cặp lệnh giống hệt nhau, khác kết quả **chỉ vì OU khác nhau**:
 
-```bash
-aws ec2 delete-snapshot --snapshot-id snap-00000000000000000 --profile <prod>
-# PHAI ra: AccessDenied ... explicit deny in a service control policy
+Chạy bằng principal **quyền admin** ở cả hai account — `OrganizationAccountAccessRole`, hoặc permission set `lz-account-admin`. Xem phần dưới về lý do.
 
-aws ec2 delete-snapshot --snapshot-id snap-00000000000000000 --profile <dev>
+```bash
+aws sts get-caller-identity --profile <prod>   # xac nhan la admin truoc da
+
+aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <prod>
+# PHAI ra: AccessDenied ... explicit deny in a service control policy: p-xxxx
+
+aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <dev>
 # PHAI ra: InvalidSnapshot.NotFound   <- khong bi SCP chan, dung
 ```
 
-> **Vì sao dùng snapshot ID giả:** SCP được đánh giá **trước** khi AWS kiểm tra resource có tồn tại — nên không cần tạo gì để thử. `NotFound` ở account prod nghĩa là SCP **không** chặn.
->
-> Đừng thử bằng `kms schedule-key-deletion --key-id alias/aws/ebs`: KMS từ chối alias trước khi tới SCP (`InvalidArnException`), và AWS-managed key vốn không xoá được — phép thử không nói lên điều gì.
+> **Vì sao thử được bằng tài nguyên không tồn tại:** SCP được đánh giá **trước** khi AWS kiểm tra resource có tồn tại — nên không cần tạo gì để thử, và không có gì bị xoá. `NotFound` ở account prod nghĩa là SCP **không** chặn.
+
+### Ba điều kiện của một phép thử SCP dùng được
+
+Đã vấp cả ba, mỗi cái một lần. Thiếu bất kỳ điều nào thì phép thử vẫn "ra lỗi" trông rất thuyết phục mà chẳng chứng minh điều gì.
+
+| # | Điều kiện | Vi phạm thì |
+|---|---|---|
+| 1 | Tham số **hợp lệ về định dạng** | Request dừng ở tầng kiểm tham số, không bao giờ chạm tới phân quyền |
+| 2 | Principal **vốn được phép** nếu không có SCP | Đang đo identity policy của chính mình, không đo SCP |
+| 3 | Service **nêu tên policy** trong thông báo lỗi | Không phân biệt được deny đến từ SCP hay từ identity |
+
+**Ba lần vấp:**
+
+| Lệnh | Kết quả | Vi phạm |
+|---|---|---|
+| `kms schedule-key-deletion --key-id alias/aws/ebs` | `InvalidArnException` | #1 — KMS từ chối alias trước khi tới SCP; AWS-managed key vốn không xoá được |
+| `ec2 delete-snapshot --snapshot-id snap-00000000000000000` | `InvalidSnapshotID.Malformed` | #1 — ID toàn số 0 không qua kiểm tra định dạng |
+| `backup delete-backup-vault` chạy bằng `lz-app-admin` | `AccessDeniedException` ở **cả hai** account | #2 và #3 — `lz-app-admin` không cấp `backup:*` nên deny đến từ identity; AWS Backup lại không nêu tên policy |
+
+**Dấu hiệu phép thử hỏng — kiểm cái này trước tiên:** hai account cho ra **cùng một** thông báo lỗi. Cặp lệnh chỉ khác nhau ở OU, nên kết quả giống nhau nghĩa là chưa cái nào chạm tới SCP.
+
+Service nêu tên policy: EC2, IAM, S3. Không nêu: AWS Backup, và nhiều service mới hơn. Ưu tiên chọn action thuộc nhóm đầu.
 
 ☑ Xong giai đoạn 2 khi: `terraform output ou_ids` ra đủ cây OU, và SCP đã gắn ở mức bạn muốn.
 

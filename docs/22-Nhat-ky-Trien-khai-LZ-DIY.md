@@ -314,6 +314,48 @@ Việc đầu là thứ khó đoán nhất: policy đúng, permission set đúng
 
 Với lab thì chấp nhận được. Với môi trường thật thì phải chọn: hoặc hạ hai set đó xuống `nonprod` và thêm breakglass tương ứng, hoặc thừa nhận câu "không ai ghi được lên prod" chỉ đúng với tầng application. Xem [doc 19 mục 4.3](./19-Permission-Set-cho-Landing-Zone.md).
 
+### 5c. Ba lần hỏng một phép thử SCP
+
+Mục 3 nói *phải luôn có một lệnh "phải chạy được" bên cạnh các lệnh "phải bị chặn"*. Đúng, nhưng chưa đủ. Kiểm chứng `prod_guard` hỏng **ba lần liên tiếp**, mỗi lần một lý do khác, và cả ba lần đều "ra lỗi" trông rất thuyết phục.
+
+Ý tưởng ban đầu vẫn đúng: chạy cùng một lệnh ở hai account chỉ khác nhau ở OU. Prod bị SCP chặn, dev thì không. Không cần tạo tài nguyên gì vì **SCP được đánh giá trước khi AWS kiểm tra tài nguyên có tồn tại** — nên `NotFound` ở dev chính là bằng chứng request đã đi lọt qua tầng SCP.
+
+Cái sai nằm ở việc chọn lệnh.
+
+| Lần | Lệnh | Kết quả | Vì sao vô nghĩa |
+|---|---|---|---|
+| 1 | `kms schedule-key-deletion --key-id alias/aws/ebs` | `InvalidArnException` | KMS từ chối alias trước khi tới phân quyền; AWS-managed key vốn không xoá được |
+| 2 | `ec2 delete-snapshot --snapshot-id snap-00000000000000000` | `InvalidSnapshotID.Malformed` ở **cả hai** | ID toàn số 0 không qua kiểm tra định dạng |
+| 3 | `backup delete-backup-vault` chạy bằng `lz-app-admin` | `AccessDeniedException` ở **cả hai** | `lz-app-admin` không cấp `backup:*` → deny đến từ identity policy; AWS Backup lại không nêu tên SCP |
+
+Rút ra ba điều kiện, thiếu cái nào cũng hỏng:
+
+| # | Điều kiện | Vi phạm thì |
+|---|---|---|
+| 1 | Tham số **hợp lệ về định dạng** | Request dừng ở tầng kiểm tham số, không bao giờ chạm tới phân quyền |
+| 2 | Principal **vốn được phép** nếu không có SCP | Đang đo identity policy của chính mình, không đo SCP |
+| 3 | Service **nêu tên policy** trong thông báo lỗi | Không phân biệt được deny đến từ SCP hay từ identity |
+
+Điều kiện 2 là cái tinh vi nhất. Ba phép thử ở mục 5 chạy đúng **nhờ may**: lúc đó chưa có Identity Center nên phải dùng `OrganizationAccountAccessRole` — quyền admin thật. Sang giai đoạn 5, đăng nhập bằng permission set hẹp, cùng một lệnh cho ra cùng một lỗi ở mọi account và chẳng chứng minh gì.
+
+> **Dấu hiệu nhận biết, kiểm trước tiên:** hai account cho ra **cùng một** thông báo lỗi. Cặp lệnh chỉ khác nhau ở OU — kết quả giống nhau nghĩa là chưa cái nào chạm tới SCP. Dấu hiệu này bắt được cả ba lần hỏng, kể cả lần đầu nếu lúc đó tôi chạy đủ cả cặp.
+
+Nêu tên policy trong lỗi: EC2, IAM, S3. Không nêu: AWS Backup và nhiều service mới hơn. Ưu tiên nhóm đầu.
+
+Lệnh cuối cùng dùng được:
+
+```bash
+aws sts get-caller-identity --profile <prod>    # xac nhan la admin TRUOC da
+
+aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <prod>
+# AccessDenied ... explicit deny in a service control policy: p-xxxx
+
+aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <dev>
+# InvalidSnapshot.NotFound
+```
+
+**Bài học rộng hơn cả SCP:** một phép kiểm chứng bảo mật báo "đạt" vì lý do sai thì nguy hiểm hơn không kiểm gì — nó tạo niềm tin không có cơ sở. Mọi phép thử "phải bị chặn" cần một cách phân biệt *bị chặn đúng chỗ mình nghĩ* với *bị chặn ở đâu đó khác*.
+
 ---
 
 ## 6. Sổ tay rút gọn
@@ -330,6 +372,8 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 | `Instance cannot be destroyed` (không có "tainted") | `create_organization` bị đổi về `false` → đặt lại `true` |
 | Plan ra số resource **ít bất thường** | Thường là taint: thứ phụ thuộc nó thành *known after apply* nên rơi khỏi plan |
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
+| Phép thử SCP ra **cùng lỗi ở cả hai** account | Phép thử hỏng, không phải SCP hỏng — xem mục 5c |
+| `AccessDenied` mà không nêu tên policy | Có thể là identity policy chứ không phải SCP. Thử lại bằng principal admin |
 | Branch diverged sau `git pull` | Đã commit file môi trường? Nay không cần sửa file track nào nữa |
 
 ---
@@ -340,7 +384,7 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 |---|---|---|
 | 1 | 6 account + chuyển vào đúng OU | Account xong; **phải kiểm `list-parents`** — `create-account` luôn thả vào root, không vào OU |
 | 2 | Xoá default VPC mọi account × mọi region | Còn — mục 4 |
-| 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử `delete-snapshot` |
+| 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử — xem mục 5c |
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
 | 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b. Còn 3 việc thủ công trong console |
 | 6 | `billing-guard` | Còn — giai đoạn 6 |
