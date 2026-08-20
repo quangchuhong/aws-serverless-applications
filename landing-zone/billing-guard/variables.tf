@@ -95,6 +95,52 @@ variable "anomaly_threshold_usd" {
   default     = "10"
 }
 
+variable "service_anomaly_monitor_arn" {
+  description = <<-EOT
+    ARN cua DIMENSIONAL anomaly monitor da co san. De RONG de Terraform
+    tao moi.
+
+    ---------------------------------------------------------------
+    GIOI HAN CUA AWS: MOI ACCOUNT CHI DUOC MOT dimensional monitor.
+
+    Va AWS thuong da TU TAO san mot cai ten "Services" khi Cost
+    Explorer duoc bat lan dau. Nen apply lan dau rat de gap:
+
+      ValidationException: Limit exceeded on dimensional spend
+      monitor creation
+
+    Do KHONG phai loi cau hinh - la da co mot cai roi.
+    ---------------------------------------------------------------
+
+    Tim cai dang co:
+
+      aws ce get-anomaly-monitors \
+        --query 'AnomalyMonitors[?MonitorType==`DIMENSIONAL`].[MonitorName,MonitorArn]' \
+        --output table
+
+    Ra ket qua -> dien ARN vao day. Terraform bo qua buoc tao va gan
+    thang subscription vao monitor do.
+
+    Rong -> de bien nay rong, Terraform tao moi.
+
+    KHONG dung terraform import cho truong hop nay tru khi ban muon
+    Terraform lam chu cai monitor cua AWS - go layer nay ve sau se xoa
+    luon no.
+
+    LUU Y GIONG create_organization: bien nay dieu khien count. Dien ARN
+    vao SAU KHI Terraform da tu tao monitor nghia la count 1 -> 0, tuc
+    ke hoach XOA cai monitor Terraform dang quan ly. Chon mot lan o lan
+    apply dau, roi giu nguyen.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.service_anomaly_monitor_arn == "" || can(regex("^arn:aws[a-z-]*:ce::[0-9]{12}:anomalymonitor/", var.service_anomaly_monitor_arn))
+    error_message = "Phai la ARN anomaly monitor (arn:aws:ce::<account>:anomalymonitor/...) hoac de rong."
+  }
+}
+
 ########################################
 # 4. Dashboard (tuy chon)
 ########################################

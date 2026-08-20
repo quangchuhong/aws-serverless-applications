@@ -25,6 +25,30 @@ budget_thresholds      = [50, 80, 100]
 anomaly_threshold_usd  = "10"
 
 ########################################
+# Anomaly monitor
+#
+# GIOI HAN: moi account chi duoc MOT dimensional monitor, va AWS
+# thuong da tu tao san mot cai khi Cost Explorer duoc bat.
+#
+# KIEM TRA TRUOC KHI APPLY:
+#   aws ce get-anomaly-monitors \
+#     --query 'AnomalyMonitors[?MonitorType==`DIMENSIONAL`].[MonitorName,MonitorArn]' \
+#     --output table
+#
+#   Ra ket qua -> dien ARN vao duoi (dung lai cai co san)
+#   Rong       -> de rong (Terraform tao moi)
+#
+# Khong kiem tra ma apply thang se gap:
+#   ValidationException: Limit exceeded on dimensional spend monitor creation
+#
+# Chon mot lan o lan apply dau roi GIU NGUYEN: bien nay dieu khien
+# count, doi ve sau se thanh ke hoach xoa.
+########################################
+
+service_anomaly_monitor_arn = ""
+# service_anomaly_monitor_arn = "arn:aws:ce::609320954321:anomalymonitor/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+########################################
 # Cost allocation tag
 #
 # QUAN TRONG: chi bat duoc SAU KHI da co it nhat mot resource

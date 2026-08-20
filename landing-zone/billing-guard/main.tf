@@ -154,17 +154,33 @@ resource "aws_budgets_budget" "per_account" {
 # Mien phi.
 ########################################
 
+# GIOI HAN CUA AWS: moi account chi duoc MOT dimensional monitor, va
+# AWS thuong da tu tao san mot cai ten "Services" khi Cost Explorer
+# duoc bat. Gap "Limit exceeded on dimensional spend monitor creation"
+# thi khong phai loi cau hinh - dien ARN cai dang co vao
+# var.service_anomaly_monitor_arn de dung lai no.
 resource "aws_ce_anomaly_monitor" "by_service" {
+  count = var.service_anomaly_monitor_arn == "" ? 1 : 0
+
   name              = "${var.project}-by-service"
   monitor_type      = "DIMENSIONAL"
   monitor_dimension = "SERVICE"
+}
+
+locals {
+  # Dung cai co san neu duoc khai, khong thi dung cai vua tao
+  service_anomaly_monitor_arn = (
+    var.service_anomaly_monitor_arn != ""
+    ? var.service_anomaly_monitor_arn
+    : aws_ce_anomaly_monitor.by_service[0].arn
+  )
 }
 
 resource "aws_ce_anomaly_subscription" "alerts" {
   name      = "${var.project}-anomaly-alerts"
   frequency = "DAILY"
 
-  monitor_arn_list = [aws_ce_anomaly_monitor.by_service.arn]
+  monitor_arn_list = [local.service_anomaly_monitor_arn]
 
   subscriber {
     type    = "SNS"
