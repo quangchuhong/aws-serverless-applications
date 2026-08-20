@@ -87,11 +87,57 @@ EXPR=$(printf '%s' "$EXPR_READABLE" | tr '\n' ' ')
 tf_err=$(mktemp)
 trap 'rm -f "$tf_err"' EXIT
 
+########################################
+# In loi cua Terraform cho de doc
+#
+# BAY PHAI BIET: khi variable validation that bai trong
+# `terraform console` che do pipe, Terraform van di tiep va danh gia
+# bieu thuc, roi PANIC:
+#
+#   panic: value for local.stmt was requested before it was provided
+#   !!!!!! TERRAFORM CRASH !!!!!!
+#   Terraform crashed! This is always indicative of a bug within Terraform.
+#
+# Cai banner do TO HON han loi that o phia tren va noi sai huong -
+# nguoi doc se di bao bug Terraform thay vi sua terraform.tfvars.
+#
+# Nen: cat bo phan stack trace, giu loi that, va noi ro panic la he
+# qua chu khong phai nguyen nhan.
+########################################
+print_tf_error() {
+  # Moi thu TRUOC banner crash moi la loi that
+  sed '/TERRAFORM CRASH/,$d' "$tf_err" | sed '/^$/{N;/^\n$/D;}' >&2
+
+  if grep -q 'TERRAFORM CRASH\|^panic:' "$tf_err"; then
+    echo >&2
+    amber "Da cat bo phan stack trace cua Terraform." >&2
+    amber "Panic la HE QUA cua loi o tren, khong phai nguyen nhan:" >&2
+    amber "console che do pipe van danh gia bieu thuc sau khi variable" >&2
+    amber "validation that bai. Sua loi o tren la het - khong phai di" >&2
+    amber "bao bug cho Terraform." >&2
+    echo >&2
+    echo "Xem nguyen van: terraform console < /dev/null" >&2
+  fi
+}
+
 # shellcheck disable=SC2086
 if ! raw=$(printf '%s\n' "$EXPR" | terraform console $TF_ARGS 2>"$tf_err"); then
   red "terraform console that bai - KHONG kiem tra duoc gi."
   echo
-  cat "$tf_err" >&2
+
+  # Goi y cu the cho loi hay gap nhat: tfvars chep tu ban example cu
+  if grep -q 'Chi chap nhan hai khoa' "$tf_err"; then
+    amber "terraform.tfvars nhieu kha nang duoc chep tu ban example cu."
+    amber "Sua lai thanh dung hai khoa:"
+    echo
+    echo '  passrole_prefixes = {'
+    echo '    workload  = "lz-workload-"'
+    echo '    analytics = "lz-analytics-"'
+    echo '  }'
+    echo
+  fi
+
+  print_tf_error
   exit 1
 fi
 
@@ -100,7 +146,7 @@ fi
 if ! data=$(printf '%s' "$raw" | jq -r . 2>/dev/null) || [ -z "$data" ]; then
   red "Khong doc duoc ket qua tu terraform console."
   echo
-  cat "$tf_err" >&2
+  print_tf_error
   echo "--- stdout ---" >&2
   printf '%s\n' "$raw" >&2
   exit 1
