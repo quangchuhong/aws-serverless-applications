@@ -359,8 +359,42 @@ users = {
 ```bash
 terraform init -backend-config=backend.hcl
 ./validate-policies.sh          # kiem tra 17 inline policy
-terraform plan
-terraform apply
+terraform plan -out=tfplan
+```
+
+**Tính trước số resource rồi mới apply.** Ra đúng số nghĩa là locals, ma trận group và phạm vi account đều khớp; ra khác thì lệch chỗ nào đó — lúc này tìm dễ hơn nhiều so với sau khi apply.
+
+| Resource | Số lượng |
+|---|---|
+| `aws_ssoadmin_permission_set` | 17 |
+| `aws_ssoadmin_permission_set_inline_policy` | 16 — `lz-account-admin` chỉ dùng managed policy |
+| `aws_ssoadmin_managed_policy_attachment` | 12 |
+| `aws_identitystore_group` | 15 |
+| `aws_identitystore_user` + membership | 2 × số user |
+| `aws_ssoadmin_account_assignment` | *(tính bên dưới)* |
+
+Số assignment = với mỗi group, cộng số account trong phạm vi của từng permission set nó dùng. Với 5 account phạm vi `all`, 1 nonprod, 1 prod, 0 analytics:
+
+```
+10 group pham vi "all" x 5 account       = 50
+lz-app-teams: 1 nonprod + 1 prod         =  2
+lz-billing-team -> management            =  1
+3 group analytics/datalake (chua co OU)  =  0
+                                    tong = 53   -> 115 resource
+```
+
+Đối chiếu nhanh mà không cần tính tay: `terraform output` sẽ có `assignment_count`.
+
+```bash
+terraform apply tfplan
+```
+
+Apply lâu — mỗi assignment là một lời gọi API chờ Identity Center provision xong một IAM role `AWSReservedSSO_<set>_<hash>` trong account đích. Gặp `ThrottlingException` thì provider tự retry.
+
+**Cảnh báo đúng, không phải lỗi** — nếu chưa có account Data Analytics:
+
+```
+Warning: Cac pham vi sau dang RONG nen khong sinh assignment nao: analytics
 ```
 
 **Kiểm tra:**
@@ -379,11 +413,58 @@ aws sso login --profile lz-net-admin
 aws sts get-caller-identity --profile lz-net-admin
 ```
 
-ARN phải có dạng `assumed-role/AWSReservedSSO_lz-network-admin_<hash>/quang`.
+ARN phải có dạng `assumed-role/AWSReservedSSO_lz-network-admin_<hash>/quang`. Chuỗi `AWSReservedSSO_` là bằng chứng permission set đã thành IAM role thật trong account đích.
 
-> **Hai bước thủ công còn lại:** xác nhận email đặt password, và bật quyền xem billing ở management account (Billing console → Account → *IAM user and role access to Billing information* → Activate) — không bật thì `lz-billing` vẫn bị Access Denied.
+Kiểm luôn ở phía account đích:
+
+```bash
+aws iam list-roles --profile lz-network \
+  --query 'Roles[?starts_with(RoleName,`AWSReservedSSO_`)].RoleName' --output table
+```
+
+> **Ba bước thủ công Terraform không làm được:**
+>
+> | Việc | Không làm thì sao |
+> |---|---|
+> | Xác nhận email đặt password | Không login được portal |
+> | Billing console → Account → *IAM user and role access to Billing information* → Activate | `lz-billing` bị `AccessDenied` dù policy đúng hoàn toàn — lỗi khó đoán nhất ở giai đoạn này |
+> | Identity Center → Settings → Authentication → *Require MFA every time* | Không có MFA |
+>
+> **Đừng** thay việc thứ ba bằng điều kiện `aws:MultiFactorAuthPresent` trong policy — phiên Identity Center không mang claim đó đáng tin, thêm vào chỉ sinh `AccessDenied` khó hiểu.
+
+### Bẫy: `terraform.tfvars` chép từ bản example cũ
+
+Trước commit `a9d9642`, file example ghi `passrole_prefixes` với ba khoá `server`/`app`/`analytics`. Code chỉ đọc `workload` và `analytics`; hai khoá kia **bị bỏ qua im lặng** — sửa tiền tố mà policy vẫn giữ giá trị cũ. Nay có validation chặn, đúng phải là:
+
+```hcl
+passrole_prefixes = {
+  workload  = "lz-workload-"
+  analytics = "lz-analytics-"
+}
+```
+
+Nếu gặp `TERRAFORM CRASH` kèm `panic: value for local.stmt was requested before it was provided`: đó là bug của `terraform console` chế độ pipe khi variable validation thất bại — panic là **hệ quả**, lỗi thật nằm phía trên banner. Sửa tfvars là hết.
 
 ☑ Xong giai đoạn 5 khi: đăng nhập được qua portal và `get-caller-identity` ra ARN `AWSReservedSSO_*`.
+
+### Việc phải làm ngay sau giai đoạn 5
+
+`aws organizations create-account` **không nhận tham số OU** — account mới luôn nằm ở root. SCP thì gắn vào OU, nên account quên chuyển là account không có guardrail nào ngoài SCP gắn ở root.
+
+```bash
+for id in $(aws organizations list-accounts --query 'Accounts[?Status==`ACTIVE`].Id' --output text); do
+  printf '%-14s %-16s %s\n' "$id" \
+    "$(aws organizations describe-account --account-id $id --query 'Account.Name' --output text)" \
+    "$(aws organizations list-parents --child-id $id --query 'Parents[0].[Type,Id]' --output text)"
+done
+```
+
+`ROOT` ở cột cuối = chưa chuyển. Nguy nhất là account production: `prod_guard` gắn vào OU `Production`, account còn ở root thì SCP đó không chạm tới nó — trong khi giai đoạn 5 vừa cấp quyền phạm vi `prod` vào đúng account đó.
+
+```bash
+aws organizations move-account --account-id <id> \
+  --source-parent-id <root-id> --destination-parent-id <ou-id>
+```
 
 ---
 

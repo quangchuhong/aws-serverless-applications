@@ -16,10 +16,12 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 |---|---|
 | Organization | `o-tvkzhcq3yh`, root `r-o5ci` |
 | Cây OU | 8 OU — 6 cấp 1 + 2 cấp 2 |
-| SCP | `baseline` (1.316 B) + `region_lock` (709 B), gắn vào root |
+| SCP | 4 policy: `baseline` + `region_lock` ở root, `network_lock` ở 3 OU, `prod_guard` ở `Production` |
 | Remote state | S3 + versioning + Object Lock + khoá DynamoDB, 16 resource |
-| Account con đầu tiên | `lz-network` trong OU `Infrastructure` |
+| Account | 6 ACTIVE — management, network, security, logarchive, app-dev, app-prod |
 | Kiểm chứng SCP | 3/3 đúng — 2 chặn, 1 cho qua |
+| Identity Center | `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62` |
+| Permission set | 17 set, 15 group, 53 assignment — 115 resource |
 
 **Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 11 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
@@ -260,6 +262,58 @@ aws iam create-user --user-name test --profile lz-network
 
 Thông báo lỗi của AWS **chỉ đích danh policy ID** — rất hữu ích khi có nhiều SCP chồng nhau. Ghi lại ID lúc `terraform output scp_summary` để đối chiếu.
 
+### 5b. Giai đoạn 5 — permission-sets
+
+Apply sạch sau khi sửa lỗi #10 và #11: **115 resource**.
+
+| Resource | Số lượng |
+|---|---|
+| `aws_ssoadmin_permission_set` | 17 |
+| `aws_ssoadmin_permission_set_inline_policy` | 16 |
+| `aws_ssoadmin_managed_policy_attachment` | 12 |
+| `aws_identitystore_group` | 15 |
+| `aws_identitystore_user` + membership | 2 |
+| `aws_ssoadmin_account_assignment` | **53** |
+
+`lz-account-admin` không có inline policy — chỉ dùng `AdministratorAccess` managed. Đó là lý do 16 chứ không phải 17.
+
+**53 assignment tính ra sao**, với 5 account trong phạm vi `all` (6 ACTIVE trừ management):
+
+| Nhóm | Assignment |
+|---|---|
+| 10 group phạm vi `all` × 5 account | 50 |
+| `lz-app-teams`: `lz-app-admin` (1 nonprod) + `lz-app-operator` (1 prod) | 2 |
+| `lz-billing-team` → management | 1 |
+| 3 group analytics/datalake — chưa có account | 0 |
+
+Mỗi assignment làm Identity Center tự tạo một IAM role `AWSReservedSSO_<set>_<hash>` trong account đích. 53 assignment = 53 role.
+
+> **Tính trước con số rồi mới apply.** Plan ra đúng 115 nghĩa là phần locals, ma trận group và phạm vi account đều khớp nhau. Ra khác 115 thì có gì đó lệch — và lúc đó dễ tìm hơn nhiều so với sau khi apply.
+
+**Cảnh báo đúng, không phải lỗi:**
+
+```
+Warning: Cac pham vi sau dang RONG nen khong sinh assignment nao: analytics
+```
+
+Chưa có account Data Analytics. Ba group `lz-analytics-*` và `lz-datalake-admins` vẫn được tạo nhưng chưa gán đi đâu. `check` block chỉ cảnh báo, không chặn apply — cố ý.
+
+**Ba việc Terraform không làm được**, phải vào console:
+
+| Việc | Không làm thì sao |
+|---|---|
+| Billing → *IAM user and role access to Billing information* → Activate | `lz-billing` bị `AccessDenied` dù policy đúng hoàn toàn |
+| Identity Center → Settings → Authentication → *Require MFA every time* | Không có MFA |
+| Bật Identity Center lần đầu | Data source trả list rỗng, apply lỗi ở `tolist(...)[0]` |
+
+Việc đầu là thứ khó đoán nhất: policy đúng, permission set đúng, assignment đúng, vẫn `AccessDenied`.
+
+> **Đừng** đặt điều kiện `aws:MultiFactorAuthPresent` trong policy của permission set để thay cho việc bật MFA ở console. Phiên Identity Center không mang claim đó một cách đáng tin, thêm vào chỉ sinh `AccessDenied` khó hiểu.
+
+**Một mâu thuẫn thiết kế lộ ra khi đọc `assignment_matrix`:** `lz-db-admin` và `lz-server-admin` có phạm vi `all`, tức có quyền ghi ở cả `lz-app-prod` — trong khi `lz-app-admin` cố ý chỉ có nonprod với lý do *"không người nào ghi được lên prod application"*. `dynamodb:Scan` trong `lz-db-admin` còn đọc được toàn bộ dữ liệu production.
+
+Với lab thì chấp nhận được. Với môi trường thật thì phải chọn: hoặc hạ hai set đó xuống `nonprod` và thêm breakglass tương ứng, hoặc thừa nhận câu "không ai ghi được lên prod" chỉ đúng với tầng application. Xem [doc 19 mục 4.3](./19-Permission-Set-cho-Landing-Zone.md).
+
 ---
 
 ## 6. Sổ tay rút gọn
@@ -288,7 +342,7 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 | 2 | Xoá default VPC mọi account × mọi region | Còn — mục 4 |
 | 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử `delete-snapshot` |
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
-| 5 | `permission-sets` | Đang làm — lỗi #10 và #11 phát sinh ở đây |
+| 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b. Còn 3 việc thủ công trong console |
 | 6 | `billing-guard` | Còn — giai đoạn 6 |
 | 7 | **Layer `account-baseline`** | Còn — tự động hoá việc 2 và việc 1; ứng viên số một |
 | 8 | `config-detective` | Còn — chỉ khi cần lớp phát hiện; layer duy nhất tốn tiền |
