@@ -22,8 +22,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Kiểm chứng SCP | 3/3 đúng — 2 chặn, 1 cho qua |
 | Identity Center | `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62` |
 | Permission set | 17 set, 15 group, 53 assignment — 115 resource |
+| Billing guard | Budget $20, SNS alert, anomaly detection — us-east-1 |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 11 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 13 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -46,12 +47,14 @@ Xếp theo thứ tự gặp phải.
 | 9 | `is tainted, so must be replaced` | Apply lỗi giữa chừng để lại taint | Hệ quả của #1 | `3410e1a` |
 | 10 | `Inconsistent conditional result types` | `?:` trả về tuple 2 vs tuple 0 trong `permission-sets` | **Lỗi code** | *(mục 2.5)* |
 | 11 | `validate-policies.sh` in bảng rỗng rồi thoát 0 | Mã thoát pipeline là của `sed`, `set -e` không nổ | **Lỗi code** | *(mục 2.5)* |
+| 12 | `Limit exceeded on dimensional spend monitor creation` | Mỗi account chỉ được 1 dimensional monitor, AWS đã tạo sẵn | **Lỗi code** | *(mục 2.6)* |
+| 13 | `Daily or weekly frequencies only support Email subscriptions` | `frequency` và `subscriber.type` ràng buộc nhau | **Lỗi code** | *(mục 2.6)* |
 
-**7/11 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**9/13 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
-## 2. Năm lỗi đáng học nhất
+## 2. Sáu lỗi đáng học nhất
 
 ### 2.1. Một service principal sai làm hỏng cả resource
 
@@ -187,6 +190,49 @@ CO LOI - khong apply.        EXIT=1
 ```
 
 Bắt đúng và thoát khác 0. Bài học: mỗi lưới an toàn phải được thử bằng một trường hợp *chắc chắn sai*, nếu không thì không biết nó có còn hoạt động hay không.
+
+### 2.6. Hai cấu hình mà không giá trị nào làm cho đúng được
+
+`billing-guard` hỏng hai lần liên tiếp, và cả hai đều cùng một dạng: code yêu cầu một thứ **AWS không bao giờ chấp nhận**, bất kể điền gì vào biến.
+
+**Lần một** — mỗi account chỉ được **một** dimensional anomaly monitor, và AWS thường đã tự tạo sẵn một cái tên "Services" khi Cost Explorer được bật:
+
+```
+ValidationException: Limit exceeded on dimensional spend monitor creation
+```
+
+Code vô điều kiện xin cái thứ hai. Cách chữa là **mượn thay vì tạo** — thêm `service_anomaly_monitor_arn`, để rỗng thì tạo mới, điền ARN thì bỏ qua bước tạo và gắn thẳng subscription vào cái sẵn có.
+
+Vì sao không `terraform import`? Import cũng chạy được, nhưng nó trao cho Terraform quyền sở hữu một thứ Terraform không tạo ra — ngày `destroy` layer này thì monitor mặc định của account bị xoá theo. Ranh giới đúng: Terraform quản lý subscription, còn monitor thì mượn.
+
+**Lần hai** — `frequency` và `subscriber.type` không độc lập với nhau:
+
+```
+ValidationException: Daily or weekly frequencies only support Email subscriptions
+```
+
+| `frequency` | Subscriber nhận được |
+|---|---|
+| `DAILY` / `WEEKLY` | **chỉ** `EMAIL` |
+| `IMMEDIATE` | `SNS` (và `EMAIL`) |
+
+Code ghép `DAILY` với `SNS`. Cách chữa **không phải** đổi thành `IMMEDIATE` rồi thôi — hai trường ràng buộc nhau nhưng nằm cách nhau mấy dòng, để nguyên thì lần sau lại ghép sai. Thay bằng một biến đặt cả hai:
+
+```hcl
+anomaly_alert_mode = "sns_immediate"   # IMMEDIATE + SNS
+anomaly_alert_mode = "email_daily"     # DAILY + EMAIL
+```
+
+Và đây là khác biệt thật, không chỉ cú pháp: ở chế độ `email_daily`, Cost Explorer gửi **thẳng** tới từng địa chỉ, **không qua SNS topic**. Muốn đẩy cảnh báo bất thường sang Slack sau này thì phải làm lại từ đầu. `sns_immediate` giữ mọi cảnh báo chi phí đi chung một cửa.
+
+> **Dạng lỗi này đáng nhận ra:** khi hai trường của cùng một resource ràng buộc lẫn nhau, để chúng là hai biến riêng nghĩa là mời người dùng ghép sai. Gộp thành một biến với danh sách giá trị hợp lệ thì tổ hợp sai không tồn tại.
+
+**Và điều cả hai lỗi này nói về repo:** không lỗi nào bị `terraform validate` bắt được — cú pháp đúng, kiểu đúng, tham chiếu đúng. Chỉ AWS mới biết. Nghĩa là **layer nào chưa apply thật thì chưa tin được**, và đó là thông tin nên có khi đọc repo này:
+
+| Layer | Đã chạy thật |
+|---|---|
+| `tf-backend`, `organization`, `permission-sets`, `billing-guard` | ✔ |
+| `config-detective`, `control-tower` | ✘ — và `config-detective` là layer duy nhất tốn tiền |
 
 ---
 
@@ -389,7 +435,7 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 | 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử — xem mục 5c |
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
 | 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b. Còn 3 việc thủ công trong console |
-| 6 | `billing-guard` | Còn — giai đoạn 6 |
+| 6 | `billing-guard` | **Xong** — budget, SNS, anomaly. Còn xác nhận email SNS và `enable_cost_allocation_tags` |
 | 7 | **Layer `account-baseline`** | Còn — tự động hoá việc 2 và việc 1; ứng viên số một |
 | 8 | `config-detective` | Còn — chỉ khi cần lớp phát hiện; layer duy nhất tốn tiền |
 

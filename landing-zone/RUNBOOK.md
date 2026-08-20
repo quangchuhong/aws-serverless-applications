@@ -4,7 +4,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 
 > Mỗi layer có README riêng nói **vì sao**. File này chỉ nói **làm gì, theo thứ tự nào, và dừng ở đâu nếu sai**.
 >
-> **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 11 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 13 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
 **Chi phí**: ~$0. Tốn tiền chỉ khi bật `config-detective` (giai đoạn 6, để sau).
@@ -501,18 +501,41 @@ cd ../billing-guard
 cp terraform.tfvars.example terraform.tfvars
 ```
 
+**Chạy lệnh này TRƯỚC khi sửa tfvars** — kết quả quyết định một biến:
+
+```bash
+aws ce get-anomaly-monitors \
+  --query 'AnomalyMonitors[?MonitorType==`DIMENSIONAL`].[MonitorName,MonitorArn]' \
+  --output table
+```
+
+| Kết quả | Đặt |
+|---|---|
+| Ra ARN (thường có sẵn tên "Services") | `service_anomaly_monitor_arn = "<ARN do>"` |
+| Rỗng | Để rỗng, Terraform tạo mới |
+
+Mỗi account **chỉ được một** dimensional monitor. Không kiểm mà apply thẳng sẽ ra `Limit exceeded on dimensional spend monitor creation`.
+
 ```hcl
 alert_emails           = ["quang.hong.0991@gmail.com"]
 org_monthly_budget_usd = "20"
 
 # Lan dau CHUA CO resource nao mang tag -> phai TAT
 enable_cost_allocation_tags = false
+
+# Mot bien dat CA HAI truong frequency va subscriber.type, vi AWS
+# rang buoc chung: DAILY/WEEKLY chi nhan EMAIL, SNS can IMMEDIATE.
+anomaly_alert_mode = "sns_immediate"
+
+service_anomaly_monitor_arn = ""   # hoac ARN tu lenh tren
 ```
 
 ```bash
 terraform init -backend-config=backend.hcl
 terraform apply
 ```
+
+> **Region là `us-east-1`, không phải region của bạn.** Budget, Cost Explorer, anomaly detection và metric `AWS/Billing` chỉ tồn tại ở đó. Đó cũng là lý do `allowed_regions` ở giai đoạn 2 bắt buộc có `us-east-1` — có validation chặn nếu thiếu. Bỏ region đó ra là tự khoá mình khỏi toàn bộ tầng billing.
 
 Sau khi đã dựng vài resource (demo network chẳng hạn), quay lại bật:
 
@@ -522,9 +545,21 @@ enable_cost_allocation_tags = true
 
 > **Cost allocation tag không hồi tố.** Bật muộn = mất vĩnh viễn dữ liệu phân bổ của giai đoạn trước. Nên bật sớm nhất có thể sau khi có resource đầu tiên.
 
-**Xác nhận email SNS** — chưa bấm link = không nhận được cảnh báo nào.
+**Xác nhận email SNS** — chưa bấm link = không nhận được cảnh báo nào. Terraform vẫn báo `Creation complete`, nhưng subscription nằm ở trạng thái `PendingConfirmation` và mọi cảnh báo rơi vào hư không.
 
-☑ Xong giai đoạn 6 khi: nhận được email xác nhận SNS và đã bấm link.
+```bash
+aws sns list-subscriptions-by-topic --topic-arn <sns_topic_arn> \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+```
+
+Cột thứ hai còn ghi `PendingConfirmation` là chưa xong. Thử đường cảnh báo từ đầu đến cuối:
+
+```bash
+aws sns publish --topic-arn <sns_topic_arn> \
+  --subject "test canh bao billing" --message "Duong canh bao da thong."
+```
+
+☑ Xong giai đoạn 6 khi: `list-subscriptions-by-topic` ra ARN thật (không phải `PendingConfirmation`) và `sns publish` về được hộp thư.
 
 ---
 
