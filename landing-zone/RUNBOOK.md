@@ -213,6 +213,20 @@ aws organizations list-policies-for-target \
 
 Lệnh thứ ba quan trọng ngang ba lệnh kia — siết quá tay cũng là lỗi.
 
+**Kiểm chứng `prod_guard`** — cặp lệnh giống hệt nhau, khác kết quả **chỉ vì OU khác nhau**:
+
+```bash
+aws ec2 delete-snapshot --snapshot-id snap-00000000000000000 --profile <prod>
+# PHAI ra: AccessDenied ... explicit deny in a service control policy
+
+aws ec2 delete-snapshot --snapshot-id snap-00000000000000000 --profile <dev>
+# PHAI ra: InvalidSnapshot.NotFound   <- khong bi SCP chan, dung
+```
+
+> **Vì sao dùng snapshot ID giả:** SCP được đánh giá **trước** khi AWS kiểm tra resource có tồn tại — nên không cần tạo gì để thử. `NotFound` ở account prod nghĩa là SCP **không** chặn.
+>
+> Đừng thử bằng `kms schedule-key-deletion --key-id alias/aws/ebs`: KMS từ chối alias trước khi tới SCP (`InvalidArnException`), và AWS-managed key vốn không xoá được — phép thử không nói lên điều gì.
+
 ☑ Xong giai đoạn 2 khi: `terraform output ou_ids` ra đủ cây OU, và SCP đã gắn ở mức bạn muốn.
 
 ---
