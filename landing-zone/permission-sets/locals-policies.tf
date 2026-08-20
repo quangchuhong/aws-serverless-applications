@@ -252,36 +252,57 @@ locals {
   # LUU Y CU PHAP: phai dung ArnNotLike chu khong phai StringNotEquals.
   # StringNotEquals so sanh CHINH XAC, khong hieu dau * trong ARN,
   # nen dieu kien se khong bao gio khop va statement thanh vo dung.
-  ########################################
-  deny_create_without_boundary = var.enforce_security_admin_boundary ? [
-    {
-      Sid    = "DenyCreatePrincipalWithoutBoundary"
-      Effect = "Deny"
-      Action = [
-        "iam:CreateRole",
-        "iam:CreateUser",
-      ]
-      Resource = "*"
-      Condition = {
-        ArnNotLike = {
-          "iam:PermissionsBoundary" = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
-        }
+  #
+  # ---------------------------------------------------------------
+  # VI SAO HAI STATEMENT NAY LA HAI LOCAL RIENG, KHONG PHAI MOT LIST
+  #
+  # Ban dau chung nam trong mot list dieu kien:
+  #   var.enforce_security_admin_boundary ? [stmt1, stmt2] : []
+  #
+  # Terraform tu choi ngay o buoc kiem kieu, KE CA khi bien la false:
+  #   Inconsistent conditional result types
+  #   The 'true' tuple has length 2, but the 'false' tuple has length 0.
+  #
+  # Ly do: stmt1 co thuoc tinh Condition, stmt2 khong. Hai object khac
+  # bo thuoc tinh -> khong quy duoc ve list(object) chung -> ket qua la
+  # TUPLE. Tuple do dai 2 va tuple do dai 0 la hai kieu khac nhau, nen
+  # hai nhanh cua ?: khong bao gio thong nhat duoc.
+  #
+  # Dung chinh cai bay ma dau permission-sets.tf da canh bao.
+  #
+  # Cach chua: bo dieu kien o day. Viec bat/tat da do local.guard_bound
+  # trong permission-sets.tf lo - no tra ve list<string> ten statement,
+  # dong nhat kieu nen khong bao gio vuong. Mot cong tac o mot cho.
+  # ---------------------------------------------------------------
+
+  deny_create_without_boundary = {
+    Sid    = "DenyCreatePrincipalWithoutBoundary"
+    Effect = "Deny"
+    Action = [
+      "iam:CreateRole",
+      "iam:CreateUser",
+    ]
+    Resource = "*"
+    Condition = {
+      ArnNotLike = {
+        "iam:PermissionsBoundary" = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
       }
-    },
-    {
-      Sid    = "DenyRemovingOrEditingTheBoundaryItself"
-      Effect = "Deny"
-      Action = [
-        "iam:DeleteRolePermissionsBoundary",
-        "iam:DeleteUserPermissionsBoundary",
-        "iam:CreatePolicyVersion",
-        "iam:SetDefaultPolicyVersion",
-        "iam:DeletePolicy",
-        "iam:DeletePolicyVersion",
-      ]
-      Resource = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
-    },
-  ] : []
+    }
+  }
+
+  deny_boundary_tampering = {
+    Sid    = "DenyRemovingOrEditingTheBoundaryItself"
+    Effect = "Deny"
+    Action = [
+      "iam:DeleteRolePermissionsBoundary",
+      "iam:DeleteUserPermissionsBoundary",
+      "iam:CreatePolicyVersion",
+      "iam:SetDefaultPolicyVersion",
+      "iam:DeletePolicy",
+      "iam:DeletePolicyVersion",
+    ]
+    Resource = "arn:aws:iam::*:policy/${var.permission_boundary_name}"
+  }
 
   ########################################
   # 7. Bao ve nen tang - dat cho MOI set tru account-admin

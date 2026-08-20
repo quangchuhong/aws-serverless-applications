@@ -21,7 +21,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Account con đầu tiên | `lz-network` trong OU `Infrastructure` |
 | Kiểm chứng SCP | 3/3 đúng — 2 chặn, 1 cho qua |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 9 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 11 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -42,12 +42,14 @@ Xếp theo thứ tự gặp phải.
 | 7 | Script bảo migrate cả 6 layer | Không phân biệt layer đã/chưa có state | Lỗi logic | `df67624`, `15abb10` |
 | 8 | `Instance cannot be destroyed` | `create_organization` đổi `true`→`false` | Tên biến gây hiểu nhầm | `cad896f` |
 | 9 | `is tainted, so must be replaced` | Apply lỗi giữa chừng để lại taint | Hệ quả của #1 | `3410e1a` |
+| 10 | `Inconsistent conditional result types` | `?:` trả về tuple 2 vs tuple 0 trong `permission-sets` | **Lỗi code** | *(mục 2.5)* |
+| 11 | `validate-policies.sh` in bảng rỗng rồi thoát 0 | Mã thoát pipeline là của `sed`, `set -e` không nổ | **Lỗi code** | *(mục 2.5)* |
 
-**5/9 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**7/11 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
-## 2. Bốn lỗi đáng học nhất
+## 2. Năm lỗi đáng học nhất
 
 ### 2.1. Một service principal sai làm hỏng cả resource
 
@@ -126,6 +128,63 @@ Tên biến sai ngay từ đầu: nó không phải *"có tạo mới không"* m
 > ```bash
 > terraform state rm 'aws_organizations_organization.this[0]'
 > ```
+
+### 2.5. Viết cảnh báo về cái bẫy rồi vẫn ngã vào nó
+
+Giai đoạn 5, lệnh đầu tiên ở layer `permission-sets` đã dừng:
+
+```
+Error: Inconsistent conditional result types
+  The 'true' tuple has length 2, but the 'false' tuple has length 0.
+```
+
+Đoạn gây lỗi:
+
+```hcl
+deny_create_without_boundary = var.enforce_security_admin_boundary ? [
+  { Sid = "...", Action = [...], Resource = "*", Condition = { ... } },   # CO Condition
+  { Sid = "...", Action = [...], Resource = "arn:...:policy/lz-boundary" } # KHONG co Condition
+] : []
+```
+
+Terraform kiểm kiểu **cả hai nhánh**, kể cả khi biến là `false` — nên lỗi xuất hiện bất kể cấu hình. Layer này chưa từng `plan` được lần nào.
+
+Cơ chế: hai object có bộ thuộc tính khác nhau (một có `Condition`, một không) nên không quy được về `list(object)` chung. Kết quả giữ nguyên kiểu **tuple**. Tuple độ dài 2 và tuple độ dài 0 là hai kiểu khác nhau, không thống nhất được — trong khi `list(X)` độ dài 2 và độ dài 0 thì thống nhất bình thường.
+
+> Đây chính là hạn chế mà comment đầu `permission-sets.tf` đã mô tả và đã có cách vòng tránh — `jsonencode` từng statement thành **chuỗi**, rồi ghép `list(string)`. Cách vòng tránh được áp dụng đúng ở file này, nhưng file `locals-policies.tf` bên cạnh vẫn còn một chỗ dùng list object thô.
+
+Thứ khiến nó sống sót lâu: **hai công tắc cho một việc**. `local.guard_bound` trong `permission-sets.tf` đã quyết định có dùng hai statement này hay không; điều kiện trong `locals-policies.tf` là thừa. Cách chữa là bỏ cái thừa — tách thành hai local riêng, không điều kiện, không đánh chỉ số list:
+
+```hcl
+deny_create_without_boundary = { Sid = "DenyCreatePrincipalWithoutBoundary", ... }
+deny_boundary_tampering      = { Sid = "DenyRemovingOrEditingTheBoundaryItself", ... }
+```
+
+**Lỗi thứ hai lộ ra ngay sau đó.** `validate-policies.sh` đáng lẽ phải bắt được chuyện này từ lâu, nhưng nó im lặng:
+
+```bash
+sets=$(terraform console <<<'keys(local.permission_sets)' | tr -d '[]",' | tr ' ' '\n' | sed '/^$/d')
+```
+
+Mã thoát của một pipeline là mã thoát của **lệnh cuối** — tức `sed`, luôn bằng 0. `set -e` không bao giờ nổ, lỗi của Terraform chỉ hiện trên stderr rồi script in tiếp một bảng rỗng và thoát 0. Một script kiểm tra báo "đạt" khi không kiểm được gì thì tệ hơn là không có script.
+
+Bản viết lại gọi `terraform console` **một lần** (thay vì ~100 lần, mỗi statement một lần), bắt stderr ra file, và kiểm tra mã thoát tường minh. Thêm hai chi tiết cụ thể của `terraform console` phi tương tác, phải thoả **đồng thời**:
+
+| Ràng buộc | Vi phạm thì báo |
+|---|---|
+| Đánh giá **từng dòng** — không nhận biểu thức nhiều dòng | `Missing expression` |
+| HCL cần newline **hoặc dấu phẩy** giữa các thuộc tính object | `Missing attribute separator` |
+
+Ép biểu thức về một dòng thoả điều 1 thì vi phạm điều 2. Nên phải viết nhiều dòng *có dấu phẩy sau mỗi thuộc tính*, rồi `tr '\n' ' '`.
+
+Kiểm chứng bản mới bằng một **test âm** — nhân đôi một mảnh statement để tạo `Sid` trùng:
+
+```
+lz-billing    1331    3    TRUNG Sid
+CO LOI - khong apply.        EXIT=1
+```
+
+Bắt đúng và thoát khác 0. Bài học: mỗi lưới an toàn phải được thử bằng một trường hợp *chắc chắn sai*, nếu không thì không biết nó có còn hoạt động hay không.
 
 ---
 
@@ -223,15 +282,32 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 
 ## 7. Việc còn lại sau lần dựng này
 
-| # | Việc | Vì sao |
+| # | Việc | Trạng thái |
 |---|---|---|
-| 1 | 4 account còn lại + chuyển vào OU | Mới có `lz-network` |
-| 2 | Xoá default VPC mọi account × mọi region | Mục 4 |
-| 3 | Bật `network_lock` + `prod_guard` | Cần account tương ứng mới kiểm chứng được |
-| 4 | Identity Center + `permission-sets` | Giai đoạn 4–5 của runbook |
-| 5 | `billing-guard` | Giai đoạn 6 |
-| 6 | **Layer `account-baseline`** | Tự động hoá mục 4 — ứng viên số một |
-| 7 | `config-detective` | Chỉ khi cần lớp phát hiện; đây là layer duy nhất tốn tiền |
+| 1 | 6 account + chuyển vào đúng OU | Account xong; **phải kiểm `list-parents`** — `create-account` luôn thả vào root, không vào OU |
+| 2 | Xoá default VPC mọi account × mọi region | Còn — mục 4 |
+| 3 | Bật `network_lock` + `prod_guard` | Đã bật, đủ 4 SCP. `prod_guard` còn nợ phép thử `delete-snapshot` |
+| 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
+| 5 | `permission-sets` | Đang làm — lỗi #10 và #11 phát sinh ở đây |
+| 6 | `billing-guard` | Còn — giai đoạn 6 |
+| 7 | **Layer `account-baseline`** | Còn — tự động hoá việc 2 và việc 1; ứng viên số một |
+| 8 | `config-detective` | Còn — chỉ khi cần lớp phát hiện; layer duy nhất tốn tiền |
+
+### Cái bẫy của việc 1
+
+`aws organizations create-account` **không nhận tham số OU**. Account mới luôn nằm ở root, phải `move-account` thủ công. SCP thì gắn vào OU — nên một account quên chuyển là account **không có guardrail nào ngoài hai SCP gắn ở root**.
+
+Nguy nhất là `lz-app-prod`: `prod_guard` gắn vào OU `Production`, account còn ở root thì SCP đó không chạm tới nó.
+
+```bash
+for id in $(aws organizations list-accounts --query 'Accounts[].Id' --output text); do
+  printf '%-14s %-16s %s\n' "$id" \
+    "$(aws organizations describe-account --account-id $id --query 'Account.Name' --output text)" \
+    "$(aws organizations list-parents --child-id $id --query 'Parents[0].[Type,Id]' --output text)"
+done
+```
+
+`ROOT` ở cột cuối = chưa chuyển.
 
 ---
 

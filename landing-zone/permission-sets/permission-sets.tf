@@ -185,8 +185,10 @@ locals {
     passrole_analytics      = jsonencode(local.passrole_analytics)
     iam_minimal             = jsonencode(local.iam_minimal_for_workload)
 
-    boundary_1 = length(local.deny_create_without_boundary) > 0 ? jsonencode(local.deny_create_without_boundary[0]) : ""
-    boundary_2 = length(local.deny_create_without_boundary) > 0 ? jsonencode(local.deny_create_without_boundary[1]) : ""
+    # Luon sinh ra chuoi. Viec CO DUNG hay khong do local.guard_bound
+    # quyet dinh - khong cu the hoa dieu kien o ca hai noi.
+    boundary_1 = jsonencode(local.deny_create_without_boundary)
+    boundary_2 = jsonencode(local.deny_boundary_tampering)
   }
 
   # Bat/tat theo bien - tra ve list ten statement (list<string>,
