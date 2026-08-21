@@ -98,13 +98,15 @@ resource "aws_config_organization_managed_rule" "this" {
   # sau do vai phut. Nhung Terraform ghi vao state o trang thai do
   # va lan apply sau se doi tao lai.
   #
-  # Cang nhieu account, cang nhieu rule thi cang lau. 30 phut du cho
-  # to chuc co vai chuc account.
+  # Cang nhieu account, cang nhieu rule thi cang lau. Voi 6 account va
+  # 8 rule, 30 phut VAN KHONG DU - da do thuc te. AWS trien khai tung
+  # rule mot xuong tung account, va 8 rule chay song song deu cham
+  # muc 30 phut cung luc.
   ####################################
   timeouts {
-    create = "30m"
-    update = "30m"
-    delete = "30m"
+    create = "90m"
+    update = "90m"
+    delete = "90m"
   }
 
   ####################################
