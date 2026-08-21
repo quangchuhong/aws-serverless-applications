@@ -13,6 +13,14 @@ data "aws_organizations_organization" "this" {}
 locals {
   bucket_name = "${var.project}-config-snapshots-${var.log_archive_account_id}"
   org_id      = data.aws_organizations_organization.this.id
+
+  # Moc chuyen storage class.
+  #
+  # 30 la TOI THIEU cua S3 cho STANDARD_IA - khong dat thap hon duoc.
+  # Ca hai moc chi duoc dung khi expiration xa hon chung; xem dynamic
+  # block trong aws_s3_bucket_lifecycle_configuration.
+  ia_transition_days      = 30
+  glacier_transition_days = 90
 }
 
 resource "aws_s3_bucket" "config" {
@@ -119,14 +127,31 @@ resource "aws_s3_bucket_lifecycle_configuration" "config" {
 
     filter {}
 
-    transition {
-      days          = 90
-      storage_class = "STANDARD_IA"
+    # Transition CHI xuat hien khi con kip truoc han xoa.
+    #
+    # Truoc day hai moc nay ghi cung 90 va 180 trong khi expiration
+    # lay tu bien. Dat snapshot_retention_days = 30 la S3 tu choi ca
+    # cau hinh:
+    #   InvalidArgument: 'Days' in the Expiration action for filter
+    #   '(prefix=)' must be greater than 'Days' in the Transition action
+    #
+    # 30 ngay la moc TOI THIEU cua S3 cho STANDARD_IA - dat nho hon
+    # cung bi tu choi. Nen giu retention ngan thi don gian la khong
+    # chuyen tang: object song qua ngan de viec chuyen tang co y nghia.
+    dynamic "transition" {
+      for_each = var.snapshot_retention_days > local.ia_transition_days ? [1] : []
+      content {
+        days          = local.ia_transition_days
+        storage_class = "STANDARD_IA"
+      }
     }
 
-    transition {
-      days          = 180
-      storage_class = "GLACIER_IR"
+    dynamic "transition" {
+      for_each = var.snapshot_retention_days > local.glacier_transition_days ? [1] : []
+      content {
+        days          = local.glacier_transition_days
+        storage_class = "GLACIER_IR"
+      }
     }
 
     # PHAI lon hon object_lock_retention_days, neu khong lifecycle
@@ -136,7 +161,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "config" {
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = 90
+      noncurrent_days = min(90, var.snapshot_retention_days)
     }
   }
 

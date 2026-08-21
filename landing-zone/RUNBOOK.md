@@ -569,7 +569,9 @@ Lớp **phát hiện**: SCP trả lời *"ai được làm gì"*, Config trả l
 
 > **Đây là lớp duy nhất tốn tiền thật.** SCP đã lo phần ngăn chặn — phần quan trọng hơn — nên hoãn giai đoạn này là lựa chọn hợp lý cho tới khi thật sự cần trả lời câu hỏi trên.
 
-### 7a. Ba điều kiện tiên quyết — thiếu cái nào cũng hỏng lặng lẽ
+### 7a. Bốn điều kiện tiên quyết — thiếu cái nào cũng hỏng
+
+> **Khuôn chung đáng nhớ:** đăng ký ở tầng Organizations là **một chuyện**, dịch vụ tự kích hoạt là **chuyện khác**. Ba dịch vụ trong giai đoạn này đều cần bước riêng — Security Hub, GuardDuty, CloudFormation StackSets. Chỉ AWS Config là đăng ký ở Organizations đủ dùng.
 
 **(1) Delegated administrator** — làm ở layer `organization`, không phải ở đây:
 
@@ -625,7 +627,16 @@ Security Hub là dịch vụ **theo region** — lặp cả ba bước cho mỗi
 
 Chưa bật thì recorder vẫn ghi, rule vẫn đánh giá, S3 vẫn có file — **và không một cảnh báo nào được gửi**. Không lỗi, không cảnh báo.
 
-**(3) Object Lock** — quyết định **trước** khi tạo bucket, không sửa được sau:
+**(3) Trusted access cho CloudFormation StackSets** — chạy **một lần** từ management account:
+
+```bash
+aws cloudformation activate-organizations-access --region ap-southeast-1
+aws cloudformation describe-organizations-access --region ap-southeast-1   # Status: ENABLED
+```
+
+Bỏ bước này thì StackSet báo `ValidationError: You must enable organizations access to operate a service managed stack set`. Có `member.org.stacksets.cloudformation.amazonaws.com` trong `aws_service_access_principals` là **chưa đủ** — đúng khuôn của Security Hub và GuardDuty.
+
+**(4) Object Lock** — quyết định **trước** khi tạo bucket, không sửa được sau:
 
 ```hcl
 enable_object_lock         = true

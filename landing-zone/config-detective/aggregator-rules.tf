@@ -85,6 +85,28 @@ resource "aws_config_organization_managed_rule" "this" {
   # Sandbox / dev: vi pham la chuyen binh thuong, bao dong chi tao nhieu
   excluded_accounts = var.excluded_accounts
 
+  ####################################
+  # 5 PHUT MAC DINH LA KHONG DU
+  #
+  # Organization rule trien khai xuong MOI account trong to chuc, va
+  # AWS lam tuan tu. Provider chi cho 5 phut roi bao:
+  #
+  #   timeout while waiting for state to become 'CREATE_SUCCESSFUL'
+  #   (last state: 'CREATE_IN_PROGRESS', timeout: 5m0s)
+  #
+  # Do KHONG phai that bai - rule van dang duoc tao va thuong xong
+  # sau do vai phut. Nhung Terraform ghi vao state o trang thai do
+  # va lan apply sau se doi tao lai.
+  #
+  # Cang nhieu account, cang nhieu rule thi cang lau. 30 phut du cho
+  # to chuc co vai chuc account.
+  ####################################
+  timeouts {
+    create = "30m"
+    update = "30m"
+    delete = "30m"
+  }
+
   depends_on = [aws_config_configuration_aggregator.org]
 }
 

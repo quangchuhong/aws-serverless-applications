@@ -106,6 +106,26 @@ resource "aws_cloudformation_stack_set" "recorder" {
 
   # SERVICE_MANAGED = Organizations tu lo IAM role hai dau,
   # khong phai tu tao AWSCloudFormationStackSetExecutionRole
+  #
+  ####################################
+  # DIEU KIEN TIEN QUYET THU CONG
+  #
+  #   ValidationError: You must enable organizations access to
+  #   operate a service managed stack set
+  #
+  # Bat "member.org.stacksets.cloudformation.amazonaws.com" trong
+  # aws_service_access_principals la CHUA DU. CloudFormation co loi
+  # goi kich hoat RIENG, chay MOT LAN tu management account:
+  #
+  #   aws cloudformation activate-organizations-access --region <region>
+  #
+  # Kiem tra:
+  #   aws cloudformation describe-organizations-access --region <region>
+  #   -> Status: ENABLED
+  #
+  # Cung khuon voi Security Hub va GuardDuty: dang ky o tang
+  # Organizations la mot chuyen, dich vu tu kich hoat la chuyen khac.
+  ####################################
   permission_model = "SERVICE_MANAGED"
 
   auto_deployment {
