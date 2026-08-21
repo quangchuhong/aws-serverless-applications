@@ -107,7 +107,21 @@ resource "aws_config_organization_managed_rule" "this" {
     delete = "30m"
   }
 
-  depends_on = [aws_config_configuration_aggregator.org]
+  ####################################
+  # THU TU QUAN TRONG: RECORDER TRUOC, RULE SAU
+  #
+  # Rule danh gia du lieu do recorder ghi. Trien khai rule xuong mot
+  # account CHUA CO recorder thi rule khong co gi de doc - no o
+  # INSUFFICIENT_DATA, hoac keo dai CREATE_IN_PROGRESS.
+  #
+  # Truoc day chi phu thuoc aggregator. Aggregator chi GOM du lieu,
+  # no khong tao ra du lieu - nen phu thuoc vao no la chua du.
+  # StackSet moi la thu dung recorder o tung account.
+  ####################################
+  depends_on = [
+    aws_config_configuration_aggregator.org,
+    aws_cloudformation_stack_set_instance.recorder,
+  ]
 }
 
 ########################################
