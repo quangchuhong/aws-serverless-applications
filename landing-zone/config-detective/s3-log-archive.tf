@@ -140,6 +140,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "config" {
     }
   }
 
+  # CHAN CUNG, khong phai canh bao.
+  #
+  # check "retention_longer_than_object_lock" o cuoi file cung kiem
+  # dieu nay, nhung check chi CANH BAO - apply van chay. Voi loi nay
+  # thi canh bao khong du: lifecycle se co xoa object dang bi Object
+  # Lock giu, that bai LANG LE, object tich lai mai va ban tra tien
+  # luu tru vo thoi han. Khong co thong bao nao.
+  lifecycle {
+    precondition {
+      condition     = !var.enable_object_lock || var.snapshot_retention_days > var.object_lock_retention_days
+      error_message = "snapshot_retention_days (${var.snapshot_retention_days}) phai LON HON object_lock_retention_days (${var.object_lock_retention_days}). Nho hon thi lifecycle co xoa object bi khoa, that bai lang le, object khong bao gio duoc don."
+    }
+  }
+
   depends_on = [aws_s3_bucket_versioning.config]
 }
 

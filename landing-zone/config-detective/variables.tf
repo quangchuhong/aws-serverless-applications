@@ -228,15 +228,41 @@ variable "enable_object_lock" {
 }
 
 variable "object_lock_retention_days" {
-  description = "So ngay khong ai xoa duoc object, ke ca root"
+  description = <<-EOT
+    So ngay khong ai xoa duoc object, ke ca root.
+
+    HE QUA THUC TE hay bi bo qua: bucket KHONG XOA DUOC cho den khi
+    object cuoi cung het han. Dat 90 nghia la neu muon don sach lab
+    thi phai doi 90 ngay - khong co duong tat, COMPLIANCE mode khong
+    co ai go duoc.
+
+    Lab dang thu: 7 - van chung minh duoc co che, khoa chan 1 tuan.
+    Moi truong that:  90 tro len, theo yeu cau tuan thu cua ban.
+  EOT
   type        = number
   default     = 90
+
+  validation {
+    condition     = var.object_lock_retention_days >= 1
+    error_message = "Phai it nhat 1 ngay."
+  }
 }
 
 variable "snapshot_retention_days" {
-  description = "Sau bao nhieu ngay thi xoa snapshot. Phai LON HON object_lock_retention_days."
+  description = <<-EOT
+    Sau bao nhieu ngay thi lifecycle xoa snapshot.
+
+    PHAI LON HON object_lock_retention_days. Nho hon thi lifecycle co
+    xoa object ma Object Lock cam xoa: KHONG BAO LOI, object tich lai
+    mai, va ban tra tien luu tru vo thoi han cho thu tuong da duoc don.
+  EOT
   type        = number
   default     = 365
+
+  validation {
+    condition     = var.snapshot_retention_days > 0
+    error_message = "Phai lon hon 0."
+  }
 }
 
 variable "snapshot_delivery_frequency" {
