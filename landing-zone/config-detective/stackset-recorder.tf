@@ -174,9 +174,33 @@ resource "aws_cloudformation_stack_set_instance" "recorder" {
   #   An argument named "region" is not expected here
   region = var.region
 
+  # 25% voi 4 account = TUNG ACCOUNT MOT. Do la chu y - sai thi dung
+  # som. Doi lai la cham: moi account vai phut, cong don len nhanh.
   operation_preferences {
     failure_tolerance_percentage = 10
     max_concurrent_percentage    = 25
+  }
+
+  ####################################
+  # 30 PHUT MAC DINH KHONG DU
+  #
+  # Trien khai tuan tu xuong tung account, moi account phai dung
+  # CloudFormation stack rieng. 4 account da gan cham 30 phut; 10
+  # account thi chac chan vuot.
+  #
+  # Vuot timeout KHONG phai that bai - StackSet van chay tiep o phia
+  # AWS. Nhung Terraform danh dau resource TAINTED, va lan apply sau
+  # se doi thay the mot thu dang hoat dong binh thuong.
+  #
+  # Gap taint o day thi kiem tra AWS TRUOC khi quyet dinh:
+  #   aws cloudformation list-stack-instances \
+  #     --stack-set-name <ten> --call-as SELF
+  #   Tat ca CURRENT -> terraform untaint, dung thay the.
+  ####################################
+  timeouts {
+    create = "90m"
+    update = "90m"
+    delete = "90m"
   }
 }
 
