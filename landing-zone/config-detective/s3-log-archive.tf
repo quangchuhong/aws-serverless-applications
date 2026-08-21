@@ -21,6 +21,17 @@ locals {
   # block trong aws_s3_bucket_lifecycle_configuration.
   ia_transition_days      = 30
   glacier_transition_days = 90
+
+  # Account duoc phep giao file Config vao bucket nay.
+  #
+  # Lay TAT CA account ACTIVE chu khong chi cac account trong
+  # recorder_target_ous: account nam ngoai pham vi khong co recorder
+  # nen khong giao gi ca, con neu sau nay mo rong pham vi thi policy
+  # da san sang - tranh mot lan sua policy nua.
+  delivery_account_ids = sort([
+    for a in data.aws_organizations_organization.this.accounts :
+    a.id if a.status == "ACTIVE"
+  ])
 }
 
 resource "aws_s3_bucket" "config" {
@@ -203,6 +214,17 @@ resource "aws_s3_bucket_policy" "config" {
     Statement = [
       # Config kiem tra quyen truoc khi giao - thieu statement nay
       # thi khong bao gio giao duoc file dau tien
+      # DUNG AWS:SourceAccount, KHONG dung AWS:SourceOrgID.
+      #
+      # Config goi S3 voi tu cach DICH VU, mang theo SourceAccount la
+      # account thanh vien dang giao file. SourceOrgID khong duoc dien
+      # dang tin cho luoi goi nay - dieu kien khong bao giờ khop va
+      # moi thu bi tu choi voi:
+      #   InsufficientDeliveryPolicyException: unable to write to bucket
+      #
+      # Doi lai: them account moi thi PHAI apply lai layer nay, neu
+      # khong account do khong giao duoc file. Gan buoc do vao account
+      # vending (doc 09), giong nhu accounts_by_scope ben permission-sets.
       {
         Sid       = "AWSConfigBucketPermissionsCheck"
         Effect    = "Allow"
@@ -210,7 +232,7 @@ resource "aws_s3_bucket_policy" "config" {
         Action    = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource  = aws_s3_bucket.config[0].arn
         Condition = {
-          StringEquals = { "AWS:SourceOrgID" = local.org_id }
+          StringEquals = { "AWS:SourceAccount" = local.delivery_account_ids }
         }
       },
       {
@@ -220,7 +242,7 @@ resource "aws_s3_bucket_policy" "config" {
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.config[0].arn}/*"
         Condition = {
-          StringEquals = { "AWS:SourceOrgID" = local.org_id }
+          StringEquals = { "AWS:SourceAccount" = local.delivery_account_ids }
         }
       },
       {

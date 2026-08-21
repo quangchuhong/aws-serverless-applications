@@ -95,6 +95,26 @@ scp_dry_run = true
 scp_exempt_role_names = []
 # scp_exempt_role_names = ["lz-cicd-deploy", "AWSControlTowerExecution"]
 
+# ---------------------------------------------------------------
+# CAN THIET NEU DUNG landing-zone/config-detective
+#
+# baseline SCP chan config:DeleteConfigurationRecorder va
+# config:DeleteDeliveryChannel - dung y do, khong ai duoc tat audit
+# trail. Nhung no chan luon CLOUDFORMATION ROLLBACK: mot lan trien
+# khai StackSet that bai la de lai stack DELETE_FAILED khong go duoc,
+# va khong ai co quyen don.
+#
+# Mien tru service-linked role ma StackSet dung o account thanh vien.
+# Ghi ca duong dan - exempt_arns rap thanh arn:aws:iam::*:role/<chuoi nay>:
+#
+#   "aws-service-role/cloudformation.amazonaws.com/AWSServiceRoleForCloudFormationStackSetsOrgMember"
+#
+# KIEM CHUNG sau khi apply, dung chinh loi de thu: neu van thay
+# "explicit deny in a service control policy" trong StatusReason cua
+# stack instance thi mien tru chua an - xem lai ten role bang
+#   aws iam list-roles --path-prefix /aws-service-role/ --profile <member>
+# ---------------------------------------------------------------
+
 ########################################
 # 6. Delegated administrator
 #
