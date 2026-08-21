@@ -524,6 +524,32 @@ Với 6 account và 8 rule, cả 8 rule chạm mốc 30 phút **cùng lúc** —
 
 Vượt timeout **không phải thất bại** — AWS vẫn chạy tiếp. Nhưng Terraform đánh dấu tainted, và lần apply sau đòi thay thế một thứ đang hoạt động bình thường.
 
+#### Cần gạt chi phí và phạm vi rule là hai biến ở hai file
+
+Lỗi cuối cùng của giai đoạn, và là hệ quả trực tiếp của một quyết định **đúng**.
+
+`recorder_target_ous` cố ý bỏ `Non-Production` — cần gạt chi phí số hai, vì dev là nơi resource đổi nhiều nhất. Nhưng organization rule đẩy xuống **mọi account thành viên, kể cả management**, bất kể biến đó:
+
+| Account | Lỗi |
+|---|---|
+| `lz-app-dev` — ngoài `recorder_target_ous` | `NoAvailableConfigurationRecorder` |
+| management — chưa từng bật Config | `UnableToAssumeServiceLinkedRoleException` |
+
+Hai biến ràng buộc nhau mà không có gì trong code nối lại:
+
+```hcl
+recorder_target_ous = [...]   # account nao CO recorder
+excluded_accounts   = []      # account nao KHONG bi ap rule
+```
+
+Và nó hỏng **chậm**: rule ngồi `CREATE_IN_PROGRESS` hàng chục phút rồi mới thành `CREATE_FAILED`, kéo cả lần apply theo — rồi lại không xoá được vì còn đang tạo.
+
+Nay có `check` block bắt trường hợp management account (layer chạy ở đó nên `data.aws_caller_identity` biết ID). Các account khác không suy ra được nếu không phụ thuộc dữ liệu OU, nên thành quy tắc trong mô tả biến:
+
+> Mọi account ACTIVE không nằm trong `recorder_target_ous` **phải** có mặt trong `excluded_accounts`. Luôn bao gồm management account.
+
+**Kết quả cuối giai đoạn 7:** 26 resource, 4/4 recorder đang ghi, aggregator gom 2 region, 8 organization rule áp cho 4 account.
+
 ---
 
 ## 6. Sổ tay rút gọn
