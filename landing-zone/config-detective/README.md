@@ -107,15 +107,33 @@ Config rule vi pham  ──►  Security Hub  ──►  EventBridge  ──► 
 
 Security Hub chưa bật thì mọi thứ khác vẫn chạy đúng: recorder ghi, rule đánh giá, file vào S3, aggregator gom dữ liệu. **Chỉ là không một cảnh báo nào được gửi** — không lỗi, không cảnh báo, chỉ im lặng.
 
-Bật ở **security account** (đã là delegated admin của Security Hub), một lần mỗi region trong `aggregator_regions`:
+Ba lệnh, ở **hai account khác nhau**, đúng thứ tự — lặp cho mỗi region trong `aggregator_regions`:
 
 ```bash
-aws securityhub enable-security-hub --profile <security> --region ap-southeast-1
-aws securityhub enable-security-hub --profile <security> --region us-east-1
+# 1. TU MANAGEMENT ACCOUNT
+aws securityhub enable-organization-admin-account \
+  --admin-account-id <security-account-id> --region ap-southeast-1
 
-# Gom findings tu moi account trong to chuc
-aws securityhub update-organization-configuration \
-  --auto-enable --profile <security> --region ap-southeast-1
+# 2. TU SECURITY ACCOUNT
+aws securityhub enable-security-hub --no-enable-default-standards \
+  --profile <security> --region ap-southeast-1
+
+# 3. TU SECURITY ACCOUNT
+aws securityhub update-organization-configuration --auto-enable \
+  --auto-enable-standards NONE \
+  --profile <security> --region ap-southeast-1
+```
+
+**Bỏ bước 1** thì bước 3 báo `InvalidAccessException: Account <id> is not an administrator for this organization`. Đăng ký delegated administrator ở tầng Organizations là **cần nhưng chưa đủ**: Security Hub có cơ chế chỉ định riêng và nó chỉ gọi được từ management account. GuardDuty cũng vậy. Config thì không cần.
+
+**Hai cờ standard là bắt buộc.** `enable-security-hub` mặc định bật AWS FSBP + CIS, tính tiền theo số lần kiểm tra — vài trăm control chạy liên tục trên mọi resource. Đó là phần đắt nhất của Security Hub, đắt hơn Config nhiều, và layer này **không cần** standard nào.
+
+Lỡ bật rồi:
+
+```bash
+aws securityhub get-enabled-standards --profile <security> --region ap-southeast-1
+aws securityhub batch-disable-standards \
+  --standards-subscription-arns <arn> --profile <security> --region ap-southeast-1
 ```
 
 Kiểm chứng đường ống trước khi tin nó:

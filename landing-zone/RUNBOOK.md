@@ -589,13 +589,39 @@ aws organizations list-delegated-administrators --output table
 
 Thiếu `config-multiaccountsetup` thì organization rule báo `AccessDeniedException` **không nói rõ thiếu gì**. Có `check` block bắt.
 
-**(2) Security Hub** — layer này **đọc** findings từ Security Hub chứ không bật nó:
+**(2) Security Hub** — layer này **đọc** findings từ Security Hub chứ không bật nó. Ba lệnh, chạy ở **hai account khác nhau**, đúng thứ tự:
 
 ```bash
-aws securityhub enable-security-hub --profile <security> --region ap-southeast-1
+# 1. TU MANAGEMENT ACCOUNT - chi dinh admin o tang Security Hub
+aws securityhub enable-organization-admin-account \
+  --admin-account-id <security-account-id> --region ap-southeast-1
+
+# 2. TU SECURITY ACCOUNT - bat, KHONG kem standard
+aws securityhub enable-security-hub --no-enable-default-standards \
+  --profile <security> --region ap-southeast-1
+
+# 3. TU SECURITY ACCOUNT - gom findings moi account
 aws securityhub update-organization-configuration --auto-enable \
+  --auto-enable-standards NONE \
   --profile <security> --region ap-southeast-1
 ```
+
+> **Bỏ bước 1 thì bước 3 báo:**
+> ```
+> InvalidAccessException: Account <id> is not an administrator for this organization
+> ```
+> Đăng ký delegated administrator ở tầng **Organizations** là cần nhưng **chưa đủ** — Security Hub có cơ chế chỉ định riêng, và nó chỉ gọi được từ management account. GuardDuty cũng vậy (`guardduty enable-organization-admin-account`). Config thì không cần — với Config, đăng ký ở Organizations là đủ.
+
+> **`--no-enable-default-standards` và `--auto-enable-standards NONE` là bắt buộc, không phải tuỳ chọn.** Mặc định của `enable-security-hub` là **bật** AWS FSBP + CIS. Standard tính tiền theo **số lần kiểm tra**, mà FSBP có vài trăm control chạy liên tục trên mọi resource — đây là phần đắt nhất của Security Hub, đắt hơn Config nhiều. Layer này **không cần** standard nào.
+>
+> Lỡ bật rồi thì gỡ:
+> ```bash
+> aws securityhub get-enabled-standards --profile <security> --region ap-southeast-1
+> aws securityhub batch-disable-standards \
+>   --standards-subscription-arns <arn> --profile <security> --region ap-southeast-1
+> ```
+
+Security Hub là dịch vụ **theo region** — lặp cả ba bước cho mỗi region trong `aggregator_regions`.
 
 Chưa bật thì recorder vẫn ghi, rule vẫn đánh giá, S3 vẫn có file — **và không một cảnh báo nào được gửi**. Không lỗi, không cảnh báo.
 
