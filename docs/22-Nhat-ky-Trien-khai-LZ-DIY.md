@@ -407,6 +407,33 @@ aws ec2 delete-snapshot --snapshot-id snap-0123456789abcdef0 --profile <dev>
 
 **Bài học rộng hơn cả SCP:** một phép kiểm chứng bảo mật báo "đạt" vì lý do sai thì nguy hiểm hơn không kiểm gì — nó tạo niềm tin không có cơ sở. Mọi phép thử "phải bị chặn" cần một cách phân biệt *bị chặn đúng chỗ mình nghĩ* với *bị chặn ở đâu đó khác*.
 
+### 5d. Cùng một `tainted`, hai cách xử lý ngược nhau
+
+Taint xuất hiện hai lần trong buổi, và cách đúng lần sau **ngược hẳn** lần trước.
+
+| | Lỗi #9 — organization | Giai đoạn 7 — 8 org config rule |
+|---|---|---|
+| Vì sao tainted | Bật service access lỗi *sau khi* org đã tạo xong | `create` gọi được, waiter hết 5 phút |
+| Ở AWS thì sao | **Lành lặn** — org đủ dùng | **Hỏng dở** — kẹt `CREATE_IN_PROGRESS` vì chưa account nào có recorder |
+| Cách đúng | `terraform untaint` | **Cứ để thay thế** |
+| Untaint sai ở đâu | — | Chỉ giấu vấn đề: rule vẫn kẹt, và không bao giờ tự thoát |
+
+Câu hỏi phải trả lời trước khi gõ lệnh không phải *"làm sao hết tainted"* mà là:
+
+> **Resource đó ở phía AWS đang lành hay đang hỏng dở?**
+
+`untaint` chỉ nói với Terraform *"tôi đã kiểm, nó ổn"*. Nếu chưa kiểm thì đó là nói dối, và cái giá là một resource hỏng nằm im trong state — Terraform không bao giờ đụng lại nữa vì nó tin bạn.
+
+Cách kiểm: hỏi thẳng AWS, đừng hỏi Terraform.
+
+```bash
+aws organizations describe-organization                          # loi #9
+aws configservice describe-organization-config-rule-statuses \
+  --profile <security> --region <region>                         # giai doan 7
+```
+
+Với 8 rule kia, để Terraform thay thế lại là điều **mong muốn**: kèm `depends_on` mới, nó xoá rule đang kẹt, dựng recorder qua StackSet, rồi tạo lại rule khi đã có dữ liệu để đọc — đúng thứ tự lẽ ra phải có ngay từ đầu.
+
 ---
 
 ## 6. Sổ tay rút gọn
@@ -419,7 +446,7 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 | `Backend initialization required` | Có `backend.tf` mà layer chưa apply → `rm backend.tf`, `init -reconfigure`, apply |
 | `Unsetting the previously set backend` | Mất `backend.tf` → chạy `./wire-backends.sh`, nó tự dựng lại |
 | `-backend-config was used without a "backend" block` | Như trên |
-| `is tainted, so must be replaced` | `terraform untaint '<address>'` rồi plan lại |
+| `is tainted, so must be replaced` | **Hỏi trước: resource đó ở AWS lành hay hỏng dở?** Lành → `terraform untaint '<address>'`. Hỏng dở → cứ để thay thế. Xem mục 5d |
 | `Instance cannot be destroyed` (không có "tainted") | `create_organization` bị đổi về `false` → đặt lại `true` |
 | Plan ra số resource **ít bất thường** | Thường là taint: thứ phụ thuộc nó thành *known after apply* nên rơi khỏi plan |
 | SCP apply xong không thấy tác dụng | `scp_dry_run = true` — đúng thiết kế |
