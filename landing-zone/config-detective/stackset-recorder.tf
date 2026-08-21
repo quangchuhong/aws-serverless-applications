@@ -50,9 +50,21 @@ locals {
         }
       }
 
+      # THU TU: DeliveryChannel TRUOC, ConfigRecorder SAU.
+      #
+      # Nguoc voi truc giac, va nguoc voi ban dau cua file nay.
+      # CloudFormation khong chi TAO recorder ma con KHOI DONG no, va
+      # StartConfigurationRecorder doi delivery channel phai co san:
+      #
+      #   NoAvailableDeliveryChannelException: Delivery channel is not
+      #   available to start configuration recorder
+      #
+      # Da kiem chung KHONG co vong lap: put-delivery-channel chay
+      # duoc tren mot account CHUA CO recorder nao. Nen chi la sai
+      # thu tu, khong phai phu thuoc vong tron.
       ConfigRecorder = {
         Type      = "AWS::Config::ConfigurationRecorder"
-        DependsOn = "ConfigRole"
+        DependsOn = ["ConfigRole", "DeliveryChannel"]
         Properties = {
           Name    = "${var.project}-recorder"
           RoleARN = { "Fn::GetAtt" = ["ConfigRole", "Arn"] }
@@ -83,9 +95,15 @@ locals {
         }
       }
 
+      # MOI ACCOUNT CHI DUOC MOT DELIVERY CHANNEL o mot region.
+      # Con mot cai khac dang ton tai - ke ca cai tro vao bucket da
+      # xoa - thi tao cai nay se bao:
+      #   MaxNumberOfDeliveryChannelsExceededException
+      # Kiem truoc khi trien khai:
+      #   aws configservice describe-delivery-channels --profile <account>
       DeliveryChannel = {
         Type      = "AWS::Config::DeliveryChannel"
-        DependsOn = "ConfigRecorder"
+        DependsOn = "ConfigRole"
         Properties = {
           Name         = "${var.project}-delivery"
           S3BucketName = local.bucket_name
