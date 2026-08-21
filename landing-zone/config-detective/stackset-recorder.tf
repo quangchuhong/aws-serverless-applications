@@ -143,7 +143,16 @@ resource "aws_cloudformation_stack_set_instance" "recorder" {
 
   # Config la per-region. Moi region them vao nhan chi phi len
   # theo so account.
-  stack_set_instance_region = var.region
+  #
+  # TEN THAM SO DOI THEO BAN PROVIDER:
+  #   provider v5  ->  region
+  #   provider v6  ->  stack_set_instance_region
+  #
+  # v6 them meta-argument "region" cho MOI resource nen phai doi ten
+  # cai cu de tranh dung do. Layer nay khai ~> 5.0 (versions.tf) nen
+  # dung "region". Nang len v6 thi phai doi dong nay, neu khong se ra:
+  #   An argument named "region" is not expected here
+  region = var.region
 
   operation_preferences {
     failure_tolerance_percentage = 10

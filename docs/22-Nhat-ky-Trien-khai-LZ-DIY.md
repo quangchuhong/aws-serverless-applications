@@ -25,7 +25,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Billing guard | Budget $20, SNS alert (đã xác nhận), anomaly detection — us-east-1 |
 | Default VPC | Đã xoá ở mọi account × mọi region |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 13 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 15 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -50,8 +50,10 @@ Xếp theo thứ tự gặp phải.
 | 11 | `validate-policies.sh` in bảng rỗng rồi thoát 0 | Mã thoát pipeline là của `sed`, `set -e` không nổ | **Lỗi code** | *(mục 2.5)* |
 | 12 | `Limit exceeded on dimensional spend monitor creation` | Mỗi account chỉ được 1 dimensional monitor, AWS đã tạo sẵn | **Lỗi code** | *(mục 2.6)* |
 | 13 | `Daily or weekly frequencies only support Email subscriptions` | `frequency` và `subscriber.type` ràng buộc nhau | **Lỗi code** | *(mục 2.6)* |
+| 14 | `InvalidAccessException: not an administrator` | Security Hub cần chỉ định riêng, Organizations chưa đủ | Thiếu tài liệu | `a48f8a6` |
+| 15 | `Unsupported argument: stack_set_instance_region` | Dùng tên tham số của provider v6 trong layer khai `~> 5.0` | **Lỗi code** | `01d882a`+ |
 
-**9/13 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**11/15 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
