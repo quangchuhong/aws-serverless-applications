@@ -4,7 +4,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 
 > Mỗi layer có README riêng nói **vì sao**. File này chỉ nói **làm gì, theo thứ tự nào, và dừng ở đâu nếu sai**.
 >
-> **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 21 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 22 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
 **Chi phí**: ~$0 cho giai đoạn 0–6. Tốn tiền chỉ khi bật `config-detective` (giai đoạn 7).
