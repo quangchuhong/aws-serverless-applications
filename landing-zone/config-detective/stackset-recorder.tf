@@ -50,21 +50,33 @@ locals {
         }
       }
 
-      # THU TU: DeliveryChannel TRUOC, ConfigRecorder SAU.
+      ####################################
+      # KHONG DAT DependsOn GIUA ConfigRecorder VA DeliveryChannel
       #
-      # Nguoc voi truc giac, va nguoc voi ban dau cua file nay.
-      # CloudFormation khong chi TAO recorder ma con KHOI DONG no, va
-      # StartConfigurationRecorder doi delivery channel phai co san:
+      # Hai API cua AWS Config doi nhau - da kiem chung tren mot
+      # account KHONG co recorder nao:
       #
-      #   NoAvailableDeliveryChannelException: Delivery channel is not
-      #   available to start configuration recorder
+      #   put-delivery-channel  -> NoAvailableConfigurationRecorderException
+      #   start (do CFN goi)    -> NoAvailableDeliveryChannelException
       #
-      # Da kiem chung KHONG co vong lap: put-delivery-channel chay
-      # duoc tren mot account CHUA CO recorder nao. Nen chi la sai
-      # thu tu, khong phai phu thuoc vong tron.
+      # Nen KHONG thu tu nao trong mot template la dung:
+      #   Recorder truoc  -> hong o buoc start
+      #   Channel truoc   -> hong o NotStabilized
+      #
+      # Loi thoat: de CA HAI phu thuoc RIENG ConfigRole, khong phu
+      # thuoc nhau. CloudFormation tao song song, va handler cua
+      # recorder THU LAI buoc start trong luc cho on dinh:
+      #
+      #   recorder Put -> Start hong -> cho, thu lai
+      #                                   ^
+      #   channel Put thanh cong (recorder da ton tai) -> Start dat
+      #
+      # AWS CLI tach ba buoc (put-recorder, put-channel, start) nen
+      # khong gap chuyen nay. CloudFormation gop buoc 1 va 3.
+      ####################################
       ConfigRecorder = {
         Type      = "AWS::Config::ConfigurationRecorder"
-        DependsOn = ["ConfigRole", "DeliveryChannel"]
+        DependsOn = "ConfigRole"
         Properties = {
           Name    = "${var.project}-recorder"
           RoleARN = { "Fn::GetAtt" = ["ConfigRole", "Arn"] }
