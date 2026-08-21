@@ -144,6 +144,39 @@ check "rules_have_matching_resource_types" {
   }
 }
 
+########################################
+# MANAGEMENT ACCOUNT PHAI NAM TRONG excluded_accounts
+#
+# Organization rule day xuong ca management account, ma o do Config
+# thuong chua bao gio duoc bat nen chua co service-linked role:
+#
+#   UnableToAssumeServiceLinkedRoleException
+#
+# Rule se ngoi CREATE_IN_PROGRESS hang chuc phut roi CREATE_FAILED,
+# keo ca lan apply theo. Day la truong hop DUY NHAT kiem tu dong
+# duoc - cac account khac ngoai recorder_target_ous thi phai tu doi
+# chieu, xem mo ta bien excluded_accounts.
+########################################
+
+check "management_account_excluded" {
+  assert {
+    condition = !local.enabled || contains(
+      var.excluded_accounts,
+      data.aws_caller_identity.current.account_id,
+    )
+
+    error_message = join(" ", [
+      "Management account (${data.aws_caller_identity.current.account_id})",
+      "khong nam trong excluded_accounts. Organization rule se duoc day",
+      "xuong do va hong voi UnableToAssumeServiceLinkedRoleException",
+      "sau vai chuc phut cho.",
+      "Them no vao excluded_accounts - va kiem luon cac account nam",
+      "ngoai recorder_target_ous, chung hong voi",
+      "NoAvailableConfigurationRecorder.",
+    ])
+  }
+}
+
 check "rule_count_reasonable" {
   assert {
     condition     = length(var.organization_rules) <= 15

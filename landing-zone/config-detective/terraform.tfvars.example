@@ -74,9 +74,27 @@ aggregator_regions = ["ap-southeast-1", "us-east-1"]
 
 # organization_rules = { ... }   # xem variables.tf
 
-# Sandbox: vi pham la binh thuong, bao dong chi tao nhieu
+# ==========================================================
+# PHAI dien: moi account ACTIVE khong nam trong
+# recorder_target_ous, VA management account.
+#
+# Organization rule day xuong MOI account thanh vien, bat ke
+# recorder_target_ous. Account khong co recorder thi rule hong:
+#
+#   NoAvailableConfigurationRecorder          <- ngoai target OU
+#   UnableToAssumeServiceLinkedRoleException  <- management
+#
+# Va no hong CHAM: CREATE_IN_PROGRESS hang chuc phut roi moi
+# thanh CREATE_FAILED, keo ca lan apply theo.
+#
+# Co check block bat truong hop management account. Cac account
+# khac phai tu doi chieu.
+# ==========================================================
+
 excluded_accounts = [
-  # "555555555555",
+  # "111111111111",   # management
+  # "222222222222",   # account trong OU khong co recorder
+  # "555555555555",   # sandbox - vi pham la binh thuong
 ]
 
 ########################################

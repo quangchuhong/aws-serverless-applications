@@ -202,8 +202,35 @@ variable "excluded_accounts" {
   description = <<-EOT
     Account KHONG ap organization rule.
 
-    Thuong la sandbox va cac account thu nghiem - noi vi pham la
-    chuyen binh thuong va bao dong chi tao nhieu.
+    ===============================================================
+    BIEN NAY RANG BUOC VOI recorder_target_ous, VA KHONG CO GI TU
+    DONG NOI CHUNG LAI.
+
+    Organization rule day xuong MOI account thanh vien, KE CA
+    management account, bat ke recorder_target_ous la gi. Account
+    khong co recorder thi rule khong bao gio tao duoc:
+
+      NoAvailableConfigurationRecorder          <- account ngoai
+                                                   recorder_target_ous
+      UnableToAssumeServiceLinkedRoleException  <- management account,
+                                                   chua tung bat Config
+
+    Va no khong hong nhanh: rule nam o CREATE_IN_PROGRESS hang chuc
+    phut roi moi thanh CREATE_FAILED, keo ca lan apply theo.
+
+    QUY TAC: moi account ACTIVE khong nam trong recorder_target_ous
+    thi PHAI co mat o day. Luon bao gom management account.
+    ===============================================================
+
+    Ngoai ra, sandbox va account thu nghiem cung nen dua vao - noi
+    vi pham la chuyen binh thuong va bao dong chi tao nhieu.
+
+    Doi chieu nhanh sau khi apply:
+      aws configservice get-organization-config-rule-detailed-status \
+        --organization-config-rule-name <ten-rule> \
+        --profile <security> --region <region> \
+        --query 'OrganizationConfigRuleDetailedStatus[].[AccountId,MemberAccountRuleStatus,ErrorCode]' \
+        --output table
   EOT
   type        = list(string)
   default     = []
