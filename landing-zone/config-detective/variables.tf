@@ -217,14 +217,45 @@ variable "enable_object_lock" {
   description = <<-EOT
     S3 Object Lock cho bucket nhan snapshot.
 
-    CHI BAT DUOC LUC TAO BUCKET - khong bat sau duoc. Quyet dinh ngay.
+    ===============================================================
+    MAC DINH FALSE, VA GAN NHU CHAC CHAN PHAI DE FALSE.
 
-    Ca ly do tach rieng account log archive la de account bi xam nhap
-    KHONG XOA DUOC bang chung. Lifecycle policy khong lam duoc viec do -
-    no chi chuyen storage class va het han.
+    AWS CONFIG KHONG GIAO DUOC FILE VAO BUCKET BAT OBJECT LOCK.
+
+    Da kiem chung bang thuc nghiem: hai bucket giong het nhau ve
+    policy, ve BucketOwnerEnforced, ve account nguon - khac moi
+    Object Lock. Bucket khong khoa thi put-delivery-channel chay
+    ngay; bucket khoa thi bao:
+
+      InsufficientDeliveryPolicyException: unable to write to bucket
+
+    Thong bao lo ra ten "DeliveryPolicy" nen rat de dan nguoi ta di
+    sua bucket policy hang gio ma khong ra - policy hoan toan dung.
+    Nguyen nhan la S3 doi header Content-MD5 tren moi PutObject vao
+    bucket co Object Lock, va Config khong gui header do.
+    ===============================================================
+
+    Y DINH BAN DAU van dung: tach account log archive de account bi
+    xam nhap khong xoa duoc bang chung, va Object Lock la cach manh
+    nhat de dam bao dieu do. Nhung no khong dung duoc TRUC TIEP tren
+    bucket ma Config giao vao.
+
+    Muon ca hai thi phai them mot tang:
+
+      Config -> bucket thuong -> S3 Replication -> bucket khoa
+
+    Replication ghi vao bucket dich bang credential cua chinh S3, nen
+    khong vuong rang buoc Content-MD5. Doi lai: them mot bucket, mot
+    IAM role, va chi phi replication. Layer nay CHUA lam viec do.
+
+    Lop bao ve con lai khi khong co Object Lock, van dang ke:
+      - bucket nam o account RIENG (log archive)
+      - versioning bat
+      - baseline SCP chan xoa configuration recorder
+      - public access block
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "object_lock_retention_days" {

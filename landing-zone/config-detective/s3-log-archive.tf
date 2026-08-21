@@ -45,6 +45,24 @@ resource "aws_s3_bucket" "config" {
 
   lifecycle {
     prevent_destroy = true
+
+    ####################################
+    # CHAN TRUOC KHI TAO, vi tao roi thi khong sua duoc
+    #
+    # AWS Config KHONG giao duoc file vao bucket bat Object Lock.
+    # Da kiem chung: hai bucket giong het nhau tru Object Lock,
+    # bucket khong khoa thi Config ghi duoc
+    # AWSLogs/<account>/Config/ConfigWritabilityCheckFile ngay,
+    # bucket khoa thi bao InsufficientDeliveryPolicyException.
+    #
+    # Cai gia cua viec khong chan o day rat cao: Object Lock chi bat
+    # duoc LUC TAO BUCKET, nen apply xong la phai xoa bucket va lam
+    # lai - trong khi prevent_destroy dang chan xoa.
+    ####################################
+    precondition {
+      condition     = !var.enable_object_lock
+      error_message = "enable_object_lock = true khong dung duoc: AWS Config khong ghi noi file kiem tra vao bucket co Object Lock, va bao InsufficientDeliveryPolicyException nghe nhu loi bucket policy. Muon bat bien khong xoa duoc thi phai them tang Config -> bucket thuong -> S3 Replication -> bucket khoa; xem mo ta bien enable_object_lock."
+    }
   }
 }
 

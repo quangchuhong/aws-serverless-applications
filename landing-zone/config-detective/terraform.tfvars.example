@@ -82,20 +82,40 @@ excluded_accounts = [
 ########################################
 # 4. Log archive
 #
-# OBJECT LOCK CHI BAT DUOC LUC TAO BUCKET. Quyet dinh ngay bay gio.
+# =====================================================
+# OBJECT LOCK PHAI DE FALSE.
 #
-# Ca ly do tach rieng account log archive la de account bi xam nhap
-# KHONG XOA DUOC bang chung. Lifecycle policy khong lam duoc viec do.
+# AWS Config KHONG giao duoc file vao bucket bat Object
+# Lock. Da kiem chung bang hai bucket giong het nhau tru
+# Object Lock: bucket thuong thi Config ghi duoc file
+# AWSLogs/<account>/Config/ConfigWritabilityCheckFile
+# ngay lap tuc, bucket khoa thi bao
 #
-# COMPLIANCE mode: khong ai go duoc, KE CA ROOT. Doi lai, object da
-# ghi thi phai tra tien luu tru du het han - khong xoa som duoc bang
-# bat ky cach nao.
+#   InsufficientDeliveryPolicyException
+#
+# Thong bao mang ten "DeliveryPolicy" nen rat de dan di
+# sua bucket policy hang gio ma khong ra - policy dung.
+#
+# Va Object Lock CHI BAT DUOC LUC TAO BUCKET, nen bat
+# nham la phai xoa bucket lam lai.
+#
+# Muon ca hai: Config -> bucket thuong -> S3 Replication
+# -> bucket khoa. Layer nay chua lam.
+# =====================================================
+#
+# Khong co Object Lock thi van con: bucket o account
+# RIENG, versioning, public access block, va baseline SCP
+# chan xoa configuration recorder.
 ########################################
 
-enable_object_lock         = true
-object_lock_retention_days = 90
+enable_object_lock = false
 
-# PHAI lon hon object_lock_retention_days
+# Chi co tac dung khi enable_object_lock = true
+object_lock_retention_days = 7
+
+# PHAI lon hon object_lock_retention_days khi bat Object Lock.
+# Cung PHAI lon hon moc chuyen storage class (30 cho STANDARD_IA,
+# 90 cho GLACIER_IR) - nho hon thi transition bi bo qua.
 snapshot_retention_days = 365
 
 snapshot_delivery_frequency = "TwentyFour_Hours"
