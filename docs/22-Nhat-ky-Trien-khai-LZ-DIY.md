@@ -24,8 +24,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Permission set | 17 set, 15 group, 53 assignment — 115 resource |
 | Billing guard | Budget $20, SNS alert (đã xác nhận), anomaly detection — us-east-1 |
 | Default VPC | Đã xoá ở mọi account × mọi region |
+| Config detective | 4/4 account có recorder đang ghi, aggregator + 8 org rule |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 15 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 21 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -51,13 +52,19 @@ Xếp theo thứ tự gặp phải.
 | 12 | `Limit exceeded on dimensional spend monitor creation` | Mỗi account chỉ được 1 dimensional monitor, AWS đã tạo sẵn | **Lỗi code** | *(mục 2.6)* |
 | 13 | `Daily or weekly frequencies only support Email subscriptions` | `frequency` và `subscriber.type` ràng buộc nhau | **Lỗi code** | *(mục 2.6)* |
 | 14 | `InvalidAccessException: not an administrator` | Security Hub cần chỉ định riêng, Organizations chưa đủ | Thiếu tài liệu | `a48f8a6` |
-| 15 | `Unsupported argument: stack_set_instance_region` | Dùng tên tham số của provider v6 trong layer khai `~> 5.0` | **Lỗi code** | `01d882a`+ |
+| 15 | `Unsupported argument: stack_set_instance_region` | Dùng tên tham số của provider v6 trong layer khai `~> 5.0` | **Lỗi code** | `688f3db` |
+| 16 | `'Days' in Expiration must be greater than Transition` | Transition ghi cứng 90/180, expiration lấy từ biến | **Lỗi code** | `a397c29` |
+| 17 | `You must enable organizations access` | CloudFormation có lời gọi kích hoạt riêng | Thiếu tài liệu | `a397c29` |
+| 18 | `InsufficientDeliveryPolicyException` | Sai condition key: `SourceOrgID` thay vì `SourceAccount` | **Lỗi code** | `24836dc` |
+| 19 | `InsufficientDeliveryPolicyException` *(vẫn)* | **Object Lock** chặn Config ghi — policy hoàn toàn đúng | **Lỗi thiết kế** | `ee6ebd3` |
+| 20 | `explicit deny ... p-2oni53yp` khi rollback | SCP chặn chính CloudFormation | **Lỗi thiết kế** | `150c013` |
+| 21 | `NoAvailableDeliveryChannelException` | Vòng lặp giữa hai API Config | **Lỗi code** | `f8754fe` |
 
-**11/15 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**17/21 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
-## 2. Sáu lỗi đáng học nhất
+## 2. Bảy lỗi đáng học nhất
 
 ### 2.1. Một service principal sai làm hỏng cả resource
 
@@ -433,6 +440,88 @@ aws configservice describe-organization-config-rule-statuses \
 ```
 
 Với 8 rule kia, để Terraform thay thế lại là điều **mong muốn**: kèm `depends_on` mới, nó xoá rule đang kẹt, dựng recorder qua StackSet, rồi tạo lại rule khi đã có dữ liệu để đọc — đúng thứ tự lẽ ra phải có ngay từ đầu.
+
+### 5e. Giai đoạn 7 — sáu lớp lỗi chồng lên một nguyên nhân
+
+`config-detective` là layer khó nhất trong repo, và lý do không phải vì nó phức tạp. Nguyên nhân gốc bị **sáu lớp khác che**, và mỗi lớp báo lỗi trỏ sai hướng.
+
+Nguyên nhân gốc, phát hiện ở lần apply đầu tiên:
+
+```
+NoAvailableDeliveryChannelException: Delivery channel is not available
+to start configuration recorder
+```
+
+Nhưng phải gỡ hết năm lớp khác mới quay lại được chỗ đó.
+
+| Lớp | Lỗi | Trỏ vào đâu | Thực ra là gì |
+|---|---|---|---|
+| 1 | `You must enable organizations access` | Organizations | CloudFormation có lời gọi kích hoạt riêng |
+| 2 | `InsufficientDeliveryPolicyException` | Bucket policy | Sai condition key: `SourceOrgID` thay vì `SourceAccount` |
+| 3 | `InsufficientDeliveryPolicyException` *(vẫn)* | Bucket policy | **Object Lock** — policy hoàn toàn đúng |
+| 4 | `explicit deny ... p-2oni53yp` | SCP chặn kẻ xấu | SCP chặn chính CloudFormation rollback |
+| 5 | `MaxNumberOfDeliveryChannelsExceededException` | Giới hạn AWS | Rác từ chính phép thử chẩn đoán |
+| 6 | `NotStabilized` / `NoAvailableDeliveryChannel` | Thứ tự template | Vòng lặp thật giữa hai API |
+
+**Lớp 3 tốn nhiều thời gian nhất**, vì tên exception nói dối. `InsufficientDeliveryPolicyException` dẫn thẳng tới bucket policy, và bucket policy không hề sai. Chỉ khi dựng hai bucket giống hệt nhau — cùng policy, cùng `BucketOwnerEnforced`, cùng account nguồn, khác **duy nhất** Object Lock — mới thấy: bucket không khoá thì Config ghi được `ConfigWritabilityCheckFile` ngay, bucket khoá thì không.
+
+#### Vòng lặp không giải được bằng thứ tự
+
+Lớp 6 là cái đáng học nhất về kỹ thuật. AWS CLI làm ba bước:
+
+```
+put-configuration-recorder  ->  put-delivery-channel  ->  start-configuration-recorder
+```
+
+CloudFormation gộp bước 1 và 3 vào `AWS::Config::ConfigurationRecorder`. Kết quả là hai API đòi nhau:
+
+```
+PutDeliveryChannel   -> NoAvailableConfigurationRecorderException
+Start (CFN tu goi)   -> NoAvailableDeliveryChannelException
+```
+
+Cả hai chiều `DependsOn` đều chết. Đã thử cả hai.
+
+Lời giải là **bỏ hẳn `DependsOn` giữa chúng** — để cả hai chỉ phụ thuộc `ConfigRole` và chạy song song:
+
+```
+recorder Put -> Start hong -> cho, thu lai
+                                ^
+channel Put thanh cong (recorder da ton tai) -> Start dat
+```
+
+Handler của recorder thử lại bước start trong lúc chờ ổn định, và đến lượt thử sau thì delivery channel đã có. Delivery channel chỉ cần recorder **tồn tại**, không cần nó **đang chạy**.
+
+> Đó là lý do template mẫu của AWS không đặt `DependsOn` giữa hai resource này — nhìn như sơ suất cho tới khi vấp phải.
+
+Kết quả cuối: 4/4 account `CURRENT`, 4/4 recorder `recording: true`, `lastStatus: SUCCESS`.
+
+#### Phép thử sai vì tôi đọc nhầm một lỗi trước đó
+
+Giữa chừng tôi kết luận "không có vòng lặp" dựa trên việc `put-delivery-channel` chạy được trong `lz-network`. Sai: `lz-network` **vẫn còn recorder** — lệnh xoá recorder trước đó đã bị SCP từ chối, mà tôi đọc như thể nó thành công.
+
+Phép thử chỉ chứng minh "tạo được delivery channel khi *đã có* recorder" — đúng điều kiện mà account cần thử không thoả. Chạy lại trong `lz-logarchive`, account chưa từng có recorder, thì ra ngay `NoAvailableConfigurationRecorderException`.
+
+> **Bài học:** một phép thử chỉ có giá trị khi điều kiện đầu vào đã được **xác nhận**, không phải giả định. Ở đây điều kiện là "account không có recorder", và nó sai vì một lệnh trước đó thất bại lặng lẽ.
+
+#### SCP chặn nhầm công cụ của chính mình
+
+Lớp 4 đáng ghi riêng. `baseline` chặn `config:DeleteConfigurationRecorder` — đúng ý đồ. Nhưng CloudFormation rollback cũng gọi đúng API đó, nên mọi lần triển khai hỏng để lại một stack `DELETE_FAILED` không ai dọn được.
+
+**SCP chặn hành động, không phân biệt được ý định.** "Xoá recorder" khi kẻ tấn công làm và khi rollback làm là cùng một lời gọi API; chỉ danh tính người gọi mới phân biệt được. Nên mọi SCP bảo vệ hạ tầng đều cần một đường miễn trừ cho chính công cụ quản lý hạ tầng — và đường đó thành thứ phải canh giữ.
+
+Role cần miễn trừ là `stacksets-exec-*`, **không** phải `AWSServiceRoleForCloudFormationStackSetsOrgMember` (cái sau là service-linked role phía quản trị). Tên thật luôn nằm trong `StatusReason` của stack instance, ở dòng `assumed-role/<ten>/...`.
+
+#### Ba lần timeout, ba con số
+
+| Resource | Mặc định | Thực tế | Đặt lại |
+|---|---|---|---|
+| `aws_config_organization_managed_rule` | 5 phút | > 30 phút | 90 phút |
+| `aws_cloudformation_stack_set_instance` | 30 phút | ~29 phút với 4 account | 90 phút |
+
+Với 6 account và 8 rule, cả 8 rule chạm mốc 30 phút **cùng lúc** — AWS triển khai từng rule xuống từng account, và 8 rule chạy song song nên chúng cùng chậm như nhau.
+
+Vượt timeout **không phải thất bại** — AWS vẫn chạy tiếp. Nhưng Terraform đánh dấu tainted, và lần apply sau đòi thay thế một thứ đang hoạt động bình thường.
 
 ---
 
