@@ -104,15 +104,22 @@ scp_exempt_role_names = []
 # khai StackSet that bai la de lai stack DELETE_FAILED khong go duoc,
 # va khong ai co quyen don.
 #
-# Mien tru service-linked role ma StackSet dung o account thanh vien.
-# Ghi ca duong dan - exempt_arns rap thanh arn:aws:iam::*:role/<chuoi nay>:
+# Mien tru role ma StackSet dung o account thanh vien:
 #
-#   "aws-service-role/cloudformation.amazonaws.com/AWSServiceRoleForCloudFormationStackSetsOrgMember"
+#   "stacksets-exec-*"
 #
-# KIEM CHUNG sau khi apply, dung chinh loi de thu: neu van thay
-# "explicit deny in a service control policy" trong StatusReason cua
-# stack instance thi mien tru chua an - xem lai ten role bang
-#   aws iam list-roles --path-prefix /aws-service-role/ --profile <member>
+# KHONG phai AWSServiceRoleForCloudFormationStackSetsOrgMember - do la
+# service-linked role o phia quan tri. Role that su THUC THI stack o
+# account thanh vien ten "stacksets-exec-<hash>", hash sinh theo to
+# chuc. Dung wildcard vi hash khong doan truoc duoc; exempt_condition
+# dung ArnNotLike nen hieu dau *.
+#
+# Xem ten that:
+#   aws iam list-roles --profile <member> \
+#     --query 'Roles[?starts_with(RoleName,`stacksets-exec`)].RoleName'
+#
+# Hoac doc thang trong StatusReason cua stack instance khi no bi tu
+# choi - dong "assumed-role/<ten>/..." chinh la no.
 # ---------------------------------------------------------------
 
 ########################################

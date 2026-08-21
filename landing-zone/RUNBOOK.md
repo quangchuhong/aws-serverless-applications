@@ -636,6 +636,18 @@ aws cloudformation describe-organizations-access --region ap-southeast-1   # Sta
 
 Bỏ bước này thì StackSet báo `ValidationError: You must enable organizations access to operate a service managed stack set`. Có `member.org.stacksets.cloudformation.amazonaws.com` trong `aws_service_access_principals` là **chưa đủ** — đúng khuôn của Security Hub và GuardDuty.
 
+**Và miễn trừ SCP cho role thực thi của StackSet**, ở layer `organization`:
+
+```hcl
+scp_exempt_role_names = ["stacksets-exec-*"]
+```
+
+`baseline` chặn `config:DeleteConfigurationRecorder` — đúng ý đồ, không ai được tắt audit trail. Nhưng nó chặn luôn **CloudFormation rollback**: một lần triển khai hỏng là để lại stack `DELETE_FAILED` mà không ai có quyền dọn, kể cả Terraform.
+
+Tên role là `stacksets-exec-<hash>`, **không** phải `AWSServiceRoleForCloudFormationStackSetsOrgMember` — cái sau là service-linked role phía quản trị. Hash sinh theo tổ chức nên dùng wildcard; `exempt_condition` dùng `ArnNotLike` nên hiểu dấu `*`.
+
+Gặp `explicit deny in a service control policy` trong `StatusReason` của stack instance thì đọc thẳng dòng `assumed-role/<ten>/...` — đó là tên role thật cần miễn trừ.
+
 **(4) Object Lock** — quyết định **trước** khi tạo bucket, không sửa được sau:
 
 ```hcl
