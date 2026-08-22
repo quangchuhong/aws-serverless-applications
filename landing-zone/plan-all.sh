@@ -144,9 +144,17 @@ $layer PLAN: $(echo "$out" | grep -A3 -iE '^│ *error' | head -10)"
 
   if echo "$out" | grep -q "No changes"; then
     green "khong doi"
+
+  # Plan chi doi OUTPUT thi Terraform KHONG in dong "Plan: N to add..."
+  # ma in "without changing any real infrastructure". Khong bat rieng
+  # thi no roi vao nhanh mac dinh "co thay doi" - dung ve ky thuat
+  # nhung vo ich, vi khong phan biet duoc voi "sap xoa 8 resource".
+  elif echo "$out" | grep -q "without changing any real infrastructure"; then
+    amber "chi output doi - apply de dong bo"
+
   else
     counts=$(echo "$out" | grep -oE 'Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy' | tail -1)
-    echo -n "${counts:-co thay doi}"
+    echo -n "${counts:-co thay doi (khong doc duoc so luong - chay terraform plan trong thu muc do)}"
 
     # Layer da tung apply ma bong nhien "chi them, khong xoa" thuong
     # KHONG phai drift - la plan doc nham state rong.
@@ -179,7 +187,11 @@ grey "Doc ket qua:"
 echo
 grey "  khong doi              dung y muon - code khop voi thuc te"
 echo
-grey "  thieu terraform.tfvars layer chua dung den (control-tower, config-detective)"
+grey "  thieu terraform.tfvars layer chua dung den"
+echo
+grey "  chi output doi         khong resource nao thay doi - thuong la sua"
+echo
+grey "                         mo ta output. Apply de state khop lai."
 echo
 grey "  Plan: N to add ...     layer chua apply, HOAC plan doc nham state rong"
 echo
