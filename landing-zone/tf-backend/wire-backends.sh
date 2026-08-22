@@ -197,6 +197,45 @@ $body"
   written=$((written + 1))
 done < <(echo "$configs" | jq -r 'keys[]')
 
+########################################
+# LAYER CO TREN DIA MA KHONG CO TRONG STATE
+#
+# backend_hcl la OUTPUT cua Terraform, va output nam trong STATE.
+# Them mot dong vao local.layers thoi thi chua du - phai apply lai
+# layer tf-backend de state biet.
+#
+# Bo qua buoc do thi script nay chay xong binh thuong, chi lang le
+# thieu mot layer. Khong loi, khong canh bao - dung loai hong ma
+# khong keu da gap suot ca du an.
+########################################
+
+missing=""
+n_missing=0
+repo_root="$(cd .. && pwd)"
+
+for d in "$repo_root"/*/; do
+  layer="landing-zone/$(basename "$d")"
+  # Chi tinh thu muc that su co code Terraform
+  ls "$d"*.tf >/dev/null 2>&1 || continue
+  if ! echo "$configs" | jq -e --arg k "$layer" 'has($k)' >/dev/null 2>&1; then
+    missing="$missing $layer"
+    n_missing=$((n_missing + 1))
+  fi
+done
+
+if [ "$n_missing" -gt 0 ]; then
+  echo
+  amber "CO $n_missing LAYER TREN DIA MA KHONG CO TRONG STATE:"
+  for m in $missing; do echo "    $m"; done
+  echo
+  echo "  backend_hcl la output cua Terraform, va output nam trong state."
+  echo "  Them dong vao local.layers (outputs.tf) roi PHAI apply lai:"
+  echo
+  echo "    terraform apply        # 0 resource doi, chi Outputs"
+  echo "    ./wire-backends.sh"
+  echo
+fi
+
 [ "$DRY_RUN" = "1" ] && exit 0
 
 echo
