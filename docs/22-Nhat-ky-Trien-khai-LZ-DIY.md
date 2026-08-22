@@ -26,8 +26,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Default VPC | Đã xoá ở mọi account × mọi region |
 | Config detective | 4/4 recorder đang ghi, aggregator, 8 org rule — 26 resource |
 | Đăng nhập SSO | Kiểm chứng thật — portal hiện đúng 5 account, không có management |
+| Org trail | CloudTrail toàn tổ chức, multi-region, có log file validation |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 23 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 25 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -62,8 +63,10 @@ Xếp theo thứ tự gặp phải.
 | 21 | `NoAvailableDeliveryChannelException` | Vòng lặp giữa hai API Config | **Lỗi code** | `f8754fe` |
 | 22 | `NoAvailableConfigurationRecorder` + `UnableToAssumeServiceLinkedRoleException` | `excluded_accounts` không khớp `recorder_target_ous` | **Lỗi thiết kế** | `4e3a406` |
 | 23 | User SSO không đăng nhập được, **không lỗi nào** | `CreateUser` không gửi thư mời — tài liệu nói như thể tự động | Thiếu tài liệu | `161c8e7` |
+| 24 | `wire-backends.sh` ghi thiếu một layer, im lặng | `backend_hcl` là output nằm trong state — thêm layer phải apply lại `tf-backend` | **Lỗi thiết kế** | `1b67012` |
+| 25 | `InsufficientS3BucketPolicyException` | Organization trail ghi vào **hai** prefix, policy chỉ cho một | **Lỗi code** | `e5281e5` |
 
-**19/23 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**21/25 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
