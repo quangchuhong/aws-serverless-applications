@@ -25,8 +25,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Billing guard | Budget $20, SNS alert (đã xác nhận), anomaly detection — us-east-1 |
 | Default VPC | Đã xoá ở mọi account × mọi region |
 | Config detective | 4/4 recorder đang ghi, aggregator, 8 org rule — 26 resource |
+| Đăng nhập SSO | Kiểm chứng thật — portal hiện đúng 5 account, không có management |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 22 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 23 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -60,8 +61,9 @@ Xếp theo thứ tự gặp phải.
 | 20 | `explicit deny ... p-2oni53yp` khi rollback | SCP chặn chính CloudFormation | **Lỗi thiết kế** | `150c013` |
 | 21 | `NoAvailableDeliveryChannelException` | Vòng lặp giữa hai API Config | **Lỗi code** | `f8754fe` |
 | 22 | `NoAvailableConfigurationRecorder` + `UnableToAssumeServiceLinkedRoleException` | `excluded_accounts` không khớp `recorder_target_ous` | **Lỗi thiết kế** | `4e3a406` |
+| 23 | User SSO không đăng nhập được, **không lỗi nào** | `CreateUser` không gửi thư mời — tài liệu nói như thể tự động | Thiếu tài liệu | `161c8e7` |
 
-**18/22 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**19/23 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 ---
 
