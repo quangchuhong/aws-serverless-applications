@@ -13,6 +13,7 @@ locals {
     "landing-zone/config-detective" = "config-detective/terraform.tfstate"
     "landing-zone/billing-guard"    = "billing-guard/terraform.tfstate"
     "landing-zone/permission-sets"  = "permission-sets/terraform.tfstate"
+    "landing-zone/org-trail"        = "org-trail/terraform.tfstate"
 
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do

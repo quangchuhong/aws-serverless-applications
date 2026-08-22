@@ -1,0 +1,70 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# ORGANIZATION CLOUDTRAIL.
+# Chay o MANAGEMENT ACCOUNT (assume role sang log archive).
+########################################
+
+enable = false
+
+region      = "ap-southeast-1"
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Account nhan log
+#
+# PHAI khac management account. Ca ly do tach account nay la de
+# account bi xam nhap khong xoa duoc bang chung cua chinh no - dat
+# bucket ngay trong account bi tan cong la mat y nghia.
+#
+# Co check block bat truong hop nay.
+########################################
+
+log_archive_account_id = ""   # "444444444444"
+
+cross_account_role = "OrganizationAccountAccessRole"
+
+########################################
+# 2. Pham vi ghi
+#
+# =====================================================
+# data_events LA CAN GAT CHI PHI LON NHAT.
+#
+# Management event: ban sao dau tien MIEN PHI, moi account.
+# Data event:       TINH TIEN THEO TUNG SU KIEN.
+#
+# Mot bucket S3 co luu luong binh thuong sinh hang trieu
+# su kien moi thang. Bat "cho chac" o pham vi to chuc la
+# cach nhanh nhat bien mot layer mien phi thanh khoan lon
+# nhat trong hoa don.
+#
+# Co check block canh bao khi dat true.
+# =====================================================
+########################################
+
+data_events = false
+
+# Ghi kem digest de phat hien log bi sua. Nen giu true - chi phi
+# khong dang ke, va khong co no thi ca chuoi bang chung mat gia tri.
+enable_log_file_validation = true
+
+########################################
+# 3. Luu tru
+#
+# log_retention_days PHAI lon hon moc chuyen storage class
+# (30 cho STANDARD_IA, 90 cho GLACIER_IR). Nho hon thi
+# transition bi bo qua va S3 tu choi ca cau hinh.
+########################################
+
+log_retention_days = 365
+
+# CHUA KIEM CHUNG VOI CLOUDTRAIL - de false.
+#
+# AWS Config KHONG ghi duoc vao bucket co Object Lock (S3 doi
+# Content-MD5, Config khong gui). CloudTrail thi chua ai do.
+# Object Lock chi bat duoc LUC TAO BUCKET, va prevent_destroy chan
+# xoa - bat nham thi rat phien. Xem mo ta bien de biet cach do.
+enable_object_lock         = false
+object_lock_retention_days = 7

@@ -7,7 +7,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 > **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 23 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
-**Chi phí**: ~$0 cho giai đoạn 0–6. Tốn tiền chỉ khi bật `config-detective` (giai đoạn 7).
+**Chi phí**: ~$0. `config-detective` (giai đoạn 7) đo được $0.29 một lần rồi ~$0/ngày; `org-trail` chỉ tốn tiền lưu trữ S3.
 
 ---
 
@@ -29,6 +29,8 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 6. billing-guard         10 phút    budget + cost tag
    ↓
 7. config-detective      30 phút    lop phat hien - LAYER DUY NHAT TON TIEN
+   ↓
+8. org-trail             15 phút    CloudTrail toan to chuc
 ```
 
 Giai đoạn **3 và 4 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
@@ -687,6 +689,78 @@ Rule ở trạng thái **`INSUFFICIENT_DATA`** nghĩa là recorder **không ghi*
 Sau ~24 giờ, đo chi phí thật trước khi mở rộng: Cost Explorer → lọc Service = *AWS Config* → group by Linked Account.
 
 Chi tiết đầy đủ ở [README của layer](./config-detective/README.md).
+
+☑ Xong giai đoạn 7 khi: `describe-configuration-recorder-status` ra `recording: true` ở mọi account đích, và 8 rule đều `CREATE_SUCCESSFUL`.
+
+---
+
+## Giai đoạn 8 — `org-trail`
+
+CloudTrail cho toàn tổ chức. **Giai đoạn này tồn tại vì giai đoạn 7 tìm ra chỗ thiếu**: ngày đầu `config-detective` chạy, `cloud-trail-enabled` ra `NON_COMPLIANT` ở mọi account — tổ chức không có trail nào, dù `baseline` SCP đã chặn `cloudtrail:StopLogging` và `lz-auditor` đã được cấp quyền đọc CloudTrail.
+
+Ba tầng bảo vệ và cấp quyền cho một thứ không tồn tại. Đọc code không thấy được, vì cái thiếu không nằm ở đâu để nhìn.
+
+### Điều kiện tiên quyết
+
+```bash
+aws organizations list-aws-service-access-for-organization \
+  --query 'EnabledServicePrincipals[?ServicePrincipal==`cloudtrail.amazonaws.com`]'
+```
+
+Rỗng thì thêm vào `aws_service_access_principals` ở giai đoạn 2. Có `check` block bắt.
+
+### Chạy
+
+```bash
+cd ../org-trail
+cp terraform.tfvars.example terraform.tfvars
+```
+
+```hcl
+enable                 = true
+log_archive_account_id = "444444444444"
+data_events            = false      # GIU FALSE - xem duoi
+log_retention_days     = 365
+enable_object_lock     = false      # chua kiem chung voi CloudTrail
+```
+
+```bash
+terraform init -backend-config=backend.hcl
+terraform plan          # mong doi 9 to add
+terraform apply
+```
+
+> **`data_events` là cần gạt chi phí lớn nhất.** Management event: bản sao đầu tiên **miễn phí** mọi account. Data event: **tính tiền theo từng sự kiện**, và một bucket S3 có lưu lượng bình thường sinh hàng triệu sự kiện mỗi tháng. Bật ở phạm vi tổ chức "cho chắc" là cách nhanh nhất biến một layer miễn phí thành khoản lớn nhất trong hoá đơn.
+
+### Kiểm chứng
+
+CloudTrail giao theo lô, **không tức thì** — bucket rỗng ngay sau apply là bình thường.
+
+```bash
+# ~15 phut
+aws cloudtrail get-trail-status --name <project>-org-trail \
+  --query '[IsLogging,LatestDeliveryTime,LatestDeliveryError]'
+
+aws cloudtrail describe-trails --trail-name-list <project>-org-trail \
+  --query 'trailList[0].[IsOrganizationTrail,IsMultiRegionTrail]'
+```
+
+Cả hai giá trị ở lệnh sau phải là `true`. `IsOrganizationTrail = false` nghĩa là trail chỉ ghi management account — đúng vùng mù lớn nhất.
+
+**Phép kiểm chứng thật** không phải việc trail tồn tại, mà là việc lớp phát hiện xác nhận nó tồn tại, sau ~1 giờ:
+
+```bash
+aws configservice describe-aggregate-compliance-by-config-rules \
+  --configuration-aggregator-name <project>-org \
+  --profile <security> --region <region> \
+  --query 'AggregateComplianceByConfigRules[?contains(ConfigRuleName,`cloud-trail`)]'
+```
+
+`cloud-trail-enabled` phải chuyển `NON_COMPLIANT` → `COMPLIANT` ở mọi account. Vòng khép kín: phát hiện → sửa → phát hiện xác nhận.
+
+☑ Xong giai đoạn 8 khi: `IsLogging = true`, file vào S3, và `cloud-trail-enabled` chuyển sang `COMPLIANT`.
+
+Chi tiết ở [README của layer](./org-trail/README.md).
 
 ---
 

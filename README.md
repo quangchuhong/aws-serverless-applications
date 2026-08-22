@@ -70,6 +70,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | [`landing-zone/config-detective`](./landing-zone/config-detective/) | AWS Config: lớp **phát hiện** bù cho SCP. **Mặc định tắt** | $0 khi tắt |
 | [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
 | [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
+| [`landing-zone/org-trail`](./landing-zone/org-trail/) | Organization CloudTrail – phủ mọi account hiện tại và tương lai. **Mặc định tắt** | ~$0 |
 
 ## Demo chạy được
 
