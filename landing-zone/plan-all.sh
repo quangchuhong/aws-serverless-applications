@@ -17,7 +17,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 
-LAYERS=(tf-backend organization control-tower config-detective billing-guard permission-sets org-trail)
+LAYERS=(tf-backend organization control-tower config-detective billing-guard permission-sets org-trail account-baseline)
 
 red()   { printf '\033[31m%s\033[0m' "$*"; }
 green() { printf '\033[32m%s\033[0m' "$*"; }

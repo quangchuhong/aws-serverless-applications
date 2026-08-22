@@ -57,7 +57,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
 **Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
 
-**Đã dựng thật một lần, đi hết cả 8 giai đoạn** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 25 lỗi gặp phải và cách sửa, trong đó **21 lỗi nằm ở chính code của repo**. Đọc mục 6 trước khi bắt đầu để đỡ mất thời gian.
+**Đã dựng thật một lần, đi hết cả 8 giai đoạn** (giai đoạn 9 vừa thêm, chưa chạy) — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 25 lỗi gặp phải và cách sửa, trong đó **21 lỗi nằm ở chính code của repo**. Đọc mục 6 trước khi bắt đầu để đỡ mất thời gian.
 
 > **Layer nào đã qua lửa:** `tf-backend`, `organization`, `permission-sets`, `billing-guard` đã apply thật.
 > **Chưa:** `config-detective`, `control-tower`. Đáng lưu ý vì 5 trong 13 lỗi thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
@@ -71,6 +71,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | [`landing-zone/billing-guard`](./landing-zone/billing-guard/) | Cost allocation tag (không hồi tố), budget cảnh báo, anomaly detection. Chạy ở management account | ~$0 |
 | [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
 | [`landing-zone/org-trail`](./landing-zone/org-trail/) | Organization CloudTrail – phủ mọi account hiện tại và tương lai. **Mặc định tắt** | ~$0 |
+| [`landing-zone/account-baseline`](./landing-zone/account-baseline/) | Thay cho AFT ở bản DIY – xoá default VPC tự động cho account mới, vending account. **Mặc định tắt** | $0 |
 
 ## Demo chạy được
 

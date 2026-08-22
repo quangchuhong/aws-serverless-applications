@@ -1,0 +1,99 @@
+########################################
+# cp terraform.tfvars.example terraform.tfvars
+#
+# ACCOUNT BASELINE - thay cho AFT o ban DIY.
+# Chay o MANAGEMENT ACCOUNT.
+########################################
+
+enable = false
+
+region      = "ap-southeast-1"
+project     = "acme-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. Quet default VPC
+#
+# Lay OU ID: cd ../organization && terraform output ou_ids
+#
+# DUA VAO DAY MOI OU chua account thuc, ke ca Sandbox va
+# Non-Production - khac han config-detective.
+#
+# Config tinh tien theo khoi luong nen phai chon loc. Xoa
+# default VPC thi mien phi va lam mot lan, nen bo sot mot OU
+# chi de lai lo hong chu khong tiet kiem duoc gi.
+########################################
+
+baseline_target_ous = [
+  # "ou-xxxx-security",
+  # "ou-xxxx-infrastructure",
+  # "ou-xxxx-non-production",
+  # "ou-xxxx-production",
+  # "ou-xxxx-sandbox",
+]
+
+# PHAI khop voi allowed_regions ben layer organization.
+# region_lock SCP chan ca ec2:DeleteVpc o region ngoai danh sach do,
+# nen Lambda se ghi "SKIP" cho chung. Do khong phai lo hong - xem
+# mo ta bien sweep_regions.
+sweep_regions = ["ap-southeast-1", "us-east-1"]
+
+# Doi gia tri nay de BUOC quet lai o moi account.
+# Custom resource cua CloudFormation chi chay lai khi thuoc tinh doi -
+# them region vao sweep_regions ma khong doi cai nay thi khong co gi
+# xay ra.
+sweep_version = "1"
+
+########################################
+# 2. Vending account moi - MAC DINH TAT
+#
+# =====================================================
+# GAN NHU KHONG HOAN TAC DUOC.
+#
+# Account khong xoa duoc, chi dong duoc, va dong xong
+# phai cho 90 ngay. Email la DUY NHAT VINH VIEN - dong
+# account roi cung khong dung lai duoc email do.
+#
+# De RONG neu chua chac. Tao tay bang create-account cung
+# duoc, chi mat them buoc move-account.
+# =====================================================
+########################################
+
+create_accounts = {}
+
+# create_accounts = {
+#   "lz-app-uat" = {
+#     email     = "ban+lz-app-uat-01@gmail.com"
+#     parent_id = "ou-xxxx-non-production"
+#   }
+# }
+
+# false = terraform destroy chi go khoi state, KHONG dong account.
+# Giu false tru khi that su co y do.
+close_accounts_on_destroy = false
+
+########################################
+# 3. Ban do pham vi
+#
+# Dung de SINH cau hinh cho layer khac, va de canh bao khi
+# co account chua duoc khai o dau ca.
+#
+#   analytics | nonprod | prod | none
+#
+# "none" = account ha tang (network, security, log archive):
+# chi nhan permission set pham vi "all".
+#
+# Sau khi apply:
+#   terraform output -raw paste_permission_sets
+#   terraform output -raw paste_config_detective
+#   terraform output unmapped_accounts
+########################################
+
+account_scopes = {
+  # "222222222222" = "none"       # lz-network
+  # "333333333333" = "none"       # lz-security
+  # "444444444444" = "none"       # lz-logarchive
+  # "555555555555" = "nonprod"    # lz-app-dev
+  # "666666666666" = "prod"       # lz-app-prod
+}

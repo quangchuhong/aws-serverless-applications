@@ -31,6 +31,8 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 7. config-detective      30 phút    lop phat hien - LAYER DUY NHAT TON TIEN
    ↓
 8. org-trail             15 phút    CloudTrail toan to chuc
+   ↓
+9. account-baseline      20 phút    thay cho AFT - don default VPC tu dong
 ```
 
 Giai đoạn **3 và 4 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
@@ -761,6 +763,91 @@ aws configservice describe-aggregate-compliance-by-config-rules \
 ☑ Xong giai đoạn 8 khi: `IsLogging = true`, file vào S3, và `cloud-trail-enabled` chuyển sang `COMPLIANT`.
 
 Chi tiết ở [README của layer](./org-trail/README.md).
+
+---
+
+## Giai đoạn 9 — `account-baseline`
+
+Thay cho **AFT**. Bản DIY không có Control Tower nên không có Account Factory for Terraform; giai đoạn này làm phần việc đó.
+
+Ba việc tay khi thêm account, **không việc nào báo lỗi khi quên**:
+
+| Việc | Quên thì |
+|---|---|
+| `move-account` vào OU | Account chỉ còn SCP ở root — mất `network_lock` và `prod_guard` |
+| Xoá default VPC | Một Internet Gateway mở sẵn; `network_lock` chỉ chặn **tạo** IGW mới |
+| Khai `accounts_by_scope` | Không ai vào được account qua Identity Center |
+
+### Chạy
+
+```bash
+cd ../organization && terraform output ou_ids     # lay OU ID
+cd ../account-baseline
+cp terraform.tfvars.example terraform.tfvars
+```
+
+```hcl
+enable = true
+
+# MOI OU chua account thuc, ke ca Sandbox va Non-Production.
+# Khac config-detective: xoa default VPC mien phi va lam mot lan,
+# nen bo sot mot OU chi de lai lo hong chu khong tiet kiem duoc gi.
+baseline_target_ous = ["ou-xxxx-security", "ou-xxxx-infrastructure",
+                       "ou-xxxx-non-production", "ou-xxxx-production"]
+
+sweep_regions = ["ap-southeast-1", "us-east-1"]   # khop allowed_regions
+sweep_version = "1"
+
+create_accounts = {}                              # GIU RONG - xem duoi
+
+account_scopes = {
+  "222222222222" = "none"       # ha tang
+  "555555555555" = "nonprod"
+  "666666666666" = "prod"
+}
+```
+
+```bash
+terraform init -backend-config=backend.hcl
+terraform plan          # mong doi 2 to add
+terraform apply
+```
+
+> **`create_accounts` gần như không hoàn tác được.** Account không xoá được, chỉ **đóng**, và phải chờ 90 ngày. Email **duy nhất vĩnh viễn** — đóng rồi cũng không dùng lại được. Giữ rỗng cho tới khi chắc; tạo tay bằng `create-account` hoàn toàn được.
+
+### Kiểm chứng
+
+```bash
+# ~5 phut
+aws cloudformation list-stack-instances   --stack-set-name <project>-account-baseline --call-as SELF   --query 'Summaries[].[Account,Status]' --output table
+
+# Xem no xoa duoc gi
+aws cloudformation describe-stacks --profile <account> --region <region>   --query 'Stacks[?contains(StackName,`account-baseline`)].Outputs[?OutputKey==`SweepResult`].OutputValue'   --output text
+```
+
+`SKIP` ở region **ngoài** `allowed_regions` là bình thường — `region_lock` chặn cả `ec2:DeleteVpc`, và default VPC ở đó vô hại vì không ai tạo được gì. `SKIP` ở region **trong** `allowed_regions` mới là vấn đề.
+
+**Kiểm độc lập**, đừng tin stack output:
+
+```bash
+for p in <cac profile>; do
+  printf '%-16s ' "$p"
+  aws ec2 describe-vpcs --region <region> --filters Name=isDefault,Values=true \
+    --query 'length(Vpcs)' --profile $p --output text
+done
+```
+
+Tất cả phải ra `0`.
+
+```bash
+terraform output -raw paste_permission_sets
+terraform output -raw paste_config_detective
+terraform output unmapped_accounts
+```
+
+☑ Xong giai đoạn 9 khi: mọi account ra `0` default VPC, và `unmapped_accounts` rỗng.
+
+Chi tiết ở [README của layer](./account-baseline/README.md).
 
 ---
 
