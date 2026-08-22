@@ -726,7 +726,7 @@ enable_object_lock     = false      # chua kiem chung voi CloudTrail
 
 ```bash
 terraform init -backend-config=backend.hcl
-terraform plan          # mong doi 9 to add
+terraform plan          # mong doi 8 to add
 terraform apply
 ```
 

@@ -78,7 +78,7 @@ terraform plan            # enable = false -> 0 resource
 
 Điền `log_archive_account_id`, đổi `enable = true`, rồi `plan` lại.
 
-Mong đợi **9 to add**: bucket + 6 resource kèm theo + bucket policy + trail. Bật `enable_object_lock` thì thành 10.
+Mong đợi **8 to add**: bucket + 5 resource kèm theo + bucket policy + trail. Bật `enable_object_lock` thì thành 9.
 
 ```bash
 terraform apply
