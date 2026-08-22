@@ -452,9 +452,11 @@ aws iam list-roles --profile lz-network \
 >
 > | Việc | Không làm thì sao |
 > |---|---|
-> | Xác nhận email đặt password | Không login được portal |
+> | **Users → chọn user → Reset password → *Send an email to the user*** | User tồn tại đủ group đủ quyền mà **không bao giờ login được** — chưa từng có password |
 > | Billing console → Account → *IAM user and role access to Billing information* → Activate | `lz-billing` bị `AccessDenied` dù policy đúng hoàn toàn — lỗi khó đoán nhất ở giai đoạn này |
 > | Identity Center → Settings → Authentication → *Require MFA every time* | Không có MFA |
+>
+> Việc đầu **lặp cho mỗi user mới**. API `CreateUser` mà Terraform dùng không gửi thư mời, và triệu chứng là *"không nhận được email"* chứ không phải một lỗi nào — nên rất dễ đi tìm ở hộp thư rác thay vì ở console.
 >
 > **Đừng** thay việc thứ ba bằng điều kiện `aws:MultiFactorAuthPresent` trong policy — phiên Identity Center không mang claim đó đáng tin, thêm vào chỉ sinh `AccessDenied` khó hiểu.
 

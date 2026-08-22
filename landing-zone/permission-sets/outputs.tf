@@ -74,7 +74,19 @@ output "unscoped_accounts" {
 output "next_steps" {
   value = <<-EOT
 
-    1. User nhan email dat password (chi khi dung Identity Center directory).
+    1. GUI THU DAT PASSWORD - THU CONG, Terraform KHONG lam duoc.
+
+       API CreateUser ma Terraform dung KHONG gui thu moi. User da ton
+       tai nhung chua co password, va khong co gi bao cho ai biet.
+
+       Identity Center console -> Users -> chon user
+       -> Reset password
+       -> "Send an email to the user with instructions for resetting
+          the password"
+
+       Lam cho TUNG user moi. Bo qua buoc nay thi user khong bao gio
+       dang nhap duoc, va trieu chung la "khong nhan duoc email" chu
+       khong phai mot loi nao.
 
     2. BAT MFA BAT BUOC - khong lam duoc bang Terraform:
        Identity Center console -> Settings -> Authentication

@@ -205,10 +205,31 @@ variable "users" {
   description = <<-EOT
     User tao trong Identity Center directory.
 
-    Email o day CHI dung de nhan thu dat password - KHONG can duy nhat
-    toan cau. Rat khac email root account. Dung lai email ca nhan duoc.
+    KHOA CUA MAP LA USERNAME DANG NHAP. Dat cho de go, khong dau.
 
-    groups = ten group trong local.groups (xem identity.tf).
+    ---------------------------------------------------------------
+    SAU KHI APPLY PHAI LAM MOT BUOC THU CONG cho tung user moi:
+
+      Identity Center console -> Users -> chon user
+      -> Reset password
+      -> "Send an email to the user with instructions for resetting
+         the password"
+
+    API CreateUser ma Terraform dung KHONG gui thu moi. Bo qua buoc
+    nay thi user ton tai day du, co group, co quyen - ma khong bao
+    gio dang nhap duoc, vi chua bao gio co password.
+
+    Trieu chung la "khong nhan duoc email", khong phai mot loi nao.
+    ---------------------------------------------------------------
+
+    Email o day CHI dung de nhan thu dat password - KHONG can duy nhat
+    toan cau. Rat khac email root account. Dung lai email ca nhan duoc,
+    va plus-addressing (ban+ten@gmail.com) cho bao nhieu dia chi cung
+    duoc ma van ve mot hop thu.
+
+    groups = ten group trong local.groups (xem identity.tf). Group
+    quyet dinh user thay account nao voi quyen gi. Co check block chan
+    neu khai group khong ton tai.
   EOT
   type = map(object({
     given_name  = string
