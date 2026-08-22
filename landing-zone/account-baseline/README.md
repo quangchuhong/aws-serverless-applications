@@ -60,6 +60,21 @@ Nên `sweep_regions` phải khớp `allowed_regions`. Region ngoài danh sách s
 
 > **`SKIP` ở region bị khoá không phải lỗ hổng.** Default VPC ở đó vô hại: không ai tạo được gì, và IGW nằm sẵn cũng không dùng được vì `ec2:RunInstances` bị `region_lock` từ chối trước. `SKIP` ở region **nằm trong** `allowed_regions` thì mới là vấn đề.
 
+### Vì sao không dùng `cfnresponse`
+
+Ví dụ của AWS cho Lambda inline dùng `import cfnresponse`, và module đó **có sẵn với một số runtime**. Với `python3.12` thì **không**:
+
+```
+Runtime.ImportModuleError: Unable to import module 'index':
+No module named 'cfnresponse'
+```
+
+Hỏng ở đây là hỏng theo kiểu tệ nhất. Lambda chết ngay lúc **khởi tạo**, trước khi vào `try`, nên không nhánh nào gửi được phản hồi. CloudFormation ngồi chờ **hết một giờ** rồi mới bỏ cuộc — stack treo `CREATE_IN_PROGRESS`, và các account còn lại xếp hàng `PENDING` phía sau.
+
+Hàm này tự gửi phản hồi bằng `urllib`, không phụ thuộc module nào ngoài thư viện chuẩn. Dài thêm 12 dòng, đổi lại không có gì để thiếu.
+
+> **Bài học chung:** custom resource nào cũng phải trả lời được CloudFormation **kể cả khi chính nó hỏng**. Không trả lời được thì triệu chứng không phải "lỗi" mà là "treo một giờ" — khó chẩn đoán hơn hẳn.
+
 ### Buộc quét lại
 
 Custom resource của CloudFormation **chỉ chạy lại khi thuộc tính đổi**. Thêm region vào `sweep_regions` mà không đổi `sweep_version` thì không có gì xảy ra.

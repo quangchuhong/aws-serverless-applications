@@ -12,13 +12,43 @@
 ########################################
 
 locals {
-  # Ham Lambda de INLINE trong template.
+  # Ham Lambda de INLINE trong template (gioi han 4096 ky tu).
   #
-  # CloudFormation gioi han ZipFile o 4096 ky tu, va tu cung cap
-  # module cfnresponse cho ham inline - nen khong phai dong goi zip
-  # rieng, va cung khong can S3 trung gian.
+  # ---------------------------------------------------------------
+  # KHONG DUNG `import cfnresponse`.
+  #
+  # Vi du cua AWS dung module do, va no CO san voi mot so runtime.
+  # Voi python3.12 thi KHONG:
+  #
+  #   Runtime.ImportModuleError: Unable to import module 'index':
+  #   No module named 'cfnresponse'
+  #
+  # Va hong o day la hong theo kieu te nhat: Lambda chet ngay luc
+  # KHOI TAO, truoc khi vao try, nen khong nhanh nao gui duoc phan
+  # hoi. CloudFormation ngoi cho HET MOT GIO roi moi bo cuoc - stack
+  # treo CREATE_IN_PROGRESS, va cac account con lai xep hang PENDING
+  # dang sau.
+  #
+  # Tu gui phan hoi bang urllib thi khong phu thuoc module nao ngoai
+  # thu vien chuan. Dai them 12 dong, doi lai khong co gi de thieu.
+  # ---------------------------------------------------------------
   sweep_code = <<-PY
-    import boto3, cfnresponse
+    import json, urllib.request, boto3
+
+    def send(event, ctx, status, data):
+        body = json.dumps({
+            'Status': status,
+            'Reason': 'Xem CloudWatch log: ' + ctx.log_stream_name,
+            'PhysicalResourceId': ctx.log_stream_name,
+            'StackId': event['StackId'],
+            'RequestId': event['RequestId'],
+            'LogicalResourceId': event['LogicalResourceId'],
+            'Data': data,
+        }).encode()
+        req = urllib.request.Request(
+            event['ResponseURL'], data=body, method='PUT',
+            headers={'content-type': '', 'content-length': str(len(body))})
+        urllib.request.urlopen(req)
 
     def handler(event, ctx):
         out = []
@@ -46,11 +76,16 @@ locals {
                     except Exception as e:
                         # Ghi lai chu KHONG nuot. Xem trong stack output.
                         out.append(r + '/SKIP:' + type(e).__name__)
-            cfnresponse.send(event, ctx, cfnresponse.SUCCESS,
-                             {'Result': (', '.join(out) or 'khong co default VPC nao')[:900]})
+            send(event, ctx, 'SUCCESS',
+                 {'Result': (', '.join(out) or 'khong co default VPC nao')[:900]})
         except Exception as e:
-            print('FATAL', e)
-            cfnresponse.send(event, ctx, cfnresponse.FAILED, {'Result': str(e)[:900]})
+            print('FATAL', repr(e))
+            # Gui FAILED cung phai bao ve: khong gui duoc thi
+            # CloudFormation treo mot gio.
+            try:
+                send(event, ctx, 'FAILED', {'Result': repr(e)[:900]})
+            except Exception as e2:
+                print('KHONG GUI DUOC PHAN HOI', repr(e2))
   PY
 
   sweep_template = jsonencode({
