@@ -194,12 +194,31 @@ resource "aws_s3_bucket_policy" "trail" {
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.trail[0].arn}/AWSLogs/${local.org_id}/*"
+
+        # HAI DUONG DAN, khong phai mot.
+        #
+        # Organization trail ghi vao CA HAI:
+        #   AWSLogs/<management-account-id>/CloudTrail/...   <- chinh management account
+        #   AWSLogs/<org-id>/<account-id>/CloudTrail/...     <- account thanh vien
+        #
+        # Thieu duong dau thi CreateTrail tu choi ngay:
+        #   InsufficientS3BucketPolicyException: Incorrect S3 bucket
+        #   policy is detected for bucket: <ten>
+        #
+        # Thong bao KHONG noi thieu cho nao - chi noi "incorrect".
+        Resource = [
+          "${aws_s3_bucket.trail[0].arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+          "${aws_s3_bucket.trail[0].arn}/AWSLogs/${local.org_id}/*",
+        ]
+
+        # KHONG dat dieu kien s3:x-amz-acl.
+        #
+        # Vi du trong tai lieu AWS co no, nhung do la cho bucket con
+        # BAT ACL. Bucket nay dung BucketOwnerEnforced - chu bucket
+        # LUON so huu object, bat ke ACL. Dieu kien do thanh thua, va
+        # mot dieu kien thua chi them mot cho de truot.
         Condition = {
-          StringEquals = {
-            "aws:SourceArn" = local.trail_arn
-            "s3:x-amz-acl"  = "bucket-owner-full-control"
-          }
+          StringEquals = { "aws:SourceArn" = local.trail_arn }
         }
       },
       {

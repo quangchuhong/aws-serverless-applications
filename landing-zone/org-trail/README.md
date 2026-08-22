@@ -118,7 +118,7 @@ aws configservice describe-aggregate-compliance-by-config-rules \
 
 | Chỗ | Hậu quả |
 |---|---|
-| **Đường dẫn trong bucket policy** | Organization trail ghi vào `AWSLogs/<org-id>/<account-id>/CloudTrail/...` — có thêm đoạn `<org-id>` mà trail thường không có. Sai prefix thì CloudTrail báo lỗi quyền ghi mà không nói rõ là do đường dẫn |
+| **Hai đường dẫn trong bucket policy** | Organization trail ghi vào **cả hai**: `AWSLogs/<management-account-id>/CloudTrail/...` và `AWSLogs/<org-id>/<account-id>/CloudTrail/...`. Thiếu một là `CreateTrail` từ chối với `InsufficientS3BucketPolicyException` — thông báo **không nói thiếu chỗ nào**, chỉ nói "incorrect" |
 | **Thiếu `AWSCloudTrailAclCheck`** | CloudTrail đọc ACL để kiểm quyền **trước** khi giao file đầu tiên. Thiếu statement này thì không bao giờ giao được |
 | **Object Lock** | `enable_object_lock` mặc định `false` và **chưa ai kiểm chứng với CloudTrail**. AWS Config không ghi được vào bucket có Object Lock; CloudTrail thì chưa đo. Object Lock chỉ bật được lúc tạo bucket, và `prevent_destroy` chặn xoá — bật nhầm là rất phiền. Cách đo nằm trong mô tả biến |
 
