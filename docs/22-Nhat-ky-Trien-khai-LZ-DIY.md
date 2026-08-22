@@ -29,7 +29,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 
 **Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 23 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
-**Chi phí:** ~$0. S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
+**Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
 ---
 
@@ -574,9 +574,74 @@ Nếu chỉ đọc một mục của file này, đọc mục này.
 
 ---
 
+## 6b. Sau 24 giờ — số đo thật, và lỗ hổng đầu tiên bị bắt
+
+Ba con số thay cho ba ước tính đã nằm trong file này từ đầu.
+
+### Chi phí: thấp hơn ước tính một bậc
+
+| Ngày | AWS Config |
+|---|---|
+| 20/8 — chưa bật | $0 |
+| 21/8 — ngày dựng | **$0.292** |
+| 22/8 — ổn định | $0 |
+
+$0.292 là chi phí **một lần**: recorder khởi động và ghi một configuration item cho mọi resource đang tồn tại thuộc 13 loại, ở 4 account. Sau đó chỉ ghi khi có **thay đổi**.
+
+Ước tính ban đầu là $2–10/tháng, và nó **sai một bậc**. Lý do: tôi tính theo *số resource* mà quên rằng `DAILY` chỉ phát sinh chi phí khi có thay đổi. Lab tĩnh thì gần như không có gì đổi.
+
+> Con số này sẽ khác hẳn khi có workload thật — mỗi lần deploy sinh một loạt configuration item. Nhưng mức nền thì nay đã đo được, không còn phải đoán.
+
+### Giao file: 4/4 SUCCESS
+
+Cả bốn account `lastStatus: SUCCESS`, đã lên lịch lần giao kế tiếp. Đường ống recorder → delivery channel → S3 ở account log archive hoạt động đầy đủ.
+
+### Một báo động sai của tôi, và trường đã giải thích nó
+
+Danh sách S3 có `ConfigHistory` cho `AWS::Athena::WorkGroup`, `AWS::Cassandra::Keyspace`, `AWS::IoT::DomainConfiguration`, `AWS::Scheduler::ScheduleGroup` — **không loại nào nằm trong 13 loại đã khai**. Tôi kết luận ngay là cần gạt chi phí số bốn không hoạt động.
+
+Sai. `describe-configuration-recorders` cho thấy cấu hình hoàn toàn đúng:
+
+```json
+"allSupported": false,
+"recordingStrategy": { "useOnly": "INCLUSION_BY_RESOURCE_TYPES" },
+"resourceTypes": [ ...dung 13 loai... ],
+"recordingScope": "PAID"
+```
+
+Trường quyết định là **`recordingScope: PAID`**. AWS Config ghi một nhóm loại resource **miễn phí**, ngoài phạm vi tính tiền, bất kể `resourceTypes` khai gì. Chúng chiếm chỗ trong S3 nhưng không tính vào hoá đơn.
+
+> Lại đúng cái lỗi suy luận của mục 5e: nhìn triệu chứng rồi kết luận, thay vì đọc cấu hình thật. Danh sách file trong S3 **không phải** nguồn đáng tin để suy ra phạm vi ghi — `describe-configuration-recorders` mới là.
+
+### Lỗ hổng đầu tiên bị bắt: không có CloudTrail nào
+
+| Rule | Kết quả |
+|---|---|
+| `iam-root-access-key-check` | COMPLIANT × 4 |
+| **`cloud-trail-enabled`** | **NON_COMPLIANT × 4** |
+| `s3-bucket-*` | COMPLIANT, chỉ ở account có bucket |
+
+Đây không phải lỗi Config. Toàn bộ repo **không có một resource `aws_cloudtrail` nào**, trong khi:
+
+- `baseline` SCP chặn `cloudtrail:StopLogging`, `DeleteTrail`, `UpdateTrail` — bảo vệ một thứ không tồn tại
+- `aws_service_access_principals` đã bật `cloudtrail.amazonaws.com` cho org trail
+- `lz-auditor` và `lz-security-operator` được cấp quyền đọc CloudTrail
+
+Ba tầng chuẩn bị cho CloudTrail, không tầng nào tạo ra nó. **Không tài liệu thiết kế nào bắt được điều này** — phải có lớp phát hiện chạy thật mới lộ ra, và nó lộ ra trong ngày đầu tiên.
+
+Đó chính là lý do lớp phát hiện tồn tại: SCP nói *ai được làm gì*, Config nói *thực tế đang thế nào*, và hai câu đó lệch nhau nhiều hơn người ta tưởng.
+
+### Bốn rule vắng mặt — và vì sao đó không phải "đạt"
+
+`encrypted-volumes`, `rds-storage-encrypted`, `vpc-sg-open-only-to-authorized-ports` và các rule S3 ở 3 account không xuất hiện trong bảng. Không có resource nào thuộc loại đó để đánh giá — không EBS, không RDS, và không security group vì default VPC đã bị xoá hết.
+
+> **Vắng mặt ≠ tuân thủ.** Nó nghĩa là "không có gì để kiểm". Khi dựng workload thật, các rule đó sẽ hiện ra và có thể mang màu khác.
+
+---
+
 ## 7. Việc còn lại sau lần dựng này
 
-Bảy giai đoạn của runbook đã đi hết, trừ giai đoạn 7 cố ý để sau.
+Đã đi hết cả bảy giai đoạn của runbook.
 
 | # | Việc | Trạng thái |
 |---|---|---|
@@ -586,10 +651,19 @@ Bảy giai đoạn của runbook đã đi hết, trừ giai đoạn 7 cố ý đ
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
 | 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b |
 | 6 | `billing-guard` | **Xong** — budget, SNS đã xác nhận, anomaly. Còn `enable_cost_allocation_tags` khi có resource mang tag |
-| 7 | **Layer `account-baseline`** | **Còn** — tự động hoá việc 1 và 3; ứng viên số một |
-| 8 | `config-detective` | Còn — chỉ khi cần lớp phát hiện; layer duy nhất tốn tiền |
+| 7 | `config-detective` | **Xong** — $0.29 một lần, ~$0/ngày ổn định. Xem mục 6b |
+| 8 | **Layer `org-trail`** | **Còn — ưu tiên số một.** `cloud-trail-enabled` NON_COMPLIANT ở cả 4 account: tổ chức không có CloudTrail nào |
+| 9 | **Layer `account-baseline`** | **Còn** — tự động hoá việc 1 và 3 |
 
-### Vì sao `account-baseline` là việc tiếp theo
+### Vì sao `org-trail` là việc tiếp theo
+
+Lớp phát hiện bắt được ngay ngày đầu: **không có CloudTrail nào trong tổ chức**. Ba tầng đã chuẩn bị sẵn cho nó mà không tầng nào tạo ra nó — `baseline` SCP chặn `cloudtrail:StopLogging`, `aws_service_access_principals` đã bật `cloudtrail.amazonaws.com`, `lz-auditor` được cấp quyền đọc. Chi tiết ở mục 6b.
+
+Không có trail thì không có bản ghi ai làm gì, `lz-auditor` không có gì để đọc, và điều tra sự cố không có nguồn dữ liệu.
+
+Một **organization trail** tạo ở management account phủ mọi account hiện tại và tương lai, ghi vào cùng bucket account log archive. Management event lần đầu miễn phí; chỉ trả tiền lưu trữ S3.
+
+### Vì sao `account-baseline` là việc sau đó
 
 Việc 1 và việc 3 đều đã làm xong **bằng tay**, và cả hai đều sẽ phải làm lại nguyên vẹn cho account thứ bảy:
 
