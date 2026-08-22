@@ -26,7 +26,8 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Default VPC | Đã xoá ở mọi account × mọi region |
 | Config detective | 4/4 recorder đang ghi, aggregator, 8 org rule — 26 resource |
 | Đăng nhập SSO | Kiểm chứng thật — portal hiện đúng 5 account, không có management |
-| Org trail | CloudTrail toàn tổ chức, multi-region, có log file validation |
+| Org trail | CloudTrail toàn tổ chức, multi-region, log file validation — 8 resource |
+| **Vòng khép kín** | `cloud-trail-enabled`: NON_COMPLIANT ×4 → dựng `org-trail` → **COMPLIANT ×4** |
 
 **Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 25 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
@@ -642,6 +643,53 @@ Ba tầng chuẩn bị cho CloudTrail, không tầng nào tạo ra nó. **Không
 
 ---
 
+## 6c. Vòng khép kín — thứ đáng giá nhất của cả dự án
+
+Lỗ hổng CloudTrail ở mục 6b được vá bằng layer [`org-trail`](../landing-zone/org-trail/). Điều đáng ghi không phải bản vá, mà là **cách nó được xác nhận**.
+
+```
+config-detective  →  "cloud-trail-enabled NON_COMPLIANT o 4 account"
+                         │
+                     dung org-trail
+                         │
+config-detective  →  "COMPLIANT o 4 account"
+```
+
+Không ai khẳng định trail chạy. Một hệ thống **độc lập**, dựng từ trước và không biết gì về layer mới, tự phát hiện chỗ thiếu rồi tự xác nhận chỗ vá.
+
+Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi lăm lỗi trong file này đều xoay quanh khoảng cách đó.
+
+### Rule định kỳ không phản ứng với thay đổi
+
+Sau khi trail chạy, aggregator vẫn báo `NON_COMPLIANT` ở cả 4 account. Không phải sai — chỉ là kết quả **cũ**.
+
+| Loại rule | Đánh giá lại khi |
+|---|---|
+| Configuration change | Resource thay đổi — vài phút |
+| **Periodic** | Theo lịch, mặc định **24 giờ** |
+
+`CLOUD_TRAIL_ENABLED` thuộc loại thứ hai. Bạn vá xong, Config vẫn báo sai suốt cả ngày, và rất dễ tưởng bản vá không có tác dụng.
+
+Ép chạy ngay, trong **account thành viên**:
+
+```bash
+aws configservice start-config-rules-evaluation \
+  --config-rule-names OrgConfigRule-<ten-rule>-<hash> \
+  --profile <account> --region <region>
+
+# hoi thang account do, khong qua aggregator - nhanh hon
+aws configservice describe-compliance-by-config-rule \
+  --config-rule-names OrgConfigRule-<ten-rule>-<hash> \
+  --profile <account> --region <region> \
+  --query 'ComplianceByConfigRules[0].Compliance.ComplianceType' --output text
+```
+
+`StartConfigRulesEvaluation` có giới hạn tốc độ — gọi lại quá sớm cho cùng một rule sẽ ra `LimitExceededException`. Đó là hạn chế, không phải lỗi.
+
+> **Trộn hai loại rule trong một dashboard mà không biết loại nào là loại nào** thì mọi bản vá đều trông như không có tác dụng trong tối đa 24 giờ. Khi vận hành, luôn hỏi rule đang xem thuộc loại nào trước khi kết luận bản vá hỏng.
+
+---
+
 ## 7. Việc còn lại sau lần dựng này
 
 Đã đi hết cả bảy giai đoạn của runbook.
@@ -655,7 +703,7 @@ Ba tầng chuẩn bị cho CloudTrail, không tầng nào tạo ra nó. **Không
 | 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b |
 | 6 | `billing-guard` | **Xong** — budget, SNS đã xác nhận, anomaly. Còn `enable_cost_allocation_tags` khi có resource mang tag |
 | 7 | `config-detective` | **Xong** — $0.29 một lần, ~$0/ngày ổn định. Xem mục 6b |
-| 8 | **Layer `org-trail`** | **Còn — ưu tiên số một.** `cloud-trail-enabled` NON_COMPLIANT ở cả 4 account: tổ chức không có CloudTrail nào |
+| 8 | **Layer `org-trail`** | **Xong** — 8 resource, và `cloud-trail-enabled` đã chuyển sang COMPLIANT ×4. Xem mục 6c |
 | 9 | **Layer `account-baseline`** | **Còn** — tự động hoá việc 1 và 3 |
 
 ### Vì sao `org-trail` là việc tiếp theo
