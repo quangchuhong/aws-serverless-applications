@@ -195,7 +195,40 @@ Cột `SubscriptionArn` phải là một ARN kết thúc bằng UUID. Hai giá t
 | Giá trị | Nghĩa là | Chữa |
 |---|---|---|
 | `PendingConfirmation` | Chưa bấm link trong thư | Bấm link |
-| `Deleted` | Quá **3 ngày** không xác nhận, SNS tự xoá | `terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'` rồi bấm link **thư mới**, rồi **kiểm lại bằng lệnh trên** |
+| `Deleted` | SNS đã vứt subscription đi | Xem phần dưới — **đừng vội `-replace`** |
+
+### `Deleted` — phân biệt hai nguyên nhân trước khi sửa
+
+`Deleted` có hai nguồn hoàn toàn khác nhau, và chữa nhầm thì lặp vô hạn:
+
+1. Subscription chưa xác nhận **quá 3 ngày** — SNS tự dọn
+2. **Địa chỉ đó bị SNS chặn** — thường do có người từng bấm *"unsubscribe"* trong một thư SNS trước đó
+
+Trường hợp 2 nhìn y hệt trường hợp 1, nhưng `-replace` **không bao giờ** sửa được: SNS nhận `Subscribe`, trả về `"pending confirmation"`, rồi xoá ngay trong vài phút.
+
+Phân biệt bằng một phép thử, không phải bằng suy luận — đăng ký một địa chỉ **khác** vào **cùng topic**, cùng lúc. Plus-addressing của Gmail là lý tưởng: cùng hộp thư, nhưng với SNS là endpoint khác hẳn.
+
+```bash
+aws sns subscribe --topic-arn <alert_topic> --protocol email \
+  --notification-endpoint <ban>+lztest@gmail.com \
+  --profile <security> --region ap-southeast-1
+
+sleep 60   # ListSubscriptionsByTopic la eventually consistent
+
+aws sns list-subscriptions-by-topic --topic-arn <alert_topic> \
+  --profile <security> --region ap-southeast-1 \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+```
+
+| Kết quả | Nguyên nhân | Chữa |
+|---|---|---|
+| Địa chỉ mới `PendingConfirmation`, cũ `Deleted` | Địa chỉ cũ **bị chặn** | Đổi `alert_emails` sang endpoint khác rồi `terraform apply`. **Không có API gỡ chặn cho email** — phải qua AWS Support |
+| Cả hai `Deleted` | Vấn đề ở topic hoặc account | Không phải chuyện địa chỉ — xem policy của topic |
+| Địa chỉ cũ biến mất khỏi bảng | Chỉ là bản ghi cũ chưa dọn xong | Không phải lỗi. `sleep 60` là thứ thiếu |
+
+> Đây chính là ca đã gặp trong lần dựng thật, và phép thử trên là thứ giải được nó sau khi ba giả thuyết suông đều sai. Xem [doc 22](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
+> **Cảnh báo bảo mật của cả tổ chức không nên gắn vào email cá nhân.** Một lần ai đó bấm "unsubscribe" là mù toàn hệ thống, và không có API nào gỡ lại. Một distribution list an toàn hơn hẳn.
 
 > **`terraform plan` không bắt được trường hợp này.** Đo được trong lần dùng thật:
 >

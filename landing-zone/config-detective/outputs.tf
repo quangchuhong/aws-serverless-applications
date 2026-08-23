@@ -68,14 +68,32 @@ output "next_steps" {
 
        Cot cuoi PHAI la mot ARN ket thuc bang UUID.
          PendingConfirmation  chua bam link
-         Deleted              da qua 3 ngay, phai tao lai:
+         Deleted              xem duoi - DUNG voi chay -replace
 
-         terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'
+       "Deleted" co hai nguyen nhan, nhin y het nhau:
+         (1) chua xac nhan qua 3 ngay, SNS tu don
+         (2) DIA CHI DO BI SNS CHAN - thuong do tung co nguoi bam
+             "unsubscribe" trong mot thu SNS truoc do
 
-       Roi CHAY LAI list-subscriptions-by-topic. SNS Subscribe voi cung
-       topic + protocol + endpoint co the tra ve DUNG ARN cu thay vi
-       tao moi - Terraform bao "1 added, 1 destroyed" ma SNS khong doi
-       gi. Log cua Terraform khong phai bang chung.
+       Voi (2) thi -replace KHONG BAO GIO sua duoc: SNS nhan Subscribe,
+       tra ve "pending confirmation", roi xoa ngay trong vai phut.
+
+       Phan biet bang PHEP THU, khong phai suy luan - dang ky mot dia
+       chi KHAC vao CUNG topic (plus-addressing cua Gmail: cung hop
+       thu, khac endpoint):
+
+         aws sns subscribe --topic-arn <alert_topic> --protocol email \
+           --notification-endpoint <ban>+lztest@gmail.com \
+           --profile <security> --region ${var.region}
+
+         sleep 60   # ListSubscriptionsByTopic la eventually consistent
+         # roi list lai
+
+       Dia chi moi PendingConfirmation ma cu van Deleted = dia chi cu
+       bi chan. Doi alert_emails sang endpoint khac roi apply. KHONG CO
+       API go chan cho email - phai qua AWS Support.
+
+       Xem README muc "Deleted" de day du ba truong hop.
 
        KHONG dung 'aws sns publish' de kiem. No tra ve MessageId ke ca
        khi topic khong co subscriber nao - lenh bao OK va thu roi vao

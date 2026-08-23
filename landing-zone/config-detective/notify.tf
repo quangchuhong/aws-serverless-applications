@@ -84,6 +84,14 @@ resource "aws_sns_topic_subscription" "email" {
   # endpoint co the tra ve DUNG ARN cu thay vi tao cai moi. Terraform
   # se bao "1 added, 1 destroyed" ma ben SNS khong doi gi. Doc log cua
   # Terraform khong du - phai list-subscriptions-by-topic lai.
+  #
+  # VA CO MOT CA MA -replace KHONG BAO GIO SUA DUOC: dia chi bi SNS
+  # chan (thuong do tung co nguoi bam "unsubscribe" trong mot thu SNS).
+  # SNS nhan Subscribe, tra ve "pending confirmation", roi xoa ngay.
+  # Khong co API go chan cho email - phai doi endpoint khac.
+  #
+  # Phan biet bang phep thu, khong phai suy luan: dang ky mot dia chi
+  # KHAC vao CUNG topic. Xem README muc "Deleted".
   # ---------------------------------------------------------------
 }
 
