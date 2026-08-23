@@ -32,7 +32,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | **Tự động bắt lỗi tay** | `account-baseline` xoá **5 default VPC ở `us-east-1`** mà lần dọn tay bỏ sót |
 | Đường cảnh báo | `plan-all.sh` bắt được email cảnh báo bảo mật **không tới ai** — xem mục 6e |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 28 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 29 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -72,8 +72,9 @@ Xếp theo thứ tự gặp phải.
 | 26 | `Runtime.ImportModuleError: No module named 'cfnresponse'` | Module đó **không có** trong `python3.12` — Lambda chết lúc khởi tạo nên không gửi được phản hồi, CloudFormation treo **một giờ** | **Lỗi code** | `cf66390` |
 | 27 | Lệnh kiểm chứng in ra **rỗng** dù output vẫn ở đó | Hai bộ lọc JMESPath liên tiếp tạo projection lồng, `--output text` in ra dòng trống | **Lỗi code** | `6336f81` |
 | 28 | `terraform plan` **sạch**, cảnh báo bảo mật không tới ai | Email subscription bị SNS xoá; state vẫn giữ ARN thật nên `plan` không thấy gì | **Lỗi thiết kế** | `76dc5b7`, `bc0dfca` |
+| 29 | `Invalid template interpolation value` ×4, ngay ở `enable = false` | `one()` trả `null` khi `count = 0`, và null không nội suy được vào string template | **Lỗi code** | `5debc69` |
 
-**24/28 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**25/29 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -669,7 +670,7 @@ config-detective  →  "COMPLIANT o 4 account"
 
 Không ai khẳng định trail chạy. Một hệ thống **độc lập**, dựng từ trước và không biết gì về layer mới, tự phát hiện chỗ thiếu rồi tự xác nhận chỗ vá.
 
-Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi tám lỗi trong file này đều xoay quanh khoảng cách đó.
+Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi chín lỗi trong file này đều xoay quanh khoảng cách đó.
 
 ### Rule định kỳ không phản ứng với thay đổi
 
@@ -883,6 +884,59 @@ ARN thật, kết thúc bằng UUID. Không có API gỡ chặn cho email — đ
 
 ---
 
+## 6f. Giai đoạn 10 — `network`, và lỗi do chính bản vá an toàn gây ra
+
+> **Mục này khác mọi mục trên: `network` MỚI CÓ CODE, CHƯA AI APPLY.** Đo được ở đây chỉ có `terraform plan`. Đừng đọc nó như bảy giai đoạn kia — chúng có số đo thật từ AWS, mục này thì chưa.
+
+Layer [`network`](../landing-zone/network/) làm giai đoạn 1 của [doc 17](./17-Network-LZ-Design-Guide.md): TGW + security VPC + Network Firewall + egress VPC, chia sẻ TGW cho cả tổ chức qua RAM. Chưa có ingress VPC (Palo Alto và F5 cần license Marketplace), chưa có 3rd-party VPC, chưa có Route 53 Profile.
+
+### Layer đầu tiên phá vỡ mẫu "~$0/ngày"
+
+| Layer | Chi phí |
+|---|---|
+| Bảy layer trước | ~$0/ngày |
+| `network`, 2 AZ | **~$770/tháng** |
+
+Trong đó **$570 là Network Firewall endpoint** — $0.395/giờ **mỗi AZ**, chạy 24/7 dù có gói tin nào đi qua hay không. Đây là quyết định khác hẳn `enable = true` ở mọi layer trước, nên README của layer mở đầu bằng bảng chi phí chứ không phải bằng kiến trúc.
+
+### Lỗi 29 — bản vá an toàn tự tạo ra lỗ hổng của nó
+
+Soát tay trước khi commit, tôi tìm ra một chỗ: `[0].id` trên resource `count = 0` là *Invalid index*, **kể cả ở nhánh không được chọn**. Sửa thành `one(...[*].id)` cho an toàn.
+
+`one()` trả về `null` khi `count = 0`. Với một phép gán thì null vô hại. Trong string template thì:
+
+```
+Error: Invalid template interpolation value
+  aws_ec2_transit_gateway.hub is empty tuple
+  The expression result is null. Cannot include a null value in a string template.
+```
+
+Bốn lần, trong hai output sinh HCL. Và nó hỏng ở **`enable = false`** — trạng thái mặc định, thứ ai cũng gặp đầu tiên, trước cả khi đọc tới TGW hay firewall.
+
+Ba điều đáng ghi, và không điều nào nói về Terraform:
+
+| | |
+|---|---|
+| **Bản vá tạo ra lỗi** | Thay đổi duy nhất tôi làm *để giảm rủi ro* là thay đổi duy nhất gây lỗi. `one()` đúng cho phép gán, sai cho template — tôi áp dụng nó ở cả hai chỗ mà không phân biệt |
+| **Hỏng ở trạng thái mặc định** | Không phải góc khuất nào. `terraform plan` với cấu hình xuất xưởng là hỏng |
+| **`fmt` sạch và soát tay kỹ đều không bắt được** | Tôi vừa soát ra ba lỗi khác nên thấy yên tâm. `fmt` chỉ kiểm định dạng, và mắt người không lần được `null` chảy vào đâu. `plan` thật bắt trong một giây |
+
+Bản sửa cho cả hai giá trị đi qua `coalesce()` với một chuỗi giữ chỗ đọc được, nên khối HCL sinh ra vẫn in được trước khi hub tồn tại.
+
+> **Vì sao tôi không tự bắt được:** layer này viết trong môi trường có chính sách mạng chặn `registry.terraform.io`, nên `terraform init` và `validate` không chạy được ở đó. Tôi nói rõ điều đó khi bàn giao — nhưng nói rõ giới hạn không làm giới hạn biến mất. **Một layer chưa ai chạy vẫn là một layer chưa ai tin được**, kể cả khi người viết đã cảnh báo trước.
+
+### Ba quyết định thiết kế, và lý do
+
+**Spoke VPC cố ý không nằm trong layer.** Provider không sinh động được bằng `for_each` — sáu account là sáu alias viết tay, account thứ bảy là sửa code. Nên layer sở hữu TGW, share qua RAM, và **nối** attachment do account workload tạo. Bước nối bắt buộc ở đây: chỉ chủ sở hữu TGW mới `associate`/`propagate` được.
+
+Bỏ bước nối = attachment `State: available` và không thuộc route table nào. Không lỗi, không cảnh báo, không một gói tin nào đi qua — **đúng họ với lỗi 28**: mọi thứ báo ổn, không ai nhận được gì.
+
+**Route table theo từng AZ**, khác bản demo một-AZ. Gói vào subnet `tgw` của AZ-a phải tới firewall endpoint của chính AZ-a. `sync_states` là một **set không có thứ tự**, nên code lập map `AZ → endpoint` chứ không lấy theo chỉ số.
+
+**`appliance_mode_support` chỉ lộ ra từ 2 AZ trở lên.** Với một AZ nó không bao giờ sai. Nên bản một-AZ — thứ tôi khuyên dùng để thử code cho rẻ — **không kết luận được là cấu hình đúng**. Đó là một giới hạn của phép thử, phải biết trước khi tin nó.
+
+---
+
 ## 7. Việc còn lại sau lần dựng này
 
 Đã đi hết cả chín giai đoạn của runbook.
@@ -898,6 +952,7 @@ ARN thật, kết thúc bằng UUID. Không có API gỡ chặn cho email — đ
 | 7 | `config-detective` | **Xong** — $0.29 một lần, ~$0/ngày ổn định. Xem mục 6b |
 | 8 | **Layer `org-trail`** | **Xong** — 8 resource, và `cloud-trail-enabled` đã chuyển sang COMPLIANT ×4. Xem mục 6c |
 | 9 | **Layer `account-baseline`** | **Xong** — 5/5 stack instance CURRENT, xoá 5 default VPC lần dọn tay bỏ sót. Xem mục 6d |
+| 10 | **Layer `network`** | **Mới có code** — `plan` sạch ở `enable = false`, **chưa ai apply**. Xem mục 6f |
 
 Còn lại, không thuộc giai đoạn nào của runbook:
 
@@ -906,6 +961,7 @@ Còn lại, không thuộc giai đoạn nào của runbook:
 | `enable_cost_allocation_tags` ở `billing-guard` | Chỉ có nghĩa khi đã có resource mang tag |
 | Xem lại pham vi `lz-db-admin` / `lz-server-admin` | Hai set này để `all`, tức có quyền ghi vào production, trong khi `lz-app-admin` chỉ nonprod. Không nhất quán — hoặc là cố ý và cần ghi rõ, hoặc là sót |
 | Layer `control-tower` | **Chưa ai chạy bao giờ.** Mặc định tắt, không ảnh hưởng gì — nhưng một lớp chưa ai chạy là một lớp chưa ai tin được, đúng như lỗi 26 vừa chứng minh với code viết cùng ngày |
+| Layer `network` | Có code, `plan` sạch, **chưa apply**. Và bật nó là ~$770/tháng — không phải việc "làm nốt cho đủ bộ" mà là quyết định có workload thật hay không. Xem mục 6f |
 
 ### Vì sao `org-trail` là việc tiếp theo
 

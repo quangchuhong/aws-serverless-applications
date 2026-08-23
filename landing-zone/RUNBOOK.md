@@ -4,7 +4,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 
 > Mỗi layer có README riêng nói **vì sao**. File này chỉ nói **làm gì, theo thứ tự nào, và dừng ở đâu nếu sai**.
 >
-> **Đã có người đi hết đường này** — cả 9 giai đoạn. [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 28 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — cả 9 giai đoạn (giai đoạn 10 mới có code). [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 29 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
 **Chi phí**: ~$0. `config-detective` (giai đoạn 7) đo được $0.29 một lần rồi ~$0/ngày; `org-trail` chỉ tốn tiền lưu trữ S3.
@@ -33,9 +33,13 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 8. org-trail             15 phút    CloudTrail toan to chuc
    ↓
 9. account-baseline      20 phút    thay cho AFT - don default VPC tu dong
+   ↓
+10. network              45 phút    TGW + firewall + egress   ← CHI KHI CO WORKLOAD
 ```
 
 Giai đoạn **3 và 4 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
+
+> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Chín giai đoạn đầu tốn ~$0/ngày; giai đoạn 10 tốn **~$770/tháng** ở 2 AZ, trong đó $570 là Network Firewall endpoint chạy 24/7 dù có gói tin hay không. Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dùng [`demo/network-lz-full`](../demo/network-lz-full/) — dựng, xem, xoá.
 
 ---
 
@@ -854,6 +858,70 @@ terraform output unmapped_accounts
 ☑ Xong giai đoạn 9 khi: mọi account ra `0` default VPC, và `unmapped_accounts` rỗng.
 
 Chi tiết ở [README của layer](./account-baseline/README.md).
+
+---
+
+## Giai đoạn 10 — `network`
+
+> **Chỉ làm khi có workload thật cần kết nối.** ~$770/tháng ở 2 AZ. Chín giai đoạn trước cộng lại là ~$0/ngày.
+>
+> **Layer này chưa ai apply.** `plan` sạch, code đã soát, nhưng chưa chạm AWS lần nào — khác hẳn chín giai đoạn trên. Đi chậm, và kiểm từng bước.
+
+```bash
+cd ../network
+cp terraform.tfvars.example terraform.tfvars
+
+cd ../organization && terraform output account_ids   # lay network_account_id
+cd ../network
+```
+
+Điền `network_account_id`. **Chưa đổi `enable` vội** — chạy thử trước:
+
+```bash
+terraform init -backend-config=backend.hcl
+terraform plan          # enable = false -> PHAI ra 0 resource, khong loi
+```
+
+Rồi mới bật. Để **thử code** thì một AZ là đủ và rẻ hơn ~$335/tháng:
+
+```hcl
+enable             = true
+availability_zones = ["ap-southeast-1a"]   # mot AZ: chi de thu
+firewall_mode      = "alert"               # LUON alert truoc
+```
+
+```bash
+terraform apply
+```
+
+`aws_networkfirewall_firewall` mất **vài phút** ở `PROVISIONING` — bình thường, đừng ngắt.
+
+**Kiểm tra:**
+
+```bash
+aws network-firewall describe-firewall --firewall-name <project>-fw \
+  --profile <network> --region ap-southeast-1 \
+  --query 'FirewallStatus.Status' --output text
+# PHAI la READY
+
+# TGW da share chua - hoi tu ACCOUNT WORKLOAD, khong phai account network
+aws ec2 describe-transit-gateways --profile <workload> --region ap-southeast-1 \
+  --query 'TransitGateways[].TransitGatewayId' --output text
+```
+
+> **Một AZ không kiểm chứng được `appliance_mode_support`.** Với một AZ nó không bao giờ sai, nên bản rẻ này chứng minh được đường đi nhưng **không** chứng minh được cấu hình đúng cho môi trường thật. Biết giới hạn đó trước khi tin kết quả.
+
+**Nối spoke** — bước hay quên nhất:
+
+```bash
+terraform output -raw paste_spoke_vpc    # chay khoi nay o ACCOUNT WORKLOAD
+```
+
+Rồi lấy attachment ID điền vào `spoke_attachments` của layer này và `apply` lại. Bỏ bước này thì attachment ở `State: available` mà **không thuộc route table nào** — không lỗi, không cảnh báo, không gói tin nào đi qua.
+
+☑ Xong giai đoạn 10 khi: EC2 trong spoke `curl` ra Internet được, và IP trả về nằm trong `terraform output nat_public_ips`.
+
+Chi tiết ở [README của layer](./network/README.md).
 
 ---
 
