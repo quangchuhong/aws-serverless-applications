@@ -786,7 +786,19 @@ for p in lz-network lz-security lz-logarchive lz-app-dev lz-app-prod; do
 done
 ```
 
-Cả mười ô phải ra `0`. Lần này lặp **cả hai** region — đúng cái mà lần trước không làm.
+Kết quả thật:
+
+```
+lz-network       ap-southeast-1=0 us-east-1=0
+lz-security      ap-southeast-1=0 us-east-1=0
+lz-logarchive    ap-southeast-1=0 us-east-1=0
+lz-app-dev       ap-southeast-1=0 us-east-1=0
+lz-app-prod      ap-southeast-1=0 us-east-1=0
+```
+
+Mười ô, mười số `0`, hỏi thẳng EC2 chứ không đọc `SweepResult`. Đây là điểm khác biệt đáng giữ: `SweepResult` là **stack tự khai về chính nó**, còn bảng trên là AWS trả lời một câu hỏi không liên quan gì tới CloudFormation.
+
+Lần này lặp **cả hai** region — đúng cái mà lần dọn tay không làm, và cũng đúng cái mà câu kiểm chứng của lần đó không làm.
 
 ---
 
@@ -877,7 +889,13 @@ Không in dòng `CON ... default VPC` nào, và cột cuối không có `ROOT` n
 
 > **Đừng dán comment `#` vào zsh.** macOS mặc định dùng zsh, và zsh **tương tác** không bật `interactive_comments` — mọi dòng `#` trong khối dán vào sẽ thành `zsh: command not found: #`. Vô hại nhưng ồn. `setopt interactive_comments` một lần là hết.
 
-> **Bản đầu của đoạn script trên có `2>/dev/null` ở cả hai lời gọi**, và khi `assume-role` hỏng nó chỉ in `(khong assume duoc)` — không nói vì sao. Đúng cùng một lỗi với #27: che mất câu trả lời rồi để người đọc tự đoán. Nguyên nhân hay gặp nhất là **credential mặc định đang là root user**, mà root **không assume role được**, không bao giờ.
+> **Bản đầu của đoạn script trên có `2>/dev/null` ở cả hai lời gọi**, và khi `assume-role` hỏng nó chỉ in `(khong assume duoc)` — không nói vì sao. Đúng cùng một lỗi với #27: che mất câu trả lời rồi để người đọc tự đoán.
+>
+> Lần dựng này nó hỏng ở cả 5 account. Tôi đoán là do credential mặc định là root user — **đoán sai**: `get-caller-identity` cho ra một IAM user có quyền admin, và cùng lời gọi `assume-role` đó chạy rời thì thành công. Nguyên nhân thật vẫn chưa biết, vì thông báo lỗi đã bị `2>/dev/null` nuốt mất trước khi ai kịp đọc.
+>
+> Ghi lại đúng như vậy, không viết một nguyên nhân nghe hợp lý vào chỗ trống. Bài học nằm ở chính chỗ đó: **script nuốt stderr thì lỗi không biến mất, nó chỉ chuyển thành phỏng đoán** — và phỏng đoán đầu tiên của tôi đã sai.
+
+> **Vòng lặp này không phải thứ bắt buộc.** Nếu đã có profile cho từng account thì bản dưới đây trả lời cùng câu hỏi với ít chỗ hỏng hơn hẳn — nó không cần `assume-role`, không cần env var tạm, không cần role nào tồn tại.
 
 ### Bản không cần assume-role
 
