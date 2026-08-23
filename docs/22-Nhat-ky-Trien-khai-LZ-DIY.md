@@ -30,8 +30,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Account baseline | StackSet + Lambda, `auto_deployment`, 5/5 stack instance CURRENT |
 | **Vòng khép kín** | `cloud-trail-enabled`: NON_COMPLIANT ×4 → dựng `org-trail` → **COMPLIANT ×4** |
 | **Tự động bắt lỗi tay** | `account-baseline` xoá **5 default VPC ở `us-east-1`** mà lần dọn tay bỏ sót |
+| Đường cảnh báo | `plan-all.sh` bắt được email cảnh báo bảo mật **không tới ai** — xem mục 6e |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 27 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 28 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -70,8 +71,9 @@ Xếp theo thứ tự gặp phải.
 | 25 | `InsufficientS3BucketPolicyException` | Organization trail ghi vào **hai** prefix, policy chỉ cho một | **Lỗi code** | `e5281e5` |
 | 26 | `Runtime.ImportModuleError: No module named 'cfnresponse'` | Module đó **không có** trong `python3.12` — Lambda chết lúc khởi tạo nên không gửi được phản hồi, CloudFormation treo **một giờ** | **Lỗi code** | `cf66390` |
 | 27 | Lệnh kiểm chứng in ra **rỗng** dù output vẫn ở đó | Hai bộ lọc JMESPath liên tiếp tạo projection lồng, `--output text` in ra dòng trống | **Lỗi code** | `6336f81` |
+| 28 | `terraform plan` **sạch**, cảnh báo bảo mật không tới ai | Email subscription bị SNS xoá; state vẫn giữ ARN thật nên `plan` không thấy gì | **Lỗi thiết kế** | `76dc5b7`, `bc0dfca` |
 
-**23/27 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**24/28 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -667,7 +669,7 @@ config-detective  →  "COMPLIANT o 4 account"
 
 Không ai khẳng định trail chạy. Một hệ thống **độc lập**, dựng từ trước và không biết gì về layer mới, tự phát hiện chỗ thiếu rồi tự xác nhận chỗ vá.
 
-Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi bảy lỗi trong file này đều xoay quanh khoảng cách đó.
+Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi tám lỗi trong file này đều xoay quanh khoảng cách đó.
 
 ### Rule định kỳ không phản ứng với thay đổi
 
@@ -799,6 +801,85 @@ lz-app-prod      ap-southeast-1=0 us-east-1=0
 Mười ô, mười số `0`, hỏi thẳng EC2 chứ không đọc `SweepResult`. Đây là điểm khác biệt đáng giữ: `SweepResult` là **stack tự khai về chính nó**, còn bảng trên là AWS trả lời một câu hỏi không liên quan gì tới CloudFormation.
 
 Lần này lặp **cả hai** region — đúng cái mà lần dọn tay không làm, và cũng đúng cái mà câu kiểm chứng của lần đó không làm.
+
+---
+
+## 6e. Lỗi 28 — ba thứ cùng nói "ổn", không ai nhận được gì
+
+Chạy `./plan-all.sh` sau khi xong giai đoạn 9. Tám layer, bảy cái `khong doi`, một cái lệch:
+
+```
+config-detective     ok        ok        Plan: 1 to add, 0 to change, 0 to destroy
+```
+
+Một resource: `aws_sns_topic_subscription.email`. Địa chỉ có trong `terraform.tfvars`, nhưng lần apply cuối chạy trước khi thêm nó. Và vì `tfvars` nằm trong `.gitignore`, **không commit nào lộ ra sự lệch này** — chỉ `plan` mới thấy.
+
+`terraform apply`. Thư xác nhận về hộp. Hỏi SNS:
+
+```
+quang.hong.0991@gmail.com    Deleted
+```
+
+### Ba lời khai đều sai
+
+| Nguồn | Nói gì | Thực tế |
+|---|---|---|
+| `terraform apply` | `1 added` | Subscription không tồn tại |
+| `terraform plan` | `No changes` | State giữ một ARN đã chết |
+| `aws sns publish` | `MessageId: a8872013-...` | Không có subscriber nào |
+
+`sns publish` là cái độc nhất: nó **luôn** trả `MessageId` miễn topic tồn tại. Lệnh báo OK, số hiệu thư có thật, thư rơi vào hư không.
+
+Nặng hơn lỗi 23 (user SSO không có thư mời): ở đó ít nhất **không có gì tuyên bố thành công**. Ở đây có ba thứ cùng khẳng định đường cảnh báo bảo mật của cả tổ chức đang chạy.
+
+### Bốn giả thuyết, bốn lần sai
+
+Đây mới là phần đáng ghi.
+
+| # | Tôi nói | Bằng chứng bác bỏ |
+|---|---|---|
+| 1 | `assume-role` hỏng vì credential là **root user** | `get-caller-identity` → IAM user có quyền admin, và lời gọi đó chạy rời thì thành công |
+| 2 | Subscription hết hạn sau **3 ngày** | Thư xác nhận về **vài phút** trước khi listing báo `Deleted`, không phải vài ngày |
+| 3 | Provider lưu ID là chuỗi `pending confirmation` | Log apply cho thấy state giữ **ARN thật kết thúc bằng UUID** |
+| 4 | Địa chỉ bị chặn — *(đúng, nhưng đo sai)* | Tôi đọc phép thử khi bản ghi cũ vẫn còn trong bảng, nên không phân biệt được "bị chặn" với "bản ghi chưa dọn" |
+
+Mỗi lần tôi lại nói chắc hơn mức bằng chứng cho phép. Giả thuyết 4 **về sau hoá ra đúng** — nhưng lúc phát biểu thì nó chưa được chứng minh, và "đoán trúng" không phải là "đo được".
+
+### Cái giải được nó
+
+Phép thử hai nhánh, giống hệt nhau, khác đúng một biến — cùng khuôn đã dùng cho lỗi 19 (hai bucket y hệt để chứng minh Object Lock chặn Config):
+
+```bash
+aws sns subscribe --topic-arn <cung mot topic> --protocol email \
+  --notification-endpoint quang.hong.0991+lztest@gmail.com ...
+```
+
+```
+quang.hong.0991@gmail.com          Deleted                 <- chan
+quang.hong.0991+lztest@gmail.com   PendingConfirmation     <- binh thuong
+```
+
+Cùng topic, cùng account, cùng phút. Một bảng loại trừ đồng thời cả ba thứ mà bốn lượt suy luận không loại được: **không phải Terraform** (subscribe trực tiếp), **không phải bản ghi cũ** (đã dọn sạch trước), **không phải topic hay account** (dòng thứ hai đứng ngay cạnh).
+
+### Hai điều phép thử dạy thêm
+
+**Chặn theo topic, không theo địa chỉ.** Cùng địa chỉ đó vẫn đăng ký bình thường vào topic khác, kể cả account khác. Chính điều này làm giả thuyết trông vô lý suốt mấy lượt — *"email này tôi dùng đăng ký khá nhiều SNS topic ở các account"* nghe như bằng chứng loại trừ, mà không phải.
+
+**Thứ tự quyết định phép thử đọc được hay không.** `Subscribe` cho endpoint còn bản ghi cũ sẽ **khớp vào bản ghi cũ** thay vì tạo mới — đó là lý do `-replace` trả về **đúng UUID cũ** và không gửi thư nào. Phải `unsubscribe`, chờ dòng đó **biến mất khỏi bảng** (không phải chờ tới khi nó ghi `Deleted`), rồi mới thử.
+
+### Kết cục
+
+Đổi `alert_emails` sang một địa chỉ khác:
+
+```
+quangchutcb@gmail.com   arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings:1a0f73d2-ec42-4784-9715-0d1e8c1f8929
+```
+
+ARN thật, kết thúc bằng UUID. Không có API gỡ chặn cho email — địa chỉ cũ phải qua AWS Support mới lấy lại được ở topic này.
+
+> **Terraform không thể tự bắt lỗi này.** Nó không có data source đọc subscription của SNS, nên không `lifecycle` hay `check` block nào cứu được. Đây không phải drift mà `plan` phát hiện được — là drift mà `plan` **khẳng định là không có**. Lưới duy nhất là layer tự nhắc người vận hành đi hỏi thẳng SNS, và đó là thứ đã thêm vào `README`, `notify.tf`, `next_steps`.
+
+> **Bài học rộng hơn cả SNS:** mọi đường cảnh báo đều phải kiểm bằng cách **hỏi đầu nhận**, không phải hỏi đầu gửi. `plan` sạch, `apply` xanh, `publish` trả `MessageId` — cả ba đều là đầu gửi.
 
 ---
 
