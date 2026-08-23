@@ -15,14 +15,13 @@ locals {
     "landing-zone/permission-sets"  = "permission-sets/terraform.tfstate"
     "landing-zone/org-trail"        = "org-trail/terraform.tfstate"
     "landing-zone/account-baseline" = "account-baseline/terraform.tfstate"
+    "landing-zone/network"          = "network/terraform.tfstate"
 
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.
     "landing-zone/control-tower" = "control-tower/terraform.tfstate"
 
-    # Chua co code - them khi dung toi
-    # "landing-zone/network" = "network/terraform.tfstate"
   }
 
   # Dong khoa trong backend config, khac nhau theo lock_mode

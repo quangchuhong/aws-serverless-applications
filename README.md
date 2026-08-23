@@ -60,7 +60,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 **Đã dựng thật một lần, đi hết cả 9 giai đoạn** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 28 lỗi gặp phải và cách sửa, trong đó **24 lỗi nằm ở chính code của repo**. Đọc mục 6 trước khi bắt đầu để đỡ mất thời gian.
 
 > **Layer nào đã qua lửa:** `tf-backend`, `organization`, `permission-sets`, `billing-guard`, `config-detective`, `org-trail`, `account-baseline` — apply thật, kiểm chứng thật.
-> **Chưa:** `control-tower` (mặc định tắt, thay thế cho `organization` chứ không chạy cùng). Đáng lưu ý vì phần lớn lỗi trong doc 22 thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
+> **Chưa:** `control-tower` (mặc định tắt, thay thế cho `organization` chứ không chạy cùng) và `network` (mới viết, chưa ai apply). Đáng lưu ý vì phần lớn lỗi trong doc 22 thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
 
 | Layer | Nội dung | Chi phí |
 |---|---|---|
@@ -72,6 +72,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | [`landing-zone/permission-sets`](./landing-zone/permission-sets/) | 17 permission set + 15 group + ma trận gán quyền. Chạy ở management account | $0 |
 | [`landing-zone/org-trail`](./landing-zone/org-trail/) | Organization CloudTrail – phủ mọi account hiện tại và tương lai. **Mặc định tắt** | ~$0 |
 | [`landing-zone/account-baseline`](./landing-zone/account-baseline/) | Thay cho AFT ở bản DIY – xoá default VPC tự động cho account mới, vending account. **Mặc định tắt** | $0 |
+| [`landing-zone/network`](./landing-zone/network/) | TGW + security VPC + Network Firewall + egress VPC, share qua RAM. **Mặc định tắt** | **~$770/tháng khi bật** |
 
 ## Demo chạy được
 

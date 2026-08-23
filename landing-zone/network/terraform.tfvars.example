@@ -1,0 +1,100 @@
+########################################
+# LAYER NAY TON TIEN THAT
+#
+# Moi layer khac trong landing-zone/ deu ~$0/ngay. Layer nay khong.
+# Doc bang chi phi trong README truoc khi doi enable = true.
+#
+# Rieng Network Firewall: ~285 USD/thang MOI AZ, chay 24/7.
+########################################
+
+enable = false
+
+project     = "quh11-lz"
+region      = "ap-southeast-1"
+owner       = "ban@example.com"
+cost_center = "platform"
+
+# cd ../organization && terraform output account_ids
+network_account_id = "111111111111"
+
+########################################
+# AZ
+#
+# Hai AZ o moi truong that.
+# Mot AZ khi chi muon thu code - tiet kiem ~285 USD/thang.
+########################################
+
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
+
+########################################
+# CIDR - theo bang chuan o doc 17 muc 3
+#
+# Doi o day thi phai doi ca doc 17, khong lam nguoc lai.
+########################################
+
+security_vpc_cidr = "10.1.0.0/16"
+egress_vpc_cidr   = "10.2.0.0/16"
+ingress_vpc_cidr  = "10.0.0.0/16"
+internal_supernet = "10.0.0.0/8"
+
+########################################
+# FIREWALL
+########################################
+
+enable_firewall = true
+
+# LUON "alert" truoc it nhat mot tuan. Doc alert log de biet thuc te
+# ai dang goi ai, roi moi viet east_west_rules va doi sang "drop".
+firewall_mode = "alert"
+
+# Rong = chua mo east-west nao. O che do "alert" khong anh huong gi;
+# o che do "drop" thi spoke khong goi duoc nhau.
+east_west_rules = [
+  # {
+  #   from_cidr = "10.10.0.0/16"
+  #   to_cidr   = "10.20.0.0/16"
+  #   port      = 443
+  #   note      = "dev goi api cua prod"
+  # },
+]
+
+egress_allowed_domains = [
+  ".amazonaws.com",
+  ".amazonlinux.com",
+  ".docker.io",
+  ".ubuntu.com",
+]
+
+########################################
+# INTERFACE ENDPOINT
+#
+# Moi cai ~7.3 USD/thang MOI AZ. Bon cai duoi la toi thieu de van
+# hanh mot spoke khong co duong ra Internet.
+########################################
+
+enable_interface_endpoints  = true
+interface_endpoint_services = ["ssm", "ssmmessages", "ec2messages", "logs"]
+
+########################################
+# NOI SPOKE - DIEN SAU KHI DA TAO SPOKE
+#
+# Bo trong buoc nay = attachment ton tai, State "available", va
+# khong thuoc route table nao. Khong loi, khong canh bao, khong mot
+# goi tin nao di qua.
+#
+# Lay ID: xem muc 3 trong output next_steps.
+########################################
+
+spoke_attachments = {
+  # app-dev  = "tgw-attach-0a1b2c3d4e5f60718"
+  # app-prod = "tgw-attach-0a1b2c3d4e5f60719"
+}
+
+# Doc 17 QT4: them VPC moi vao network account = them mot dong o day.
+extra_security_routes = {
+  # "10.9.0.0/16" = "tgw-attach-0a1b2c3d4e5f6071a"   # 3rd-party VPC
+}
+
+# Chi bat khi da co ingress VPC that.
+enable_ingress_route  = false
+ingress_attachment_id = ""
