@@ -173,33 +173,45 @@ output "dns" {
 
 output "dns_check" {
   description = "Lenh kiem DNS that su hoat dong - chay TRONG spoke qua SSM"
-  value       = <<-EOT
 
-    Chay tu EC2 trong spoke (aws ssm start-session --target <id>):
+  # Dung join() chu KHONG dung %{for} trong heredoc: template directive
+  # co thut le rieng, va <<-EOT strip theo dong it thut nhat - ket qua
+  # la khoi lenh so le, dan vao terminal nhin rat kho.
+  value = join("\n", concat(
+    [
+      "",
+      "Chay tu EC2 trong spoke (aws ssm start-session --target <id>):",
+      "",
+      "  # 1. PHZ noi bo: goi spoke khac bang TEN, khong phai IP",
+    ],
 
-      # 1. PHZ noi bo: goi spoke khac bang TEN, khong phai IP
-      %{if var.enable_internal_dns && var.enable_test_instances~}
-      %{for k, r in aws_route53_record.spoke_app~}
-      dig +short ${r.name}
-      curl -s http://${r.name} | head -1
-      %{endfor~}
-      %{else~}
-      (enable_internal_dns hoac enable_test_instances dang tat)
-      %{endif~}
+    length(aws_route53_record.spoke_app) > 0 ? flatten([
+      for k, r in aws_route53_record.spoke_app : [
+        "  dig +short ${r.name}",
+        "  curl -s http://${r.name} | head -1",
+      ]
+    ]) : ["  (enable_internal_dns hoac enable_test_instances dang tat)"],
 
-      # 2. VPC endpoint tap trung: ten AWS phai tro vao IP NOI BO
-      %{for k, z in aws_route53_zone.endpoint~}
-      dig +short ${k}.${var.region}.amazonaws.com
-      %{endfor~}
+    [
+      "",
+      "  # 2. VPC endpoint tap trung: ten AWS phai tro vao IP NOI BO",
+    ],
 
-      Ket qua PHAI la IP trong ${var.security_vpc_cidr} - do la
-      interface endpoint dat o security VPC. Ra IP cong khai nghia la
-      PHZ chua toi duoc spoke, va luu luong dang di vong ra Internet.
+    [for k, z in aws_route53_zone.endpoint : "  dig +short ${k}.${var.region}.amazonaws.com"],
 
-      # 3. Gateway endpoint S3: KHONG qua TGW, khong ton tien
-      dig +short s3.${var.region}.amazonaws.com
-      # Cai nay RA IP CONG KHAI - dung. Gateway endpoint lam viec o
-      # tang route table (prefix list), khong phai tang DNS.
-
-  EOT
+    [
+      "",
+      "  Ket qua PHAI la IP trong ${var.security_vpc_cidr} - do la interface",
+      "  endpoint dat o security VPC. Ra IP cong khai nghia la PHZ chua toi",
+      "  duoc spoke, va luu luong dang di vong ra Internet: endpoint van",
+      "  tinh tien ma khong ai dung.",
+      "",
+      "  # 3. Gateway endpoint S3: KHONG qua TGW, khong ton tien",
+      "  dig +short s3.${var.region}.amazonaws.com",
+      "",
+      "  Cai nay RA IP CONG KHAI - va do la DUNG. Gateway endpoint lam viec",
+      "  o tang route table (prefix list), khong phai tang DNS.",
+      "",
+    ],
+  ))
 }
