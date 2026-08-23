@@ -147,17 +147,21 @@ aws cloudformation describe-stacks --profile <account> --region <region> \
 | `khong co default VPC nao` | Không còn gì — đúng nếu đã dọn tay trước đó |
 | `us-east-1/SKIP:ClientError` | Bị từ chối. Region ngoài `allowed_regions` thì bình thường |
 
-**Kiểm độc lập** — đừng tin stack output, hỏi thẳng AWS:
+**Kiểm độc lập** — đừng tin stack output, hỏi thẳng AWS. Lặp **mọi** region trong `sweep_regions`, không chỉ region đang mở terminal:
 
 ```bash
 for p in <cac profile>; do
   printf '%-16s ' "$p"
-  aws ec2 describe-vpcs --region <region> --filters Name=isDefault,Values=true \
-    --query 'length(Vpcs)' --profile $p --output text
+  for r in <cac region trong sweep_regions>; do
+    printf '%s=%s ' "$r" "$(aws ec2 describe-vpcs --region $r --profile $p \
+      --filters Name=isDefault,Values=true --query 'length(Vpcs)' --output text)"
+  done; echo
 done
 ```
 
 Tất cả phải ra `0`.
+
+> **Vòng lặp một region là cái đã tạo ra lỗ hổng ngay từ đầu.** Lần dọn tay trước layer này chỉ chạy ở `ap-southeast-1`, và câu kiểm chứng cũng chỉ hỏi `ap-southeast-1` — nên nó xác nhận đúng cái giả định mà nó đáng ra phải kiểm. Layer này tìm thấy default VPC ở `us-east-1` tại **cả 5 account**. Chi tiết ở [doc 22 mục 6d](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 **Dán cấu hình sang layer khác:**
 

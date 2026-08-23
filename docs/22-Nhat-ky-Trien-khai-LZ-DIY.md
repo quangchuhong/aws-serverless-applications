@@ -23,13 +23,15 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Identity Center | `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62` |
 | Permission set | 17 set, 15 group, 53 assignment — 115 resource |
 | Billing guard | Budget $20, SNS alert (đã xác nhận), anomaly detection — us-east-1 |
-| Default VPC | Đã xoá ở mọi account × mọi region |
+| Default VPC | Xoá tay ở `ap-southeast-1` — **và chỉ ở đó**, xem mục 6d |
 | Config detective | 4/4 recorder đang ghi, aggregator, 8 org rule — 26 resource |
 | Đăng nhập SSO | Kiểm chứng thật — portal hiện đúng 5 account, không có management |
 | Org trail | CloudTrail toàn tổ chức, multi-region, log file validation — 8 resource |
+| Account baseline | StackSet + Lambda, `auto_deployment`, 5/5 stack instance CURRENT |
 | **Vòng khép kín** | `cloud-trail-enabled`: NON_COMPLIANT ×4 → dựng `org-trail` → **COMPLIANT ×4** |
+| **Tự động bắt lỗi tay** | `account-baseline` xoá **5 default VPC ở `us-east-1`** mà lần dọn tay bỏ sót |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 25 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 27 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -66,8 +68,12 @@ Xếp theo thứ tự gặp phải.
 | 23 | User SSO không đăng nhập được, **không lỗi nào** | `CreateUser` không gửi thư mời — tài liệu nói như thể tự động | Thiếu tài liệu | `161c8e7` |
 | 24 | `wire-backends.sh` ghi thiếu một layer, im lặng | `backend_hcl` là output nằm trong state — thêm layer phải apply lại `tf-backend` | **Lỗi thiết kế** | `1b67012` |
 | 25 | `InsufficientS3BucketPolicyException` | Organization trail ghi vào **hai** prefix, policy chỉ cho một | **Lỗi code** | `e5281e5` |
+| 26 | `Runtime.ImportModuleError: No module named 'cfnresponse'` | Module đó **không có** trong `python3.12` — Lambda chết lúc khởi tạo nên không gửi được phản hồi, CloudFormation treo **một giờ** | **Lỗi code** | `cf66390` |
+| 27 | Lệnh kiểm chứng in ra **rỗng** dù output vẫn ở đó | Hai bộ lọc JMESPath liên tiếp tạo projection lồng, `--output text` in ra dòng trống | **Lỗi code** | `6336f81` |
 
-**21/25 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**23/27 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
 ---
 
@@ -305,6 +311,10 @@ aws ec2 delete-vpc --vpc-id $VPC --region $REGION --profile $PROFILE
 ```
 
 Đây chính là việc [doc 09](./09-Account-Vending-Tu-Dong.md) gọi là **account baseline** và giao cho StackSet làm tự động. Layer đó **chưa có code** — nên tạm thời làm tay, và nó là ứng viên số một cho lần bổ sung tiếp theo.
+
+> **Đính chính, viết sau khi lớp tự động chạy (mục 6d).** Đoạn trên nói "phải xoá cho **mọi** region". Thực tế lần dọn tay chỉ chạy ở `ap-southeast-1` — cái region đang mở terminal. `us-east-1` **cũng nằm trong `allowed_regions`** mà không ai đụng tới, và cả **năm** account thành viên vẫn còn nguyên default VPC ở đó, kèm Internet Gateway, cho tới khi `account-baseline` xoá chúng.
+>
+> Câu "đã xoá ở mọi region" được viết ra vì vòng lặp bash lúc đó chỉ có một region trong biến. Không lệnh nào báo sai — nó làm đúng cái được bảo làm.
 
 ---
 
@@ -657,7 +667,7 @@ config-detective  →  "COMPLIANT o 4 account"
 
 Không ai khẳng định trail chạy. Một hệ thống **độc lập**, dựng từ trước và không biết gì về layer mới, tự phát hiện chỗ thiếu rồi tự xác nhận chỗ vá.
 
-Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi lăm lỗi trong file này đều xoay quanh khoảng cách đó.
+Đó là khác biệt giữa *"tôi đã cấu hình đúng"* và *"có bằng chứng nó đúng"* — và cả hai mươi bảy lỗi trong file này đều xoay quanh khoảng cách đó.
 
 ### Rule định kỳ không phản ứng với thay đổi
 
@@ -690,21 +700,119 @@ aws configservice describe-compliance-by-config-rule \
 
 ---
 
+## 6d. Giai đoạn 9 — `account-baseline`, và bằng chứng rằng việc tay không đủ
+
+Không dùng Control Tower thì không có **AFT**. Layer [`account-baseline`](../landing-zone/account-baseline/) làm phần việc đó: một StackSet `SERVICE_MANAGED` với `auto_deployment`, mỗi account một stack instance, bên trong là một Lambda tự quét các region trong `sweep_regions`.
+
+Điểm mấu chốt không phải sáu account hiện có — dọn tay được. Là **account thứ bảy**: `auto_deployment` khiến account vừa vào OU tự được dọn, không phải chạy lại gì.
+
+### Kết quả: năm default VPC chưa ai biết là còn
+
+Mục 4 kết luận default VPC "đã xoá ở mọi account × mọi region". Lớp tự động trả lời khác:
+
+```
+lz-network       us-east-1/vpc-05d7cc1ef6007e805
+lz-security      us-east-1/vpc-00ca7292432c5ff23
+lz-logarchive    us-east-1/vpc-0b3933a8423ea26d6
+lz-app-dev       us-east-1/vpc-09e5a7ecc087170f0
+lz-app-prod      us-east-1/vpc-00e86d924d937405a
+```
+
+**Năm trên năm.** Lần dọn tay chỉ chạy ở `ap-southeast-1`, và không ai nhận ra vì `describe-vpcs` cũng chỉ được hỏi ở `ap-southeast-1`. Câu kiểm chứng dùng đúng cái giả định mà nó đáng ra phải kiểm.
+
+Và đây **không phải** trường hợp `SKIP` vô hại:
+
+| | |
+|---|---|
+| `us-east-1` có trong `allowed_regions` không? | **Có** — bắt buộc, `variables.tf` có validation ép phải có, vì service toàn cầu neo ở đó |
+| Vậy `region_lock` có chặn `RunInstances` ở đó không? | **Không** |
+| Nghĩa là | Năm account có sẵn đường ra Internet ở một region **được phép chạy EC2**, suốt cả tuần |
+
+Nếu `us-east-1` nằm ngoài `allowed_regions` thì Lambda đã ghi `us-east-1/SKIP:ClientError` và đó mới là chuyện vô hại — không ai tạo được gì ở region bị khoá. Ở đây thì ngược lại.
+
+### Lỗi 26 — treo một giờ, không phải "lỗi"
+
+Ví dụ Lambda inline của AWS dùng `import cfnresponse`. Module đó có với một số runtime; với `python3.12` thì không.
+
+Hỏng ở đây hỏng theo kiểu tệ nhất: Lambda chết ngay lúc **khởi tạo**, trước khi vào `try`, nên **không nhánh nào gửi được phản hồi**. Triệu chứng không phải thông báo lỗi mà là:
+
+```
+Still creating... [4m50s elapsed]
+Still creating... [37m40s elapsed]
+```
+
+CloudFormation chờ **hết một giờ** rồi mới bỏ cuộc. Stack treo `CREATE_IN_PROGRESS`, các account còn lại xếp hàng `PENDING` phía sau, và stack hỏng rơi vào `DELETE_FAILED` — trạng thái chỉ gỡ được bằng:
+
+```bash
+aws cloudformation delete-stack --stack-name <ten> \
+  --retain-resources <LogicalId>     # chi hop le khi dang DELETE_FAILED
+```
+
+Bản sửa: tự gửi phản hồi bằng `urllib`, không phụ thuộc module nào ngoài thư viện chuẩn. Dài thêm 12 dòng.
+
+> **Quy tắc chung cho custom resource:** phải trả lời được CloudFormation **kể cả khi chính nó hỏng**. Cả nhánh `FAILED` cũng phải bọc `try` — không gửi được phản hồi thì triệu chứng là "treo một giờ", khó chẩn đoán hơn hẳn một dòng lỗi.
+
+Thêm một điểm dễ quên: custom resource **chỉ chạy lại khi thuộc tính đổi**. Thêm region vào `sweep_regions` mà không đổi `sweep_version` thì không có gì xảy ra — và cũng không có gì báo.
+
+### Lỗi 27 — lệnh kiểm chứng nói dối một cách êm ái
+
+Sau khi apply xong, lệnh tôi tự viết trong README in ra **rỗng** ở cả năm account:
+
+```bash
+# SAI - in ra dong trong
+--query 'Stacks[?...].Outputs[?OutputKey==`SweepResult`].OutputValue'
+
+# DUNG
+--query "Stacks[?...].Outputs[] | [?OutputKey=='SweepResult'].OutputValue"
+```
+
+Hai bộ lọc liên tiếp tạo một **projection lồng**. Với `--output json` nó hiện ra `[[{...}]]`; với `--output text` nó in một dòng trống — trông y hệt stack không có output nào.
+
+Cái bẫy nằm ở chỗ **"rỗng" là câu trả lời hợp lý**: đã dọn tay rồi thì không tìm thấy gì là đúng. Suýt nữa thì ghi vào nhật ký rằng lớp mới chạy sạch và không phát hiện gì.
+
+> **Bài học:** khi một lệnh kiểm chứng trả về đúng cái mình mong đợi, đó là lúc phải nghi ngờ **chính lệnh đó** nhất — chứ không phải lúc nó trả về thứ bất ngờ. Cách rẻ nhất: đổi sang `--output json` một lần. `[[...]]` là dấu hiệu của projection lồng.
+
+### Kiểm độc lập
+
+Không tin stack output — hỏi thẳng AWS:
+
+```bash
+for p in lz-network lz-security lz-logarchive lz-app-dev lz-app-prod; do
+  printf '%-16s ' "$p"
+  for r in ap-southeast-1 us-east-1; do
+    printf '%s=%s ' "$r" "$(aws ec2 describe-vpcs --region $r --profile $p \
+      --filters Name=isDefault,Values=true --query 'length(Vpcs)' --output text)"
+  done; echo
+done
+```
+
+Cả mười ô phải ra `0`. Lần này lặp **cả hai** region — đúng cái mà lần trước không làm.
+
+---
+
 ## 7. Việc còn lại sau lần dựng này
 
-Đã đi hết cả bảy giai đoạn của runbook.
+Đã đi hết cả chín giai đoạn của runbook.
 
 | # | Việc | Trạng thái |
 |---|---|---|
 | 1 | 6 account + chuyển vào đúng OU | **Xong** — `list-parents` xác nhận cả 5 account thành viên đúng OU |
 | 2 | 4 SCP | **Xong** — kiểm chứng 4/4, kể cả `prod_guard` |
-| 3 | Xoá default VPC mọi account × mọi region | **Xong** — làm tay; sẽ phải làm lại cho account thứ 7 |
+| 3 | Xoá default VPC mọi account × mọi region | **Xong** — làm tay sót `us-east-1` ở cả 5 account, `account-baseline` dọn nốt. Xem mục 6d |
 | 4 | Identity Center | **Xong** — `ssoins-8210168ac3d88c11`, identity store `d-9667ae9e62`, `ap-southeast-1` |
 | 5 | `permission-sets` | **Xong** — 115 resource, xem mục 5b |
 | 6 | `billing-guard` | **Xong** — budget, SNS đã xác nhận, anomaly. Còn `enable_cost_allocation_tags` khi có resource mang tag |
 | 7 | `config-detective` | **Xong** — $0.29 một lần, ~$0/ngày ổn định. Xem mục 6b |
 | 8 | **Layer `org-trail`** | **Xong** — 8 resource, và `cloud-trail-enabled` đã chuyển sang COMPLIANT ×4. Xem mục 6c |
-| 9 | **Layer `account-baseline`** | **Còn** — tự động hoá việc 1 và 3 |
+| 9 | **Layer `account-baseline`** | **Xong** — 5/5 stack instance CURRENT, xoá 5 default VPC lần dọn tay bỏ sót. Xem mục 6d |
+
+Còn lại, không thuộc giai đoạn nào của runbook:
+
+| Việc | Vì sao |
+|---|---|
+| `enable_cost_allocation_tags` ở `billing-guard` | Chỉ có nghĩa khi đã có resource mang tag |
+| Xem lại pham vi `lz-db-admin` / `lz-server-admin` | Hai set này để `all`, tức có quyền ghi vào production, trong khi `lz-app-admin` chỉ nonprod. Không nhất quán — hoặc là cố ý và cần ghi rõ, hoặc là sót |
+| Layer `control-tower` | **Chưa ai chạy bao giờ.** Mặc định tắt, không ảnh hưởng gì — nhưng một lớp chưa ai chạy là một lớp chưa ai tin được, đúng như lỗi 26 vừa chứng minh với code viết cùng ngày |
 
 ### Vì sao `org-trail` là việc tiếp theo
 
@@ -716,7 +824,7 @@ Một **organization trail** tạo ở management account phủ mọi account hi
 
 ### Vì sao `account-baseline` là việc sau đó
 
-Việc 1 và việc 3 đều đã làm xong **bằng tay**, và cả hai đều sẽ phải làm lại nguyên vẹn cho account thứ bảy:
+Việc 1 và việc 3 lúc đó đã làm **bằng tay**, và cả hai đều sẽ phải làm lại nguyên vẹn cho account thứ bảy:
 
 | Việc tay | Quên thì hậu quả |
 |---|---|
@@ -726,7 +834,9 @@ Việc 1 và việc 3 đều đã làm xong **bằng tay**, và cả hai đều 
 
 Ba việc, không việc nào báo lỗi khi quên. Account vẫn chạy, chỉ là không có guardrail — đúng loại sai lệch lặng lẽ mà một landing zone sinh ra để ngăn.
 
-Đó là lý do [doc 09](./09-Account-Vending-Tu-Dong.md) gọi đây là **account vending** và giao cho tự động hoá. Layer đó chưa có code.
+Đó là lý do [doc 09](./09-Account-Vending-Tu-Dong.md) gọi đây là **account vending** và giao cho tự động hoá.
+
+> Viết đoạn trên xong thì dựng luôn layer đó, và nó lập tức chứng minh lập luận mạnh hơn cả dự tính: không phải account thứ bảy mới thiếu guardrail — **sáu account hiện có đã thiếu sẵn rồi**, chỉ là không ai hỏi đúng region. Chi tiết ở mục 6d.
 
 ### Lệnh kiểm lại toàn bộ
 

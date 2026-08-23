@@ -139,16 +139,21 @@ output "next_steps" {
 
        SKIP o region NAM TRONG allowed_regions thi moi la van de.
 
-    4. KIEM DOC LAP - dung tin stack output, hoi thang AWS:
+    4. KIEM DOC LAP - dung tin stack output, hoi thang AWS.
+       Lap MOI region trong sweep_regions, khong chi region dang mo:
 
          for p in <cac profile>; do
            printf '%-16s ' "$p"
-           aws ec2 describe-vpcs --region ${var.region} \
-             --filters Name=isDefault,Values=true \
-             --query 'length(Vpcs)' --profile $p --output text
+           for r in ${join(" ", var.sweep_regions)}; do
+             printf '%s=%s ' "$r" "$(aws ec2 describe-vpcs --region $r \
+               --profile $p --filters Name=isDefault,Values=true \
+               --query 'length(Vpcs)' --output text)"
+           done; echo
          done
 
-       Tat ca phai ra 0.
+       Tat ca phai ra 0. Vong lap MOT region chinh la thu da tao ra lo
+       hong: lan don tay chi chay o mot region, va cau kiem chung cung
+       chi hoi region do.
 
     5. DAN CAU HINH SANG LAYER KHAC:
 

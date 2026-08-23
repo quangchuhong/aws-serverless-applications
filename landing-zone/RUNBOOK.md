@@ -4,7 +4,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 
 > Mỗi layer có README riêng nói **vì sao**. File này chỉ nói **làm gì, theo thứ tự nào, và dừng ở đâu nếu sai**.
 >
-> **Đã có người đi hết đường này** — [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 25 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — cả 9 giai đoạn. [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 27 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
 **Chi phí**: ~$0. `config-detective` (giai đoạn 7) đo được $0.29 một lần rồi ~$0/ngày; `org-trail` chỉ tốn tiền lưu trữ S3.
@@ -822,22 +822,28 @@ terraform apply
 aws cloudformation list-stack-instances   --stack-set-name <project>-account-baseline --call-as SELF   --query 'Summaries[].[Account,Status]' --output table
 
 # Xem no xoa duoc gi
-aws cloudformation describe-stacks --profile <account> --region <region>   --query 'Stacks[?contains(StackName,`account-baseline`)].Outputs[?OutputKey==`SweepResult`].OutputValue'   --output text
+aws cloudformation describe-stacks --profile <account> --region <region> \
+  --query "Stacks[?contains(StackName,'account-baseline')].Outputs[] | [?OutputKey=='SweepResult'].OutputValue" \
+  --output text
 ```
+
+> Dấu `[]` sau `Outputs` là **bắt buộc**. Không có nó thì hai bộ lọc liên tiếp tạo một projection lồng và `--output text` in ra **dòng trống** — trông y hệt như stack không có output nào. Đây là lỗi 27 trong [doc 22](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md), và nó suýt làm cả năm cái VPC bị xoá thật được ghi thành "không tìm thấy gì".
 
 `SKIP` ở region **ngoài** `allowed_regions` là bình thường — `region_lock` chặn cả `ec2:DeleteVpc`, và default VPC ở đó vô hại vì không ai tạo được gì. `SKIP` ở region **trong** `allowed_regions` mới là vấn đề.
 
-**Kiểm độc lập**, đừng tin stack output:
+**Kiểm độc lập**, đừng tin stack output — và lặp **mọi region** trong `sweep_regions`, không chỉ region đang mở terminal:
 
 ```bash
 for p in <cac profile>; do
   printf '%-16s ' "$p"
-  aws ec2 describe-vpcs --region <region> --filters Name=isDefault,Values=true \
-    --query 'length(Vpcs)' --profile $p --output text
+  for r in <cac region trong sweep_regions>; do
+    printf '%s=%s ' "$r" "$(aws ec2 describe-vpcs --region $r --profile $p \
+      --filters Name=isDefault,Values=true --query 'length(Vpcs)' --output text)"
+  done; echo
 done
 ```
 
-Tất cả phải ra `0`.
+Tất cả phải ra `0`. Lần dựng thật chỉ hỏi một region, và bỏ sót default VPC ở `us-east-1` tại **cả 5 account** — xem doc 22 mục 6d.
 
 ```bash
 terraform output -raw paste_permission_sets
