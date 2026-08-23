@@ -74,3 +74,15 @@ state_writer_accounts = {
 ########################################
 
 enable_access_logging = true
+
+########################################
+# BACKEND O MOT ACCOUNT, RESOURCE O ACCOUNT KHAC
+#
+# Gan nhu moi layer khong can. Chi layer nao chay bang profile cua
+# account KHAC management moi can chi ro profile doc bucket state.
+########################################
+
+backend_profiles = {
+  # "demo/network-lz-full" = "default"   # chay AWS_PROFILE=lz-network,
+  #                                      # nhung state van o management
+}

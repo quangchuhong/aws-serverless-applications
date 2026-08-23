@@ -46,6 +46,13 @@ locals {
       "region         = \"${var.region}\"",
       "encrypt        = true",
       var.use_kms_cmk ? "kms_key_id     = \"${local.kms_arn}\"" : "",
+
+      # Chi layer nao co BACKEND va RESOURCE o hai account khac nhau
+      # moi can dong nay. Xem var.backend_profiles.
+      try(var.backend_profiles[dir], "") != ""
+      ? "profile        = \"${var.backend_profiles[dir]}\""
+      : "",
+
       local.lock_line,
     ]))
   }

@@ -179,3 +179,30 @@ variable "enable_access_logging" {
   type        = bool
   default     = true
 }
+
+variable "backend_profiles" {
+  description = <<-EOT
+    Layer -> profile AWS dung RIENG cho backend S3.
+
+    Gan nhu moi layer khong can dong nay: chung chay o management
+    account, noi dat bucket state, nen credential mac dinh doc duoc.
+
+    Truong hop can: layer co BACKEND o mot account va RESOURCE o
+    account khac. Vi du demo/network-lz-full khi duoc giu lam mang
+    that - chay bang AWS_PROFILE=lz-network de resource roi vao
+    account network, trong khi bucket state van o management:
+
+      backend_profiles = {
+        "demo/network-lz-full" = "default"   # profile cua management
+      }
+
+    Khong co dong nay thi terraform init bao:
+      Error refreshing state: ... HeadObject ... StatusCode: 403
+
+    Them tay vao backend.hcl cung chay, NHUNG wire-backends.sh ghi de
+    file do moi lan chay - dong them tay se bien mat im lang. Khai o
+    day thi no duoc sinh lai moi lan.
+  EOT
+  type        = map(string)
+  default     = {}
+}

@@ -334,9 +334,23 @@ Mặc định `true` khiến bộ này rất dễ xoá — đó là điều đú
 
 **Và chuyển state lên S3.** State của hạ tầng thường trực nằm trên laptop thì mất máy là mất quyền quản lý mạng của cả tổ chức:
 
+Bộ này là layer **duy nhất** có backend ở một account và resource ở account khác — state nằm ở management, resource rơi vào `lz-network` vì bạn chạy bằng `AWS_PROFILE=lz-network`. Credential đó không đọc được bucket state, nên `init` sẽ ra:
+
+```
+Error refreshing state: ... HeadObject ... StatusCode: 403
+```
+
+Khai profile riêng cho backend trong `landing-zone/tf-backend/terraform.tfvars`:
+
+```hcl
+backend_profiles = {
+  "demo/network-lz-full" = "default"   # profile cua management
+}
+```
+
 ```bash
 cd ../../landing-zone/tf-backend
-terraform apply                    # dang ky layer moi vao output
+terraform apply                    # dang ky layer + profile vao output
 ./wire-backends.sh                 # sinh backend.hcl + backend.tf
 
 cd ../../demo/network-lz-full
