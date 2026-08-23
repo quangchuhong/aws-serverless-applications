@@ -63,22 +63,27 @@ resource "aws_sns_topic_subscription" "email" {
   # ---------------------------------------------------------------
   # VA TERRAFORM KHONG BAO CHO BAN BIET KHI NO HONG.
   #
-  # Subscribe voi protocol=email tra ve chuoi "pending confirmation"
-  # chu khong phai ARN. Provider luu chuoi do lam ID, nen lan refresh
-  # sau no khong doi chieu duoc voi bat cu thu gi ben SNS. Neu ai do
-  # khong bam link trong 3 NGAY, SNS tu xoa subscription va:
+  # Do duoc trong lan dung that - chi ghi cai QUAN SAT DUOC:
   #
-  #   terraform plan  ->  No changes        (Terraform noi ON)
-  #   SNS             ->  Deleted           (khong ai nhan gi)
+  #   terraform state   ->  ARN that, ket thuc bang UUID
+  #   terraform plan    ->  No changes         (Terraform noi ON)
+  #   SNS               ->  Deleted            (khong ai nhan gi)
+  #
+  # Provider truyen ReturnSubscriptionArn=true nen SNS tra ARN that
+  # NGAY CA khi subscription chua duoc xac nhan. State giu ARN do, va
+  # khi SNS xoa subscription chua xac nhan (sau 3 NGAY), plan van sach.
   #
   # Day KHONG phai drift ma plan phat hien duoc - la drift ma plan
   # KHANG DINH la khong co. Khong co lifecycle hay check block nao
   # sua duoc: Terraform khong co data source doc subscription cua SNS.
   #
   # Nen cach duy nhat la hoi thang SNS - xem muc 1 trong output
-  # next_steps. Tao lai khi can:
+  # next_steps.
   #
-  #   terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'
+  # LUU Y ve -replace: SNS Subscribe voi cung topic + protocol +
+  # endpoint co the tra ve DUNG ARN cu thay vi tao cai moi. Terraform
+  # se bao "1 added, 1 destroyed" ma ben SNS khong doi gi. Doc log cua
+  # Terraform khong du - phai list-subscriptions-by-topic lai.
   # ---------------------------------------------------------------
 }
 

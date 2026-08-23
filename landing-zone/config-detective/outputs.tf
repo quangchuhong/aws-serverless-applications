@@ -49,15 +49,15 @@ output "next_steps" {
        SNS gui thu xac nhan toi tung dia chi trong alert_emails.
        CHUA BAM LINK = KHONG NHAN DUOC CANH BAO NAO.
 
-       TERRAFORM KHONG KIEM DUOC VIEC NAY. Provider luu ID la chuoi
-       "pending confirmation" chu khong phai ARN that, nen lan refresh
-       sau no khong thay ban ghi da bien mat. Ket qua:
+       TERRAFORM KHONG KIEM DUOC VIEC NAY. Do duoc trong lan dung that:
 
+         terraform state ->  ARN that, ket thuc bang UUID
          terraform plan  ->  khong doi          (Terraform noi ON)
          SNS             ->  Deleted            (khong ai nhan gi)
 
-       Va SNS TU XOA subscription chua xac nhan sau 3 NGAY. Bam link
-       muon hon la link vo dung, khong bao gi.
+       Provider truyen ReturnSubscriptionArn=true nen SNS tra ARN that
+       NGAY CA khi chua xac nhan. State giu ARN do, va khi SNS xoa
+       subscription chua xac nhan sau 3 NGAY thi plan van sach.
 
        Hoi thang SNS:
 
@@ -71,6 +71,11 @@ output "next_steps" {
          Deleted              da qua 3 ngay, phai tao lai:
 
          terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'
+
+       Roi CHAY LAI list-subscriptions-by-topic. SNS Subscribe voi cung
+       topic + protocol + endpoint co the tra ve DUNG ARN cu thay vi
+       tao moi - Terraform bao "1 added, 1 destroyed" ma SNS khong doi
+       gi. Log cua Terraform khong phai bang chung.
 
        KHONG dung 'aws sns publish' de kiem. No tra ve MessageId ke ca
        khi topic khong co subscriber nao - lenh bao OK va thu roi vao

@@ -195,11 +195,21 @@ Cột `SubscriptionArn` phải là một ARN kết thúc bằng UUID. Hai giá t
 | Giá trị | Nghĩa là | Chữa |
 |---|---|---|
 | `PendingConfirmation` | Chưa bấm link trong thư | Bấm link |
-| `Deleted` | Quá **3 ngày** không xác nhận, SNS tự xoá | `terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'` rồi bấm link **thư mới** |
+| `Deleted` | Quá **3 ngày** không xác nhận, SNS tự xoá | `terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'` rồi bấm link **thư mới**, rồi **kiểm lại bằng lệnh trên** |
 
-> **`terraform plan` không bắt được trường hợp này.** `Subscribe` với `protocol=email` trả về chuỗi `pending confirmation` chứ không phải ARN, và provider lưu chính chuỗi đó làm ID — nên lần refresh sau nó không đối chiếu được với gì bên SNS. Khi subscription bị xoá, `plan` vẫn báo **No changes**.
+> **`terraform plan` không bắt được trường hợp này.** Đo được trong lần dùng thật:
+>
+> ```
+> terraform state  ->  ARN thật, kết thúc bằng UUID
+> terraform plan   ->  No changes          (Terraform nói ON)
+> SNS              ->  Deleted             (không ai nhận gì)
+> ```
+>
+> Provider truyền `ReturnSubscriptionArn=true`, nên SNS trả ARN thật **ngay cả khi chưa xác nhận**. State giữ ARN đó, và khi SNS xoá subscription chưa xác nhận thì `plan` vẫn sạch.
 >
 > Đây không phải drift mà `plan` phát hiện được. Là drift mà `plan` **khẳng định là không có** — và không `lifecycle` hay `check` block nào sửa được, vì Terraform không có data source đọc subscription của SNS. Cách duy nhất là hỏi thẳng SNS.
+
+> **`-replace` chưa chắc đã sửa được.** SNS `Subscribe` với cùng topic + protocol + endpoint có thể trả về **đúng ARN cũ** thay vì tạo mới. Terraform in ra `1 added, 1 destroyed` với **cùng một UUID ở cả hai dòng**, trong khi bên SNS không đổi gì. Log của Terraform không phải bằng chứng — chỉ `list-subscriptions-by-topic` mới là.
 
 > **Đừng dùng `aws sns publish` để kiểm.** Nó trả về `MessageId` kể cả khi topic không có subscriber nào. Lệnh báo OK, số hiệu thư có thật, thư rơi vào hư không.
 
