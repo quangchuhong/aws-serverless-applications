@@ -364,3 +364,67 @@ variable "ingress_allowed_cidrs" {
     error_message = "ingress_allowed_cidrs rong thi khong ai vao duoc NLB - dung enable_ingress = false neu do la y muon."
   }
 }
+
+########################################
+# DNS TAP TRUNG - doc 12
+########################################
+
+variable "enable_internal_dns" {
+  description = <<-EOT
+    PHZ noi bo de dat ten cho service, thay vi goi nhau bang IP.
+
+    Huu ich NGAY ca o mot account: IP doi moi lan thay instance, ten
+    thi khong. Gan nhu mien phi - Route 53 tinh $0.50/thang moi hosted
+    zone, cong phi truy van.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "internal_dns_domain" {
+  description = <<-EOT
+    Ten mien cho PHZ noi bo.
+
+    DUNG duoi TLD cong khai (.com/.net/.org) tru khi ban THAT SU so
+    huu ten do: PHZ che mat ten that voi moi VPC duoc gan, nen
+    "example.com" trong PHZ se lam moi VPC mat duong toi example.com
+    that. Dung .internal hoac .lan.
+  EOT
+  type        = string
+  default     = "lz.internal"
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+$", var.internal_dns_domain))
+    error_message = "internal_dns_domain chi gom chu thuong, so, dau cham va gach ngang."
+  }
+}
+
+variable "enable_dns_profile" {
+  description = <<-EOT
+    Route 53 Profile - gom nhieu PHZ lai, share mot lan.
+
+    Mac dinh TAT, va o bo MOT ACCOUNT nay nen giu vay: ca ba VPC deu
+    da co PHZ gan thang, profile khong them gi ngoai phi association.
+
+    Chi bat khi:
+      - muon thu truoc mo hinh se dung o multi-account, hoac
+      - se co VPC o account khac noi vao (can organization_arn)
+
+    GIOI HAN: mot VPC chi gan duoc MOT profile. Gom het vao mot cai.
+    Can AWS provider >= 5.60.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "organization_arn" {
+  description = <<-EOT
+    ARN to chuc, de share DNS profile qua RAM.
+
+      aws organizations describe-organization --query 'Organization.Arn' --output text
+
+    De rong = khong share. Profile van chay trong chinh account nay.
+  EOT
+  type        = string
+  default     = ""
+}

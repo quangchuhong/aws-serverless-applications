@@ -148,3 +148,58 @@ output "ephemeral" {
   description = "true = demo dung-xem-xoa. false = ha tang thuong tru, teardown.sh se tu choi chay."
   value       = var.ephemeral
 }
+
+########################################
+# DNS TAP TRUNG
+########################################
+
+output "dns" {
+  description = "PHZ noi bo, ban ghi sinh ra, va trang thai Route 53 Profile"
+  value = {
+    internal_zone    = try(aws_route53_zone.internal[0].name, null)
+    internal_zone_id = try(aws_route53_zone.internal[0].zone_id, null)
+
+    # Ten goi duoc tu trong spoke. Day la thu de thu that.
+    records = { for k, r in aws_route53_record.spoke_app : k => r.name }
+
+    # PHZ cua VPC endpoint - dich vu -> zone id
+    endpoint_zones = { for k, z in aws_route53_zone.endpoint : k => z.zone_id }
+
+    profile_enabled = var.enable_dns_profile
+    profile_id      = try(aws_route53profiles_profile.shared[0].id, null)
+    profile_shared  = var.enable_dns_profile && var.organization_arn != ""
+  }
+}
+
+output "dns_check" {
+  description = "Lenh kiem DNS that su hoat dong - chay TRONG spoke qua SSM"
+  value       = <<-EOT
+
+    Chay tu EC2 trong spoke (aws ssm start-session --target <id>):
+
+      # 1. PHZ noi bo: goi spoke khac bang TEN, khong phai IP
+      %{if var.enable_internal_dns && var.enable_test_instances~}
+      %{for k, r in aws_route53_record.spoke_app~}
+      dig +short ${r.name}
+      curl -s http://${r.name} | head -1
+      %{endfor~}
+      %{else~}
+      (enable_internal_dns hoac enable_test_instances dang tat)
+      %{endif~}
+
+      # 2. VPC endpoint tap trung: ten AWS phai tro vao IP NOI BO
+      %{for k, z in aws_route53_zone.endpoint~}
+      dig +short ${k}.${var.region}.amazonaws.com
+      %{endfor~}
+
+      Ket qua PHAI la IP trong ${var.security_vpc_cidr} - do la
+      interface endpoint dat o security VPC. Ra IP cong khai nghia la
+      PHZ chua toi duoc spoke, va luu luong dang di vong ra Internet.
+
+      # 3. Gateway endpoint S3: KHONG qua TGW, khong ton tien
+      dig +short s3.${var.region}.amazonaws.com
+      # Cai nay RA IP CONG KHAI - dung. Gateway endpoint lam viec o
+      # tang route table (prefix list), khong phai tang DNS.
+
+  EOT
+}

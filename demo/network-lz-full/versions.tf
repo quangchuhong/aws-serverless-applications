@@ -5,7 +5,11 @@ terraform {
     aws = {
       source = "hashicorp/aws"
       # >= 5.16 de NLB nhan security_groups (dung cho khoa origin o cdn.tf)
-      version = "~> 5.16"
+      # >= 5.60 de co aws_route53profiles_* (dns.tf)
+      #
+      # Lock file cu hon 5.60 thi init bao loi ro rang. Chay:
+      #   terraform init -upgrade
+      version = ">= 5.60, < 6.0"
     }
     random = {
       source  = "hashicorp/random"

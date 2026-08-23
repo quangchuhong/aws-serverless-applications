@@ -226,11 +226,19 @@ resource "aws_route53_zone" "endpoint" {
     vpc_id = aws_vpc.security[0].id
   }
 
+  # Gan thang vao spoke - CHI khi khong dung Route 53 Profile.
+  # Dung ca hai duong cho cung mot VPC la thua. Xem dns.tf.
   dynamic "vpc" {
-    for_each = var.spokes
+    for_each = var.enable_dns_profile ? {} : var.spokes
     content {
       vpc_id = aws_vpc.spoke[vpc.key].id
     }
+  }
+
+  # Association them qua Profile hoac tu account khac nam NGOAI state.
+  # Khong bo qua thi moi lan apply Terraform se go chung ra.
+  lifecycle {
+    ignore_changes = [vpc]
   }
 }
 
