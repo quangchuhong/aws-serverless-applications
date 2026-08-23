@@ -341,3 +341,26 @@ variable "ephemeral" {
   type        = bool
   default     = true
 }
+
+variable "ingress_allowed_cidrs" {
+  description = <<-EOT
+    Dai IP duoc phep goi vao NLB cong 80, khi enable_cdn = false.
+
+    Mac dinh 0.0.0.0/0 - dung cho demo va CHI dung cho demo: do la mot
+    cong HTTP cong khai, khong CDN, khong WAF, khong TLS.
+
+    Giu bo nay lam mang that thi co hai duong:
+      - siet lai day, vi du ["<IP-van-phong>/32"]
+      - hoac enable_cdn = true, luc do rule nay khong ton tai va chi
+        prefix list cua CloudFront vao duoc
+
+    Co check block canh bao khi ephemeral = false ma van de 0.0.0.0/0.
+  EOT
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.ingress_allowed_cidrs) > 0
+    error_message = "ingress_allowed_cidrs rong thi khong ai vao duoc NLB - dung enable_ingress = false neu do la y muon."
+  }
+}

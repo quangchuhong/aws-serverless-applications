@@ -161,7 +161,14 @@ resource "aws_security_group" "nlb" {
   tags = { Name = "${var.project}-nlb" }
 }
 
-# Khong bat CDN: mo cho moi noi
+# Khong bat CDN: NLB tu no la duong vao, khong co gi truoc no.
+#
+# Mac dinh 0.0.0.0/0 - dung cho demo, va CHI dung cho demo. Do la mot
+# cong HTTP cong khai: khong CDN, khong WAF, khong TLS.
+#
+# Giu bo nay lam mang that thi siet ingress_allowed_cidrs lai, hoac bat
+# enable_cdn = true de chi CloudFront vao duoc. Co check block ben duoi
+# canh bao khi ephemeral = false ma van de mo.
 resource "aws_security_group_rule" "nlb_open" {
   count = var.enable_ingress && !var.enable_cdn ? 1 : 0
 
@@ -169,9 +176,21 @@ resource "aws_security_group_rule" "nlb_open" {
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = var.ingress_allowed_cidrs
   security_group_id = aws_security_group.nlb[0].id
-  description       = "HTTP tu moi noi (chua bat CDN)"
+  description       = "HTTP tu ${join(", ", var.ingress_allowed_cidrs)} (chua bat CDN)"
+}
+
+check "ingress_not_open_to_world_in_prod" {
+  assert {
+    condition = (
+      var.ephemeral
+      || !var.enable_ingress
+      || var.enable_cdn
+      || !contains(var.ingress_allowed_cidrs, "0.0.0.0/0")
+    )
+    error_message = "ephemeral = false (ha tang thuong tru) nhung NLB dang mo cong 80 cho 0.0.0.0/0, khong CDN, khong WAF, khong TLS. Siet ingress_allowed_cidrs, hoac bat enable_cdn = true de chi CloudFront vao duoc."
+  }
 }
 
 # Bat CDN: CHI CloudFront. Day la lop chan di vong qua CDN.
@@ -196,7 +215,9 @@ resource "aws_lb" "ingress" {
   subnets            = [aws_subnet.ingress_public[0].id]
   security_groups    = [aws_security_group.nlb[0].id]
 
-  enable_deletion_protection = false # DEMO: phai tat de destroy duoc
+  # ephemeral = true  -> tat, de destroy chay tron
+  # ephemeral = false -> bat, vi day la duong vao duy nhat cua ung dung
+  enable_deletion_protection = !var.ephemeral
 
   tags = { Name = "${var.project}-nlb" }
 }
