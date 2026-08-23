@@ -1,3 +1,32 @@
+########################################
+# GIA TRI DUNG TRONG HEREDOC
+#
+# one(...[*].id) tra ve NULL khi count = 0, va null KHONG noi suy
+# duoc vao string template:
+#
+#   Error: Invalid template interpolation value
+#   The expression result is null.
+#
+# Doi voi mot gan gia tri thi null vo hai - xem
+# local.inspect_attachment_id ben tgw.tf. Trong heredoc thi no lam
+# hong ca terraform plan, va hong o dung trang thai MAC DINH
+# (enable = false) - trang thai ai cung gap dau tien.
+#
+# coalesce() thay null bang cho giu cho doc duoc.
+########################################
+
+locals {
+  tgw_id_text = coalesce(
+    one(aws_ec2_transit_gateway.hub[*].id),
+    "<tgw-id: chay terraform apply truoc>"
+  )
+
+  fw_bucket_text = coalesce(
+    one(aws_s3_bucket.fw_logs[*].id),
+    "<bucket log firewall: chay terraform apply truoc>"
+  )
+}
+
 output "enabled" {
   value = local.enabled
 }
@@ -103,7 +132,7 @@ output "paste_spoke_vpc" {
 
     # TGW da duoc share qua RAM nen dung thang ID nay duoc.
     resource "aws_ec2_transit_gateway_vpc_attachment" "this" {
-      transit_gateway_id = "${one(aws_ec2_transit_gateway.hub[*].id)}"
+      transit_gateway_id = "${local.tgw_id_text}"
       vpc_id             = aws_vpc.spoke.id
       subnet_ids         = [for s in aws_subnet.tgw : s.id]
 
@@ -124,7 +153,7 @@ output "paste_spoke_vpc" {
     resource "aws_route" "to_tgw" {
       route_table_id         = aws_route_table.private.id
       destination_cidr_block = "0.0.0.0/0"
-      transit_gateway_id     = "${one(aws_ec2_transit_gateway.hub[*].id)}"
+      transit_gateway_id     = "${local.tgw_id_text}"
       depends_on             = [aws_ec2_transit_gateway_vpc_attachment.this]
     }
 
@@ -183,7 +212,7 @@ output "next_steps" {
 
           hoac liet ke tat ca (chay o account network):
             aws ec2 describe-transit-gateway-attachments \
-              --filters Name=transit-gateway-id,Values=${one(aws_ec2_transit_gateway.hub[*].id)} \
+              --filters Name=transit-gateway-id,Values=${local.tgw_id_text} \
                         Name=resource-type,Values=vpc \
               --query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceOwnerId,State]' \
               --output table
@@ -211,7 +240,7 @@ output "next_steps" {
 
     5. DOC ALERT LOG MOT TUAN TRUOC KHI BAT "drop":
 
-         aws s3 ls s3://${one(aws_s3_bucket.fw_logs[*].id)}/alert/ --recursive \
+         aws s3 ls s3://${local.fw_bucket_text}/alert/ --recursive \
            --profile <network> | tail
 
        Tim dong "UNMATCHED east-west" - do la ban do that ve ai dang
