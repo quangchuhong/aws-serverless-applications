@@ -119,8 +119,12 @@ output "next_steps" {
 
          aws cloudformation describe-stacks \
            --profile <account> --region ${var.region} \
-           --query 'Stacks[?contains(StackName,`account-baseline`)].Outputs[?OutputKey==`SweepResult`].OutputValue' \
+           --query "Stacks[?contains(StackName,'account-baseline')].Outputs[] | [?OutputKey=='SweepResult'].OutputValue" \
            --output text
+
+       Dau [] sau Outputs la BAT BUOC. Khong co no thi JMESPath tao mot
+       projection long va --output text in ra RONG - trong y het nhu
+       stack khong co output nao, trong khi output van o do.
 
        Ket qua co ba dang:
          "ap-southeast-1/vpc-xxx"   da xoa

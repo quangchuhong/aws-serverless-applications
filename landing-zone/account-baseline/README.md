@@ -135,9 +135,11 @@ aws cloudformation list-stack-instances \
 
 ```bash
 aws cloudformation describe-stacks --profile <account> --region <region> \
-  --query 'Stacks[?contains(StackName,`account-baseline`)].Outputs[?OutputKey==`SweepResult`].OutputValue' \
+  --query "Stacks[?contains(StackName,'account-baseline')].Outputs[] | [?OutputKey=='SweepResult'].OutputValue" \
   --output text
 ```
+
+> Dấu `[]` sau `Outputs` là bắt buộc. Không có nó thì JMESPath tạo một projection lồng và `--output text` in ra **rỗng** — trông y hệt như stack không có output nào, trong khi output vẫn ở đó.
 
 | Kết quả | Nghĩa là |
 |---|---|
