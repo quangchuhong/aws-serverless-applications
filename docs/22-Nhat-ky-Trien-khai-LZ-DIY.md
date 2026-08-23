@@ -853,26 +853,45 @@ for id in $(aws organizations list-accounts \
              --query 'Parents[0].[Type,Id]' --output text)
   printf '%-14s %-16s %s\n' "$id" "$name" "$parent"
 
-  # Bo qua management account - khong assume vao chinh minh duoc
-  [ "$id" = "$(aws sts get-caller-identity --query Account --output text)" ] && continue
+  [ "$id" = "$(aws sts get-caller-identity --query Account --output text)" ] \
+    && continue
 
+  # KHONG nuot stderr - xem phan duoi vi sao
   creds=$(aws sts assume-role \
     --role-arn "arn:aws:iam::$id:role/OrganizationAccountAccessRole" \
     --role-session-name vpc-audit \
     --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
-    --output text 2>/dev/null) || { echo "    (khong assume duoc)"; continue; }
+    --output text) || { echo "    ^ khong assume duoc, xem loi ngay tren"; continue; }
 
   read -r AK SK ST <<<"$creds"
   for r in $ORG_REGIONS; do
     n=$(AWS_ACCESS_KEY_ID=$AK AWS_SECRET_ACCESS_KEY=$SK AWS_SESSION_TOKEN=$ST \
         aws ec2 describe-vpcs --region "$r" --filters Name=isDefault,Values=true \
-          --query 'length(Vpcs)' --output text 2>/dev/null)
+          --query 'length(Vpcs)' --output text)
     [ "$n" != "0" ] && echo "    $r: CON $n default VPC"
   done
 done
 ```
 
 Không in dòng `CON ... default VPC` nào, và cột cuối không có `ROOT` nào ngoài management account, là sạch.
+
+> **Đừng dán comment `#` vào zsh.** macOS mặc định dùng zsh, và zsh **tương tác** không bật `interactive_comments` — mọi dòng `#` trong khối dán vào sẽ thành `zsh: command not found: #`. Vô hại nhưng ồn. `setopt interactive_comments` một lần là hết.
+
+> **Bản đầu của đoạn script trên có `2>/dev/null` ở cả hai lời gọi**, và khi `assume-role` hỏng nó chỉ in `(khong assume duoc)` — không nói vì sao. Đúng cùng một lỗi với #27: che mất câu trả lời rồi để người đọc tự đoán. Nguyên nhân hay gặp nhất là **credential mặc định đang là root user**, mà root **không assume role được**, không bao giờ.
+
+### Bản không cần assume-role
+
+Nếu đã có profile cho từng account thì bỏ hẳn `assume-role` đi — ít chỗ hỏng hơn, và đây mới là kiểm chứng thật của mục 6d: `SweepResult` là stack tự khai về chính nó, còn cái này hỏi thẳng EC2.
+
+```bash
+for p in lz-network lz-security lz-logarchive lz-app-dev lz-app-prod; do
+  printf '%-16s ' "$p"
+  for r in ap-southeast-1 us-east-1; do
+    printf '%s=%s ' "$r" "$(aws ec2 describe-vpcs --region $r --profile $p \
+      --filters Name=isDefault,Values=true --query 'length(Vpcs)' --output text)"
+  done; echo
+done
+```
 
 ### Cái bẫy của việc 1
 
