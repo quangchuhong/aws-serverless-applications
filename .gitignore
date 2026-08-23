@@ -47,6 +47,13 @@ backend.tf
 *.tfplan
 plan.out
 
+# File plan xuat ra de doc. Chua GIA TRI THAT, khong phai placeholder:
+# random_password.origin_verify (header X-Origin-Verify cua CloudFront)
+# nam trong plan.json duoi dang ro. Doc xong thi xoa.
+tfplan
+plan.txt
+plan.json
+
 # Crash log
 crash.log
 crash.*.log
