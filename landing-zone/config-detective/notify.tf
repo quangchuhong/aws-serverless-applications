@@ -59,6 +59,27 @@ resource "aws_sns_topic_subscription" "email" {
 
   # SNS gui thu xac nhan. CHUA BAM LINK = KHONG NHAN DUOC CANH BAO NAO.
   # Day la buoc hay quen nhat trong ca layer.
+  #
+  # ---------------------------------------------------------------
+  # VA TERRAFORM KHONG BAO CHO BAN BIET KHI NO HONG.
+  #
+  # Subscribe voi protocol=email tra ve chuoi "pending confirmation"
+  # chu khong phai ARN. Provider luu chuoi do lam ID, nen lan refresh
+  # sau no khong doi chieu duoc voi bat cu thu gi ben SNS. Neu ai do
+  # khong bam link trong 3 NGAY, SNS tu xoa subscription va:
+  #
+  #   terraform plan  ->  No changes        (Terraform noi ON)
+  #   SNS             ->  Deleted           (khong ai nhan gi)
+  #
+  # Day KHONG phai drift ma plan phat hien duoc - la drift ma plan
+  # KHANG DINH la khong co. Khong co lifecycle hay check block nao
+  # sua duoc: Terraform khong co data source doc subscription cua SNS.
+  #
+  # Nen cach duy nhat la hoi thang SNS - xem muc 1 trong output
+  # next_steps. Tao lai khi can:
+  #
+  #   terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'
+  # ---------------------------------------------------------------
 }
 
 ########################################

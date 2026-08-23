@@ -44,9 +44,37 @@ output "alert_topic" {
 output "next_steps" {
   value = <<-EOT
 
-    1. XAC NHAN EMAIL. SNS gui thu xac nhan toi tung dia chi trong
-       alert_emails. CHUA BAM LINK = KHONG NHAN DUOC CANH BAO NAO.
-       Day la buoc hay quen nhat.
+    1. XAC NHAN EMAIL, ROI KIEM LAI BANG LENH.
+
+       SNS gui thu xac nhan toi tung dia chi trong alert_emails.
+       CHUA BAM LINK = KHONG NHAN DUOC CANH BAO NAO.
+
+       TERRAFORM KHONG KIEM DUOC VIEC NAY. Provider luu ID la chuoi
+       "pending confirmation" chu khong phai ARN that, nen lan refresh
+       sau no khong thay ban ghi da bien mat. Ket qua:
+
+         terraform plan  ->  khong doi          (Terraform noi ON)
+         SNS             ->  Deleted            (khong ai nhan gi)
+
+       Va SNS TU XOA subscription chua xac nhan sau 3 NGAY. Bam link
+       muon hon la link vo dung, khong bao gi.
+
+       Hoi thang SNS:
+
+         aws sns list-subscriptions-by-topic \
+           --topic-arn <alert_topic> \
+           --profile <security> --region ${var.region} \
+           --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+
+       Cot cuoi PHAI la mot ARN ket thuc bang UUID.
+         PendingConfirmation  chua bam link
+         Deleted              da qua 3 ngay, phai tao lai:
+
+         terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'
+
+       KHONG dung 'aws sns publish' de kiem. No tra ve MessageId ke ca
+       khi topic khong co subscriber nao - lenh bao OK va thu roi vao
+       hu khong.
 
     2. KIEM TRA RECORDER DA CHAY o vai account:
 

@@ -167,6 +167,11 @@ terraform apply
 ## Kiểm chứng
 
 ```bash
+# 0. Duong canh bao co ai o dau kia khong
+aws sns list-subscriptions-by-topic --topic-arn <alert_topic> \
+  --profile <security> --region ap-southeast-1 \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+
 # 1. Recorder da chay chua
 aws configservice describe-configuration-recorder-status \
   --profile <account> --region ap-southeast-1
@@ -183,6 +188,21 @@ aws configservice describe-aggregate-compliance-by-config-rules \
 
 Bước 3 quan trọng nhất: rule ở trạng thái **`INSUFFICIENT_DATA`** nghĩa là recorder **không ghi** loại resource mà rule đó kiểm tra. Nó **im lặng**, và rất dễ nhầm là "mọi thứ đều ổn". Có `check` block bắt trường hợp rule `s3-*` mà không ghi `AWS::S3::Bucket`.
 
+### Bước 0: thứ Terraform không kiểm được
+
+Cột `SubscriptionArn` phải là một ARN kết thúc bằng UUID. Hai giá trị khác đều nghĩa là **không ai nhận được cảnh báo nào**:
+
+| Giá trị | Nghĩa là | Chữa |
+|---|---|---|
+| `PendingConfirmation` | Chưa bấm link trong thư | Bấm link |
+| `Deleted` | Quá **3 ngày** không xác nhận, SNS tự xoá | `terraform apply -replace='aws_sns_topic_subscription.email["<email>"]'` rồi bấm link **thư mới** |
+
+> **`terraform plan` không bắt được trường hợp này.** `Subscribe` với `protocol=email` trả về chuỗi `pending confirmation` chứ không phải ARN, và provider lưu chính chuỗi đó làm ID — nên lần refresh sau nó không đối chiếu được với gì bên SNS. Khi subscription bị xoá, `plan` vẫn báo **No changes**.
+>
+> Đây không phải drift mà `plan` phát hiện được. Là drift mà `plan` **khẳng định là không có** — và không `lifecycle` hay `check` block nào sửa được, vì Terraform không có data source đọc subscription của SNS. Cách duy nhất là hỏi thẳng SNS.
+
+> **Đừng dùng `aws sns publish` để kiểm.** Nó trả về `MessageId` kể cả khi topic không có subscriber nào. Lệnh báo OK, số hiệu thư có thật, thư rơi vào hư không.
+
 ---
 
 ## Ba lỗi hay gặp
@@ -192,6 +212,7 @@ Bước 3 quan trọng nhất: rule ở trạng thái **`INSUFFICIENT_DATA`** ng
 | `InsufficientDeliveryPolicyException` | Bucket policy thiếu một trong hai statement `AWSConfigBucketPermissionsCheck` / `AWSConfigBucketDelivery`. Nếu bucket mã hoá KMS thì key policy **cũng phải** cho — thiếu một trong hai là fail, thông báo lỗi không chỉ ra thiếu chỗ nào |
 | `AccessDeniedException` khi tạo organization rule | Thiếu `config-multiaccountsetup.amazonaws.com` |
 | S3 rỗng sau 24 giờ | `aws configservice describe-delivery-channel-status` để xem lý do thật |
+| `plan` sạch mà cảnh báo không tới | Email subscription bị SNS xoá sau 3 ngày chưa xác nhận — xem bước 0 |
 
 ---
 
