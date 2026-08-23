@@ -12,10 +12,18 @@ resource "aws_networkfirewall_firewall" "main" {
   firewall_policy_arn = aws_networkfirewall_firewall_policy.main[0].arn
   vpc_id              = aws_vpc.security[0].id
 
-  # DEMO: tat het bao ve de terraform destroy chay duoc.
-  # PRODUCTION: bat delete_protection va subnet_change_protection.
-  delete_protection                 = false
-  subnet_change_protection          = false
+  # ephemeral = true  -> tat bao ve, terraform destroy chay tron
+  # ephemeral = false -> bat bao ve that
+  #
+  # Xoa firewall la moi route tro vao endpoint cua no thanh mo coi,
+  # va CA MANG mat ket noi - khong chi mat thanh tra. Muon xoa that
+  # thi doi ephemeral = false thanh true, apply rieng mot lan, roi
+  # moi destroy.
+  delete_protection        = !var.ephemeral
+  subnet_change_protection = !var.ephemeral
+
+  # De false o ca hai che do: doi policy la viec van hanh binh thuong
+  # (them rule, doi alert sang drop), khong phai viec can chan.
   firewall_policy_change_protection = false
 
   subnet_mapping {
@@ -158,7 +166,7 @@ resource "aws_s3_bucket" "fw_logs" {
   count = local.fw
 
   bucket        = "${var.project}-fw-logs-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true # DEMO: cho phep destroy khi con object
+  force_destroy = var.ephemeral # ephemeral=false: con log thi destroy dung lai
 
   tags = { Name = "${var.project}-fw-logs" }
 }

@@ -311,3 +311,33 @@ variable "egress_allowed_domains" {
     ".amazontrust.com",
   ]
 }
+
+########################################
+# DUNG DEMO NAY LAM HA TANG THUONG TRUC
+########################################
+
+variable "ephemeral" {
+  description = <<-EOT
+    true (mac dinh) - day la DEMO: dung len xem roi xoa.
+
+      - moi resource mang tag Ephemeral = "true"
+      - teardown.sh QUET THEO TAG DO va xoa sach
+      - firewall tat delete_protection
+      - ba bucket dat force_destroy = true
+
+    Bon dieu do lam cho "dung - xem - xoa" chay tron. Chung cung lam
+    cho bo nay CUC KY NGUY HIEM neu ban giu no lai lam mang that:
+    mot lenh ./teardown.sh la mat toan bo, khong co lop chan nao.
+
+    false - dung bo nay lam ha tang thuong tru:
+
+      - BO tag Ephemeral -> teardown.sh khong con thay resource nao
+      - BAT delete_protection va subnet_change_protection cua firewall
+      - force_destroy = false -> bucket con object thi destroy dung lai
+
+    Doi sang false thi terraform destroy se KHONG chay tron nua. Do
+    la dung y muon - xem muc "Xoa" trong README.
+  EOT
+  type        = bool
+  default     = true
+}

@@ -6,6 +6,39 @@ set -uo pipefail
 
 REGION="${AWS_REGION:-ap-southeast-1}"
 
+########################################
+# CHAN: bo nay co dang duoc dung lam ha tang thuong tru khong
+#
+# ephemeral = false nghia la ai do da giu bo demo nay lai lam mang
+# that. Luc do script nay khong con la "don dep sau khi xem" ma la
+# "xoa mang dang chay".
+#
+# Doc tu state chu khong tu tfvars: tfvars co the da bi sua sau lan
+# apply cuoi, state thi phan anh cai dang chay that.
+########################################
+EPHEMERAL=$(terraform output -raw ephemeral 2>/dev/null || echo "unknown")
+
+if [[ "$EPHEMERAL" == "false" ]]; then
+  echo "════════════════════════════════════════════"
+  echo " DUNG LAI"
+  echo "════════════════════════════════════════════"
+  echo
+  echo "Bo nay dang chay voi ephemeral = false, tuc no KHONG phai"
+  echo "demo nua ma la ha tang thuong tru:"
+  echo
+  echo "  - resource khong mang tag Ephemeral"
+  echo "  - firewall bat delete_protection"
+  echo "  - bucket khong co force_destroy"
+  echo
+  echo "Script nay se khong chay. Muon xoa that thi lam co y thuc:"
+  echo
+  echo "  1. Doi ephemeral = true trong terraform.tfvars"
+  echo "  2. terraform apply        # go bao ve, RIENG mot lan"
+  echo "  3. Chay lai ./teardown.sh"
+  echo
+  exit 1
+fi
+
 echo "════════════════════════════════════════════"
 echo " Teardown demo network LZ"
 echo "════════════════════════════════════════════"

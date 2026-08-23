@@ -26,19 +26,24 @@ terraform {
 ########################################
 
 locals {
-  common_tags = {
-    CostCenter  = var.cost_center
-    Owner       = var.owner
-    Environment = var.environment
-    Project     = var.project
+  common_tags = merge(
+    {
+      CostCenter  = var.cost_center
+      Owner       = var.owner
+      Environment = var.environment
+      Project     = var.project
 
-    ManagedBy = "terraform"
-    Repo      = "aws-serverless-applications/demo/network-lz-full"
+      ManagedBy = "terraform"
+      Repo      = "aws-serverless-applications/demo/network-lz-full"
+    },
 
-    # Chi co o demo: danh dau resource se bi xoa.
-    # teardown.sh quet theo tag nay de tim resource sot.
-    Ephemeral = "true"
-  }
+    # Danh dau resource se bi xoa. teardown.sh QUET THEO TAG NAY va
+    # xoa moi thu mang no - ke ca resource khong con trong state.
+    #
+    # Vi vay ephemeral = false BO HAN tag: neu ban giu bo nay lam mang
+    # that thi tag Ephemeral la mot lenh xoa dang cho nguoi bam.
+    var.ephemeral ? { Ephemeral = "true" } : {},
+  )
 }
 
 provider "aws" {

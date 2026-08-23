@@ -17,6 +17,14 @@ locals {
     "landing-zone/account-baseline" = "account-baseline/terraform.tfstate"
     "landing-zone/network"          = "network/terraform.tfstate"
 
+    # Demo, NHUNG dang duoc giu lai lam mang that (ephemeral = false).
+    # Demo binh thuong dung state local la du - dung len xem roi xoa.
+    # Cai nay thi khong: state cua ha tang thuong tru ma nam tren mot
+    # cai laptop la mat may = mat quyen quan ly mang cua ca to chuc.
+    #
+    # Doi ephemeral ve true (dung-xem-xoa) thi bo dong nay di.
+    "demo/network-lz-full" = "demo-network-lz-full/terraform.tfstate"
+
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.

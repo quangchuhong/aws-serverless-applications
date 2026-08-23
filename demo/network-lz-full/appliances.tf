@@ -259,7 +259,7 @@ resource "aws_s3_bucket" "f5_config" {
   count = local.app_on
 
   bucket        = "${var.project}-f5-config-${data.aws_caller_identity.current.account_id}"
-  force_destroy = true
+  force_destroy = var.ephemeral
 
   tags = { Name = "${var.project}-f5-config" }
 }

@@ -220,7 +220,7 @@ resource "aws_route53_zone" "endpoint" {
 
   name          = "${each.value}.${var.region}.amazonaws.com"
   comment       = "${var.project} PHZ cho VPC endpoint ${each.value}"
-  force_destroy = true
+  force_destroy = var.ephemeral
 
   vpc {
     vpc_id = aws_vpc.security[0].id

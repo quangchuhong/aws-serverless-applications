@@ -305,11 +305,49 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | Không Palo Alto / F5 | Chuỗi đầy đủ (doc 14) |
 | Hostname `*.cloudfront.net` | Domain riêng + ACM cert |
 | Origin khoá bằng prefix list | Thêm kiểm tra header bí mật ở F5 |
-| `delete_protection = false` | Bật cho firewall và NLB |
+| `delete_protection = false` | Bật cho firewall và NLB — đặt `ephemeral = false`, xem dưới |
 | NLB nghe HTTP:80 | HTTPS:443 + ACM |
 | Không đối tác | 3rd-party VPC + VPN (doc 16) |
 
 > Header `X-Origin-Verify` đã được sinh và gửi đi từ CloudFront, nhưng demo dùng nginx nên **chưa ai kiểm tra nó**. Trong thiết kế thật, F5 kiểm tra header này và trả 403 nếu thiếu — lớp thứ hai phòng khi ai đó qua được tầng mạng. Xem [doc 14 mục 7.1](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md).
+
+---
+
+## Giữ bộ này lại làm mạng thật
+
+Được, nhưng **đổi một biến trước đã**:
+
+```hcl
+ephemeral = false
+```
+
+Mặc định `true` khiến bộ này rất dễ xoá — đó là điều đúng cho một demo và **nguy hiểm** cho hạ tầng thường trực:
+
+| `ephemeral` | Tag `Ephemeral` | Firewall | Bucket |
+|---|---|---|---|
+| `true` (mặc định) | Có — `teardown.sh` **quét theo tag này** và xoá sạch | `delete_protection = false` | `force_destroy = true` |
+| `false` | **Bỏ hẳn** | Bật `delete_protection` + `subnet_change_protection` | `force_destroy = false` |
+
+> Tag `Ephemeral` không phải nhãn ghi chú — nó là **điều kiện lọc của một lệnh xoá đang chờ người bấm**. `teardown.sh` gọi `resourcegroupstaggingapi get-resources --tag-filters Key=Ephemeral,Values=true` rồi xoá mọi thứ khớp, **kể cả resource không còn trong state**.
+
+`teardown.sh` đọc `terraform output ephemeral` và **từ chối chạy** khi giá trị là `false`. Muốn xoá thật thì phải làm có ý thức: đổi về `true`, `apply` riêng một lần để gỡ bảo vệ, rồi mới teardown.
+
+**Và chuyển state lên S3.** State của hạ tầng thường trực nằm trên laptop thì mất máy là mất quyền quản lý mạng của cả tổ chức:
+
+```bash
+cd ../../landing-zone/tf-backend
+terraform apply                    # dang ky layer moi vao output
+./wire-backends.sh                 # sinh backend.hcl + backend.tf
+
+cd ../../demo/network-lz-full
+terraform init -migrate-state -backend-config=backend.hcl
+terraform state list               # phai con nguyen resource
+terraform plan                     # PHAI ra "No changes"
+```
+
+Chỉ khi `plan` ra **No changes** mới xoá `terraform.tfstate` local.
+
+Còn ba khác biệt nữa so với production mà công tắc này **không** giải quyết: vẫn **1 AZ** (mất AZ đó là mất cả mạng), vẫn **một account**, và NLB vẫn nghe HTTP:80. Xem bảng bên trên.
 
 ---
 

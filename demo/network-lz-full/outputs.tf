@@ -134,3 +134,17 @@ output "next_steps" {
     ════════════════════════════════════════════════
   EOT
 }
+
+########################################
+# teardown.sh DOC OUTPUT NAY
+#
+# Doc tu state chu khong tu tfvars: tfvars co the da bi sua sau lan
+# apply cuoi, state thi phan anh cai dang chay that.
+#
+# Xoa output nay = cai chan trong teardown.sh im lang mat tac dung.
+########################################
+
+output "ephemeral" {
+  description = "true = demo dung-xem-xoa. false = ha tang thuong tru, teardown.sh se tu choi chay."
+  value       = var.ephemeral
+}
