@@ -202,9 +202,11 @@ Cột `SubscriptionArn` phải là một ARN kết thúc bằng UUID. Hai giá t
 `Deleted` có hai nguồn hoàn toàn khác nhau, và chữa nhầm thì lặp vô hạn:
 
 1. Subscription chưa xác nhận **quá 3 ngày** — SNS tự dọn
-2. **Địa chỉ đó bị SNS chặn** — thường do có người từng bấm *"unsubscribe"* trong một thư SNS trước đó
+2. **Địa chỉ đó bị SNS chặn ở topic này** — do có người từng bấm *"unsubscribe"* trong một thư từ chính topic đó
 
 Trường hợp 2 nhìn y hệt trường hợp 1, nhưng `-replace` **không bao giờ** sửa được: SNS nhận `Subscribe`, trả về `"pending confirmation"`, rồi xoá ngay trong vài phút.
+
+> **Chặn theo topic, không phải theo địa chỉ.** Cùng địa chỉ đó vẫn đăng ký bình thường vào topic khác, kể cả ở account khác — nên "email của tôi vẫn nhận cảnh báo billing đấy thôi" **không** loại trừ được trường hợp 2.
 
 Phân biệt bằng một phép thử, không phải bằng suy luận — đăng ký một địa chỉ **khác** vào **cùng topic**, cùng lúc. Plus-addressing của Gmail là lý tưởng: cùng hộp thư, nhưng với SNS là endpoint khác hẳn.
 
@@ -226,7 +228,11 @@ aws sns list-subscriptions-by-topic --topic-arn <alert_topic> \
 | Cả hai `Deleted` | Vấn đề ở topic hoặc account | Không phải chuyện địa chỉ — xem policy của topic |
 | Địa chỉ cũ biến mất khỏi bảng | Chỉ là bản ghi cũ chưa dọn xong | Không phải lỗi. `sleep 60` là thứ thiếu |
 
-> Đây chính là ca đã gặp trong lần dựng thật, và phép thử trên là thứ giải được nó sau khi ba giả thuyết suông đều sai. Xem [doc 22](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+> **Bản ghi cũ còn nằm đó thì phép thử đọc sai.** Một dòng `Deleted` sót lại trông hệt như trường hợp 2, và `Subscribe` cho cùng endpoint sẽ **khớp vào bản ghi cũ** thay vì tạo mới — `-replace` khi đó trả về đúng UUID cũ và không có thư nào được gửi.
+>
+> Nên trình tự đúng là: `aws sns unsubscribe` bản ghi cũ → chờ tới khi nó **biến mất khỏi bảng** (không phải tới khi nó ghi `Deleted`) → rồi mới `Subscribe` lại. Chỉ lúc đó kết quả mới đọc được.
+
+> Đây chính là ca đã gặp trong lần dựng thật. Bốn giả thuyết suông đều sai; thứ giải được nó là phép thử trên, chạy lại sau khi bản ghi cũ đã sạch. Xem [doc 22](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 > **Cảnh báo bảo mật của cả tổ chức không nên gắn vào email cá nhân.** Một lần ai đó bấm "unsubscribe" là mù toàn hệ thống, và không có API nào gỡ lại. Một distribution list an toàn hơn hẳn.
 

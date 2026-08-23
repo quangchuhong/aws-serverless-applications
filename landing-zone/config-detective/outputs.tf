@@ -72,8 +72,12 @@ output "next_steps" {
 
        "Deleted" co hai nguyen nhan, nhin y het nhau:
          (1) chua xac nhan qua 3 ngay, SNS tu don
-         (2) DIA CHI DO BI SNS CHAN - thuong do tung co nguoi bam
-             "unsubscribe" trong mot thu SNS truoc do
+         (2) DIA CHI DO BI CHAN O TOPIC NAY - do tung co nguoi bam
+             "unsubscribe" trong mot thu TU CHINH TOPIC DO
+
+       (2) la chan theo TOPIC chu khong theo dia chi: cung dia chi do
+       van dang ky binh thuong vao topic khac, ke ca o account khac.
+       Nen "email nay van nhan canh bao billing" KHONG loai tru duoc.
 
        Voi (2) thi -replace KHONG BAO GIO sua duoc: SNS nhan Subscribe,
        tra ve "pending confirmation", roi xoa ngay trong vai phut.
@@ -88,6 +92,11 @@ output "next_steps" {
 
          sleep 60   # ListSubscriptionsByTopic la eventually consistent
          # roi list lai
+
+       QUAN TRONG: ban ghi cu con nam do thi phep thu doc SAI. Subscribe
+       cho cung endpoint se KHOP VAO ban ghi cu thay vi tao moi. Phai
+       unsubscribe ban ghi cu va cho toi khi no BIEN MAT khoi bang -
+       khong phai toi khi no ghi "Deleted" - roi moi thu lai.
 
        Dia chi moi PendingConfirmation ma cu van Deleted = dia chi cu
        bi chan. Doi alert_emails sang endpoint khac roi apply. KHONG CO
