@@ -55,7 +55,7 @@ Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code ch�
 
 Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
-**Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
+**Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** · **Xoá: [`landing-zone/TEARDOWN.md`](./landing-zone/TEARDOWN.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
 
 **Đã dựng thật một lần, đi hết cả 9 giai đoạn** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 29 lỗi gặp phải và cách sửa, trong đó **25 lỗi nằm ở chính code của repo**. Đọc mục 6 trước khi bắt đầu để đỡ mất thời gian.
 
