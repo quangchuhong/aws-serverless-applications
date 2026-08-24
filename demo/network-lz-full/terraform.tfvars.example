@@ -3,7 +3,9 @@
 ########################################
 
 region = "ap-southeast-1"
-az     = "ap-southeast-1a"
+# TOI THIEU 2 AZ. Moi AZ them ~$318/thang (NAT ~$33 + firewall
+# endpoint ~$285). Doi lai: mot AZ hong khong lam sap ca mang.
+availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
 
 ########################################
 # TAG CHUAN

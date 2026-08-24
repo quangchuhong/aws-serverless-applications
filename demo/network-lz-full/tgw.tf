@@ -25,7 +25,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
 
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
   vpc_id             = aws_vpc.spoke[each.key].id
-  subnet_ids         = [aws_subnet.spoke_tgw[each.key].id]
+  subnet_ids         = [for z in var.availability_zones : aws_subnet.spoke_tgw["${each.key}-${z}"].id]
 
   transit_gateway_default_route_table_association = false
   transit_gateway_default_route_table_propagation = false

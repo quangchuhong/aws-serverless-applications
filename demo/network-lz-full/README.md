@@ -85,7 +85,7 @@ aws ssm start-session --target $(terraform output -json instances | jq -r '.["ap
 Trong session:
 
 ```bash
-curl -s https://checkip.amazonaws.com    # = terraform output nat_public_ip
+curl -s https://checkip.amazonaws.com    # = mot trong terraform output nat_public_ips
 ```
 
 Chính việc **vào được session** đã chứng minh đường egress chạy — SSM agent phải ra Internet qua egress VPC mới đăng ký được.
@@ -299,7 +299,7 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 
 | Demo | Production (doc 17) |
 |---|---|
-| 1 AZ | Mỗi AZ một firewall endpoint và một NAT |
+| ~~1 AZ~~ **2–3 AZ** | Giống nhau — mỗi AZ một firewall endpoint và một NAT |
 | Một account | Nhiều account, TGW share qua RAM |
 | Không SCP | SCP chặn IGW/NAT/EIP ở OU workload |
 | Không Palo Alto / F5 | Chuỗi đầy đủ (doc 14) |
@@ -361,7 +361,7 @@ terraform plan                     # PHAI ra "No changes"
 
 Chỉ khi `plan` ra **No changes** mới xoá `terraform.tfstate` local.
 
-Còn ba khác biệt nữa so với production mà công tắc này **không** giải quyết: vẫn **1 AZ** (mất AZ đó là mất cả mạng), vẫn **một account**, và NLB vẫn nghe HTTP:80. Xem bảng bên trên.
+Còn hai khác biệt nữa so với production mà công tắc này **không** giải quyết: vẫn **một account** (spoke là VPC trong chính account network, không phải account workload thật), và NLB vẫn nghe HTTP:80. Xem bảng bên trên.
 
 ---
 

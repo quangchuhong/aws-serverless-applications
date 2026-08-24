@@ -29,7 +29,7 @@ resource "aws_subnet" "ingress_gwlbe" {
 
   vpc_id            = aws_vpc.ingress[0].id
   cidr_block        = "10.0.10.0/28"
-  availability_zone = var.az
+  availability_zone = local.primary_az
 
   tags = { Name = "${var.project}-ingress-gwlbe", Tier = "gwlbe" }
 }
@@ -39,7 +39,7 @@ resource "aws_subnet" "ingress_appliance" {
 
   vpc_id            = aws_vpc.ingress[0].id
   cidr_block        = "10.0.20.0/24"
-  availability_zone = var.az
+  availability_zone = local.primary_az
 
   tags = { Name = "${var.project}-ingress-appliance", Tier = "appliance" }
 }
@@ -49,7 +49,7 @@ resource "aws_subnet" "ingress_f5" {
 
   vpc_id            = aws_vpc.ingress[0].id
   cidr_block        = "10.0.30.0/24"
-  availability_zone = var.az
+  availability_zone = local.primary_az
 
   tags = { Name = "${var.project}-ingress-f5", Tier = "f5" }
 }
@@ -59,7 +59,7 @@ resource "aws_subnet" "ingress_mgmt" {
 
   vpc_id            = aws_vpc.ingress[0].id
   cidr_block        = "10.0.50.0/24"
-  availability_zone = var.az
+  availability_zone = local.primary_az
 
   tags = { Name = "${var.project}-ingress-mgmt", Tier = "mgmt" }
 }
@@ -331,7 +331,7 @@ resource "aws_security_group" "f5" {
     from_port   = var.nlb_listener_port
     to_port     = var.nlb_listener_port
     protocol    = "tcp"
-    cidr_blocks = [aws_subnet.ingress_public[0].cidr_block]
+    cidr_blocks = [for s in aws_subnet.ingress_public : s.cidr_block]
   }
 
   ingress {
@@ -400,11 +400,15 @@ resource "aws_route_table" "igw_edge" {
   tags   = { Name = "${var.project}-igw-edge-rt" }
 }
 
+# MOI subnet public mot route: mot aws_route chi mang duoc MOT
+# destination. Voi 2-3 AZ, thieu route cua mot AZ nghia la luu luong
+# vao node NLB o AZ do di THANG toi NLB, khong qua Palo Alto - mot
+# duong vong quanh appliance ma khong co gi bao.
 resource "aws_route" "igw_edge_to_gwlbe" {
-  count = local.app_on
+  for_each = local.app_on > 0 ? aws_subnet.ingress_public : {}
 
   route_table_id         = aws_route_table.igw_edge[0].id
-  destination_cidr_block = aws_subnet.ingress_public[0].cidr_block
+  destination_cidr_block = each.value.cidr_block
   vpc_endpoint_id        = aws_vpc_endpoint.gwlbe[0].id
 }
 

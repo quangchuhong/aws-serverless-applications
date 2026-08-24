@@ -48,6 +48,29 @@ locals {
     # that thi tag Ephemeral la mot lenh xoa dang cho nguoi bam.
     var.ephemeral ? { Ephemeral = "true" } : {},
   )
+
+  ########################################
+  # AZ - nen tang cua moi subnet trong bo nay
+  #
+  # azs: ten AZ -> chi so. Chi so dung de tinh CIDR sao cho khong AZ
+  # nao dam vao AZ nao, va khop bang o doc 17 muc 3.
+  ########################################
+  azs = { for i, z in var.availability_zones : z => i }
+
+  # Resource DON CHIEC dat o day: NAT/firewall thi moi AZ mot cai,
+  # nhung appliance (Palo Alto, F5) trong demo nay chi co MOT.
+  primary_az = var.availability_zones[0]
+
+  # spoke x AZ. Khoa "app-dev-ap-southeast-1a" de doc duoc trong plan.
+  spoke_azs = {
+    for pair in setproduct(keys(var.spokes), var.availability_zones) :
+    "${pair[0]}-${pair[1]}" => {
+      spoke = pair[0]
+      az    = pair[1]
+      idx   = index(var.availability_zones, pair[1])
+      cidr  = var.spokes[pair[0]].cidr
+    }
+  }
 }
 
 provider "aws" {

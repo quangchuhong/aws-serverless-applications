@@ -13,22 +13,25 @@ resource "aws_vpc" "spoke" {
   tags = { Name = "${var.project}-${each.key}-vpc" }
 }
 
+# Subnet theo SPOKE x AZ. Khoa dang "app-dev-ap-southeast-1a".
+#   private  10.x.0.0/24   10.x.1.0/24   10.x.2.0/24
+#   tgw      10.x.20.0/28  10.x.21.0/28  10.x.22.0/28
 resource "aws_subnet" "spoke_private" {
-  for_each = var.spokes
+  for_each = local.spoke_azs
 
-  vpc_id            = aws_vpc.spoke[each.key].id
-  cidr_block        = cidrsubnet(each.value.cidr, 8, 1)
-  availability_zone = var.az
+  vpc_id            = aws_vpc.spoke[each.value.spoke].id
+  availability_zone = each.value.az
+  cidr_block        = cidrsubnet(each.value.cidr, 8, each.value.idx)
 
   tags = { Name = "${var.project}-${each.key}-private", Tier = "private" }
 }
 
 resource "aws_subnet" "spoke_tgw" {
-  for_each = var.spokes
+  for_each = local.spoke_azs
 
-  vpc_id            = aws_vpc.spoke[each.key].id
-  cidr_block        = cidrsubnet(each.value.cidr, 12, 32)
-  availability_zone = var.az
+  vpc_id            = aws_vpc.spoke[each.value.spoke].id
+  availability_zone = each.value.az
+  cidr_block        = cidrsubnet(each.value.cidr, 12, 320 + each.value.idx * 16)
 
   tags = { Name = "${var.project}-${each.key}-tgw", Tier = "tgw" }
 }
@@ -65,11 +68,14 @@ resource "aws_route" "spoke_default_to_tgw" {
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.spoke]
 }
 
+# MOT bang moi spoke la du: route cua spoke khong phu thuoc AZ
+# (0.0.0.0/0 -> TGW o moi AZ). Khac han security/egress, noi bang
+# phai tach theo AZ vi tro vao endpoint/NAT khac nhau.
 resource "aws_route_table_association" "spoke_private" {
-  for_each = var.spokes
+  for_each = local.spoke_azs
 
   subnet_id      = aws_subnet.spoke_private[each.key].id
-  route_table_id = aws_route_table.spoke_private[each.key].id
+  route_table_id = aws_route_table.spoke_private[each.value.spoke].id
 }
 
 ########################################

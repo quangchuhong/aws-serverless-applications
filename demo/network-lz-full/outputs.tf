@@ -6,9 +6,17 @@ output "mode" {
   ]))
 }
 
-output "nat_public_ip" {
-  description = "Moi spoke phai ra Internet bang IP nay"
-  value       = aws_eip.nat.public_ip
+output "nat_public_ips" {
+  description = <<-EOT
+    AZ -> IP cong khai cua NAT. Moi AZ mot cai.
+
+    Day la TOAN BO dia chi ma landing zone dung khi goi ra Internet.
+    EC2 trong spoke curl checkip.amazonaws.com PHAI ra mot trong so
+    nay - ra IP khac nghia la co duong ra khong qua egress VPC.
+
+    Dua ca danh sach cho doi tac de allowlist, va kiem lai khi them AZ.
+  EOT
+  value       = { for z, e in aws_eip.nat : z => e.public_ip }
 }
 
 output "transit_gateway_id" {
@@ -19,8 +27,9 @@ output "security_vpc_id" {
   value = one(aws_vpc.security[*].id)
 }
 
-output "firewall_endpoint_id" {
-  value = local.fw_endpoint_id
+output "firewall_endpoints" {
+  description = "AZ -> firewall endpoint ID. Route cua moi AZ phai tro vao dung endpoint cua AZ do."
+  value       = local.fw_endpoints
 }
 
 output "nlb_dns_name" {
@@ -116,7 +125,8 @@ output "next_steps" {
 
     2. Trong session - IP ra Internet phai la NAT:
        curl -s https://checkip.amazonaws.com
-       => ${aws_eip.nat.public_ip}
+       => phai la MOT trong: ${join(", ", [for e in aws_eip.nat : e.public_ip])}
+          (moi AZ mot NAT, IP nao la tuy AZ cua EC2)
 
     3. Chay kiem chung tu dong:
        ./verify.sh

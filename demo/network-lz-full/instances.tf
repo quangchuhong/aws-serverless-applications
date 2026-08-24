@@ -93,9 +93,11 @@ resource "aws_security_group" "test" {
 resource "aws_instance" "test" {
   for_each = var.enable_test_instances ? var.spokes : {}
 
-  ami                         = data.aws_ssm_parameter.al2023[0].value
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.spoke_private[each.key].id
+  ami           = data.aws_ssm_parameter.al2023[0].value
+  instance_type = var.instance_type
+  # EC2 test chi mot con moi spoke, dat o AZ dau. Muc dich la kiem
+  # duong di, khong phai kiem HA cua ung dung.
+  subnet_id                   = aws_subnet.spoke_private["${each.key}-${local.primary_az}"].id
   vpc_security_group_ids      = [aws_security_group.test[each.key].id]
   iam_instance_profile        = aws_iam_instance_profile.ec2[0].name
   associate_public_ip_address = false

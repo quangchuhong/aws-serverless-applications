@@ -32,25 +32,31 @@ resource "aws_internet_gateway" "ingress" {
   tags   = { Name = "${var.project}-ingress-igw" }
 }
 
+# CIDR theo bang o doc 17 muc 3:
+#   public  10.0.0.0/24   10.0.1.0/24   10.0.2.0/24
+#   tgw     10.0.40.0/28  10.0.41.0/28  10.0.42.0/28
+#
+# tgw bat dau tu .40 de chua cho gwlbe (.10), appliance (.20) va
+# f5 (.30) o appliances.tf - dung ban do cua doc 17.
 resource "aws_subnet" "ingress_public" {
-  count = local.ing
+  for_each = local.ing == 1 ? local.azs : {}
 
   vpc_id                  = aws_vpc.ingress[0].id
-  cidr_block              = cidrsubnet(var.ingress_vpc_cidr, 8, 0)
-  availability_zone       = var.az
+  availability_zone       = each.key
+  cidr_block              = cidrsubnet(var.ingress_vpc_cidr, 8, each.value)
   map_public_ip_on_launch = false
 
-  tags = { Name = "${var.project}-ingress-public", Tier = "public" }
+  tags = { Name = "${var.project}-ingress-public-${each.key}", Tier = "public" }
 }
 
 resource "aws_subnet" "ingress_tgw" {
-  count = local.ing
+  for_each = local.ing == 1 ? local.azs : {}
 
   vpc_id            = aws_vpc.ingress[0].id
-  cidr_block        = cidrsubnet(var.ingress_vpc_cidr, 12, 32)
-  availability_zone = var.az
+  availability_zone = each.key
+  cidr_block        = cidrsubnet(var.ingress_vpc_cidr, 12, 640 + each.value * 16)
 
-  tags = { Name = "${var.project}-ingress-tgw", Tier = "tgw" }
+  tags = { Name = "${var.project}-ingress-tgw-${each.key}", Tier = "tgw" }
 }
 
 ########################################
@@ -88,9 +94,9 @@ resource "aws_route" "ingress_public_to_internal" {
 }
 
 resource "aws_route_table_association" "ingress_public" {
-  count = local.ing
+  for_each = local.ing == 1 ? local.azs : {}
 
-  subnet_id      = aws_subnet.ingress_public[0].id
+  subnet_id      = aws_subnet.ingress_public[each.key].id
   route_table_id = aws_route_table.ingress_public[0].id
 }
 
@@ -102,9 +108,9 @@ resource "aws_route_table" "ingress_tgw" {
 }
 
 resource "aws_route_table_association" "ingress_tgw" {
-  count = local.ing
+  for_each = local.ing == 1 ? local.azs : {}
 
-  subnet_id      = aws_subnet.ingress_tgw[0].id
+  subnet_id      = aws_subnet.ingress_tgw[each.key].id
   route_table_id = aws_route_table.ingress_tgw[0].id
 }
 
@@ -113,7 +119,7 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "ingress" {
 
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
   vpc_id             = aws_vpc.ingress[0].id
-  subnet_ids         = [aws_subnet.ingress_tgw[0].id]
+  subnet_ids         = [for z in var.availability_zones : aws_subnet.ingress_tgw[z].id]
 
   transit_gateway_default_route_table_association = false
   transit_gateway_default_route_table_propagation = false
@@ -212,8 +218,10 @@ resource "aws_lb" "ingress" {
   name               = "${var.project}-nlb"
   load_balancer_type = "network"
   internal           = false
-  subnets            = [aws_subnet.ingress_public[0].id]
-  security_groups    = [aws_security_group.nlb[0].id]
+  # NLB co mot node o MOI AZ duoc liet ke. Mot AZ thi ca duong vao
+  # chet theo AZ do.
+  subnets         = [for z in var.availability_zones : aws_subnet.ingress_public[z].id]
+  security_groups = [aws_security_group.nlb[0].id]
 
   # ephemeral = true  -> tat, de destroy chay tron
   # ephemeral = false -> bat, vi day la duong vao duy nhat cua ung dung

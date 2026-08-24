@@ -3,10 +3,39 @@ variable "region" {
   default = "ap-southeast-1"
 }
 
-variable "az" {
-  description = "Demo dung 1 AZ de tiet kiem. Production phai >= 2 (xem doc 17)."
-  type        = string
-  default     = "ap-southeast-1a"
+variable "availability_zones" {
+  description = <<-EOT
+    AZ dat ha tang mang. TOI THIEU 2.
+
+    MOI AZ nhan mot ban sao cua:
+      NAT Gateway               ~$33/thang + phi du lieu
+      Network Firewall endpoint ~$285/thang   <- khoan lon nhat
+      subnet tgw/firewall/public/private
+
+    Vi sao khong cho 1 AZ: duong ra Internet VA east-west deu di qua
+    security VPC. AZ do hong thi khong phai "giam nang luc" ma la
+    MAT CA MANG - spoke A goi spoke B cung chet, du ca hai khong lien
+    quan gi toi AZ do.
+
+    3 AZ chi them du phong; bang CIDR o doc 17 muc 3 cap phat du cho 3.
+  EOT
+  type        = list(string)
+  default     = ["ap-southeast-1a", "ap-southeast-1b"]
+
+  validation {
+    condition     = length(var.availability_zones) >= 2
+    error_message = "Toi thieu 2 AZ. Mot AZ nghia la mot diem hong lam sap ca mang - xem mo ta bien."
+  }
+
+  validation {
+    condition     = length(var.availability_zones) <= 3
+    error_message = "Toi da 3 AZ - bang CIDR o doc 17 muc 3 chi cap phat den do."
+  }
+
+  validation {
+    condition     = length(distinct(var.availability_zones)) == length(var.availability_zones)
+    error_message = "availability_zones co phan tu trung nhau."
+  }
 }
 
 ########################################

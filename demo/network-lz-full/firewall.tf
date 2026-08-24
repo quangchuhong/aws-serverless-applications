@@ -26,17 +26,33 @@ resource "aws_networkfirewall_firewall" "main" {
   # (them rule, doi alert sang drop), khong phai viec can chan.
   firewall_policy_change_protection = false
 
-  subnet_mapping {
-    subnet_id = aws_subnet.security_firewall[0].id
+  # MOT endpoint moi AZ - bat buoc, khong phai lua chon: subnet o AZ-a
+  # khong tro duoc vao endpoint nam o AZ-b.
+  dynamic "subnet_mapping" {
+    for_each = local.azs
+    content {
+      subnet_id = aws_subnet.security_firewall[subnet_mapping.key].id
+    }
   }
 
   tags = { Name = "${var.project}-fw" }
 }
 
-# Endpoint ID de dung trong route table.
-# Cau truc: firewall_status[0].sync_states[*].attachment[0].endpoint_id
+########################################
+# Endpoint ID theo TUNG AZ
+#
+# sync_states la mot SET, khong phai list co thu tu - nen KHONG duoc
+# lay theo chi so. Phai lap thanh map AZ -> endpoint id roi tra cuu.
+#
+# Lay nham endpoint cua AZ khac thi luu luong di cheo AZ va firewall
+# stateful chi thay nua phien.
+########################################
+
 locals {
-  fw_endpoint_id = var.enable_firewall ? tolist(aws_networkfirewall_firewall.main[0].firewall_status[0].sync_states)[0].attachment[0].endpoint_id : null
+  fw_endpoints = var.enable_firewall ? {
+    for st in tolist(aws_networkfirewall_firewall.main[0].firewall_status[0].sync_states) :
+    st.availability_zone => tolist(st.attachment)[0].endpoint_id
+  } : {}
 }
 
 ########################################

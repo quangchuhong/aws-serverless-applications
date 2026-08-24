@@ -211,7 +211,9 @@ run_remote() {
 INSTANCES=$(terraform output -json instances 2>/dev/null || echo '{}')
 DEV_ID=$(echo "$INSTANCES" | jq -r '.["app-dev"].id // empty')
 PROD_IP=$(echo "$INSTANCES" | jq -r '.["app-prod"].private_ip // empty')
-NAT_IP=$(tfout nat_public_ip)
+# Moi AZ mot NAT nen day la DANH SACH. EC2 ra Internet bang NAT cua
+# AZ chua no, khong doan truoc duoc la cai nao.
+NAT_IPS=$(terraform output -json nat_public_ips 2>/dev/null | jq -r '.[]' | tr '\n' ' ')
 
 if [[ -z "$DEV_ID" ]]; then
   skip "Khong co EC2 test (enable_test_instances = false)"
@@ -219,10 +221,15 @@ else
   echo "  ... dang chay lenh tren $DEV_ID qua SSM (~1 phut)"
 
   out=$(run_remote "$DEV_ID" "curl -s --max-time 10 https://checkip.amazonaws.com")
-  if [[ "$out" == *"$NAT_IP"* ]]; then
-    ok "Egress ra Internet bang NAT cua egress VPC ($NAT_IP)"
+  matched=""
+  for ip in $NAT_IPS; do
+    [[ "$out" == *"$ip"* ]] && matched="$ip"
+  done
+
+  if [[ -n "$matched" ]]; then
+    ok "Egress ra Internet bang NAT cua egress VPC ($matched)"
   else
-    bad "IP ra Internet = '$out', ky vong '$NAT_IP'"
+    bad "IP ra Internet = '$out', ky vong mot trong: $NAT_IPS"
   fi
 
   if [[ -n "$PROD_IP" ]]; then
