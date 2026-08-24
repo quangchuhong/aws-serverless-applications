@@ -2,7 +2,14 @@
 
 Triển khai thiết kế ở [doc 17 – Network LZ Design Guide](../../docs/17-Network-LZ-Design-Guide.md), **trừ Palo Alto và F5**.
 
-Dựng lên chạy thử rồi xoá. Buổi thực hành 4 tiếng khoảng **$3**.
+Dựng lên chạy thử rồi xoá. Buổi thực hành 4 tiếng khoảng **$5** ở 2 AZ.
+
+| AZ | ~USD/giờ | ~USD/tháng |
+|---:|---:|---:|
+| 2 (mặc định) | 1.26 | **918** |
+| 3 | 1.75 | 1.278 |
+
+Chênh lệch gần như toàn bộ là **Network Firewall endpoint** (~$285/tháng mỗi AZ). `terraform output estimated_cost` tính lại theo số AZ bạn khai.
 
 ---
 

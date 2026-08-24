@@ -96,22 +96,49 @@ locals {
   c_palo_alto = 1.50 # EC2 m5.xlarge (~$0.24) + license (~$1.3)
   c_f5        = 1.50 # EC2 m5.xlarge (~$0.24) + license (~$1.3)
 
+  # MOT attachment moi VPC, khong phu thuoc so AZ - them AZ chi them
+  # subnet vao attachment da co.
   n_attach = length(var.spokes) + 1 + local.fw + local.ing
+
+  # Nhung thu NHAN LEN theo so AZ. Bo qua he so nay la bao gia bang
+  # mot nua su that khi chay 2 AZ.
+  n_az = length(var.availability_zones)
 
   hourly = (
     local.n_attach * local.c_tgw_attach
-    + local.c_nat
-    + (var.enable_firewall ? local.c_fw : 0)
-    + (var.enable_ingress ? local.c_nlb : 0)
-    + (var.enable_firewall && var.enable_interface_endpoints ? length(var.interface_endpoint_services) * local.c_vpce : 0)
+
+    # NAT Gateway: mot moi AZ
+    + local.n_az * local.c_nat
+
+    # Firewall endpoint: mot moi AZ - khoan nhan len dat nhat
+    + (var.enable_firewall ? local.n_az * local.c_fw : 0)
+
+    # NLB tinh theo AZ duoc bat
+    + (var.enable_ingress ? local.n_az * local.c_nlb : 0)
+
+    # Interface endpoint: mot ENI moi AZ moi dich vu
+    + (var.enable_firewall && var.enable_interface_endpoints
+      ? local.n_az * length(var.interface_endpoint_services) * local.c_vpce
+    : 0)
+
+    # EC2 test: mot con moi spoke, KHONG theo AZ
     + (var.enable_test_instances ? length(var.spokes) * local.c_ec2 : 0)
+
     + (local.cdn > 0 ? local.c_waf_acl + (length(var.waf_managed_rule_groups) + 1) * local.c_waf_rule : 0)
+
+    # Appliance don chiec, dat o AZ dau - khong nhan len
     + (local.app_on > 0 ? local.c_gwlb + local.c_gwlbe + local.c_palo_alto + local.c_f5 : 0)
   )
 }
 
 output "estimated_cost" {
-  description = "Uoc tinh THO phi co dinh. Chua tinh data transfer."
+  description = <<-EOT
+    Uoc tinh THO phi co dinh. Chua tinh data transfer.
+
+    Da nhan theo so AZ cho: NAT, firewall endpoint, NLB, interface
+    endpoint. TGW attachment thi KHONG - mot attachment moi VPC du co
+    bao nhieu AZ.
+  EOT
   value       = format("~$%.3f/gio  |  ~$%.2f/ngay  |  ~$%.0f/thang", local.hourly, local.hourly * 24, local.hourly * 730)
 }
 
