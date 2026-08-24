@@ -181,3 +181,32 @@ variable "object_lock_retention_days" {
     error_message = "Phai it nhat 1 ngay."
   }
 }
+
+########################################
+# TEARDOWN
+########################################
+
+variable "allow_destroy" {
+  description = <<-EOT
+    Go moi lop bao ve PHIA AWS de destroy chay duoc.
+
+    Layer nay: bat force_destroy cho bucket trail o log archive
+    account. Bucket bat versioning nen khong co dong nay thi destroy
+    dung lai voi BucketNotEmpty.
+
+    CAN NHAC TRUOC KHI BAT. Day la bang chung kiem toan: moi lenh goi
+    API cua ca to chuc. Xoa la mat han, khong khoi phuc duoc, va
+    thuong la thu dau tien kiem toan vien hoi den. Can giu thi copy
+    sang noi khac TRUOC:
+
+      aws s3 sync s3://<bucket-trail> ./trail-backup/ --profile <p>
+
+    Bat enable_object_lock = true thi force_destroy KHONG du: object
+    con trong thoi han giu se tu choi xoa cho den khi het han.
+
+    Con mot lop nua khong bien nao go duoc: prevent_destroy. Dung
+    ./unlock-destroy.sh. Quy trinh: xem TEARDOWN.md muc 2.
+  EOT
+  type        = bool
+  default     = false
+}

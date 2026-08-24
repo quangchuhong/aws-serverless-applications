@@ -179,19 +179,22 @@ Tìm dòng `UNMATCHED east-west` — đó là **bản đồ thật** về ai đa
 ## Xoá
 
 ```bash
-# 1. Tat bao ve TRUOC, rieng mot lan apply
-#    firewall.tf: delete_protection = false, subnet_change_protection = false
-terraform apply
-
-# 2. Roi moi
-terraform destroy
+terraform apply   -var allow_destroy=true    # tat bao ve - RIENG mot lan
+terraform destroy -var allow_destroy=true
 ```
 
-Bucket log firewall còn object thì `destroy` dừng — không có `force_destroy`, cố ý. Dọn tay:
+`allow_destroy` gỡ ba thứ cùng lúc: `delete_protection`, `subnet_change_protection`, và `force_destroy` cho bucket log firewall.
 
-```bash
-aws s3 rm s3://<project>-fw-logs-<network-account>/ --recursive --profile <network>
+**Bắt buộc `apply` một lần riêng.** Hai cái đầu là thuộc tính phía AWS — đổi chúng gọi `UpdateFirewallDeleteProtection` và `UpdateSubnetChangeProtection` thật. Đặt biến rồi destroy ngay thì Terraform vẫn gặp firewall đang khoá.
+
+`plan` sẽ cảnh báo khi biến này còn bật:
+
 ```
+Warning: Check block assertion failed
+  allow_destroy = true: Network Firewall dang TAT delete_protection ...
+```
+
+Chi tiết cả hai cổng khoá: [TEARDOWN.md mục 2](../TEARDOWN.md#2-gỡ-chặn-trước-khi-destroy).
 
 ---
 

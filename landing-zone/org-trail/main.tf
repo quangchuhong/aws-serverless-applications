@@ -36,6 +36,10 @@ resource "aws_s3_bucket" "trail" {
   # CHI BAT DUOC LUC TAO BUCKET.
   object_lock_enabled = var.enable_object_lock
 
+  # Bat Object Lock roi thi dong nay KHONG du: object con trong thoi
+  # han giu se tu choi xoa, ke ca khi force_destroy = true.
+  force_destroy = var.allow_destroy
+
   lifecycle {
     prevent_destroy = true
   }

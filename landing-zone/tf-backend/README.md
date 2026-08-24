@@ -235,7 +235,20 @@ Layer thường trực thì ngược lại — state là thứ có giá trị nh
 
 Bucket và bảng khoá đều có `prevent_destroy = true`, nên `terraform destroy` sẽ **fail** — đúng như thiết kế.
 
-Muốn xoá thật thì phải bỏ `lifecycle` trong `main.tf`, apply, rồi mới destroy. Hai bước có chủ đích, không thể lỡ tay.
+Xoá thật phải mở **hai cổng**, ở hai nơi khác nhau:
+
+```bash
+cd .. && ./unlock-destroy.sh --unlock tf-backend   # cong 1: prevent_destroy
+cd tf-backend
+terraform apply   -var allow_destroy=true          # cong 2: force_destroy bucket
+terraform destroy -var allow_destroy=true
+```
+
+Ba bước có chủ đích, không thể lỡ tay. `force_destroy` phải nằm trong state **trước** khi destroy mới có tác dụng — nên `apply` đó bắt buộc, không gộp được vào lệnh destroy.
+
+Bật MFA Delete rồi thì `force_destroy` cũng chịu: xoá version bắt buộc có MFA và chỉ credential **root** làm được.
+
+**Và trước tất cả: chuyển state của chính layer này về local**, nếu không bạn xoá mất cái đang cầm. Xem [TEARDOWN.md bước 1](../TEARDOWN.md#1--tf-backend--cuối-cùng).
 
 Nhưng **cân nhắc đừng xoá**: xoá bucket state là mọi layer khác mất dấu vết về resource của mình. Terraform sẽ không còn biết cái gì là của nó, và bạn phải `terraform import` lại từng resource bằng tay.
 

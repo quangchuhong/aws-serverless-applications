@@ -201,7 +201,16 @@ terraform output active_accounts
 
 Organization và OU đều có `prevent_destroy = true` — `terraform destroy` sẽ **fail**, đúng thiết kế.
 
-Xoá organization = mọi account con bị tách ra, SCP mất tác dụng, CloudTrail org trail và RAM share ngừng hoạt động. Muốn xoá thật thì bỏ `lifecycle` trong code, apply, rồi mới destroy.
+Xoá organization = mọi account con bị tách ra, SCP mất tác dụng, CloudTrail org trail và RAM share ngừng hoạt động.
+
+```bash
+cd .. && ./unlock-destroy.sh --unlock organization
+cd organization && terraform destroy
+```
+
+Layer này **không có** `allow_destroy` — nó không giữ resource nào có bảo vệ phía AWS, nên một cổng là đủ.
+
+**Destroy layer này gần như luôn là bước áp chót.** SCP của nó chặn việc dọn dẹp ở các layer khác (`config-detective` rõ nhất) — gỡ nó trước rồi mới phát hiện là tự khoá mình ra ngoài. Thứ tự đúng ở [TEARDOWN.md](../TEARDOWN.md).
 
 ---
 

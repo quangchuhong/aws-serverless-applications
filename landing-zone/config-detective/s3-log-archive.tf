@@ -43,6 +43,10 @@ resource "aws_s3_bucket" "config" {
   # CHI BAT DUOC LUC TAO BUCKET. Khong bat sau duoc.
   object_lock_enabled = var.enable_object_lock
 
+  # Bucket bat versioning - khong co dong nay thi destroy dung lai
+  # voi BucketNotEmpty du da "aws s3 rm --recursive".
+  force_destroy = var.allow_destroy
+
   lifecycle {
     prevent_destroy = true
 

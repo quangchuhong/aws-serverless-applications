@@ -206,3 +206,33 @@ variable "backend_profiles" {
   type        = map(string)
   default     = {}
 }
+
+########################################
+# TEARDOWN
+########################################
+
+variable "allow_destroy" {
+  description = <<-EOT
+    Go moi lop bao ve PHIA AWS de destroy chay duoc.
+
+    Layer nay: bat force_destroy cho bucket state va bucket log truy
+    cap. Bucket deu bat versioning, nen KHONG co force_destroy thi
+    "aws s3 rm --recursive" chi tao delete marker va destroy van dung
+    lai voi BucketNotEmpty.
+
+    force_destroy la thuoc tinh PHIA PROVIDER - doi no khong goi mot
+    API nao ca. Nghia la apply gan nhu tuc thi, va SCP khong can vao
+    duoc. Nhung no CHI co tac dung neu da nam trong state TRUOC khi
+    destroy: phai apply mot lan rieng, roi moi destroy.
+
+    Con mot lop nua khong bien nao go duoc: prevent_destroy. Terraform
+    khong cho dung bien trong lifecycle. Dung ./unlock-destroy.sh.
+
+    Bat MFA Delete roi thi ke ca force_destroy cung khong xoa noi
+    version - chi credential ROOT kem ma MFA lam duoc, bang CLI.
+
+    Quy trinh: xem TEARDOWN.md muc 2.
+  EOT
+  type        = bool
+  default     = false
+}

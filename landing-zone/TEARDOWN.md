@@ -19,7 +19,9 @@ Ngược lại [RUNBOOK](./RUNBOOK.md). Đọc hết trước khi gõ lệnh đ�
 ```bash
 aws sts get-caller-identity     # phai la management, KHONG phai account con
 unset AWS_PROFILE               # export con sot lai se gui lenh sai account
-cd landing-zone && ./plan-all.sh
+cd landing-zone
+./plan-all.sh                   # layer nao that su dang co state
+./unlock-destroy.sh             # cong 1 dang khoa/mo o dau
 ```
 
 `plan-all.sh` cho biết layer nào thật sự đang có state — đừng destroy theo trí nhớ.
@@ -48,27 +50,88 @@ Ngược chiều dựng. Mỗi bước **phải xong** trước khi sang bước
 
 ---
 
-## 2. Hai thứ chặn mọi bước
+## 2. Gỡ chặn trước khi destroy
 
-### `prevent_destroy` — phải sửa code, không phải đổi biến
+Hạ tầng thường trực có **hai cổng khoá**, và chúng khoá ở hai nơi khác nhau. Phải mở cả hai, mở đúng thứ tự.
+
+| | Cổng 1 — `prevent_destroy` | Cổng 2 — `allow_destroy` |
+|---|---|---|
+| Khoá ở đâu | Terraform, trong `lifecycle` | AWS, trên chính resource |
+| Mở bằng | `./unlock-destroy.sh --unlock` | `-var allow_destroy=true` |
+| Vì sao không gộp | Terraform **không cho** dùng biến trong `lifecycle` — bắt buộc là hằng số viết thẳng trong file | — |
+| Có gọi API không | **Không** | **Có** (firewall). Bucket thì không |
+| Cần `apply` xen giữa | Không — mở xong destroy luôn | **Có — bắt buộc** |
+
+### Cổng 1 — `prevent_destroy`
+
+11 resource trên 6 layer. Xem trạng thái hiện tại:
+
+```bash
+cd landing-zone && ./unlock-destroy.sh
+```
 
 ```
-account-baseline/accounts.tf      account
-config-detective/s3-log-archive.tf bucket snapshot
-control-tower/main.tf              ×2
-org-trail/main.tf                  bucket trail
-organization/organization.tf       ×3  org, OU
-organization/delegated-admin.tf    delegated admin
-tf-backend/main.tf                 ×2  bucket state, khoá
+  tf-backend         KHOA     2 prevent_destroy
+  organization       KHOA     4 prevent_destroy
+  control-tower      KHOA     2 prevent_destroy
+  config-detective   KHOA     1 prevent_destroy
+  org-trail          KHOA     1 prevent_destroy
+  account-baseline   KHOA     1 prevent_destroy
 ```
 
-Gặp `Instance cannot be destroyed` thì **không phải lỗi** — đó là lớp chặn làm đúng việc. Gỡ bằng cách xoá khối `lifecycle { prevent_destroy = true }` trong file tương ứng, commit lại, rồi destroy. Sửa xong nhớ hoàn nguyên nếu còn dùng repo.
+Mở khoá (script hỏi xác nhận, phải gõ đúng chữ `unlock`):
 
-### Không layer nào có `force_destroy`
+```bash
+./unlock-destroy.sh --unlock                    # tat ca
+./unlock-destroy.sh --unlock config-detective   # chi mot layer
+./unlock-destroy.sh --lock                      # khoa lai
+```
 
-Mọi bucket còn object là `destroy` dừng lại. **Cố ý** — bucket ở đây chứa log kiểm toán.
+Script đổi `prevent_destroy = true` thành `false` chứ **không xoá dòng** — `git diff` nhìn ra ngay, và `--lock` đảo ngược lại chính xác. Nó chỉ khớp dòng đúng dạng `prevent_destroy = <bool>`, nên các chỗ nhắc tên biến trong comment và mô tả không bị đụng vào.
 
-Bucket đều bật **versioning**, nên `aws s3 rm --recursive` **không đủ**: nó chỉ tạo delete marker. Phải xoá cả version lẫn delete marker:
+> Gặp `Instance cannot be destroyed` thì **không phải lỗi** — đó là cổng 1 đang làm đúng việc.
+
+Xong teardown mà còn dùng repo thì `--lock` lại. Chạy `./unlock-destroy.sh` không tham số sẽ cảnh báo nếu còn chỗ đang mở.
+
+### Cổng 2 — `allow_destroy`
+
+Có ở 4 layer: `tf-backend`, `org-trail`, `config-detective`, `network`. Bật lên là gỡ hết bảo vệ phía AWS của layer đó cùng lúc.
+
+| Layer | `allow_destroy = true` gỡ gì |
+|---|---|
+| `tf-backend` | `force_destroy` bucket state + bucket access log |
+| `org-trail` | `force_destroy` bucket CloudTrail |
+| `config-detective` | `force_destroy` bucket AWS Config |
+| `network` | `delete_protection` + `subnet_change_protection` của Network Firewall, `force_destroy` bucket log firewall |
+
+**Phải `apply` một lần riêng, rồi mới `destroy`** — cả hai loại, vì hai lý do khác nhau:
+
+```bash
+terraform apply   -var allow_destroy=true
+terraform destroy -var allow_destroy=true
+```
+
+- **Firewall**: đổi `delete_protection` gọi `UpdateFirewallDeleteProtection` thật. Đặt biến rồi destroy ngay thì Terraform vẫn gặp firewall đang khoá.
+- **Bucket**: `force_destroy` là thuộc tính **phía provider**, đổi nó không gọi API nào — nhưng nó chỉ có tác dụng nếu đã **nằm trong state** trước khi destroy.
+
+> **Lệnh `apply` mới là lệnh bắt buộc, không phải cái `-var` ở lệnh `destroy`.** Kế hoạch destroy chỉ sinh hành động xoá, nó đọc thuộc tính từ **state** chứ không tính lại từ config — nên giá trị có tác dụng là giá trị `apply` đã ghi vào state. Truyền biến ở lệnh `destroy` chỉ để hai lệnh khớp nhau khi đọc lại lịch sử shell.
+
+Bốn layer đều có `check` cảnh báo khi biến này còn bật, để lỡ quên thì `plan` nhắc:
+
+```
+Warning: Check block assertion failed
+  allow_destroy = true: bucket state va bucket log dang o che do
+  force_destroy, mot lan destroy la mat state cua MOI layer.
+```
+
+### Khi `force_destroy` vẫn không đủ
+
+| Tình huống | Vì sao | Làm gì |
+|---|---|---|
+| **Object Lock** đang bật (`org-trail`, `config-detective`) | Object còn trong thời hạn giữ thì `COMPLIANCE` mode từ chối xoá, kể cả root | Đợi hết hạn. Không có đường tắt — đó là điểm của Object Lock |
+| **MFA Delete** đang bật (bucket state) | Xoá version bắt buộc có MFA, và chỉ credential **root** làm được | Tắt bằng CLI với credential root + mã MFA, hoặc dọn tay như dưới |
+
+Dọn tay bucket versioned — nhớ **cả** version lẫn delete marker, vì `aws s3 rm --recursive` chỉ tạo delete marker:
 
 ```bash
 BUCKET=<ten-bucket>; PROFILE=<profile>
@@ -86,24 +149,30 @@ aws s3api delete-objects --bucket "$BUCKET" --profile "$PROFILE" --delete file:/
 
 Bucket rỗng thật thì `list-object-versions` không in gì.
 
+### Cổng thứ ba, không nằm trong layer nào: SCP
+
+`config-detective` còn vướng một lớp nữa mà cả hai biến trên **đều không gỡ được** — xem [bước 7](#7--config-detective).
+
 ---
 
 ## 3. Từng bước
 
 ### 11 + 10 — Network
 
-Bộ demo và layer thật đều bật bảo vệ khi `ephemeral = false`:
-
-```hcl
-ephemeral = true     # demo/network-lz-full
-```
+Cùng một cơ chế, hai tên biến ngược chiều nhau:
 
 ```bash
+# demo/network-lz-full
+ephemeral = true     # trong terraform.tfvars
 terraform apply      # go bao ve - RIENG mot lan
 ./teardown.sh        # script tu choi chay khi ephemeral = false
+
+# landing-zone/network
+terraform apply   -var allow_destroy=true    # RIENG mot lan
+terraform destroy -var allow_destroy=true
 ```
 
-`landing-zone/network` thì đổi `delete_protection` của firewall về `false`, apply, rồi destroy.
+Cả hai gỡ đúng ba thứ: `delete_protection`, `subnet_change_protection`, và `force_destroy` bucket log firewall.
 
 > Firewall endpoint phải biến mất **hẳn** thì VPC mới xoá được. Gặp `DependencyViolation` giữa chừng là bình thường — chạy `terraform destroy` lần nữa. Tổng ~15–20 phút.
 
@@ -113,11 +182,25 @@ terraform apply      # go bao ve - RIENG mot lan
 cd account-baseline && terraform destroy
 ```
 
-`close_accounts_on_destroy = false` (mặc định) nên **account không bị đóng** — chỉ gỡ StackSet và Lambda dọn VPC. Nếu bạn tạo account bằng layer này thì `prevent_destroy` sẽ chặn; xem mục 2.
+`close_accounts_on_destroy = false` (mặc định) nên **account không bị đóng** — chỉ gỡ StackSet và Lambda dọn VPC. Nếu bạn tạo account bằng layer này thì `prevent_destroy` sẽ chặn; mở bằng `./unlock-destroy.sh --unlock account-baseline`, xem mục 2.
 
 ### 8 — `org-trail`
 
-Trail nằm ở **management account** nên `baseline` SCP (chặn `cloudtrail:DeleteTrail`) **không chạm tới**. Bucket ở logarchive thì phải dọn tay trước — xem mục 2.
+```bash
+cd ../org-trail
+terraform apply   -var allow_destroy=true    # RIENG mot lan
+terraform destroy -var allow_destroy=true
+```
+
+Trail nằm ở **management account** nên `baseline` SCP (chặn `cloudtrail:DeleteTrail`) **không chạm tới**.
+
+**Bật `enable_object_lock = true` thì `allow_destroy` không cứu được** — object còn trong thời hạn giữ vẫn từ chối xoá. Phải đợi hết hạn.
+
+Đây là log kiểm toán của cả tổ chức. Cần giữ thì copy trước khi destroy:
+
+```bash
+aws s3 sync s3://<bucket-trail> ./trail-backup/ --profile <logarchive>
+```
 
 ### 7 — `config-detective`
 
@@ -135,7 +218,20 @@ Recorder do StackSet tạo trong account thành viên, nên xoá chúng **phải
 cd ../organization && terraform output -json scp_summary
 ```
 
-`scp_exempt_role_names` phải chứa role thực thi StackSet (`stacksets-exec-*`). Không có thì thêm vào rồi `apply` layer `organization` **trước**, sau đó mới destroy `config-detective`.
+`scp_exempt_role_names` phải chứa role thực thi StackSet (`stacksets-exec-*`). Không có thì thêm vào rồi `apply` layer `organization` **trước**, sau đó mới destroy `config-detective`:
+
+```bash
+cd ../organization
+terraform apply -var 'scp_exempt_role_names=["stacksets-exec-<hau-to>"]'
+
+cd ../config-detective
+terraform apply   -var allow_destroy=true    # RIENG mot lan
+terraform destroy -var allow_destroy=true
+```
+
+Đừng dùng `enable_scp = false` cho việc này. Nó gỡ **sạch** SCP của cả tổ chức trong lúc bạn đang dọn dẹp — `scp_exempt_role_names` chỉ mở đúng một role, phần còn lại vẫn được bảo vệ.
+
+**Và layer `organization` phải còn sống khi làm việc này.** Destroy nó ở bước 2 trước rồi mới phát hiện SCP đang chặn `config-detective` thì bạn tự khoá mình ra ngoài — SCP vẫn còn trên tổ chức nhưng Terraform không còn chỗ nào để sửa nó nữa.
 
 > Đây chính là lỗi 20 trong [doc 22](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md): SCP chặn chính CloudFormation, và thông báo lỗi chỉ nói *"explicit deny in a service control policy"* kèm ID policy — không nói action nào.
 
@@ -168,10 +264,11 @@ Bỏ qua bước này cũng được: instance không tính tiền. Chỉ xoá k
 
 ### 2 — `organization`
 
+Layer này **không có** `allow_destroy` — nó không giữ resource nào có bảo vệ phía AWS. Chỉ cần cổng 1:
+
 ```bash
-cd ../organization
-# go prevent_destroy trong organization.tf va delegated-admin.tf
-terraform destroy
+cd .. && ./unlock-destroy.sh --unlock organization
+cd organization && terraform destroy
 ```
 
 **OU phải rỗng.** Còn account trong OU thì `DeleteOrganizationalUnit` báo `OrganizationalUnitNotEmptyException`. Chuyển account về root trước:
@@ -199,13 +296,24 @@ terraform init -migrate-state          # S3 -> local
 terraform state list                   # phai con nguyen resource
 ```
 
-Rồi dọn bucket (xem mục 2 — nhớ cả version lẫn delete marker), gỡ `prevent_destroy`, và:
+Rồi mở cả hai cổng và destroy:
 
 ```bash
-terraform destroy
+cd .. && ./unlock-destroy.sh --unlock tf-backend
+cd tf-backend
+terraform apply   -var allow_destroy=true    # RIENG mot lan
+terraform destroy -var allow_destroy=true
 ```
 
-> Bật MFA Delete rồi thì xoá version **bắt buộc có MFA**, và chỉ credential **root** làm được. Đó là lớp chặn cuối cùng, cố ý.
+`force_destroy` lo phần dọn bucket, kể cả version lẫn delete marker — **trừ** khi đã bật MFA Delete.
+
+> Bật MFA Delete rồi thì xoá version **bắt buộc có MFA**, và chỉ credential **root** làm được — `force_destroy` cũng chịu. Phải tắt MFA Delete bằng CLI với credential root trước, hoặc dọn tay theo mục 2. Đó là lớp chặn cuối cùng, cố ý.
+
+Xong hết mà còn giữ repo thì khoá lại:
+
+```bash
+cd .. && ./unlock-destroy.sh --lock
+```
 
 ---
 
@@ -247,5 +355,6 @@ Cost Explorer → Service → Daily
 | | |
 |---|---|
 | [RUNBOOK](./RUNBOOK.md) | Chiều ngược lại — dựng theo thứ tự |
+| [`unlock-destroy.sh`](./unlock-destroy.sh) | Bật/tắt `prevent_destroy` — cổng 1 ở mục 2 |
 | [doc 22](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) | Lỗi 20: SCP chặn chính CloudFormation |
 | [doc 20](../docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | Remote state, quy trình thay đổi |

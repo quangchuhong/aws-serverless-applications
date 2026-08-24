@@ -965,15 +965,26 @@ Gửi lại cả khối `│ Error:` kèm tên layer — đừng chỉ gửi dò
 
 ## Xoá đi dựng lại
 
-Layer thường trực đều có `prevent_destroy`, nên `terraform destroy` sẽ fail — **đúng thiết kế**.
+Layer thường trực đều có `prevent_destroy`, nên `terraform destroy` sẽ fail — **đúng thiết kế**. Gỡ được, nhưng phải mở **hai cổng khoá** đúng thứ tự:
+
+```bash
+./unlock-destroy.sh --unlock <layer>          # cong 1: prevent_destroy
+terraform apply -var allow_destroy=true       # cong 2: bao ve phia AWS
+terraform destroy -var allow_destroy=true
+```
+
+**Thứ tự destroy giữa các layer quan trọng hơn cả hai cổng đó.** Toàn bộ quy trình nằm ở [TEARDOWN.md](./TEARDOWN.md) — đọc hết trước khi gõ lệnh đầu tiên.
 
 | Thứ | Xoá được? |
 |---|---|
 | Demo (`demo/*`) | ✅ `./teardown.sh` |
-| `config-detective` | ⚠️ Object Lock COMPLIANCE không gỡ được trước hạn |
-| `permission-sets`, `billing-guard` | ⚠️ Bỏ `prevent_destroy` trước |
-| `organization`, `tf-backend` | ❌ Đừng — xoá org là tách mọi account con |
+| `permission-sets`, `billing-guard` | ✅ Không có cổng nào — destroy thẳng |
+| `org-trail`, `network` | ⚠️ Cả hai cổng |
+| `config-detective` | ⚠️ Cả hai cổng, **cộng** SCP phải miễn trừ role StackSet trước |
+| `organization`, `tf-backend` | ❌ Đừng — xoá org là tách mọi account con, xoá backend là mất state mọi layer |
 | **Account AWS** | ❌ Không xoá được, chỉ **đóng** được, và email cháy vĩnh viễn |
+
+Object Lock COMPLIANCE thì **không cổng nào gỡ được** — object còn trong hạn giữ là còn, phải đợi hết hạn.
 
 Muốn tiết kiệm giữa các buổi thì **xoá demo, giữ nguyên layer thường trực** — chúng tốn ~$0.
 

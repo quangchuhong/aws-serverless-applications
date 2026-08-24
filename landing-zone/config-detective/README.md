@@ -278,10 +278,18 @@ Chạy **một tuần** rồi mới mở rộng, và mở **từng thứ một**
 ## Xoá
 
 ```bash
-terraform destroy
+# SCP phai mien tru role StackSet TRUOC - xem ben duoi
+cd ../organization && terraform apply -var 'scp_exempt_role_names=["stacksets-exec-<hau-to>"]'
+
+cd .. && ./unlock-destroy.sh --unlock config-detective
+cd config-detective
+terraform apply   -var allow_destroy=true
+terraform destroy -var allow_destroy=true
 ```
 
-Bucket có `prevent_destroy` — destroy sẽ fail, đúng thiết kế.
+**Ba lớp chặn, không phải một.** `prevent_destroy` trên bucket và `force_destroy` (qua `allow_destroy`) là hai lớp trong Terraform. Lớp thứ ba nằm ngoài layer này: SCP `baseline` chặn `config:DeleteConfigurationRecorder`, `StopConfigurationRecorder` và `DeleteDeliveryChannel` ở **mọi account thành viên**, mà recorder lại do StackSet tạo trong chính các account đó. Role thực thi StackSet phải nằm trong `scp_exempt_role_names` của layer `organization`, và layer đó phải được apply **trước**.
+
+Đây là [lỗi 20 trong doc 22](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md): thông báo chỉ nói *"explicit deny in a service control policy"* kèm ID policy — không nói action nào bị chặn.
 
 > **Object Lock ở chế độ COMPLIANCE không gỡ được.** Object đã ghi phải trả tiền lưu trữ đủ hết hạn, không xoá sớm được bằng bất kỳ cách nào — kể cả root, kể cả đóng account. Cân nhắc `object_lock_retention_days` cho kỹ.
 

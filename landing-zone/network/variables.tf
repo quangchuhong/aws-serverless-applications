@@ -371,3 +371,35 @@ variable "firewall_log_retention_days" {
     error_message = "Giu duoi 7 ngay thi khong dieu tra duoc gi."
   }
 }
+
+########################################
+# TEARDOWN
+########################################
+
+variable "allow_destroy" {
+  description = <<-EOT
+    Go moi lop bao ve PHIA AWS de destroy chay duoc.
+
+    Layer nay go ba thu:
+      - delete_protection cua Network Firewall
+      - subnet_change_protection cua Network Firewall
+      - force_destroy cho bucket log firewall
+
+    Hai cai dau la thuoc tinh PHIA AWS, khong phai phia provider:
+    doi chung goi UpdateFirewallDeleteProtection va
+    UpdateSubnetChangeProtection that. Nghia la BAT BUOC apply mot
+    lan rieng truoc khi destroy - dat bien nay roi destroy ngay thi
+    Terraform van gap firewall dang khoa.
+
+    Vi sao mac dinh bat bao ve: xoa firewall thi moi route tro vao
+    endpoint cua no thanh mo coi, va toan bo Landing Zone mat ket
+    noi - khong chi mat thanh tra.
+
+    Doi voi demo/network-lz-full, bien tuong duong la ephemeral (dao
+    chieu: ephemeral = true tuong duong allow_destroy = true).
+
+    Quy trinh: xem TEARDOWN.md muc 2.
+  EOT
+  type        = bool
+  default     = false
+}

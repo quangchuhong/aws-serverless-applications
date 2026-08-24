@@ -388,3 +388,35 @@ variable "slack_webhook_secret_name" {
   type        = string
   default     = "lz/slack/security-alerts"
 }
+
+########################################
+# TEARDOWN
+########################################
+
+variable "allow_destroy" {
+  description = <<-EOT
+    Go moi lop bao ve PHIA AWS de destroy chay duoc.
+
+    Layer nay: bat force_destroy cho bucket Config o log archive
+    account. Bucket bat versioning nen khong co dong nay thi destroy
+    dung lai voi BucketNotEmpty.
+
+    KHONG go duoc lop chan lon nhat cua layer nay. Bao ve that nam o
+    SCP "baseline" cua layer organization, chan o MOI account thanh
+    vien:
+
+      config:DeleteConfigurationRecorder
+      config:StopConfigurationRecorder
+      config:DeleteDeliveryChannel
+
+    Recorder do StackSet tao trong account thanh vien, nen role thuc
+    thi StackSet phai nam trong scp_exempt_role_names cua layer
+    organization, va layer do phai duoc apply TRUOC khi destroy layer
+    nay. Xem TEARDOWN.md muc 3 buoc 7.
+
+    Con mot lop nua khong bien nao go duoc: prevent_destroy. Dung
+    ./unlock-destroy.sh.
+  EOT
+  type        = bool
+  default     = false
+}

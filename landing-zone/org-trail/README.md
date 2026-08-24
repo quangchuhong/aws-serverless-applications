@@ -126,6 +126,29 @@ Vòng lặp giữa trail và bucket policy được cắt bằng cách **ráp AR
 
 ---
 
+## Xoá
+
+Bucket trail có `prevent_destroy`, và bật versioning nên còn object là destroy dừng. Mở hai cổng:
+
+```bash
+cd .. && ./unlock-destroy.sh --unlock org-trail    # cong 1: prevent_destroy
+cd org-trail
+terraform apply   -var allow_destroy=true          # cong 2: force_destroy
+terraform destroy -var allow_destroy=true
+```
+
+Trail nằm ở **management account** nên SCP `baseline` (chặn `cloudtrail:DeleteTrail`) không chạm tới — SCP không bao giờ áp lên management.
+
+**Cân nhắc trước khi chạy.** Đây là bằng chứng kiểm toán của cả tổ chức: mọi lệnh gọi API, mọi account. Xoá là mất hẳn. Cần giữ thì copy trước:
+
+```bash
+aws s3 sync s3://<bucket-trail> ./trail-backup/ --profile <logarchive>
+```
+
+Bật `enable_object_lock = true` thì `allow_destroy` **không cứu được** — object còn trong hạn giữ vẫn từ chối xoá, kể cả root.
+
+---
+
 ## Liên quan
 
 | | |

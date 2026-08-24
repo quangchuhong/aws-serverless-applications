@@ -21,10 +21,15 @@ resource "aws_networkfirewall_firewall" "main" {
   #
   # delete_protection ngan xoa nham ca firewall - va xoa firewall
   # thi moi route tro vao endpoint cua no thanh mo coi, toan bo LZ
-  # mat ket noi. Muon xoa that thi doi thanh false rieng mot lan
-  # apply, roi moi destroy.
-  delete_protection                 = true
-  subnet_change_protection          = true
+  # mat ket noi.
+  #
+  # Hai dong nay la thuoc tinh PHIA AWS, khong phai phia provider:
+  # doi chung goi UpdateFirewallDeleteProtection va
+  # UpdateSubnetChangeProtection that. Nen allow_destroy = true PHAI
+  # duoc apply mot lan RIENG truoc khi destroy - dat bien roi destroy
+  # ngay thi Terraform van gap firewall dang khoa.
+  delete_protection                 = !var.allow_destroy
+  subnet_change_protection          = !var.allow_destroy
   firewall_policy_change_protection = false
 
   dynamic "subnet_mapping" {
@@ -196,6 +201,10 @@ resource "aws_s3_bucket" "fw_logs" {
   provider = aws.network
 
   bucket = "${var.project}-fw-logs-${var.network_account_id}"
+
+  # Log flow day len rat nhanh - bucket nay gan nhu chac chan co
+  # object luc destroy.
+  force_destroy = var.allow_destroy
 
   tags = { Name = "${var.project}-fw-logs" }
 }

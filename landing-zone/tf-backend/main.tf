@@ -73,6 +73,10 @@ resource "aws_kms_alias" "state" {
 resource "aws_s3_bucket" "logs" {
   count  = var.enable_access_logging ? 1 : 0
   bucket = local.log_bucket
+
+  # Thuoc tinh phia provider - doi khong goi API nao. Nhung phai nam
+  # trong state TRUOC khi destroy moi co tac dung.
+  force_destroy = var.allow_destroy
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -153,6 +157,14 @@ resource "aws_s3_bucket_policy" "logs" {
 
 resource "aws_s3_bucket" "state" {
   bucket = local.bucket_name
+
+  # Bucket bat versioning, nen "aws s3 rm --recursive" chi tao delete
+  # marker va destroy van dung lai voi BucketNotEmpty. force_destroy
+  # xoa ca version lan delete marker.
+  #
+  # De mac dinh false. Hai cong: allow_destroy mo cong nay,
+  # unlock-destroy.sh mo cong prevent_destroy ben duoi.
+  force_destroy = var.allow_destroy
 
   # KHONG BO DONG NAY.
   #
