@@ -119,9 +119,9 @@ fi
 ########################################
 
 if [ "$MODE" = "unlock" ]; then
-  from="$RE_TRUE";  to='false'; n=$n_true
+  from="$RE_TRUE";  from_bool='true';  to='false'; n=$n_true
 else
-  from="$RE_FALSE"; to='true';  n=$n_false
+  from="$RE_FALSE"; from_bool='false'; to='true';  n=$n_false
 fi
 
 if [ "$n" -eq 0 ]; then
@@ -132,17 +132,29 @@ fi
 if [ "$MODE" = "unlock" ]; then
   printf '%s sap go %s lop chan cuoi cung tren %s layer.\n\n' \
     "$(red 'CANH BAO')" "$n" "${#LAYERS[@]}"
-  cat <<'EOT'
-  Sau buoc nay, "terraform destroy" o cac layer do se xoa that:
-  bucket state, bucket CloudTrail, OU, va dang ky delegated admin.
-  Khong co xac nhan nao nua.
 
-  Ba thu KHONG lay lai duoc:
-    - state cua moi layer (bucket tf-backend)
-    - lich su CloudTrail va Config
-    - email cua account da dong (chay vinh vien tren toan AWS)
+  # Chi noi hau qua cua layer THAT SU duoc chon. Liet ke ca danh sach
+  # khi nguoi ta mo mot layer la kieu canh bao ai cung hoc cach lo di.
+  printf '  Sau buoc nay "terraform destroy" o cac layer duoi day se xoa that,\n'
+  printf '  khong con xac nhan nao nua:\n\n'
+  for l in "${LAYERS[@]}"; do
+    case "$l" in
+      tf-backend)
+        printf '    %-18s bucket state - MOI layer khac mat dau vet resource\n' "$l" ;;
+      organization)
+        printf '    %-18s cay OU, SCP, dang ky delegated admin\n' "$l" ;;
+      control-tower)
+        printf '    %-18s account loi (chi go khoi state, account van con)\n' "$l" ;;
+      config-detective)
+        printf '    %-18s bucket log AWS Config - lich su khong khoi phuc duoc\n' "$l" ;;
+      org-trail)
+        printf '    %-18s bucket CloudTrail - bang chung kiem toan ca to chuc\n' "$l" ;;
+      account-baseline)
+        printf '    %-18s ban ghi account (account KHONG bi dong, chi roi state)\n' "$l" ;;
+    esac
+  done
+  printf '\n'
 
-EOT
   printf '  Go dung chu %s de tiep tuc: ' "$(amber 'unlock')"
   read -r ans
   if [ "$ans" != "unlock" ]; then
@@ -152,19 +164,69 @@ EOT
   printf '\n'
 fi
 
+########################################
+# KHONG dung "sed -i".
+#
+# sed cua BSD (macOS) BAT BUOC co tham so hau to di kem -i, nen
+# "sed -i -E" bi doc thanh "hau to = -E". Mat -E la mat che do ERE:
+# dau ngoac thanh ky tu thuong, khong con nhom bat, va \1 o ve phai
+# bao "not defined in the RE".
+#
+# Ghi ra file tam roi "cat >" de len file goc - chay giong het nhau
+# tren GNU lan BSD, va giu nguyen inode cung quyen cua file goc
+# (mv se thay bang quyen 600 cua mktemp).
+########################################
+
+count_line() {  # $1 = file, $2 = bool -> so dong khop
+  grep -Ec "^[[:space:]]*prevent_destroy[[:space:]]*=[[:space:]]*$2[[:space:]]*$" "$1" 2>/dev/null || true
+}
+
 changed=0
+files=0
+failed=0
+
 for l in "${LAYERS[@]}"; do
   while IFS= read -r file; do
     [ -n "$file" ] || continue
+    files=$((files + 1))
+
+    before=$(count_line "$file" "${from_bool}")
+
+    tmp=$(mktemp) || { printf '  %s khong tao duoc file tam\n' "$(red 'LOI')"; exit 1; }
     # \1 giu nguyen thut dau dong cua file goc
-    sed -i -E "s/$from/\\1prevent_destroy = $to/" "$file"
-    hits=$(grep -Ec "^[[:space:]]*prevent_destroy[[:space:]]*=[[:space:]]*$to[[:space:]]*$" "$file")
-    printf '  %-40s %s\n' "$file" "$(grey "-> $to  ($hits)")"
-    changed=$((changed + 1))
+    if ! sed -E "s/$from/\\1prevent_destroy = $to/" "$file" > "$tmp"; then
+      rm -f "$tmp"
+      printf '  %-42s %s\n' "$file" "$(red 'sed that bai - file GIU NGUYEN')"
+      failed=$((failed + 1))
+      continue
+    fi
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+
+    after=$(count_line "$file" "$to")
+
+    # Doi that su chua? Khong tin sed da chay la xong - doc lai file.
+    if [ "$after" -lt "$before" ]; then
+      printf '  %-42s %s\n' "$file" \
+        "$(red "doi hut: mong $before dong -> $to, chi thay $after")"
+      failed=$((failed + 1))
+    else
+      printf '  %-42s %s\n' "$file" "$(grey "$before dong -> $to")"
+      changed=$((changed + before))
+    fi
   done < <(grep -rlE "$from" --include='*.tf' "$l" 2>/dev/null)
 done
 
-printf '\n  %s %s file.\n\n' "$(green 'Xong:')" "$changed"
+printf '\n'
+
+if [ "$failed" -gt 0 ]; then
+  printf '  %s %s/%s file KHONG doi duoc. Kiem tra bang tay truoc khi destroy:\n' \
+    "$(red 'THAT BAI:')" "$failed" "$files"
+  printf '    grep -rn "prevent_destroy" --include=%s .\n\n' "'*.tf'"
+  exit 1
+fi
+
+printf '  %s %s dong tren %s file.\n\n' "$(green 'Xong:')" "$changed" "$files"
 
 if [ "$MODE" = "unlock" ]; then
   cat <<'EOT'
