@@ -264,7 +264,28 @@ Bỏ qua bước này cũng được: instance không tính tiền. Chỉ xoá k
 
 ### 2 — `organization`
 
-Layer này **không có** `allow_destroy` — nó không giữ resource nào có bảo vệ phía AWS. Chỉ cần cổng 1:
+Layer này **không có** `allow_destroy` — nó không giữ resource nào có bảo vệ phía AWS. Nhưng **kiểm một thứ trước khi mở cổng 1**:
+
+```bash
+cd organization && terraform state list | grep aws_organizations_organization
+```
+
+| Kết quả | Nghĩa là |
+|---|---|
+| **Rỗng** | Terraform chỉ đọc tổ chức qua data source. Destroy an toàn, sang phần dưới |
+| `aws_organizations_organization.this[0]` | **Terraform đang quản lý chính tổ chức.** `destroy` sẽ XOÁ NÓ — mọi account con bị tách ra khỏi tổ chức |
+
+Với trường hợp thứ hai, gỡ tổ chức khỏi state **trước**. Lệnh này không gọi API nào, tổ chức thật không hề bị đụng tới:
+
+```bash
+terraform state rm 'aws_organizations_organization.this[0]'
+```
+
+rồi đặt `create_organization = false` và destroy.
+
+> **Đừng đổi `create_organization` về `false` khi chưa `state rm`.** `count` tụt từ 1 xuống 0, và Terraform hiểu là *"không quản nữa, XOÁ ĐI"* — đúng cái bạn đang tránh. Bình thường `prevent_destroy` chặn lại với `Instance cannot be destroyed`, nhưng nếu bạn vừa chạy `unlock-destroy.sh --unlock organization` thì **lưới an toàn đó đã bị gỡ**. Hai thao tác riêng lẻ đều hợp lý; ghép lại thì xoá mất tổ chức.
+
+Xong phần đó rồi mới mở cổng 1:
 
 ```bash
 cd .. && ./unlock-destroy.sh --unlock organization
@@ -283,7 +304,38 @@ for id in $(aws organizations list-accounts --query 'Accounts[].Id' --output tex
 done
 ```
 
-Giữ `create_organization = false` thì Terraform **không** xoá tổ chức, chỉ gỡ OU và SCP. Đó gần như luôn là điều bạn muốn.
+Với `create_organization = false` **và** tổ chức không nằm trong state, Terraform chỉ gỡ OU cùng SCP — tổ chức và mọi account con giữ nguyên. Đó gần như luôn là điều bạn muốn.
+
+#### Gửi account đi đâu: root, hay một OU "Suspended"
+
+Chuyển hết về root là cách nhanh nhất để OU rỗng. Nhưng account ở root **chỉ còn các SCP gắn ở root** — mất `network_lock` và `prod_guard`, trong khi vẫn chạy bình thường.
+
+Nếu account còn sống tiếp (bạn parking chúng lại chứ không đóng), làm như Control Tower: một OU `Suspended` với đúng một SCP chặn sạch.
+
+```bash
+ROOT=$(aws organizations list-roots --query 'Roots[0].Id' --output text)
+SUS=$(aws organizations create-organizational-unit \
+  --parent-id "$ROOT" --name Suspended \
+  --query 'OrganizationalUnit.Id' --output text)
+
+cat > /tmp/deny-all.json <<'JSON'
+{"Version":"2012-10-17","Statement":[{"Sid":"DenyAll","Effect":"Deny","Action":"*","Resource":"*"}]}
+JSON
+
+POL=$(aws organizations create-policy --name SuspendedDenyAll \
+  --type SERVICE_CONTROL_POLICY --content file:///tmp/deny-all.json \
+  --description "Parking OU - chan moi hanh dong" \
+  --query 'Policy.PolicySummary.Id' --output text)
+
+aws organizations attach-policy --policy-id "$POL" --target-id "$SUS"
+aws organizations detach-policy --policy-id p-FullAWSAccess --target-id "$SUS"
+```
+
+**Tạo OU này BẰNG TAY, đừng đưa vào layer `organization`.** Layer đó sắp bị destroy; OU nào của nó mà còn account bên trong sẽ chặn chính nó với `OrganizationalUnitNotEmptyException`. Tạo ngoài Terraform thì OU `Suspended` sống sót qua destroy, còn OU của layer thì rỗng và xoá trôi.
+
+> `detach-policy p-FullAWSAccess` là dòng dễ quên nhất. SCP hoạt động theo kiểu giao nhau: còn `FullAWSAccess` gắn ở đó thì `Deny *` vẫn thắng — nhưng gỡ nó ra làm ý đồ rõ ràng, và tránh việc ai đó sau này sửa `Deny` thành `Allow` rồi tưởng đã khoá.
+>
+> Account trong OU này **vẫn tính tiền** cho tài nguyên đang chạy. SCP chặn hành động, không tắt máy. Dọn sạch tài nguyên trước khi parking — xem mục 4.
 
 ### 1 — `tf-backend` — cuối cùng
 
