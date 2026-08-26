@@ -200,6 +200,7 @@ variable "enable_scp" {
     region_lock  = optional(bool, true)
     network_lock = optional(bool, true)
     prod_guard   = optional(bool, true)
+    suspended    = optional(bool, true)
   })
   default = {}
 }

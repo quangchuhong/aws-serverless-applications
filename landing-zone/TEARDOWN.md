@@ -306,36 +306,18 @@ done
 
 Với `create_organization = false` **và** tổ chức không nằm trong state, Terraform chỉ gỡ OU cùng SCP — tổ chức và mọi account con giữ nguyên. Đó gần như luôn là điều bạn muốn.
 
-#### Gửi account đi đâu: root, hay một OU "Suspended"
+#### Gửi account đi đâu: root, hay OU `Suspended`
 
 Chuyển hết về root là cách nhanh nhất để OU rỗng. Nhưng account ở root **chỉ còn các SCP gắn ở root** — mất `network_lock` và `prod_guard`, trong khi vẫn chạy bình thường.
 
-Nếu account còn sống tiếp (bạn parking chúng lại chứ không đóng), làm như Control Tower: một OU `Suspended` với đúng một SCP chặn sạch.
+Nếu account còn sống tiếp — bạn parking chúng lại chứ không đóng — thì dùng OU `Suspended`. Layer `organization` đã có sẵn, xem [mục 6](#6-parking-account-thay-vì-đóng).
 
-```bash
-ROOT=$(aws organizations list-roots --query 'Roots[0].Id' --output text)
-SUS=$(aws organizations create-organizational-unit \
-  --parent-id "$ROOT" --name Suspended \
-  --query 'OrganizationalUnit.Id' --output text)
+**Nhưng nếu bạn thật sự destroy layer `organization`** thì OU `Suspended` của nó cũng bị xoá theo, và OU nào còn account bên trong sẽ chặn chính lệnh destroy với `OrganizationalUnitNotEmptyException`. Hai đường ra:
 
-cat > /tmp/deny-all.json <<'JSON'
-{"Version":"2012-10-17","Statement":[{"Sid":"DenyAll","Effect":"Deny","Action":"*","Resource":"*"}]}
-JSON
-
-POL=$(aws organizations create-policy --name SuspendedDenyAll \
-  --type SERVICE_CONTROL_POLICY --content file:///tmp/deny-all.json \
-  --description "Parking OU - chan moi hanh dong" \
-  --query 'Policy.PolicySummary.Id' --output text)
-
-aws organizations attach-policy --policy-id "$POL" --target-id "$SUS"
-aws organizations detach-policy --policy-id p-FullAWSAccess --target-id "$SUS"
-```
-
-**Tạo OU này BẰNG TAY, đừng đưa vào layer `organization`.** Layer đó sắp bị destroy; OU nào của nó mà còn account bên trong sẽ chặn chính nó với `OrganizationalUnitNotEmptyException`. Tạo ngoài Terraform thì OU `Suspended` sống sót qua destroy, còn OU của layer thì rỗng và xoá trôi.
-
-> `detach-policy p-FullAWSAccess` là dòng dễ quên nhất. SCP hoạt động theo kiểu giao nhau: còn `FullAWSAccess` gắn ở đó thì `Deny *` vẫn thắng — nhưng gỡ nó ra làm ý đồ rõ ràng, và tránh việc ai đó sau này sửa `Deny` thành `Allow` rồi tưởng đã khoá.
->
-> Account trong OU này **vẫn tính tiền** cho tài nguyên đang chạy. SCP chặn hành động, không tắt máy. Dọn sạch tài nguyên trước khi parking — xem mục 4.
+| | |
+|---|---|
+| **Giữ layer** (thường đúng hơn) | Đừng destroy `organization`. Nó gần như miễn phí, và là nền móng cho mọi thứ dựng lại sau này |
+| **Vẫn destroy** | Tạo một OU parking **bằng tay** ngoài Terraform trước, chuyển account sang đó. OU của layer khi ấy rỗng và xoá trôi |
 
 ### 1 — `tf-backend` — cuối cùng
 
@@ -402,11 +384,55 @@ Cost Explorer → Service → Daily
 
 ---
 
+## 6. Parking account thay vì đóng
+
+**Cách rẻ nhất để dừng một account mà không mất gì.** Account AWS không xoá được, chỉ đóng — và đóng là quyết định không lùi được: 90 ngày mới rời tổ chức, email cháy vĩnh viễn. OU `Suspended` là đường ở giữa: account vẫn tồn tại, nhưng SCP chặn mọi hành động.
+
+Layer `organization` đã dựng sẵn cả hai phần: OU `Suspended` trong `ou_structure`, và SCP `suspended` (một statement `Deny *`) gắn vào đúng OU đó.
+
+```bash
+./park-account.sh --list                    # ai dang bi dong bang
+./park-account.sh lz-app-dev                # dong bang mot account
+./park-account.sh --restore lz-app-dev      # tha ra, VE DUNG OU CU
+```
+
+Script ghi OU cũ vào tag `lz:parked-from` **trước khi** move, nên `--restore` đưa account về đúng chỗ chứ không phải về root. Mất tag thì nó hỏi trước khi rơi về root, kèm cảnh báo rằng account ở root mất `network_lock` và `prod_guard`.
+
+### Vì sao không phải Terraform
+
+Account nằm ở OU nào là **trạng thái vận hành**, không phải mô tả hạ tầng. Đưa vào Terraform nghĩa là mỗi lần parking phải sửa code, commit, apply — và bất kỳ ai chạy `apply` với `tfvars` cũ sẽ lặng lẽ kéo account trở lại.
+
+Script cũng **đọc trạng thái thật từ AWS** chứ không đọc `terraform output`, nên nó đúng kể cả khi state nằm ở máy khác.
+
+### Ba thứ phải biết trước
+
+| | |
+|---|---|
+| **Vẫn tính tiền** | SCP chặn *hành động*, không tắt máy. Tài nguyên đang chạy vẫn tính phí — **dọn sạch trước khi park**, xem mục 4 |
+| **Không dọn được sau khi park** | `Deny *` chặn cả việc xoá tài nguyên. Muốn dọn phải `--restore` đưa ra trước |
+| **Không park được management** | SCP không bao giờ áp lên management account. Script từ chối thẳng |
+
+### Kiểu hỏng tệ nhất, và cách script chặn nó
+
+Nguy hiểm nhất **không phải** thiếu OU — mà là **có OU mà không có SCP**. Khi đó lệnh chạy trót lọt, báo thành công, và account vẫn chạy bình thường trong một OU tên `Suspended`.
+
+Script kiểm nội dung policy thật sự gắn trên OU trước khi move, và từ chối nếu không tìm thấy `Deny *`. Hai cấu hình dẫn tới trạng thái đó, cả hai đều có `check` cảnh báo lúc `plan`:
+
+```hcl
+enable_scp = { suspended = false }   # OU co, SCP khong
+scp_dry_run = true                   # policy duoc tao nhung khong gan vao dau
+```
+
+> `FullAWSAccess` vẫn gắn ở OU và **không sao cả** — `Deny` tường minh luôn thắng `Allow`. Gỡ nó ra chỉ làm ý đồ rõ ràng hơn, và phải làm bằng tay vì Terraform không quản lý attachment mặc định của AWS.
+
+---
+
 ## Liên quan
 
 | | |
 |---|---|
 | [RUNBOOK](./RUNBOOK.md) | Chiều ngược lại — dựng theo thứ tự |
 | [`unlock-destroy.sh`](./unlock-destroy.sh) | Bật/tắt `prevent_destroy` — cổng 1 ở mục 2 |
+| [`park-account.sh`](./park-account.sh) | Đóng băng account mà không đóng nó — mục 6 |
 | [doc 22](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) | Lỗi 20: SCP chặn chính CloudFormation |
 | [doc 20](../docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | Remote state, quy trình thay đổi |

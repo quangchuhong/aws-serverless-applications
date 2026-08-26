@@ -88,3 +88,24 @@ output "next_steps" {
 
   EOT
 }
+
+########################################
+# SUSPENDED
+#
+# park-account.sh doc output nay. No tra ve ID cua OU VA trang thai
+# dong bang - vi OU ton tai ma khong co SCP la truong hop nguy hiem
+# nhat: script chay tron, bao thanh cong, account van chay.
+########################################
+
+output "suspended" {
+  description = "OU Suspended: id, va SCP dong bang da thuc su gan chua"
+  value = {
+    ou_id = try(local.ou_ids["Suspended"], null)
+
+    # Gan THAT SU, khong phai "da khai bao". scp_dry_run = true thi
+    # policy duoc tao nhung khong gan vao dau - va o day ra false.
+    frozen = contains(keys(local.scp_attachments), "suspended|Suspended")
+
+    policy_id = try(aws_organizations_policy.scp["suspended"].id, null)
+  }
+}

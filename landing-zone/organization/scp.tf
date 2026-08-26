@@ -252,6 +252,41 @@ locals {
   ]
 
   ####################################
+  # SUSPENDED - dong bang account khong con dung
+  #
+  # Account khong xoa duoc, chi dong duoc - va dong la quyet dinh
+  # khong lui duoc: 90 ngay moi roi to chuc, email chay vinh vien.
+  # OU nay la duong o giua: account van ton tai, nhung khong lam
+  # duoc gi.
+  #
+  # MOT statement duy nhat, va co y de no tho nhu vay. "Dong bang"
+  # ma con ngoai le thi khong con la dong bang, va moi ngoai le la
+  # mot cho phai kiem lai sau nay.
+  #
+  # HE QUA PHAI BIET TRUOC:
+  #
+  #   - KHONG don duoc tai nguyen trong account dang o day. Muon don
+  #     thi park-account.sh --restore dua no ra truoc.
+  #   - SCP chan HANH DONG, khong tat may. Tai nguyen dang chay VAN
+  #     TINH TIEN. Don sach TRUOC khi park, dung sau.
+  #   - Khong ap len management account - SCP khong bao gio ap len
+  #     no. Dung tim cach park management.
+  #
+  # FullAWSAccess van gan o OU nay va khong sao ca: Deny tuong minh
+  # luon thang Allow. Go no ra chi lam y do ro rang hon, va phai lam
+  # bang tay vi Terraform khong quan ly attachment mac dinh cua AWS.
+  ####################################
+
+  stmt_suspended = [
+    jsonencode({
+      Sid      = "DenyAll"
+      Effect   = "Deny"
+      Action   = "*"
+      Resource = "*"
+    }),
+  ]
+
+  ####################################
   # Gom lai
   ####################################
 
@@ -282,6 +317,13 @@ locals {
       description = "Chan thao tac pha huy khong phuc hoi duoc o production"
       statements  = local.stmt_prod_guard
       targets     = ["Workloads/Production"]
+    }
+
+    suspended = {
+      enabled     = try(var.enable_scp.suspended, true)
+      description = "Dong bang account trong OU Suspended - chan moi hanh dong"
+      statements  = local.stmt_suspended
+      targets     = ["Suspended"]
     }
   }
 
@@ -356,5 +398,45 @@ check "scp_count_per_target_under_limit" {
     ])
 
     error_message = "Mot target dang co qua 4 SCP tu viet. AWS gioi han 5 policy/target, FullAWSAccess chiem 1."
+  }
+}
+
+########################################
+# SUSPENDED - hai cach hong LANG LE
+#
+# Ca hai deu de OU Suspended ton tai ma KHONG dong bang gi ca. Nguy
+# hiem hon la khong co OU: park-account.sh chay tron, bao thanh cong,
+# va account van chay binh thuong trong mot OU ten "Suspended".
+########################################
+
+check "suspended_ou_is_actually_frozen" {
+  assert {
+    condition = (
+      !contains(keys(var.ou_structure), "Suspended")
+      || try(var.enable_scp.suspended, true)
+    )
+
+    error_message = join(" ", [
+      "ou_structure co OU 'Suspended' nhung enable_scp.suspended = false.",
+      "OU do se KHONG dong bang gi ca - account chuyen vao van chay",
+      "binh thuong, va ten OU lam moi nguoi tuong nguoc lai.",
+      "Bat enable_scp.suspended, hoac bo OU 'Suspended' khoi ou_structure.",
+    ])
+  }
+}
+
+check "suspended_not_silently_unattached" {
+  assert {
+    condition = (
+      !contains(keys(var.ou_structure), "Suspended")
+      || !try(var.enable_scp.suspended, true)
+      || !var.scp_dry_run
+    )
+
+    error_message = join(" ", [
+      "scp_dry_run = true nen SCP suspended duoc TAO nhung KHONG GAN",
+      "vao OU nao. Account park vao Suspended luc nay van chay binh thuong.",
+      "Tat scp_dry_run truoc khi dung park-account.sh.",
+    ])
   }
 }
