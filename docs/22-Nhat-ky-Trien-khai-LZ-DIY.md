@@ -31,8 +31,9 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | **Vòng khép kín** | `cloud-trail-enabled`: NON_COMPLIANT ×4 → dựng `org-trail` → **COMPLIANT ×4** |
 | **Tự động bắt lỗi tay** | `account-baseline` xoá **5 default VPC ở `us-east-1`** mà lần dọn tay bỏ sót |
 | Đường cảnh báo | `plan-all.sh` bắt được email cảnh báo bảo mật **không tới ai** — xem mục 6e |
+| **Xoá và dựng lại** | 158 resource xoá / 5 layer, rồi 162 dựng lại — kiểm chứng cả hai chiều, xem mục 7 |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 29 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 32 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -73,8 +74,13 @@ Xếp theo thứ tự gặp phải.
 | 27 | Lệnh kiểm chứng in ra **rỗng** dù output vẫn ở đó | Hai bộ lọc JMESPath liên tiếp tạo projection lồng, `--output text` in ra dòng trống | **Lỗi code** | `6336f81` |
 | 28 | `terraform plan` **sạch**, cảnh báo bảo mật không tới ai | Email subscription bị SNS xoá; state vẫn giữ ARN thật nên `plan` không thấy gì | **Lỗi thiết kế** | `76dc5b7`, `bc0dfca` |
 | 29 | `Invalid template interpolation value` ×4, ngay ở `enable = false` | `one()` trả `null` khi `count = 0`, và null không nội suy được vào string template | **Lỗi code** | `5debc69` |
+| 30 | `\1 not defined in the RE` trên macOS, script chạy tốt trên Linux | `sed -i` của BSD **bắt buộc** có tham số hậu tố, nên `sed -i -E` bị đọc thành *"hậu tố = -E"* — mất chế độ ERE, ngoặc thành ký tự thường | **Lỗi code** | `6e771b6` |
+| 31 | Script báo `Xong: 1 file` trong khi **không đổi được gì** | Đếm file đã mở thay vì dòng đã sửa. Trên một script chỉ có mỗi việc gỡ lớp chặn cuối cùng, báo thành công giả nguy hơn lỗi 30 | **Lỗi thiết kế** | `6e771b6` |
+| 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
 
-**25/29 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**28/32 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Ba lỗi cuối đến từ **vòng xoá–dựng lại** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1066,10 +1072,99 @@ done
 
 ---
 
+## 7. Vòng xoá–dựng lại
+
+Lần dựng đầu chứng minh code **dựng được**. Nó không chứng minh được code **gỡ được** — và đó là hai việc khác nhau, vì lớp bảo vệ chỉ lộ ra khi bạn đi ngược chiều.
+
+### 7a. Số đo
+
+| Layer | Xoá | Thời gian đáng chú ý | Dựng lại |
+|---|---|---|---|
+| `config-detective` | 25 | StackSet instance **1m33s**; 8 org rule 1m20s–1m46s | 25 |
+| `account-baseline` | 2 | StackSet instance **2m5s** trên 6 OU | 2 |
+| `org-trail` | 8 | Bucket **26 giây** | 8 |
+| `billing-guard` | 5 | tức thì | **9** |
+| `permission-sets` | 118 | ~2 phút | 118 |
+| | **158** | | **162** |
+
+Chênh 4 vì lần dựng lại bật thêm cost allocation tag — xem 7e.
+
+### 7b. Hai cổng khoá, và bằng chứng chúng khác nhau thật
+
+Hạ tầng thường trực có hai lớp chặn, khoá ở hai nơi:
+
+| | `prevent_destroy` | `allow_destroy` |
+|---|---|---|
+| Khoá ở | Terraform, trong `lifecycle` | AWS, trên chính resource |
+| Gọi API khi gỡ | **Không** | **Có** (firewall) |
+| Cần `apply` xen giữa | Không | **Bắt buộc** |
+
+Terraform **không cho** dùng biến trong `lifecycle`, nên lớp thứ nhất không thể thành một cờ — phải sửa file. Đó là lý do có `unlock-destroy.sh`: nó đổi `true` ↔ `false` trên 11 chỗ / 6 layer, và vì đổi giá trị chứ không xoá dòng nên `git diff` về **rỗng đúng từng byte** sau khi khoá lại.
+
+Bằng chứng rõ nhất rằng cổng thứ hai làm việc thật nằm ở hai con số cạnh nhau:
+
+```
+aws_s3_bucket.config[0]:  Destruction complete after 3s      <- bucket rong
+aws_s3_bucket.trail[0]:   Destruction complete after 26s     <- force_destroy quet version that
+```
+
+Cùng một kiểu resource, cùng bật versioning. 3 giây là bucket không có gì; 26 giây là `force_destroy` duyệt và xoá từng version cùng delete marker của log CloudTrail. Không có nó thì `destroy` dừng ở `BucketNotEmpty` — vì `aws s3 rm --recursive` chỉ tạo delete marker.
+
+### 7c. Hai cảnh báo tôi đưa ra, cả hai đều sai
+
+**"Bước dễ kẹt nhất là `config-detective`, phải miễn trừ role StackSet trước."** Tôi nói điều này hai lần. Nó chạy thẳng, không vướng gì. Lý do: đường miễn trừ `stacksets-exec-*` **đã nằm sẵn trong `scp_exempt_role_names`** từ lúc sửa lỗi 20, năm ngày trước. Cảnh báo đúng về nguyên tắc, thừa với org này — và tôi đã không kiểm `scp_summary` trước khi nói.
+
+**"Vòng thử `--unlock`/`--lock` đã kiểm chứng, đảo ngược chính xác."** Vòng thử đó chạy trên Linux, nơi GNU `sed` chấp nhận `sed -i -E`. Máy người dùng là macOS. Xem lỗi 30 và 31 — tôi báo là đã kiểm chứng một thứ mà phép kiểm không phủ tới nền tảng đang dùng.
+
+> Cả hai đều cùng một dạng: **suy luận từ thứ mình biết thay vì hỏi hệ thống**. Đúng cái mục 2.5 đã viết ra, rồi lại ngã vào.
+
+### 7d. Ba thứ nhanh hơn lần đầu, và vì sao
+
+| | Lần đầu | Lần dựng lại |
+|---|---|---|
+| 8 Config rule | Cả 8 chạm mốc timeout 30 phút, Terraform đánh dấu tainted | Xong trong giới hạn, không tainted |
+| Cost allocation tag | — | `Active` **ngay lập tức** |
+| CloudTrail giao file đầu | ~15 phút (ước tính) | `LatestDeliveryTime` có ngay sau apply |
+
+Cái đầu là do bản sửa nâng timeout lên 90 phút đã ăn. Cái thứ hai đáng ghi vì `next_steps` nói *"chờ ~24 giờ"* — câu đó vẫn đúng nhưng cho **việc khác**: kích hoạt tag key có hiệu lực ngay, còn 24 giờ là để dữ liệu chi phí **nhóm theo tag** xuất hiện trong báo cáo. Hai chuyện.
+
+### 7e. Cost allocation tag — chỗ duy nhất "muộn" tệ hơn "chưa hoàn hảo"
+
+`enable_cost_allocation_tags` đang là `false` trong tfvars, đúng theo mô tả biến: *"tag chỉ bật được SAU KHI đã có ít nhất một resource mang tag đó"*. Lần dựng đầu chưa có gì mang chúng.
+
+Nhưng cost allocation tag **không hồi tố**. Mỗi ngày để tắt là một ngày dữ liệu hoá đơn vĩnh viễn không chia được theo team. Và lúc dựng lại thì đã có 118 permission set + 5 SCP mang đủ 4 tag key.
+
+Bật, apply, và cả 4 ra `Active` ngay. Câu hỏi bỏ ngỏ trước đó — *"AWS có tính tag trên resource không tính tiền không?"* — được trả lời bằng chính phép thử: **có**.
+
+### 7f. Account không xoá được, nên đừng xoá
+
+Điều đáng nhớ nhất của cả vòng này không phải kỹ thuật. Account AWS **chỉ đóng được**, sau đó nằm lại tổ chức 90 ngày, và email cháy vĩnh viễn trên toàn AWS.
+
+Nên `organization` có thêm OU `Suspended` với đúng một SCP `Deny *`, cùng `park-account.sh` để chuyển account vào ra. Ba chi tiết học được khi viết nó:
+
+- **OU không có SCP nguy hơn không có OU.** Lệnh chạy trót lọt, báo thành công, account vẫn chạy bình thường trong một OU tên `Suspended`. Script vì vậy đọc nội dung policy thật gắn trên OU và từ chối move nếu không thấy `Deny *`.
+- **Ghi tag trước khi move, không phải sau.** OU cũ lưu vào `lz:parked-from`; ghi tag hỏng thì dừng, chưa move gì cả.
+- **`Deny *` chặn hành động, không chặn hoá đơn.** Tài nguyên còn chạy vẫn tính tiền, và không xoá được cho tới khi `--restore`. Dọn sạch trước, park sau.
+
+### 7g. Ba nguồn phải cùng nói một điều
+
+Bước kiểm cuối của `account-baseline` hỏi ba nơi khác nhau về cùng một sự thật:
+
+```
+StackSet  ->  5/5 CURRENT                      (da toi noi chua)
+Lambda    ->  "khong co default VPC nao" ×5    (no BAO cao xoa gi)
+AWS       ->  0 / 0 ×5 accounts × 2 regions    (thuc te con gi)
+```
+
+Lệnh thứ ba là lệnh duy nhất không tin lời ai — và nó xác nhận lỗ hổng `us-east-1` ở mục 6d đã đóng. Vòng lặp **một** region chính là thứ đã tạo ra lỗ hổng đó: lần dọn tay chỉ chạy ở một region, và câu kiểm chứng cũng chỉ hỏi region đó.
+
+---
+
 ## Liên quan
 
 | | |
 |---|---|
+| [TEARDOWN](../landing-zone/TEARDOWN.md) | Chiều ngược lại — hai cổng khoá, parking account |
 | [RUNBOOK](../landing-zone/RUNBOOK.md) | Làm gì, theo thứ tự nào — bảng lỗi ở cuối |
 | [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md) | Vì sao chọn DIY, 4 SCP |
 | [20 – Vận hành LZ](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | Remote state, quy trình thay đổi |

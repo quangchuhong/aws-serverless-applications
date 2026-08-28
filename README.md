@@ -22,7 +22,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | [06](./docs/06-Aws-Landing-Zone.md) | **Landing Zone** – Organizations, OU, SCP, logging, Identity Center |
 | **[20](./docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md)** | **Vận hành LZ** – remote state, khoá state, quy trình thay đổi hằng ngày |
 | **[21](./docs/21-Control-Tower-vs-DIY.md)** | **Control Tower vs DIY** – hai cách dựng nền tảng, code cả hai để đối chiếu |
-| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – lần dựng thật: 29 lỗi gặp phải và cách sửa |
+| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – dựng thật, xoá thật, dựng lại: 32 lỗi và cách sửa |
 | [09](./docs/09-Account-Vending-Tu-Dong.md) | Account vending tự động – request as code, StackSet baseline |
 | [10](./docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | CI/CD cho LZ – GitHub Actions + OIDC, không dùng access key |
 | [11](./docs/11-Tag-Policy-va-Cost-Allocation.md) | Tag policy và cost allocation – chia bill theo team |
@@ -57,7 +57,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
 **Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** · **Xoá: [`landing-zone/TEARDOWN.md`](./landing-zone/TEARDOWN.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
 
-**Đã dựng thật một lần, đi hết cả 9 giai đoạn** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 29 lỗi gặp phải và cách sửa, trong đó **25 lỗi nằm ở chính code của repo**. Đọc mục 6 trước khi bắt đầu để đỡ mất thời gian.
+**Đã dựng thật, xoá thật, rồi dựng lại** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 32 lỗi gặp phải và cách sửa, trong đó **28 lỗi nằm ở chính code của repo**. Ba lỗi cuối chỉ lộ ra khi đi ngược chiều. Đọc mục 6 trước khi dựng, mục 7 trước khi xoá.
 
 > **Layer nào đã qua lửa:** `tf-backend`, `organization`, `permission-sets`, `billing-guard`, `config-detective`, `org-trail`, `account-baseline` — apply thật, kiểm chứng thật.
 > **Chưa:** `control-tower` (mặc định tắt, thay thế cho `organization` chứ không chạy cùng) và `network` (mới viết, chưa ai apply). Đáng lưu ý vì phần lớn lỗi trong doc 22 thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
