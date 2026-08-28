@@ -6,6 +6,8 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 >
 > **Xoá đi thì theo [TEARDOWN.md](./TEARDOWN.md)** — ngược chiều, và có ba thứ không hoàn tác được.
 >
+> **Đã xoá rồi, giờ dựng lại?** Đừng bắt đầu từ giai đoạn 0 — nhảy tới [Dựng lại sau khi xoá](#dựng-lại-sau-khi-xoá). Đường đó ngắn hơn và có bốn bước preflight mà lần dựng đầu không có.
+>
 > **Đã có người đi hết đường này** — cả 9 giai đoạn (giai đoạn 10 mới có code). [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 32 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
@@ -987,6 +989,133 @@ terraform destroy -var allow_destroy=true
 Object Lock COMPLIANCE thì **không cổng nào gỡ được** — object còn trong hạn giữ là còn, phải đợi hết hạn.
 
 Muốn tiết kiệm giữa các buổi thì **xoá demo, giữ nguyên layer thường trực** — chúng tốn ~$0.
+
+---
+
+## Dựng lại sau khi xoá
+
+**Không phải chạy lại từ giai đoạn 0.** Dựng lại là một đường khác, ngắn hơn, và có vài cái bẫy mà lần dựng đầu không có.
+
+> Số liệu dưới đây từ một lần xoá–dựng lại thật: 158 resource xoá, 162 dựng lại. Chi tiết ở [doc 22 mục 7](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
+### 1. Cái gì còn, cái gì phải dựng lại
+
+| Giai đoạn | Sau khi destroy 5 layer |
+|---|---|
+| 1 `tf-backend` | ✅ Còn — **bỏ qua** |
+| 2 `organization` | ✅ Còn — OU, SCP, delegated admin nguyên vẹn |
+| 3 Account | ✅ Còn — account không xoá được |
+| 4 Identity Center | ✅ Instance còn — user/group thì mất theo layer 5 |
+| 5 `permission-sets` | ❌ Dựng lại — **118** resource |
+| 6 `billing-guard` | ❌ Dựng lại — 5, hoặc **9** nếu bật cost allocation tag |
+| 7 `config-detective` | ❌ Dựng lại — **25** |
+| 8 `org-trail` | ❌ Dựng lại — **8** |
+| 9 `account-baseline` | ❌ Dựng lại — **2** |
+
+Giai đoạn 1–4 chỉ phải làm lại nếu bạn đã cố ý xoá chúng. Xoá `tf-backend` thì mọi layer mất dấu state và phải `terraform import` lại từng resource.
+
+### 2. Preflight của dựng lại — bốn thứ không có trong lần đầu
+
+```bash
+cd landing-zone
+unset AWS_PROFILE
+aws sts get-caller-identity                    # phai la MANAGEMENT
+
+./park-account.sh --list                       # 1. account KHONG duoc dang bi park
+./unlock-destroy.sh                            # 2. ca 6 layer phai la KHOA
+aws cloudformation describe-organizations-access --region <region>   # 3. -> ENABLED
+./plan-all.sh                                  # 4. layer nao that su con state
+```
+
+| | Vì sao |
+|---|---|
+| **1** | Account trong OU `Suspended` bị `Deny *` chặn — StackSet không tạo được recorder, CloudTrail không ghi được. Lỗi báo về là *"explicit deny in a service control policy"*, **không** nhắc gì tới chuyện account đang bị đóng băng |
+| **2** | Còn layer nào ở `prevent_destroy = false` thì tài nguyên sắp dựng **ra đời thiếu lớp bảo vệ đó**. Khoá lại trước khi apply, không phải sau |
+| **3** | Destroy layer **không** tắt cờ này, nhưng kiểm mất 2 giây và thiếu nó thì StackSet service-managed chết ngay |
+| **4** | Đừng dựng lại theo trí nhớ |
+
+### 3. Chạy lại năm layer
+
+Đúng thứ tự 5 → 9. Mỗi bước xong mới sang bước sau.
+
+```bash
+for L in permission-sets billing-guard config-detective org-trail account-baseline; do
+  echo "=== $L ==="
+  (cd $L && terraform init -backend-config=backend.hcl && terraform plan)
+done
+```
+
+Xem hết plan rồi mới apply từng layer. **Mọi layer phải ra `0 to change, 0 to destroy`** — có `to destroy` nghĩa là state còn sót resource từ lần trước, dừng lại xem đã.
+
+### 4. Việc thủ công: cái nào phải làm lại, cái nào không
+
+Đây là chỗ dễ mất thời gian nhất, vì **không việc nào báo lỗi nếu bỏ sót**.
+
+| Việc | Sau khi dựng lại |
+|---|---|
+| **Xác nhận email SNS ×2** | ❌ **Phải làm lại.** Subscription bị xoá cùng topic — cả `billing-guard` lẫn `config-detective` |
+| **Gửi thư đặt mật khẩu cho từng user** | ❌ **Phải làm lại.** User là resource mới, chưa từng có mật khẩu |
+| Bật MFA bắt buộc | ✅ Còn — là cấu hình của **instance** Identity Center, không thuộc layer |
+| Quyền xem billing | ✅ Còn — là cấu hình của **management account** |
+| `activate-organizations-access` | ✅ Còn — cấu hình cấp tổ chức của CloudFormation |
+| Account nằm đúng OU | ✅ Còn — destroy layer không di chuyển account |
+
+Hai dòng đỏ ở trên là **cùng một kiểu hỏng**: mọi thứ báo xanh, và không ai nhận được gì.
+
+```bash
+# Sau khi bam link trong ca hai email:
+aws sns list-subscriptions-by-topic --topic-arn <billing-topic> --region us-east-1 \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+aws sns list-subscriptions-by-topic --topic-arn <security-topic> \
+  --profile <security> --region <region> \
+  --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output table
+```
+
+Cột cuối **phải kết thúc bằng UUID**. `PendingConfirmation` là chưa bấm link; `Deleted` thì xem [README của `config-detective`](./config-detective/README.md). Đừng dùng `sns publish` để kiểm — nó trả về MessageId kể cả khi topic không có ai nhận.
+
+### 5. Kiểm chứng — hỏi AWS, đừng hỏi Terraform
+
+```bash
+# Recorder chi chay o account TRONG pham vi. Account ngoai pham vi ra rong
+# la DUNG THIET KE, khong phai hong.
+for p in <cac profile>; do
+  printf '%-16s ' "$p"
+  aws configservice describe-configuration-recorder-status --profile $p \
+    --region <region> \
+    --query 'ConfigurationRecordersStatus[0].[recording,lastStatus]' --output text
+done
+
+aws cloudtrail describe-trails --trail-name-list <project>-org-trail \
+  --query 'trailList[0].[IsOrganizationTrail,IsMultiRegionTrail]'
+
+aws cloudformation list-stack-instances --stack-set-name <project>-account-baseline \
+  --call-as SELF --query 'Summaries[].[Account,Status]' --output table
+```
+
+`IsOrganizationTrail = false` là vùng mù lớn nhất có thể có — trail chỉ ghi management account, và `apply` vẫn báo xanh y hệt.
+
+Rồi **~1 giờ sau**, phép kiểm chéo thật sự của cả lần dựng lại:
+
+```bash
+aws configservice describe-aggregate-compliance-by-config-rules \
+  --configuration-aggregator-name <project>-org --profile <security> --region <region> \
+  --query 'AggregateComplianceByConfigRules[?ConfigRuleName==`cloud-trail-enabled`].[AccountId,Compliance.ComplianceType]' \
+  --output table
+```
+
+`cloud-trail-enabled` phải chuyển `NON_COMPLIANT` → `COMPLIANT`. Đó là lúc hai tầng nói chuyện với nhau: một tầng tạo tài nguyên, tầng kia độc lập phát hiện ra nó. Không tầng nào tự khai về mình.
+
+### 6. Một cơ hội chỉ có ở lần dựng lại
+
+`enable_cost_allocation_tags` thường để `false` ở lần dựng đầu, vì tag key chỉ bật được **sau khi** đã có resource mang tag đó. Lúc dựng lại thì điều kiện đó đã thoả — permission set và SCP đều mang đủ tag.
+
+Bật ngay, đừng để sau: **cost allocation tag không hồi tố.** Mỗi ngày để tắt là một ngày dữ liệu hoá đơn vĩnh viễn không chia được theo team.
+
+```hcl
+enable_cost_allocation_tags = true    # billing-guard/terraform.tfvars
+```
+
+Đo được: cả 4 tag chuyển `Active` **ngay**, không phải chờ 24 giờ. Con số 24 giờ là để dữ liệu chi phí **nhóm theo tag** xuất hiện trong báo cáo Cost Explorer — việc khác.
 
 ---
 
