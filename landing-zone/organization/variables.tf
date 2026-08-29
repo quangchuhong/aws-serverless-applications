@@ -237,3 +237,97 @@ variable "scp_exempt_role_names" {
   type        = list(string)
   default     = []
 }
+
+########################################
+# 7. TAG POLICY
+########################################
+
+variable "enable_tag_policy" {
+  description = <<-EOT
+    Bat tag policy chuan hoa tag chia chi phi.
+
+    MAC DINH TAT. Bat theo hai nhip, dung nhip mot lan:
+
+      1. enable_tag_policy = true, moi enforced_for de RONG
+         -> chi bao cao. Xem Resource Groups & Tag Editor ->
+            Tag policies vai ngay, biet ai dang gan sai.
+      2. Them enforced_for cho TUNG khoa mot.
+
+    ---------------------------------------------------------------
+    TAG POLICY KHONG LAM TAG TRO THANH BAT BUOC.
+
+    No chi quan ly GIA TRI cua mot tag KHI tag do duoc gan. Tao mot
+    EC2 instance khong co tag nao thi tag policy im lang - ke ca khi
+    da bat enforced_for.
+
+    Muon chan tao resource thieu tag thi can SCP (doc 11 muc 5).
+    Muon phat hien resource DA CO ma thieu tag thi can Config rule
+    required-tags o config-detective.
+    ---------------------------------------------------------------
+
+    TAG_POLICY phai duoc bat tren root truoc. Voi create_organization
+    = true thi da co san trong enabled_policy_types; voi to chuc co
+    san thi bat bang tay mot lan.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "tag_policy_keys" {
+  description = <<-EOT
+    Khoa tag duoc chuan hoa, va muc do siet cua tung khoa.
+
+      allowed_values  Danh sach gia tri hop le. RONG = gia tri nao
+                      cung duoc, nhung CACH VIET KHOA van bi ep.
+      enforced_for    Resource type ma thao tac gan tag SAI GIA TRI
+                      se bi TU CHOI. RONG = chi bao cao.
+
+    tag_key luon duoc ep, va do moi la phan gia tri nhat: AWS coi
+    CostCenter / costcenter / Cost_Center la BA tag khac nhau, va do
+    la cach bang chi phi vo vun nhanh nhat.
+
+    CostCenter de rong allowed_values vi ma phong ban la thu rieng
+    cua tung to chuc - dien ma that cua ban vao day.
+
+    Environment giu dung bon gia tri cua doc 11 muc 2. Them gia tri
+    thu nam nghia la moi bao cao chi phi theo moi truong deu lech.
+
+    Resource type dung dang "<service>:<resource>", vi du "ec2:instance",
+    "s3:bucket". Danh sach day du trong tai lieu Organizations.
+  EOT
+  type = map(object({
+    allowed_values = optional(list(string), [])
+    enforced_for   = optional(list(string), [])
+  }))
+
+  default = {
+    CostCenter  = {}
+    Owner       = {}
+    Project     = {}
+    Environment = { allowed_values = ["dev", "staging", "prod", "sandbox"] }
+  }
+
+  validation {
+    condition = alltrue([
+      for _, cfg in var.tag_policy_keys : alltrue([
+        for r in cfg.enforced_for : can(regex("^[a-z0-9-]+:[a-z0-9-]+$", r))
+      ])
+    ])
+    error_message = "enforced_for phai dang \"<service>:<resource>\", vi du ec2:instance hoac s3:bucket."
+  }
+}
+
+variable "tag_policy_targets" {
+  description = <<-EOT
+    Gan tag policy vao dau. "ROOT" hoac ten OU trong ou_structure.
+
+    Mac dinh ROOT vi tag policy KE THUA VA TRON xuong duoi - khac SCP
+    von GIAO NHAU. Gan o root la phu het, va OU con van tinh chinh
+    them duoc bang @@append o mot policy khac.
+
+    Han muc rieng: 5 tag policy moi target, khong an chung slot voi
+    5 SCP.
+  EOT
+  type        = list(string)
+  default     = ["ROOT"]
+}

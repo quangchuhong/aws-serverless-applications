@@ -109,3 +109,20 @@ output "suspended" {
     policy_id = try(aws_organizations_policy.scp["suspended"].id, null)
   }
 }
+
+output "tag_policy" {
+  description = "Tag policy: dang chan hay chi bao cao"
+  value = {
+    enabled = var.enable_tag_policy
+    keys    = sort(keys(var.tag_policy_keys))
+
+    # Khoa co enforced_for = dang thuc su tu choi thao tac gan tag sai.
+    # Rong nghia la CHI BAO CAO - trang thai khoi dau dung, nhung dung
+    # nham la tag da duoc ep buoc.
+    enforcing   = sort(local.tp_enforcing)
+    report_only = var.enable_tag_policy && length(local.tp_enforcing) == 0
+
+    policy_id = try(aws_organizations_policy.tag[0].id, null)
+    targets   = var.tag_policy_targets
+  }
+}

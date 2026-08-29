@@ -197,6 +197,69 @@ terraform output active_accounts
 
 ---
 
+## Tag policy — mặc định tắt
+
+Lấp khoảng trống giữa **quy ước** và **ràng buộc**. `default_tags` của provider gắn tag đúng ở mọi thứ Terraform quản lý, nhưng ai tạo resource bằng console hay CDK thì không có gì bắt họ gắn — và resource đó rơi vào cột "chưa gán" trong Cost Explorer mà không ai được báo.
+
+```hcl
+enable_tag_policy = true
+
+tag_policy_keys = {
+  CostCenter  = {}                                                   # ep cach viet
+  Owner       = {}
+  Project     = {}
+  Environment = { allowed_values = ["dev", "staging", "prod", "sandbox"] }
+}
+```
+
+### Điều hay bị hiểu nhầm nhất
+
+**Tag policy không làm cho tag trở thành bắt buộc.** Nó chỉ quản lý *giá trị* của một tag **khi tag đó được gắn**. Tạo một EC2 instance không có tag nào cả thì tag policy im lặng — kể cả khi đã bật `enforced_for`.
+
+| Tầng | Làm gì | Ở đâu |
+|---|---|---|
+| **Tag policy** | Ép đúng cách viết và giá trị hợp lệ | Layer này |
+| **SCP** | Chặn **tạo** resource khi thiếu tag | [doc 11 mục 5](../../docs/11-Tag-Policy-va-Cost-Allocation.md) |
+| **Config `required-tags`** | Phát hiện resource **đã có** mà thiếu tag | `config-detective` |
+
+Phần giá trị nhất lại là phần dễ bỏ qua: `tag_key` ép **đúng cách viết**. AWS coi `CostCenter`, `costcenter` và `Cost_Center` là **ba tag khác nhau** — đó là cách bảng chi phí vỡ vụn nhanh nhất.
+
+### Bật theo hai nhịp
+
+```hcl
+# Nhip 1 — chi bao cao, khong chan gi
+tag_policy_keys = { CostCenter = {}, Environment = { allowed_values = [...] } }
+
+# Nhip 2 — sau khi doc bao cao vai ngay, siet TUNG khoa mot
+tag_policy_keys = {
+  Environment = {
+    allowed_values = ["dev", "staging", "prod", "sandbox"]
+    enforced_for   = ["ec2:instance", "s3:bucket"]
+  }
+}
+```
+
+`enforced_for` rỗng là **chỉ báo cáo** — trạng thái khởi đầu đúng. Đọc báo cáo ở **Resource Groups & Tag Editor → Tag policies**. `check "tag_policy_is_report_only"` nhắc lúc `plan` để không ai dừng ở nhịp 1 mà tưởng tag đã bị ép buộc.
+
+### Khác SCP ở chỗ gộp chính sách
+
+| | Gộp thế nào | Hạn mức |
+|---|---|---|
+| SCP | **Giao nhau** — deny ở bất kỳ tầng nào là chặn | 5/target, `FullAWSAccess` chiếm 1 |
+| Tag policy | **Kế thừa và trộn** — tầng dưới `@@append` hoặc `@@assign` đè tầng trên | 5/target, **hạn mức riêng** |
+
+Hai hạn mức tách nhau, nên thêm tag policy **không** ăn vào slot của 4 SCP. Mặc định gắn ở `ROOT` để phủ hết, OU con vẫn tinh chỉnh thêm được.
+
+> `TAG_POLICY` phải được bật trên root trước. Với `create_organization = true` thì đã có sẵn trong `enabled_policy_types`; tổ chức có sẵn thì bật tay một lần:
+>
+> ```bash
+> aws organizations enable-policy-type --root-id <root> --policy-type TAG_POLICY
+> ```
+>
+> `check "tag_policy_type_enabled"` bắt trường hợp này — nhưng chỉ cảnh báo khi **đọc được** trạng thái root và thấy thiếu. Không đọc được thì im lặng, để tránh báo động giả.
+
+---
+
 ## Xoá
 
 Organization và OU đều có `prevent_destroy = true` — `terraform destroy` sẽ **fail**, đúng thiết kế.
