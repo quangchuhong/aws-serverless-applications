@@ -77,7 +77,7 @@ Xếp theo thứ tự gặp phải.
 | 30 | `\1 not defined in the RE` trên macOS, script chạy tốt trên Linux | `sed -i` của BSD **bắt buộc** có tham số hậu tố, nên `sed -i -E` bị đọc thành *"hậu tố = -E"* — mất chế độ ERE, ngoặc thành ký tự thường | **Lỗi code** | `6e771b6` |
 | 31 | Script báo `Xong: 1 file` trong khi **không đổi được gì** | Đếm file đã mở thay vì dòng đã sửa. Trên một script chỉ có mỗi việc gỡ lớp chặn cuối cùng, báo thành công giả nguy hơn lỗi 30 | **Lỗi thiết kế** | `6e771b6` |
 | 34 | `lz-server-admin` có `s3:*` **ngay trong account log archive** | 10/17 permission set khai `scope = "all"`, mà `all` suy ra từ Organizations nên gồm cả account giữ bằng chứng. `DenyTamperingWithGuardrails` chặn `cloudtrail:DeleteTrail` nhưng **không** chặn `s3:DeleteObject` | **Lỗi thiết kế** | *(mục 7i)* |
-| 33 | Đường cảnh báo bảo mật **chưa bao giờ có nguồn** | `notify.tf` khớp `source = aws.securityhub`, nhưng không gì trong layer bật Security Hub. EventBridge rule tồn tại, SNS có subscriber đã xác nhận, và **không sự kiện nào đi qua**. Lỗi 28 chỉ là một nửa câu chuyện | **Lỗi thiết kế** | *(mục 7h)* |
+| 33 | Nguồn của đường cảnh báo **nằm ngoài code** | `notify.tf` khớp `source = aws.securityhub`, nhưng không layer nào tạo hay quản Security Hub — nó được bật bằng ba lệnh tay ở RUNBOOK giai đoạn 7. Terraform không biết nó tồn tại, nên không ai được báo nếu nó tắt | **Lỗi thiết kế** | *(mục 7h)* |
 | 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
 
 **30/34 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
@@ -1160,7 +1160,7 @@ AWS       ->  0 / 0 ×5 accounts × 2 regions    (thuc te con gi)
 
 Lệnh thứ ba là lệnh duy nhất không tin lời ai — và nó xác nhận lỗ hổng `us-east-1` ở mục 6d đã đóng. Vòng lặp **một** region chính là thứ đã tạo ra lỗ hổng đó: lần dọn tay chỉ chạy ở một region, và câu kiểm chứng cũng chỉ hỏi region đó.
 
-### 7h. Lỗi 33 — đường cảnh báo chưa bao giờ có nguồn
+### 7h. Lỗi 33 — nguồn của đường cảnh báo nằm ngoài code
 
 Câu hỏi khởi đầu vô hại: *"guardrail của Control Tower có port sang DIY được không?"* Trả lời nó buộc phải đọc lại `notify.tf`, và ở đó có một dòng:
 
@@ -1171,23 +1171,35 @@ event_pattern = jsonencode({
 })
 ```
 
-**Không có gì trong repo bật Security Hub.** Không một resource nào, ở bất kỳ layer nào.
+**Không layer nào tạo hay quản Security Hub.** `grep -r aws_securityhub --include=*.tf` ra rỗng.
 
-Nghĩa là: EventBridge rule tồn tại, SNS topic tồn tại, subscription đã xác nhận thật với ARN kết thúc bằng UUID — và **không sự kiện nào từng đi qua nó**, vì nguồn duy nhất mà rule chấp nhận chưa bao giờ được bật.
+Nghĩa là toàn bộ đường cảnh báo — EventBridge rule, SNS topic, subscription — treo trên một dịch vụ mà Terraform không biết là có tồn tại.
 
-Điều làm nó đáng ghi riêng: đây là **lỗi thứ hai** trên cùng một đường cảnh báo, và lỗi 28 đã che nó đi hoàn toàn.
+#### Tôi đã ghi lỗi này nặng hơn thực tế, và đây là bản sửa
 
-| | Lỗi 28 | Lỗi 33 |
-|---|---|---|
-| Hỏng ở đâu | Cuối đường — SNS chặn địa chỉ | Đầu đường — không có nguồn |
-| Triệu chứng | Y hệt nhau: `apply` xanh, `plan` sạch, không ai nhận gì |  |
-| Phát hiện bằng | Phép thử hai nhánh, sau bốn giả thuyết sai | Đọc lại code vì một câu hỏi không liên quan |
+Bản đầu của mục này viết rằng *"không sự kiện nào từng đi qua"*, và dựng nó thành **lỗi thứ hai trên cùng đường ống mà lỗi 28 che đi**. Cả hai đều sai.
 
-Sửa xong lỗi 28 thì mọi lời khai đều nói "ổn" — subscription có ARN thật, `list-subscriptions-by-topic` in ra UUID. Nhưng cái được sửa là **đoạn ống cuối**, trong khi đầu ống không nối vào đâu cả.
+Sự thật: Security Hub **đang chạy và có dữ liệu đổ về**. Nó được bật ở giai đoạn 7 bằng ba lệnh tay mà chính RUNBOOK ghi ra (commit `a48f8a6`), và destroy `config-detective` không tắt nó — Security Hub không nằm trong layer đó.
 
-> **Bài học, và nó khác bài học của lỗi 28.** Lỗi 28 dạy: đừng tin `terraform plan`, hỏi thẳng dịch vụ. Lỗi 33 dạy một thứ khác — **hỏi đúng dịch vụ là chưa đủ nếu chỉ hỏi một đầu**. Tôi kiểm SNS rất kỹ và chưa lần nào hỏi *"cái gì tạo ra sự kiện đầu tiên?"*.
->
-> Cách kiểm duy nhất đủ cho một đường cảnh báo là **gây ra một vi phạm thật rồi xem thư có tới không**. Mọi thứ ngắn hơn đều chỉ kiểm một đoạn ống.
+Tôi suy từ *"repo không bật nó"* sang *"nên nó chưa bao giờ chạy"*. Bước suy luận đó bỏ qua mất phần thủ công của chính runbook mình viết. Kiểm bằng một lệnh là ra:
+
+```bash
+aws securityhub describe-hub --profile lz-security --region ap-southeast-1
+```
+
+> **Cùng một sai lầm với lỗi 28, chỉ đổi hướng.** Lỗi 28 tôi tin `terraform plan` và không hỏi SNS. Lần này tôi tin `grep` và không hỏi Security Hub. Cả hai lần đều suy ra trạng thái vận hành từ thứ nằm trong repo — mà repo chỉ là một nửa câu chuyện, nửa kia là những bước tay runbook bảo người ta làm.
+
+#### Vậy lỗi thật là gì
+
+Không phải "đường cảnh báo chết". Là **một phụ thuộc không được quản lý**:
+
+| | |
+|---|---|
+| Rủi ro thật | Ai đó tắt Security Hub, hoặc dựng LZ này ở tổ chức mới mà bỏ qua bước tay — đường cảnh báo im lặng, không gì báo |
+| `terraform plan` thấy gì | Không gì cả. Nó không biết dịch vụ đó tồn tại |
+| Vì sao vẫn là lỗi thiết kế | Một đường cảnh báo mà nguồn nằm ngoài code là đường cảnh báo không ai kiểm được bằng code |
+
+`securityhub.tf` đưa nguồn đó vào Terraform để `plan` nhìn thấy nó. Và `check "alerts_have_a_source"` **không** khẳng định đường ống chết — nó nói rằng nguồn không do layer này quản, rồi đưa ra lệnh để hỏi thẳng dịch vụ.
 
 Bản sửa thêm `securityhub.tf` và một `check` bắt đúng trạng thái này lúc `plan`:
 

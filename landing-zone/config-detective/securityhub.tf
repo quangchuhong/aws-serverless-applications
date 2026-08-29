@@ -168,11 +168,17 @@ check "alerts_have_a_source" {
   assert {
     condition = !local.enabled || length(var.alert_emails) == 0 || var.enable_security_hub
     error_message = join(" ", [
-      "alert_emails da khai nhung enable_security_hub = false.",
-      "notify.tf khop event theo source = aws.securityhub, nen KHONG CO",
-      "su kien nao toi rule EventBridge va khong ai nhan duoc gi -",
-      "du SNS co subscriber da xac nhan. Bat enable_security_hub,",
-      "hoac bo alert_emails de khoi tuong minh dang duoc canh bao.",
+      "alert_emails da khai nhung enable_security_hub = false, nghia la",
+      "NGUON cua duong canh bao KHONG DO LAYER NAY QUAN.",
+      "notify.tf khop event theo source = aws.securityhub.",
+      "Security Hub co the dang chay - RUNBOOK giai doan 7 co ba lenh bat",
+      "bang tay - nhung Terraform khong biet, va khong ai bao neu no tat.",
+      "HOI THANG DICH VU, dung suy tu plan:",
+      "aws securityhub describe-hub --profile <security> --region <region>",
+      "Ra HubArn = duong canh bao co nguon.",
+      "Ra InvalidAccessException = khong ai nhan duoc gi, du SNS co",
+      "subscriber da xac nhan.",
+      "Dat enable_security_hub = true de Terraform quan luon nguon do.",
     ])
   }
 }
