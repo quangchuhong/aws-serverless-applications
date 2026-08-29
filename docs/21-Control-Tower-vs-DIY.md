@@ -194,6 +194,30 @@ Nếu sau này chuyển sang CT, đây là chỗ trùng lặp cần biết:
 
 Kết luận thực dụng: chuyển sang CT thì vẫn **giữ SCP riêng cho `network_lock` và `prod_guard`**. Control Tower không cấm bạn gắn thêm SCP — nhưng nhớ giới hạn 5 policy/target, và controls của CT cũng chiếm slot.
 
+### Đi chiều ngược lại: port control của CT sang DIY
+
+Câu hỏi hay gặp hơn là chiều này — *"muốn guardrail như CT mà không dùng CT thì làm sao?"*. Trả lời được, nhưng phải tách theo **ba loại control**, vì chúng cài bằng ba cơ chế khác hẳn nhau.
+
+| Loại | CT cài bằng | Port sang DIY |
+|---|---|---|
+| **Preventive** | SCP | ✅ Nó *chính là* SCP — copy nội dung policy vào `scp.tf` |
+| **Detective** | AWS Config rule | ✅ `config-detective` đã đúng cơ chế — nhưng đừng port từng rule |
+| **Proactive** | CloudFormation Hook | ⚠️ Xem dưới — gần như không đáng làm |
+
+**Preventive.** Ràng buộc không phải kỹ thuật mà là **5 policy/target**, `FullAWSAccess` chiếm 1. Nên thêm control là **thêm statement vào SCP có sẵn**, không tạo policy mới — và nhớ trần 5120 ký tự, `check "scp_size_under_limit"` đang canh.
+
+**Detective — đây là chỗ có đòn bẩy.** CT có hơn trăm detective control, gần hết là AWS Config managed rule. Port tay từng cái là việc vô nghĩa. Đường ngắn hơn: bật **Security Hub standard** ở cấp tổ chức. `AWS Foundational Security Best Practices` gói sẵn phần lớn detective control của CT, bật một lần phủ mọi account, **không cần Control Tower**.
+
+Repo có sẵn từ [`config-detective/securityhub.tf`](../landing-zone/config-detective/securityhub.tf), mặc định tắt vì nó **tính tiền theo số lần kiểm tra bảo mật** mỗi account mỗi region — khác hẳn SCP.
+
+**Proactive — bỏ qua, và lý do có thể bất ngờ.** Proactive control cài bằng CloudFormation Hook, chặn resource không tuân thủ *trước khi* tạo. Nhưng chúng chỉ chạy khi resource được tạo **qua CloudFormation**. Một tổ chức triển khai bằng Terraform thì kể cả port được, chúng cũng không bao giờ kích hoạt.
+
+Thứ thay đúng chỗ là policy-as-code trong pipeline — xem [doc 10 mục 5](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md). Với Terraform, đó mới là tầng "proactive" thật.
+
+> **Muốn đọc định nghĩa control mà không dựng CT:** AWS có Control Catalog, API chỉ đọc, không đòi Control Tower. Từ đó lọc control loại `Preventive`, đọc nội dung policy, rồi thêm statement vào SCP có sẵn.
+>
+> Thứ tự đáng làm nếu mục tiêu là "guardrail tương đương CT": **giữ nguyên SCP hiện có** → **bật một Security Hub standard, đo một tuần** → **bỏ qua proactive, thay bằng policy check ở CI**.
+
 ---
 
 ## 7. Kiểm chứng cả hai bản

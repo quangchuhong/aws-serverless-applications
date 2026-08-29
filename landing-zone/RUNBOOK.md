@@ -8,7 +8,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 >
 > **Đã xoá rồi, giờ dựng lại?** Đừng bắt đầu từ giai đoạn 0 — nhảy tới [Dựng lại sau khi xoá](#dựng-lại-sau-khi-xoá). Đường đó ngắn hơn và có bốn bước preflight mà lần dựng đầu không có.
 >
-> **Đã có người đi hết đường này** — cả 9 giai đoạn (giai đoạn 10 mới có code). [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 32 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — cả 9 giai đoạn (giai đoạn 10 mới có code). [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 33 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
 
 **Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
 **Chi phí**: ~$0. `config-detective` (giai đoạn 7) đo được $0.29 một lần rồi ~$0/ngày; `org-trail` chỉ tốn tiền lưu trữ S3.

@@ -33,7 +33,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Đường cảnh báo | `plan-all.sh` bắt được email cảnh báo bảo mật **không tới ai** — xem mục 6e |
 | **Xoá và dựng lại** | 158 resource xoá / 5 layer, rồi 162 dựng lại — kiểm chứng cả hai chiều, xem mục 7 |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 32 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 33 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -76,11 +76,12 @@ Xếp theo thứ tự gặp phải.
 | 29 | `Invalid template interpolation value` ×4, ngay ở `enable = false` | `one()` trả `null` khi `count = 0`, và null không nội suy được vào string template | **Lỗi code** | `5debc69` |
 | 30 | `\1 not defined in the RE` trên macOS, script chạy tốt trên Linux | `sed -i` của BSD **bắt buộc** có tham số hậu tố, nên `sed -i -E` bị đọc thành *"hậu tố = -E"* — mất chế độ ERE, ngoặc thành ký tự thường | **Lỗi code** | `6e771b6` |
 | 31 | Script báo `Xong: 1 file` trong khi **không đổi được gì** | Đếm file đã mở thay vì dòng đã sửa. Trên một script chỉ có mỗi việc gỡ lớp chặn cuối cùng, báo thành công giả nguy hơn lỗi 30 | **Lỗi thiết kế** | `6e771b6` |
+| 33 | Đường cảnh báo bảo mật **chưa bao giờ có nguồn** | `notify.tf` khớp `source = aws.securityhub`, nhưng không gì trong layer bật Security Hub. EventBridge rule tồn tại, SNS có subscriber đã xác nhận, và **không sự kiện nào đi qua**. Lỗi 28 chỉ là một nửa câu chuyện | **Lỗi thiết kế** | *(mục 7h)* |
 | 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
 
-**28/32 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**29/33 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
-> Ba lỗi cuối đến từ **vòng xoá–dựng lại** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+> Bốn lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1157,6 +1158,46 @@ AWS       ->  0 / 0 ×5 accounts × 2 regions    (thuc te con gi)
 ```
 
 Lệnh thứ ba là lệnh duy nhất không tin lời ai — và nó xác nhận lỗ hổng `us-east-1` ở mục 6d đã đóng. Vòng lặp **một** region chính là thứ đã tạo ra lỗ hổng đó: lần dọn tay chỉ chạy ở một region, và câu kiểm chứng cũng chỉ hỏi region đó.
+
+### 7h. Lỗi 33 — đường cảnh báo chưa bao giờ có nguồn
+
+Câu hỏi khởi đầu vô hại: *"guardrail của Control Tower có port sang DIY được không?"* Trả lời nó buộc phải đọc lại `notify.tf`, và ở đó có một dòng:
+
+```hcl
+event_pattern = jsonencode({
+  source        = ["aws.securityhub"]
+  ...
+})
+```
+
+**Không có gì trong repo bật Security Hub.** Không một resource nào, ở bất kỳ layer nào.
+
+Nghĩa là: EventBridge rule tồn tại, SNS topic tồn tại, subscription đã xác nhận thật với ARN kết thúc bằng UUID — và **không sự kiện nào từng đi qua nó**, vì nguồn duy nhất mà rule chấp nhận chưa bao giờ được bật.
+
+Điều làm nó đáng ghi riêng: đây là **lỗi thứ hai** trên cùng một đường cảnh báo, và lỗi 28 đã che nó đi hoàn toàn.
+
+| | Lỗi 28 | Lỗi 33 |
+|---|---|---|
+| Hỏng ở đâu | Cuối đường — SNS chặn địa chỉ | Đầu đường — không có nguồn |
+| Triệu chứng | Y hệt nhau: `apply` xanh, `plan` sạch, không ai nhận gì |  |
+| Phát hiện bằng | Phép thử hai nhánh, sau bốn giả thuyết sai | Đọc lại code vì một câu hỏi không liên quan |
+
+Sửa xong lỗi 28 thì mọi lời khai đều nói "ổn" — subscription có ARN thật, `list-subscriptions-by-topic` in ra UUID. Nhưng cái được sửa là **đoạn ống cuối**, trong khi đầu ống không nối vào đâu cả.
+
+> **Bài học, và nó khác bài học của lỗi 28.** Lỗi 28 dạy: đừng tin `terraform plan`, hỏi thẳng dịch vụ. Lỗi 33 dạy một thứ khác — **hỏi đúng dịch vụ là chưa đủ nếu chỉ hỏi một đầu**. Tôi kiểm SNS rất kỹ và chưa lần nào hỏi *"cái gì tạo ra sự kiện đầu tiên?"*.
+>
+> Cách kiểm duy nhất đủ cho một đường cảnh báo là **gây ra một vi phạm thật rồi xem thư có tới không**. Mọi thứ ngắn hơn đều chỉ kiểm một đoạn ống.
+
+Bản sửa thêm `securityhub.tf` và một `check` bắt đúng trạng thái này lúc `plan`:
+
+```
+alert_emails da khai nhung enable_security_hub = false.
+notify.tf khop event theo source = aws.securityhub, nen KHONG CO
+su kien nao toi rule EventBridge va khong ai nhan duoc gi -
+du SNS co subscriber da xac nhan.
+```
+
+Cùng file đó cũng đưa **lỗi 14 vào code**: `aws_securityhub_organization_admin_account` là lệnh chỉ định riêng của Security Hub, và đăng ký `securityhub.amazonaws.com` ở tầng Organizations là chưa đủ — thiếu nó thì mọi lệnh gọi từ security account báo `InvalidAccessException: The account is not an administrator`, một thông báo không nhắc gì tới Organizations.
 
 ---
 

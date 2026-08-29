@@ -141,3 +141,15 @@ output "next_steps" {
 
   EOT
 }
+
+output "security_hub" {
+  description = "Trang thai Security Hub - nguon cua duong canh bao"
+  value = {
+    enabled       = var.enable_security_hub
+    admin_account = var.enable_security_hub ? var.security_account_id : null
+    standards     = keys(local.sh_selected)
+
+    # Duong canh bao chi song khi CA HAI cung co.
+    alert_path_live = var.enable_security_hub && length(var.alert_emails) > 0
+  }
+}

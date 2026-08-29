@@ -420,3 +420,100 @@ variable "allow_destroy" {
   type        = bool
   default     = false
 }
+
+########################################
+# SECURITY HUB
+########################################
+
+variable "enable_security_hub" {
+  description = <<-EOT
+    Bat Security Hub o pham vi to chuc.
+
+    MAC DINH TAT - vi day la thu tinh tien, khac han SCP.
+
+    ---------------------------------------------------------------
+    NHUNG NEU DA KHAI alert_emails THI PHAI BAT.
+
+    notify.tf khop event theo source = ["aws.securityhub"]. Khong bat
+    Security Hub thi khong co su kien nao toi rule EventBridge, va ca
+    duong canh bao nam im - khong loi, khong canh bao, khong gi ca.
+    Co check "alerts_have_a_source" bat truong hop nay luc plan.
+    ---------------------------------------------------------------
+
+    DUOC GI: phan lon DETECTIVE control cua Control Tower la AWS Config
+    managed rule, va Security Hub standard goi san chung. Bat FSBP cho
+    do phu tuong duong ma khong can dung Control Tower.
+
+    Con lai: PREVENTIVE control la SCP (layer organization), PROACTIVE
+    control la CloudFormation Hook - chi chay khi resource duoc tao qua
+    CloudFormation, nen khong dung toi voi mot to chuc dung Terraform.
+
+    CHI PHI: tinh theo so lan kiem tra bao mat, moi account, moi region.
+    Do o Cost Explorer voi Service = "AWS Security Hub" sau mot tuan
+    truoc khi mo rong.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "security_hub_standards" {
+  description = <<-EOT
+    Standard bat tai security account. Ten ngan, khong phai ARN.
+
+      fsbp          AWS Foundational Security Best Practices
+      cis-1.4       CIS AWS Foundations Benchmark 1.4.0
+      cis-3.0       CIS AWS Foundations Benchmark 3.0.0
+      nist-800-53   NIST SP 800-53 Rev 5
+      pci-dss       PCI DSS 3.2.1
+
+    Bat DUNG MOT CAI truoc. Cac standard trung nhau rat nhieu, nen cai
+    thu hai them it phat hien moi ma nhan doi so lan kiem tra phai tra
+    tien. check "security_hub_costs_money" canh bao khi khai hon mot.
+
+    CIS 1.2 KHONG co trong danh sach: ARN cua no dung duong dan
+    "ruleset/..." va khong co region - khac khuon moi ban khac. No cung
+    da bi thay the boi 1.4 va 3.0.
+  EOT
+  type        = list(string)
+  default     = ["fsbp"]
+
+  validation {
+    condition = alltrue([
+      for s in var.security_hub_standards :
+      contains(["fsbp", "cis-1.4", "cis-3.0", "nist-800-53", "pci-dss"], s)
+    ])
+    error_message = "Chi nhan: fsbp, cis-1.4, cis-3.0, nist-800-53, pci-dss."
+  }
+}
+
+variable "security_hub_auto_enable_new_accounts" {
+  description = <<-EOT
+    Account tao SAU co tu duoc bat Security Hub khong.
+
+    Cung khuon voi auto_deployment cua StackSet ben account-baseline:
+    thu gi phai nho lam tay cho tung account moi thi som muon cung bi
+    quen o mot account nao do.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "security_hub_auto_enable_standards" {
+  description = <<-EOT
+    Standard nao tu bat o account thanh vien: "DEFAULT" hoac "NONE".
+
+    AWS chi cho hai gia tri nay. DEFAULT = chi FSBP.
+
+    Muon CIS hoac NIST tren MOI account thanh vien thi bien nay KHONG
+    lam duoc - phai dung central configuration policy (API moi hon)
+    hoac dang ky tung account. security_hub_standards o tren CHI ap
+    cho security account.
+  EOT
+  type        = string
+  default     = "DEFAULT"
+
+  validation {
+    condition     = contains(["DEFAULT", "NONE"], var.security_hub_auto_enable_standards)
+    error_message = "Chi nhan DEFAULT hoac NONE."
+  }
+}
