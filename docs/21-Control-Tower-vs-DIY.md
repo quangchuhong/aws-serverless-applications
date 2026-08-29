@@ -80,12 +80,28 @@ Không phải vì DIY tốt hơn. Vì nó khớp với ràng buộc đã đặt 
 | Dấu hiệu | Vì sao CT hợp hơn |
 |---|---|
 | Cần bằng chứng tuân thủ cho kiểm toán | Config rule có lịch sử vi phạm, SCP không |
-| Trên ~10 account, nhiều team tự vend | Account Factory chuẩn hoá tốt hơn script tự viết |
+| Trên ~10 account, nhiều team tự vend | Account Factory chuẩn hoá tốt hơn script tự viết — [vì sao](#account-factory-là-một-portfolio-service-catalog) |
 | Cần dashboard tuân thủ sẵn có | CT có sẵn, DIY phải tự dựng |
 | Công ty đã dùng CT ở nơi khác | Nhất quán quan trọng hơn tối ưu |
 | Không có người chuyên trách platform | CT gánh phần bảo trì |
 
 Ngược lại, giữ DIY khi: cần chi phí ~$0, cần xoá–dựng lại thường xuyên, cần kiểm soát chính xác từng dòng policy, hoặc đang học.
+
+### Account Factory là một portfolio Service Catalog
+
+Dòng "Account Factory chuẩn hoá tốt hơn script tự viết" ở trên nghe như lời quảng cáo. Cơ chế thật thì cụ thể hơn: **Account Factory không phải phần mềm riêng của Control Tower — nó là một portfolio AWS Service Catalog.**
+
+Hệ quả là nó thừa hưởng **TagOptions**: mỗi lần vend account, người dùng đi qua một form, và tag nào có nhiều giá trị hợp lệ thì **không chọn thì không tạo được**. Không phải "nhớ gắn tag" mà là không có đường bỏ qua.
+
+Script vending tự viết ([doc 09](./09-Account-Vending-Tu-Dong.md)) thì tag chỉ là một tham số — quên truyền thì account vẫn ra đời, chỉ là không có tag, và không ai được báo.
+
+| | Script tự viết | Account Factory |
+|---|---|---|
+| Tag lúc vend | Tham số, quên được | TagOption, **buộc chọn** |
+| Ai chạy được | Người có quyền chạy pipeline | Người được share portfolio |
+| Sửa quy trình | Sửa code | Sửa product trong catalog |
+
+**Điểm đáng lấy về bản DIY:** bạn không cần Control Tower để có cơ chế này. Service Catalog dùng độc lập được, và [doc 11 mục 3b](./11-Tag-Policy-va-Cost-Allocation.md#3b-service-catalog-tagoptions--ép-tag-ở-thời-điểm-tạo) có cấu hình tham khảo. Nhưng nó chỉ đáng dựng khi **đội ứng dụng tự tạo resource** — một tổ chức mà mọi thứ đi qua Terraform thì `default_tags` đã phủ hết.
 
 ---
 

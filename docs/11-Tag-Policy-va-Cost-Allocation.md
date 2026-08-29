@@ -19,11 +19,14 @@ Bốn lớp thực thi, xếp theo thứ tự nên triển khai:
 | Lớp | Cơ chế | Tác dụng | Điểm yếu |
 |---|---|---|---|
 | **1. Terraform `default_tags`** | Provider tự gắn tag | Phủ ~90% resource, không tốn công | Chỉ áp cho resource tạo bằng Terraform |
+| **1b. Service Catalog TagOptions** | Ép tag lúc launch product | Người dùng **không chọn thì không tạo được** | Chỉ phủ resource launch từ catalog |
 | **2. Tag Policy** | AWS Organizations | Chuẩn hoá **giá trị** tag (viết hoa, danh sách hợp lệ) | Không chặn được resource tạo *thiếu* tag |
 | **3. SCP** | AWS Organizations | **Chặn** tạo resource nếu thiếu tag | Chỉ áp được cho một số action |
 | **4. AWS Config** | Detective | Phát hiện resource đã lỡ tạo mà thiếu tag | Sau khi việc đã rồi |
 
-Nhiều người bắt đầu từ lớp 2 vì tên nghe giống nhất với "bắt buộc tag" — rồi ngạc nhiên vì tag policy **không chặn** ai tạo EC2 không tag. Bắt đầu từ lớp 1: rẻ nhất, hiệu quả nhất.
+Hai lớp đầu **gắn** tag; ba lớp sau **ràng buộc** hoặc **phát hiện**. Đó là khác biệt quan trọng nhất trong bảng, và cũng là chỗ hay nhầm.
+
+Nhiều người bắt đầu từ lớp 2 vì tên nghe giống nhất với "bắt buộc tag" — rồi ngạc nhiên vì tag policy **không chặn** ai tạo EC2 không tag. Bắt đầu từ lớp 1: rẻ nhất, hiệu quả nhất. Lớp 1b chỉ đáng dựng khi đội ứng dụng tự tạo resource; mọi thứ đi qua Terraform thì nó chỉ thêm bộ máy phải bảo trì.
 
 ---
 
@@ -93,6 +96,147 @@ resource "aws_dynamodb_table" "orders" {
 > Vài resource (điển hình là `aws_autoscaling_group`, và một số resource có cơ chế tag riêng) hay sinh diff lặp lại khi dùng `default_tags`. Gặp trường hợp đó thì khai báo tag tường minh cho resource đó và thêm `ignore_changes` cho `tags_all`.
 
 Áp cùng bộ tag cho account vending ở [doc 09](./09-Account-Vending-Tu-Dong.md) — tag của account chính là nguồn cho `default_tags` của mọi workload trong account đó.
+
+### 3b. Service Catalog TagOptions — ép tag ở thời điểm tạo
+
+`default_tags` chỉ phủ được thứ Terraform quản. Người tạo resource bằng console hay SDK vẫn lọt. Cách duy nhất **ép** được tag lúc tạo mà không cần Terraform là **đổi cách người ta tạo resource**: đưa cho họ một catalog thay vì quyền tạo trực tiếp.
+
+TagOption là cặp key–value quản trong Service Catalog, gắn vào portfolio hoặc product. Khi ai đó launch product:
+
+| | Người dùng thấy gì |
+|---|---|
+| Key có **một** value | Tag tự gắn, không hiện ra, không bỏ được |
+| Key có **nhiều** value | **Buộc phải chọn một** mới launch được |
+
+Trường hợp thứ hai mới là điểm mạnh thật. Không phải "nhắc gắn tag" mà là **không chọn thì không tạo được**. Đó là thứ `default_tags` và tag policy đều không làm được — cái đầu chỉ phủ Terraform, cái sau chỉ ràng buộc *giá trị của tag đã gắn*.
+
+**Phạm vi rất hẹp, phải nói rõ:**
+
+| | TagOptions ép không |
+|---|---|
+| Launch product từ Service Catalog | ✅ |
+| Console, CLI, SDK | ❌ |
+| Terraform chạy trực tiếp | ❌ |
+| Resource đã tồn tại | ❌ |
+
+Nên nó **không** phải "ép tag lên mọi tài nguyên". Nó chỉ đáng dựng khi **đội ứng dụng tự tạo resource** — lúc đó bạn cần hàng rào ở đúng thời điểm tạo. Một tổ chức mà mọi thứ đi qua Terraform thì `default_tags` đã phủ hết, và Service Catalog chỉ thêm bộ máy phải bảo trì.
+
+> **Bạn có thể đã dùng nó mà không biết:** Account Factory của Control Tower *chính là* một portfolio Service Catalog. Đó là lý do [doc 21](./21-Control-Tower-vs-DIY.md) nói Account Factory chuẩn hoá tốt hơn script tự viết — không phải vì thuật toán hay hơn, mà vì nó buộc người vend account đi qua một form có TagOptions.
+
+#### Cấu hình tham khảo
+
+> **Chưa apply lần nào.** Khác với phần còn lại của repo, đoạn dưới đây chưa qua `terraform plan` với provider thật. Đọc như bản phác, không phải bản đã kiểm chứng.
+
+```hcl
+########################################
+# 1. TagOption — thư viện key–value của account
+#
+# Đây là "kho", chưa gắn vào đâu cả. Một key nhiều value thì
+# người launch BUỘC PHẢI CHỌN một.
+########################################
+
+resource "aws_servicecatalog_tag_option" "environment" {
+  for_each = toset(["dev", "staging", "prod", "sandbox"])
+
+  key   = "Environment"
+  value = each.value
+}
+
+resource "aws_servicecatalog_tag_option" "cost_center" {
+  for_each = toset(var.cost_center_codes)   # ["CC-1001", "CC-2002", ...]
+
+  key   = "CostCenter"
+  value = each.value
+}
+
+# Một value duy nhất -> tự gắn, người dùng không thấy và không bỏ được
+resource "aws_servicecatalog_tag_option" "managed_by" {
+  key   = "ManagedBy"
+  value = "service-catalog"
+}
+
+########################################
+# 2. Portfolio
+########################################
+
+resource "aws_servicecatalog_portfolio" "app_team" {
+  name          = "${var.project}-app-team"
+  description   = "Resource đội ứng dụng tự phục vụ"
+  provider_name = "Platform Engineering"
+}
+
+########################################
+# 3. Gắn TagOption vào portfolio
+#
+# Gắn ở PORTFOLIO thì MỌI product trong đó thừa hưởng — không phải
+# gắn lại cho từng product. Thêm product mới là tự có tag.
+########################################
+
+resource "aws_servicecatalog_tag_option_resource_association" "environment" {
+  for_each = aws_servicecatalog_tag_option.environment
+
+  resource_id   = aws_servicecatalog_portfolio.app_team.id
+  tag_option_id = each.value.id
+}
+
+resource "aws_servicecatalog_tag_option_resource_association" "cost_center" {
+  for_each = aws_servicecatalog_tag_option.cost_center
+
+  resource_id   = aws_servicecatalog_portfolio.app_team.id
+  tag_option_id = each.value.id
+}
+
+resource "aws_servicecatalog_tag_option_resource_association" "managed_by" {
+  resource_id   = aws_servicecatalog_portfolio.app_team.id
+  tag_option_id = aws_servicecatalog_tag_option.managed_by.id
+}
+
+########################################
+# 4. Launch constraint — dòng dễ quên nhất
+#
+# Không có nó thì người launch phải TỰ CÓ QUYỀN trên mọi dịch vụ
+# mà product tạo ra. Mà nếu họ đã có quyền đó thì họ tạo thẳng
+# được rồi, và cả cái catalog thành vô nghĩa.
+#
+# Có launch constraint: Service Catalog assume role này để tạo,
+# nên người dùng chỉ cần quyền launch product.
+########################################
+
+resource "aws_servicecatalog_constraint" "launch" {
+  description  = "Service Catalog tạo resource bằng role này"
+  portfolio_id = aws_servicecatalog_portfolio.app_team.id
+  product_id   = aws_servicecatalog_product.example.id
+  type         = "LAUNCH"
+
+  parameters = jsonencode({
+    RoleArn = aws_iam_role.sc_launch.arn
+  })
+}
+
+########################################
+# 5. Chia sẻ ra tổ chức
+#
+# Chia theo OU thì account TẠO SAU trong OU đó tự thấy portfolio —
+# cùng khuôn với auto_deployment của StackSet.
+########################################
+
+resource "aws_servicecatalog_portfolio_share" "workloads" {
+  portfolio_id = aws_servicecatalog_portfolio.app_team.id
+  type         = "ORGANIZATIONAL_UNIT"
+  principal_id = var.workloads_ou_arn
+
+  share_tag_options = true   # BẮT BUỘC, xem dưới
+}
+```
+
+#### Bốn chỗ dễ sai
+
+| | |
+|---|---|
+| **Thiếu `share_tag_options = true`** | Portfolio chia sang account khác nhưng **TagOption ở lại**. Người dùng bên đó launch được product mà không bị hỏi tag nào — đúng cái bạn dựng cả hệ thống để tránh, và nó hỏng im lặng |
+| **Thiếu launch constraint** | Người launch phải tự có quyền trên mọi dịch vụ product tạo ra. Có quyền đó rồi thì họ tạo thẳng được, catalog thành hình thức |
+| **TagOption theo account + region** | Không phải tài nguyên toàn cầu. Dùng ở nhiều region thì phải tạo lại ở từng region |
+| **Vô hiệu hoá thay vì xoá** | TagOption có trạng thái active/inactive. Ngừng dùng một value thì đặt `active = false` chứ đừng xoá — xoá làm product đang chạy mất tham chiếu |
 
 ---
 
