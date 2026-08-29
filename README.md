@@ -73,6 +73,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 | [`landing-zone/org-trail`](./landing-zone/org-trail/) | Organization CloudTrail – phủ mọi account hiện tại và tương lai. **Mặc định tắt** | ~$0 |
 | [`landing-zone/account-baseline`](./landing-zone/account-baseline/) | Thay cho AFT ở bản DIY – xoá default VPC tự động cho account mới, vending account. **Mặc định tắt** | $0 |
 | [`landing-zone/network`](./landing-zone/network/) | TGW + security VPC + Network Firewall + egress VPC, share qua RAM. **Mặc định tắt** | **~$770/tháng khi bật** |
+| [`landing-zone/service-catalog`](./landing-zone/service-catalog/) | Service Catalog TagOptions – ép chọn tag ở thời điểm tạo resource. **Mặc định tắt** | ~$0 |
 
 ## Demo chạy được
 

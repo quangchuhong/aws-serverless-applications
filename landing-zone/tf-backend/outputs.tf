@@ -16,6 +16,7 @@ locals {
     "landing-zone/org-trail"        = "org-trail/terraform.tfstate"
     "landing-zone/account-baseline" = "account-baseline/terraform.tfstate"
     "landing-zone/network"          = "network/terraform.tfstate"
+    "landing-zone/service-catalog"  = "service-catalog/terraform.tfstate"
 
     # Demo, NHUNG dang duoc giu lai lam mang that (ephemeral = false).
     # Demo binh thuong dung state local la du - dung len xem roi xoa.

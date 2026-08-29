@@ -1,0 +1,51 @@
+enable  = false          # doi thanh true khi da doc muc "Khi nao dang bat" o README
+project = "acme-lz"
+region  = "ap-southeast-1"
+
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+# De canh bao khi ban dang chay layer nay o management account
+management_account_id = "111111111111"
+
+########################################
+# TagOption
+#
+# 1 gia tri   -> tag tu gan, nguoi dung khong thay
+# 2 tro len   -> nguoi dung BUOC PHAI CHON
+########################################
+tag_options = {
+  Environment = ["dev", "staging", "prod", "sandbox"]
+  ManagedBy   = ["service-catalog"]
+
+  # Dien ma phong ban THAT. De rong thi khong ep duoc ai chon
+  # CostCenter, va do la key quan trong nhat cho viec chia bill.
+  CostCenter = ["CC-1001", "CC-2002", "CC-3010"]
+}
+
+portfolios = {
+  app-team = { description = "Resource doi ung dung tu phuc vu" }
+}
+
+########################################
+# Chia se - ARN cua OU, KHONG phai ID
+#
+#   aws organizations list-organizational-units-for-parent \
+#     --parent-id <root-id> \
+#     --query 'OrganizationalUnits[].[Name,Arn]' --output table
+########################################
+share_ou_arns = [
+  # "arn:aws:organizations::111111111111:ou/o-xxxx/ou-xxxx-yyyyyyyy",
+]
+
+########################################
+# Launch role
+#
+# DUNG gan AdministratorAccess: ai launch duoc product se gian tiep
+# co quyen do. Viet policy rieng, chi du cho product ban dua vao
+# catalog - va nho quyen CloudFormation, do la thu thuc su tao resource.
+########################################
+create_launch_role      = true
+launch_role_policy_arns = [
+  # "arn:aws:iam::111111111111:policy/acme-lz-sc-launch",
+]
