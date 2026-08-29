@@ -64,6 +64,30 @@ Rỗng thì thêm `cloudtrail.amazonaws.com` vào `aws_service_access_principals
 
 Ngoài ra cần một **account log archive** khác management account. Có `check` block bắt luôn.
 
+### Log archive có nhất thiết phải là account riêng?
+
+**Không** — không có ràng buộc kỹ thuật nào. Bucket này chỉ là một bucket S3 với bucket policy cho `cloudtrail.amazonaws.com`; đặt ở account security, hay bất kỳ account nào khác management, đều chạy. Một dòng trong tfvars:
+
+```hcl
+log_archive_account_id = "<security-account-id>"
+```
+
+Nhưng biết mình đánh đổi gì. Tính chất mua được bằng việc tách là **account phát hiện được không phải account xoá được**:
+
+| `lz-security` | `lz-logarchive` |
+|---|---|
+| **Được vận hành** — aggregator, Security Hub admin, SNS, EventBridge, người đăng nhập hằng ngày | **Không được vận hành** — chỉ giữ object |
+
+Cụ thể trong repo này: permission set `lz-security-admin` có `iam:*`. Không có `s3:*` — nhưng `iam:*` trong một account là đường đi tới mọi quyền khác trong account đó, kể cả `s3:DeleteObject` qua một role tự tạo. Và không SCP nào hiện tại chặn: `baseline` bảo vệ API của CloudTrail/Config chứ không bảo vệ object S3, còn `ProtectS3Recovery` chỉ gắn ở `Workloads/Production`.
+
+Gộp lại nghĩa là một phiên đăng nhập của đội security vừa có công cụ phát hiện vừa có bằng chứng.
+
+**Riêng layer này có một đường bù:** `enable_object_lock = true`. Chế độ `COMPLIANCE` thì không ai xoá được cho tới hết hạn, kể cả root — đó là thứ thật sự thay thế được ranh giới account. Đọc mô tả biến trước khi bật: nó **chỉ bật được lúc tạo bucket**, và chưa ai kiểm chứng với CloudTrail.
+
+> [`config-detective`](../config-detective/) **không có** đường bù đó — AWS Config không giao được file vào bucket bật Object Lock (lỗi 19, doc 22). Ở đó ranh giới account là lớp kiểm soát duy nhất còn lại.
+
+Gộp là lựa chọn hợp lý cho lab hoặc tổ chức nhỏ, nơi thêm một account là chi phí vận hành thật. Chỉ đừng gộp mà vẫn tưởng còn lớp bảo vệ đó.
+
 ---
 
 ## Chạy

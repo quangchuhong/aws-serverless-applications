@@ -49,6 +49,40 @@ variable "log_archive_account_id" {
     Ca ly do tach account nay: account bi xam nhap khong duoc xoa
     bang chung cua chinh no. Dat bucket ngay trong account bi tan
     cong thi lop bao ve nay mat y nghia.
+
+    ---------------------------------------------------------------
+    DAT BANG security_account_id CO DUOC KHONG?
+
+    Duoc - khong co rang buoc ky thuat nao. Chi la mot bucket voi mot
+    bucket policy; tro vao dau cung chay. Nhung biet minh danh doi gi:
+
+      security account   DUOC VAN HANH - aggregator, Security Hub
+                         admin, SNS, EventBridge, va nguoi dang nhap
+                         hang ngay
+      log archive        KHONG duoc van hanh - chi giu object,
+                         khong ai dang nhap
+
+    Tinh chat mua duoc bang viec tach: ACCOUNT PHAT HIEN DUOC KHONG
+    PHAI ACCOUNT XOA DUOC.
+
+    Cu the trong repo nay: permission set lz-security-admin co iam:*.
+    Khong co s3:* - nhung iam:* trong mot account la duong di toi moi
+    quyen khac trong account do (tao role co s3:DeleteObject roi assume).
+    Va khong SCP nao hien tai chan viec do: baseline bao ve API cua
+    CloudTrail/Config chu khong bao ve object S3, con ProtectS3Recovery
+    chi gan o Workloads/Production.
+
+    Gop lai = mot phien dang nhap cua doi security vua co cong cu phat
+    hien vua co bang chung.
+
+    THU LE RA THAY THE DUOC RANH GIOI DO: Object Lock che do COMPLIANCE
+    - khong ai xoa duoc ke ca root. Voi CloudTrail thi dung duoc
+    (enable_object_lock, mac dinh false vi chua ai kiem chung).
+    Voi AWS Config thi KHONG - xem loi 19 doc 22.
+
+    Gop la lua chon hop ly cho lab hoac to chuc nho. Chi dung gop ma
+    van tuong minh con lop bao ve do.
+    ---------------------------------------------------------------
   EOT
   type        = string
 

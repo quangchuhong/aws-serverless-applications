@@ -43,7 +43,32 @@ variable "security_account_id" {
 }
 
 variable "log_archive_account_id" {
-  description = "Account log archive - giu S3 nhan Config snapshot"
+  description = <<-EOT
+    Account log archive - giu S3 nhan Config snapshot.
+
+    DAT BANG security_account_id CO DUOC KHONG?
+
+    Duoc - khong co rang buoc ky thuat nao. Nhung o layer NAY viec gop
+    dat hon o org-trail, vi mot ly do cu the:
+
+      Object Lock che do COMPLIANCE la thu duy nhat lam cho "gop van an
+      toan" - khong ai xoa duoc ke ca root. Va AWS Config KHONG GIAO
+      DUOC FILE vao bucket bat Object Lock. Da kiem chung, xem loi 19
+      doc 22, va precondition trong s3-log-archive.tf chan truoc de
+      khong ai vap lai.
+
+    Nen voi snapshot cua Config, RANH GIOI ACCOUNT LA LOP KIEM SOAT DUY
+    NHAT CON LAI. Gop la bo not no.
+
+    Cu the: lz-security-admin co iam:*, tuc co duong di toi moi quyen
+    khac trong account do - ke ca s3:DeleteObject qua mot role tu tao.
+    Khong SCP nao hien tai chan viec do.
+
+    Van gop duoc - lab hoac to chuc nho thi them mot account la chi phi
+    van hanh that. Chi dung tuong minh con lop bao ve do.
+
+    Xem check "evidence_lives_outside_the_operated_account".
+  EOT
   type        = string
   default     = ""
 }

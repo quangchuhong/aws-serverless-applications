@@ -294,3 +294,31 @@ check "retention_longer_than_object_lock" {
     error_message = "snapshot_retention_days phai LON HON object_lock_retention_days, neu khong lifecycle se co gang xoa object dang bi khoa va that bai lang le."
   }
 }
+
+########################################
+# GOP HAI ACCOUNT - canh bao, khong chan
+#
+# Day la lua chon thiet ke hop le, khong phai loi. Nhung no lang le:
+# apply xanh, moi thu chay, va lop bao ve da bien mat ma khong co
+# dong nao noi ra.
+########################################
+
+check "evidence_lives_outside_the_operated_account" {
+  assert {
+    condition = (
+      !local.enabled
+      || var.log_archive_account_id == ""
+      || var.log_archive_account_id != var.security_account_id
+    )
+
+    error_message = join(" ", [
+      "log_archive_account_id trung security_account_id.",
+      "Chay duoc, nhung bang chung gio nam trong account DUOC VAN HANH:",
+      "lz-security-admin co iam:*, tuc co duong toi s3:DeleteObject qua",
+      "mot role tu tao, va khong SCP nao hien tai chan viec do.",
+      "Object Lock - thu duy nhat thay the duoc ranh gioi account -",
+      "KHONG dung duoc voi AWS Config (loi 19 doc 22).",
+      "Chap nhan thi bo qua canh bao nay; con khong thi tach account.",
+    ])
+  }
+}

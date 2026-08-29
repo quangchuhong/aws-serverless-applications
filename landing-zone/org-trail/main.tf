@@ -317,3 +317,4 @@ check "data_events_cost_warning" {
     error_message = "data_events = true: CloudTrail tinh tien theo TUNG su kien data, va o pham vi to chuc thi mot bucket S3 binh thuong sinh hang trieu su kien moi thang. Chi bat khi da khoanh pham vi cu the trong event_selector."
   }
 }
+

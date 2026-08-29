@@ -73,6 +73,21 @@ Lợi thêm: cùng đường này gom luôn GuardDuty, Inspector, Macie — khô
 | **Aggregator** | Security | Mảnh thiếu trong sơ đồ ban đầu |
 | `aws_config_organization_managed_rule` | Security | **Một** resource, áp cho **mọi** account |
 | EventBridge + SNS + Lambda | Security | Đọc Security Hub findings |
+| Security Hub | Management → Security | **Nguồn** của đường cảnh báo — mặc định tắt |
+
+### Vì sao bucket ở log archive mà không phải security
+
+Không có ràng buộc kỹ thuật — đặt ở security account chạy được, một dòng trong tfvars. Nhưng ở layer **này** việc gộp đắt hơn ở `org-trail`, vì một lý do cụ thể.
+
+Tính chất mua được bằng việc tách: **account phát hiện được không phải account xoá được.** Security là account *được vận hành* — aggregator, Security Hub admin, SNS, người đăng nhập hằng ngày. Log archive thì không ai đăng nhập, việc duy nhất là giữ object.
+
+Cụ thể: `lz-security-admin` có `iam:*`, tức có đường tới mọi quyền khác trong account đó — kể cả `s3:DeleteObject` qua một role tự tạo. Không SCP nào hiện tại chặn việc đó.
+
+**Và ở đây không có đường bù.** Thứ thường thay thế được ranh giới account là Object Lock chế độ `COMPLIANCE` — không ai xoá được kể cả root. Nhưng **AWS Config không giao được file vào bucket bật Object Lock**: đó là lỗi 19 trong [doc 22](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md), và `s3-log-archive.tf` có `precondition` chặn trước để không ai vấp lại.
+
+Nên với snapshot của Config, **ranh giới account là lớp kiểm soát duy nhất còn lại**. Gộp là bỏ nốt nó.
+
+Vẫn gộp được — lab hoặc tổ chức nhỏ thì thêm một account là chi phí vận hành thật. `check "evidence_lives_outside_the_operated_account"` sẽ cảnh báo lúc `plan` chứ không chặn, để quyết định đó là quyết định có ý thức chứ không phải một dòng tfvars lặng lẽ.
 
 ### Vì sao dùng organization rule chứ không phải rule từng account
 
