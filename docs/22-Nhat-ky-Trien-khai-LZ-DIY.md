@@ -1237,6 +1237,20 @@ Deny đó **phải nêu Resource cụ thể**, không được `"*"` — `s3:Del
 
 Và nó được gắn **tự động** theo `contains(each.value.statements, "deny_guardrails")` chứ không khai tay ở từng set: khai tay nghĩa là phải nhớ gắn vào 10 chỗ, nhớ lại mỗi lần thêm set mới — và chỗ bị quên chính là chỗ mất bằng chứng.
 
+**Số đo thật sau khi áp dụng:**
+
+| | Trước | Sau |
+|---|---|---|
+| Tổng assignment | 53 | **29** |
+| Permission set trên `lz-logarchive` | 10 | **3** |
+| `lz-server-admin`, `lz-db-admin` | 5 account mỗi cái | **2** — chỉ app-dev và app-prod |
+| `lz-security-admin` | 5 | **1** |
+| `lz-network-admin` | 5 | **1** |
+
+Ba set còn lại trên log archive là `lz-account-admin` (trần đã nêu ở trên), `lz-auditor` và `lz-security-operator` — hai cái sau chỉ đọc và đã chặn data-plane.
+
+Terraform báo `16 to change`, đúng bằng 7 tag `PermissionSetScope` đổi giá trị cộng 9 inline policy nhận thêm `DenyDeletingAuditEvidence` — đúng 9 set có `deny_guardrails`.
+
 > **Bài học:** phân quyền có hai câu hỏi, và tôi chỉ hỏi một. *"Set này cho quyền gì?"* đọc trong policy. *"Set này gán vào đâu?"* đọc ở chỗ khác hoàn toàn. Một set vô hại ở account workload thành nguy hiểm ở account log archive mà **nội dung policy không đổi một chữ**.
 >
 > Output `scope_map` thêm vào để câu hỏi thứ hai trả lời được bằng một lệnh.
