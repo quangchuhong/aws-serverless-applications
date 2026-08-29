@@ -362,6 +362,26 @@ locals {
   # core_accounts.log_archive de rong thi khong rap duoc ten bucket va
   # statement KHONG duoc sinh ra. check "core_accounts_declared" o
   # organizations.tf canh bao truong hop do.
+  #
+  # ---------------------------------------------------------------
+  # TRAN CUA LOP NAY - KHONG PHAI BAO VE TUYET DOI
+  #
+  # Statement duoc gan theo deny_guardrails. lz-account-admin co
+  # statements = [] - khong co inline policy nao, chi
+  # AdministratorAccess - nen KHONG nhan deny nay, va van o scope
+  # "all". Nhom lz-platform-admins do do van co s3:* trong account
+  # log archive.
+  #
+  # Do la CO Y, khong phai sot: lz-account-admin la duong break-glass,
+  # va phai co ai do van hanh duoc account log archive. Chan no thi
+  # chi con credential root.
+  #
+  # Nen doc lop nay dung pham vi cua no: no chan cac set VAN HANH
+  # (compute, database, ung dung, phan tich) cham vao bang chung.
+  # No KHONG chan duong quan tri nen tang. Muon chan ca duong do thi
+  # phai tach mot set quan tri rieng cho log archive voi group rieng
+  # - mot quyet dinh khac, khong phai mot dong them vao day.
+  # ---------------------------------------------------------------
   ########################################
   evidence_bucket_arns = var.core_accounts.log_archive == "" ? [] : [
     "arn:aws:s3:::${var.project}-cloudtrail-${var.core_accounts.log_archive}",
