@@ -53,13 +53,31 @@ output "accounts_in_scope" {
   value       = { for k, v in local.scope_accounts : k => length(v) }
 }
 
+output "scope_map" {
+  description = <<-EOT
+    Pham vi -> account ID that su nam trong do.
+
+    Doc cai nay khi thac mac "sao account X lai nhan nhieu permission
+    set the". Dem tung account xuat hien o bao nhieu pham vi la ra.
+
+    Ba pham vi ha tang loi (security, network, workloads) suy ra tu
+    var.core_accounts. Khai thieu thi "workloads" bang dung "all", va
+    set van hanh compute/database quay lai duoc gan vao account log
+    archive - noi giu bang chung kiem toan.
+  EOT
+  value       = { for k, v in local.scope_accounts : k => sort(v) }
+}
+
 output "unscoped_accounts" {
   description = <<-EOT
     Account ACTIVE khong thuoc analytics/nonprod/prod nao.
 
-    Cac account nay chi nhan duoc permission set pham vi "all".
-    Neu co account workload nam trong danh sach nay thi ban da quen
-    khai no vao accounts_by_scope.
+    Cac account nay van nhan permission set pham vi "all" va
+    "workloads" (tru khi chung la account ha tang loi), cong them
+    "security" hoac "network" neu dung la account do.
+
+    Co account workload nam trong danh sach nay = da quen khai no
+    vao accounts_by_scope.
   EOT
   value = sort(tolist(setsubtract(
     toset(local.all_accounts),

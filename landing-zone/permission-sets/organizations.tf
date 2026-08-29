@@ -35,13 +35,74 @@ locals {
     for id in local.active_accounts : id if id != var.management_account_id
   ] : local.active_accounts
 
+  # Ba account ha tang loi. "all" van gom chung - do la co y, vi
+  # lz-account-admin va lz-auditor phai vao duoc moi noi. Cai duoc
+  # tach ra la nhung set KHONG can toi chung.
+  core_accounts = compact([
+    var.core_accounts.security,
+    var.core_accounts.log_archive,
+    var.core_accounts.network,
+  ])
+
   scope_accounts = {
-    all        = local.all_accounts
+    # Moi account thanh vien. CHI danh cho set that su can di khap noi:
+    # quan tri, kiem toan, va chi-doc bao mat.
+    all = local.all_accounts
+
     management = [var.management_account_id]
-    analytics  = try(var.accounts_by_scope["analytics"], [])
-    nonprod    = try(var.accounts_by_scope["nonprod"], [])
-    prod       = try(var.accounts_by_scope["prod"], [])
-    none       = []
+
+    # Account HA TANG LOI - tach rieng de set van hanh workload khong
+    # cham toi. Rong thi khong sinh assignment nao, dung y muon.
+    security = compact([var.core_accounts.security])
+    network  = compact([var.core_accounts.network])
+
+    # MOI account TRU ba account loi.
+    #
+    # Day la pham vi dung cho lz-db-* va lz-server-*: chung quan
+    # database va compute, ma ba account kia khong chay thu nao ca.
+    # Truoc khi tach, lz-server-admin nhan s3:* trong account log
+    # archive - tuc xoa duoc bang chung kiem toan.
+    #
+    # core_accounts de rong thi cai nay = all, va khong tach duoc gi.
+    workloads = [
+      for id in local.all_accounts : id if !contains(local.core_accounts, id)
+    ]
+
+    analytics = try(var.accounts_by_scope["analytics"], [])
+    nonprod   = try(var.accounts_by_scope["nonprod"], [])
+    prod      = try(var.accounts_by_scope["prod"], [])
+    none      = []
+  }
+}
+
+########################################
+# KIEM TRA CHEO
+########################################
+
+check "core_accounts_declared" {
+  assert {
+    condition = length(local.core_accounts) > 0
+    error_message = join(" ", [
+      "core_accounts de rong nen pham vi \"workloads\" bang dung \"all\".",
+      "Nghia la lz-server-admin va lz-db-admin van duoc gan vao account",
+      "security, log archive va network - va lz-server-admin co s3:*,",
+      "tuc xoa duoc bang chung trong bucket CloudTrail/Config.",
+      "Khai core_accounts de lop tach nay co tac dung.",
+    ])
+  }
+}
+
+check "core_accounts_are_real_members" {
+  assert {
+    condition = alltrue([
+      for id in local.core_accounts : contains(local.active_accounts, id)
+    ])
+    error_message = join(" ", [
+      "Co account ID trong core_accounts khong phai thanh vien ACTIVE",
+      "cua to chuc. Sai ID thi no khong loai duoc gi khoi \"workloads\"",
+      "- lop tach im lang khong hoat dong. Doi chieu:",
+      "aws organizations list-accounts --query 'Accounts[].[Id,Name]' --output table",
+    ])
   }
 }
 

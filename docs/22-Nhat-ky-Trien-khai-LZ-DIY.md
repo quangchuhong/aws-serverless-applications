@@ -33,7 +33,7 @@ Dựng từ một account trắng đến LZ có guardrail hoạt động, kiểm
 | Đường cảnh báo | `plan-all.sh` bắt được email cảnh báo bảo mật **không tới ai** — xem mục 6e |
 | **Xoá và dựng lại** | 158 resource xoá / 5 layer, rồi 162 dựng lại — kiểm chứng cả hai chiều, xem mục 7 |
 
-**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 33 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
+**Thời gian thật:** ~3 giờ, trong đó phần lớn là gỡ 34 lỗi dưới đây. Đường đi sạch thì khoảng 1 giờ.
 
 **Chi phí đo được:** $0.29 một lần cho lần quét đầu của AWS Config, sau đó ~$0/ngày. Sáu layer còn lại không tốn gì — S3 vài trăm KB, DynamoDB `PAY_PER_REQUEST`, Organizations/OU/SCP miễn phí.
 
@@ -76,12 +76,13 @@ Xếp theo thứ tự gặp phải.
 | 29 | `Invalid template interpolation value` ×4, ngay ở `enable = false` | `one()` trả `null` khi `count = 0`, và null không nội suy được vào string template | **Lỗi code** | `5debc69` |
 | 30 | `\1 not defined in the RE` trên macOS, script chạy tốt trên Linux | `sed -i` của BSD **bắt buộc** có tham số hậu tố, nên `sed -i -E` bị đọc thành *"hậu tố = -E"* — mất chế độ ERE, ngoặc thành ký tự thường | **Lỗi code** | `6e771b6` |
 | 31 | Script báo `Xong: 1 file` trong khi **không đổi được gì** | Đếm file đã mở thay vì dòng đã sửa. Trên một script chỉ có mỗi việc gỡ lớp chặn cuối cùng, báo thành công giả nguy hơn lỗi 30 | **Lỗi thiết kế** | `6e771b6` |
+| 34 | `lz-server-admin` có `s3:*` **ngay trong account log archive** | 10/17 permission set khai `scope = "all"`, mà `all` suy ra từ Organizations nên gồm cả account giữ bằng chứng. `DenyTamperingWithGuardrails` chặn `cloudtrail:DeleteTrail` nhưng **không** chặn `s3:DeleteObject` | **Lỗi thiết kế** | *(mục 7i)* |
 | 33 | Đường cảnh báo bảo mật **chưa bao giờ có nguồn** | `notify.tf` khớp `source = aws.securityhub`, nhưng không gì trong layer bật Security Hub. EventBridge rule tồn tại, SNS có subscriber đã xác nhận, và **không sự kiện nào đi qua**. Lỗi 28 chỉ là một nửa câu chuyện | **Lỗi thiết kế** | *(mục 7h)* |
 | 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
 
-**29/33 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**30/34 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
-> Bốn lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+> Năm lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1198,6 +1199,47 @@ du SNS co subscriber da xac nhan.
 ```
 
 Cùng file đó cũng đưa **lỗi 14 vào code**: `aws_securityhub_organization_admin_account` là lệnh chỉ định riêng của Security Hub, và đăng ký `securityhub.amazonaws.com` ở tầng Organizations là chưa đủ — thiếu nó thì mọi lệnh gọi từ security account báo `InvalidAccessException: The account is not an administrator`, một thông báo không nhắc gì tới Organizations.
+
+### 7i. Lỗi 34 — `scope = "all"` nghĩa là *tất cả*, kể cả nơi giữ bằng chứng
+
+Câu hỏi của người dùng: *"sao account `lz-security` lại nhận nhiều permission set đến vậy?"*
+
+Đếm ra 10. Nguyên nhân: **10/17 permission set khai `scope = "all"`**, và `all` không phải một danh sách viết tay — nó suy ra từ Organizations:
+
+```hcl
+all_accounts = [for id in local.active_accounts : id if id != var.management_account_id]
+```
+
+Không có khái niệm "chỉ account workload". `all` là *tất cả*, kể cả hai account giữ tài sản nhạy cảm nhất.
+
+Đó mới là câu hỏi. Câu trả lời tệ hơn nhiều.
+
+`lz-server-admin` cũng ở `scope = "all"`. Quyền của nó sinh từ `admin_actions["compute"]`, và `svc_compute` chứa `"s3"` — nên nó có **`s3:*`**. Còn `all` gồm cả `lz-logarchive`.
+
+Kiểm các deny của set đó: `DenyEc2NetworkApis`, `DenyEc2SecurityGroupRuleChanges`, `DenyIamWritesOutsideSecurityDomain`, `DenyTamperingWithGuardrails`. Cái cuối chặn `cloudtrail:DeleteTrail`, `config:DeleteConfigurationRecorder`… **không chặn `s3:DeleteObject`**.
+
+> **Kết quả: cả đội hạ tầng compute xoá được bucket CloudTrail và bucket Config snapshot của cả tổ chức.**
+
+Điều làm nó đáng ghi riêng: **hai tin nhắn trước đó tôi vừa bảo vệ chính lớp bảo mật này.** Người dùng hỏi vì sao log phải ghi vào account log archive riêng, tôi trả lời rằng nó mua được tính chất *"account phát hiện được không phải account xoá được"*, và lập luận dựa trên việc `lz-security-admin` phải đi vòng qua `iam:*`.
+
+Lập luận đúng về ranh giới account, và **thiếu hẳn tầng permission set đâm xuyên qua nó** — không cần vòng vèo, `s3:*` là cấp thẳng. Tôi đã đọc kỹ SCP và IAM policy của một account, rồi quên hỏi *ai được gán vào account đó*.
+
+**Bản sửa dùng hai lớp, vì một lớp là một lần sửa nhầm:**
+
+| Lớp | Làm gì |
+|---|---|
+| **Phạm vi** | Tách `all` thành `all` / `security` / `network` / `workloads`. `workloads` = mọi account **trừ** ba account hạ tầng lõi, khai trong `core_accounts` |
+| **Deny cứng** | `DenyDeletingAuditEvidence` nêu đích danh ARN của hai bucket bằng chứng, gắn **tự động** vào mọi set đã có `deny_guardrails` |
+
+Lớp thứ hai bắt trường hợp sau này ai đó khai lại `scope = "all"`, hoặc thêm một account lõi mà quên đưa vào `core_accounts`. Một lớp thì một lần sửa nhầm là mất; hai lớp thì phải sai ở hai chỗ khác nhau cùng lúc.
+
+Deny đó **phải nêu Resource cụ thể**, không được `"*"` — `s3:DeleteBucket` trên `"*"` sẽ chặn cả việc xoá bucket hợp lệ trong account workload, mà quản S3 ở đó đúng là việc của `lz-server-admin`. Tôi viết sai chỗ này ở bản nháp đầu và phải sửa lại trước khi commit.
+
+Và nó được gắn **tự động** theo `contains(each.value.statements, "deny_guardrails")` chứ không khai tay ở từng set: khai tay nghĩa là phải nhớ gắn vào 10 chỗ, nhớ lại mỗi lần thêm set mới — và chỗ bị quên chính là chỗ mất bằng chứng.
+
+> **Bài học:** phân quyền có hai câu hỏi, và tôi chỉ hỏi một. *"Set này cho quyền gì?"* đọc trong policy. *"Set này gán vào đâu?"* đọc ở chỗ khác hoàn toàn. Một set vô hại ở account workload thành nguy hiểm ở account log archive mà **nội dung policy không đổi một chữ**.
+>
+> Output `scope_map` thêm vào để câu hỏi thứ hai trả lời được bằng một lệnh.
 
 ---
 

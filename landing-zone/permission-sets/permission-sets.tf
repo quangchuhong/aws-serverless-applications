@@ -259,7 +259,7 @@ locals {
     "lz-network-admin" = {
       description      = "Administrative access to AWS networking services and APIs"
       session_duration = "PT4H"
-      scope            = "all"
+      scope            = "network"
       managed          = ["arn:aws:iam::aws:policy/job-function/NetworkAdministrator"]
       statements       = ["allow_network_admin", "iam_minimal", "deny_iam_writes", "deny_guardrails"]
     }
@@ -267,7 +267,7 @@ locals {
     "lz-network-operator" = {
       description      = "Read-only access to AWS networking services and APIs"
       session_duration = "PT8H"
-      scope            = "all"
+      scope            = "network"
       managed          = ["arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"]
       statements       = concat(["allow_network_read", "deny_iam_writes", "deny_interactive_access"], local.guard_data)
     }
@@ -282,7 +282,7 @@ locals {
     "lz-security-admin" = {
       description      = "Administrative access to AWS security services and APIs"
       session_duration = "PT1H"
-      scope            = "all"
+      scope            = "security"
       managed          = []
       statements       = concat(["allow_security_admin", "deny_guardrails"], local.guard_bound)
     }
@@ -305,7 +305,7 @@ locals {
     "lz-server-admin" = {
       description      = "Administrative access to compute, storage and related services"
       session_duration = "PT4H"
-      scope            = "all"
+      scope            = "workloads"
       managed          = []
       statements = [
         "allow_server_admin",
@@ -321,7 +321,7 @@ locals {
     "lz-server-operator" = {
       description      = "Read-only access to compute, storage and related services"
       session_duration = "PT8H"
-      scope            = "all"
+      scope            = "workloads"
       managed          = ["arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"]
       statements       = concat(["allow_server_read", "allow_logs_read", "deny_iam_writes", "deny_interactive_access"], local.guard_data)
     }
@@ -338,7 +338,7 @@ locals {
     "lz-db-admin" = {
       description      = "Administrative access to the database services"
       session_duration = "PT1H"
-      scope            = "all"
+      scope            = "workloads"
       managed          = []
       statements       = ["allow_db_admin", "passrole_workload", "iam_minimal", "deny_iam_writes", "deny_guardrails"]
     }
@@ -346,7 +346,7 @@ locals {
     "lz-db-operator" = {
       description      = "Read-only access to the database services"
       session_duration = "PT8H"
-      scope            = "all"
+      scope            = "workloads"
       managed          = ["arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"]
       statements       = concat(["allow_db_read", "deny_iam_writes", "deny_interactive_access"], local.guard_data)
     }
@@ -487,8 +487,21 @@ resource "aws_ssoadmin_permission_set_inline_policy" "this" {
   instance_arn       = local.sso_instance_arn
   permission_set_arn = aws_ssoadmin_permission_set.this[each.key].arn
 
+  # Statement bao ve bucket bang chung duoc GAN TU DONG vao moi set da
+  # co deny_guardrails - khong khai tay o tung set.
+  #
+  # Khai tay nghia la phai nho gan no vao 10 cho, va nho lam lai moi
+  # lan them mot set moi. Thu phai nho lam la thu som muon se quen o
+  # mot cho nao do - va cho bi quen chinh la cho mat bang chung.
+  #
+  # Rong khi core_accounts.log_archive chua khai; xem locals-policies.tf.
   inline_policy = format(
     "{\"Version\":\"2012-10-17\",\"Statement\":[%s]}",
-    join(",", [for n in each.value.statements : local.stmt[n]])
+    join(",", concat(
+      [for n in each.value.statements : local.stmt[n]],
+      contains(each.value.statements, "deny_guardrails")
+      ? [for s in local.deny_evidence_deletion : jsonencode(s)]
+      : [],
+    ))
   )
 }

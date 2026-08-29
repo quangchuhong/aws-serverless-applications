@@ -335,4 +335,64 @@ locals {
     ]
     Resource = "*"
   }
+
+  ########################################
+  # BUCKET BANG CHUNG - lop bao ve thu hai
+  #
+  # VI SAO CAN, KHI DA TACH PHAM VI:
+  #
+  # Pham vi la lop thu nhat - lz-server-admin gio chi vao account
+  # workload, khong vao log archive nua. Day la lop thu hai, cho truong
+  # hop ai do sau nay khai lai scope = "all", hoac them mot account loi
+  # ma quen dua vao core_accounts.
+  #
+  # Mot lop thi mot lan sua nham la mat. Hai lop thi phai sai o hai cho
+  # khac nhau cung luc.
+  #
+  # deny_guardrails chan API cua CloudTrail va Config. Statement nay
+  # chan viec xoa CHINH FILE - thu ma DeleteTrail khong dung toi.
+  #
+  # RESOURCE PHAI CU THE, KHONG DUOC "*".
+  #
+  # Deny s3:DeleteBucket tren "*" se chan ca viec xoa bucket hop le
+  # trong account workload - lz-server-admin quan S3 o do la dung viec.
+  # Nen statement nay chi neu dich danh bon ARN cua hai bucket bang
+  # chung.
+  #
+  # core_accounts.log_archive de rong thi khong rap duoc ten bucket va
+  # statement KHONG duoc sinh ra. check "core_accounts_declared" o
+  # organizations.tf canh bao truong hop do.
+  ########################################
+  evidence_bucket_arns = var.core_accounts.log_archive == "" ? [] : [
+    "arn:aws:s3:::${var.project}-cloudtrail-${var.core_accounts.log_archive}",
+    "arn:aws:s3:::${var.project}-cloudtrail-${var.core_accounts.log_archive}/*",
+    "arn:aws:s3:::${var.project}-config-snapshots-${var.core_accounts.log_archive}",
+    "arn:aws:s3:::${var.project}-config-snapshots-${var.core_accounts.log_archive}/*",
+  ]
+
+  deny_evidence_deletion = length(local.evidence_bucket_arns) == 0 ? [] : [{
+    Sid    = "DenyDeletingAuditEvidence"
+    Effect = "Deny"
+    Action = [
+      # Xoa file
+      "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
+
+      # Xoa ca bucket - nhanh hon xoa tung file
+      "s3:DeleteBucket",
+      "s3:DeleteBucketPolicy",
+
+      # Tat versioning roi xoa: khong con version cu de khoi phuc
+      "s3:PutBucketVersioning",
+
+      # Dat lifecycle het han sau 1 ngay - xoa ma khong goi lenh xoa nao
+      "s3:PutLifecycleConfiguration",
+
+      # Go Object Lock neu sau nay co bat
+      "s3:PutObjectRetention",
+      "s3:PutObjectLegalHold",
+      "s3:BypassGovernanceRetention",
+    ]
+    Resource = local.evidence_bucket_arns
+  }]
 }

@@ -78,6 +78,51 @@ variable "accounts_by_scope" {
   }
 }
 
+variable "core_accounts" {
+  description = <<-EOT
+    Account HA TANG LOI - khong phai noi chay workload.
+
+      security      Config aggregator, Security Hub admin, canh bao
+      log_archive   bucket CloudTrail + Config snapshot. BANG CHUNG.
+      network       TGW, Network Firewall, egress
+
+    ---------------------------------------------------------------
+    VI SAO PHAI KHAI O DAY
+
+    Pham vi "all" suy ra tu Organizations, nen no la MOI account thanh
+    vien - ke ca ba account tren. Truoc khi co bien nay, lz-server-admin
+    (co scope "all", va admin_actions["compute"] chua "s3") nhan quyen
+    s3:* NGAY TRONG account log archive. Khong deny nao chan:
+    DenyTamperingWithGuardrails chan cloudtrail:DeleteTrail va
+    config:Delete*, KHONG chan s3:DeleteObject.
+
+    Nghia la ca doi ha tang compute xoa duoc bang chung kiem toan cua
+    to chuc. Ranh gioi account van con, nhung permission set dam thang
+    qua no.
+
+    De RONG thi pham vi "workloads" bang dung "all" va lop tach nay
+    khong ton tai. check "core_accounts_declared" canh bao khi do.
+    ---------------------------------------------------------------
+  EOT
+  type = object({
+    security    = optional(string, "")
+    log_archive = optional(string, "")
+    network     = optional(string, "")
+  })
+  default = {}
+
+  validation {
+    condition = alltrue([
+      for id in compact([
+        var.core_accounts.security,
+        var.core_accounts.log_archive,
+        var.core_accounts.network,
+      ]) : can(regex("^[0-9]{12}$", id))
+    ])
+    error_message = "Account ID phai dung 12 chu so, hoac de rong."
+  }
+}
+
 variable "exclude_management_from_all" {
   description = <<-EOT
     Loai management account khoi pham vi \"all\".
