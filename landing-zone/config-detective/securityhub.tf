@@ -56,16 +56,50 @@ locals {
 ########################################
 # 1. Bat o MANAGEMENT account
 #
-# EnableOrganizationAdminAccount goi tu management account, va doi
-# Security Hub da bat o chinh account do. Nen buoc nay dung truoc
-# viec uy quyen, khong phai sau.
+# DAY KHONG PHAI DIEU KIEN TIEN QUYET - trang thai that da chung minh.
+#
+# Ban dau file nay ghi rang EnableOrganizationAdminAccount doi Security
+# Hub phai bat san o management account. SAI. Do thay duoc bang hai
+# lenh, tren chinh to chuc nay:
+#
+#   aws securityhub describe-hub                      (management)
+#     -> InvalidAccessException: Account ... is not subscribed
+#   aws securityhub list-organization-admin-accounts  (management)
+#     -> 458195083898  ENABLED
+#
+# Uy quyen dang chay, management chua bao gio subscribe. Xem loi 36
+# cua doc 22.
+#
+# ---------------------------------------------------------------
+# VAY VI SAO VAN GIU RESOURCE NAY?
+#
+# Khong phai de uy quyen duoc, ma de management account DUOC GIAM SAT.
+#
+# auto_enable = true o muc 4 KHONG voi toi management account - cung
+# hai lenh tren la bang chung: auto_enable da bat tu lau va management
+# van khong subscribe. Khong bat o day thi khong ai bat no.
+#
+# Va day la account dang tiec nhat neu bo sot: no giu Organizations,
+# SCP, va hoa don - dong thoi la account duy nhat SCP KHONG BAO GIO
+# ap duoc. No can lop phat hien HON cac account khac, khong phai kem hon.
+#
+# ---------------------------------------------------------------
+# HE QUA KHI APPLY: day la thay doi THAT, khong phai import.
+#
+# Neu ban dang co Security Hub bat bang tay o security account roi thi
+# ba resource kia import duoc, rieng dong nay se TAO MOI - tuc la
+# subscribe them mot account. Chi phi nho (khong standard, khong tu bat
+# control) nhung khac khong.
+#
+# Khong muon thi: enable_default_standards/auto_enable_controls khong
+# giup gi - phai bo han resource nay va dong depends_on o muc 2.
 ########################################
 
 resource "aws_securityhub_account" "management" {
   count = local.sh
 
-  # Management account khong chay workload, nen tat het cai tu bat.
-  # No chi can ton tai de uy quyen duoc.
+  # Management account khong chay workload. Bat het muc dich la giam
+  # sat chinh no, khong phai chay hang tram control tinh tien o day.
   enable_default_standards = false
   auto_enable_controls     = false
 }
@@ -89,6 +123,13 @@ resource "aws_securityhub_organization_admin_account" "this" {
 
   admin_account_id = var.security_account_id
 
+  # KHONG phai rang buoc ky thuat - muc 1 da noi ro no khong phai dieu
+  # kien tien quyet. Giu lai vi mot ly do khac: no dinh thu tu DESTROY.
+  #
+  # Terraform go theo chieu nguoc, nen dong nay bao dam bo uy quyen
+  # TRUOC khi tat Security Hub o management. Bo dong nay thi hai viec
+  # do chay song song, va thu tu ngau nhien la thu tu se hong o mot lan
+  # destroy nao do chu khong phai lan nay.
   depends_on = [aws_securityhub_account.management]
 }
 

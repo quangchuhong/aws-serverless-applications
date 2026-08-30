@@ -81,9 +81,11 @@ Xếp theo thứ tự gặp phải.
 | 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
 | 35 | Mô tả biến `delegated_administrators` **mời** khai `guardduty.amazonaws.com`, trong khi layer khác đã sở hữu việc đó | Danh sách "service principal hay dùng" gộp chung hai nhóm khác hẳn nhau: nhóm chỉ đăng ký được qua Organizations, và nhóm có lệnh chỉ định riêng *(lệnh đó tự đăng ký giúp)*. Khai nhóm hai vào map = hai layer cùng sở hữu một sự thật | **Tài liệu sai** | *(mục 7j)* |
 
-**31/35 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 36 | Comment trong `securityhub.tf` khẳng định một **điều kiện tiên quyết không tồn tại** | Ghi rằng `EnableOrganizationAdminAccount` đòi Security Hub bật sẵn ở management account. Trạng thái thật bác bỏ: management `InvalidAccessException: not subscribed`, mà `list-organization-admin-accounts` vẫn trả về admin `ENABLED` | **Tài liệu sai** | *(mục 7k)* |
 
-> Sáu lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**32/36 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Bảy lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1292,6 +1294,36 @@ Với nhóm hai, `aws_securityhub_organization_admin_account` và `aws_guardduty
 Mô tả biến giờ tách rõ hai nhóm, và có `check "guardduty_admin_belongs_to_config_detective"` cảnh báo nếu khoá `guardduty.amazonaws.com` lọt vào map.
 
 > **Bài học:** một danh sách gợi ý trong mô tả biến là **tài liệu có sức nặng ngang code** — nó là thứ người dùng đọc ngay lúc sắp gõ giá trị. Tôi liệt kê `guardduty.amazonaws.com` như một lựa chọn hợp lệ trong khi đang viết layer khác sở hữu chính việc đó. Danh sách phẳng che mất chuyện các mục trong nó không cùng loại.
+
+---
+
+### 7k. Lỗi 36 — điều kiện tiên quyết tôi tự nghĩ ra, và hai lệnh bác bỏ nó
+
+Trước khi import Security Hub đang chạy vào state, phải biết cái gì đã tồn tại. Hai lệnh chạy từ management account:
+
+```
+aws securityhub describe-hub
+  -> InvalidAccessException: Account 609320954321 is not subscribed to AWS Security Hub
+
+aws securityhub list-organization-admin-accounts
+  -> AccountId 458195083898   Status ENABLED
+```
+
+Hai dòng đó **không thể cùng đúng** nếu comment tôi viết ở `securityhub.tf` mục 1 là đúng:
+
+> *"`EnableOrganizationAdminAccount` gọi từ management account, và đòi Security Hub đã bật ở chính account đó. Nên bước này đứng trước việc uỷ quyền, không phải sau."*
+
+Uỷ quyền đang chạy. Management chưa từng subscribe. Điều kiện tiên quyết đó **không tồn tại** — tôi viết nó ra vì nó *nghe hợp lý*, không vì đo được.
+
+**Điều thật sự đúng, cũng từ hai lệnh đó:** `AutoEnable: true` đã bật từ lâu ở delegated admin, mà management vẫn không subscribe. Nghĩa là **`auto_enable` không với tới management account** — nó chỉ phủ member account.
+
+Nên resource `aws_securityhub_account.management` vẫn giữ, nhưng vì một lý do khác hẳn lý do tôi viết ban đầu: **không bật ở đó thì không ai bật nó**. Và đó là account đáng tiếc nhất nếu bỏ sót — nó giữ Organizations, SCP và hoá đơn, đồng thời là account duy nhất **SCP không bao giờ áp được**. Nó cần lớp phát hiện *hơn* các account khác, không phải kém hơn.
+
+Hệ quả thực tế: khi import Security Hub sẵn có, ba resource import được, riêng dòng này **tạo mới** — một thay đổi thật, không phải import. Comment giờ nói thẳng điều đó và chỉ cách bỏ nếu không muốn.
+
+`depends_on` giữ nguyên nhưng đổi lý do: không phải ràng buộc kỹ thuật lúc tạo, mà để **định thứ tự destroy** — gỡ uỷ quyền trước khi tắt Security Hub ở management.
+
+> **Bài học:** lỗi 32 là câu dặn sai trong tài liệu vận hành; lỗi 36 là cùng loại nhưng nằm trong **comment giải thích code**, chỗ khó soi hơn nhiều vì không ai chạy comment. Cả hai đều là thứ tôi *suy ra* rồi viết như thể đã kiểm chứng. Khác biệt duy nhất giữa hai lỗi đó và phần còn lại của repo: ở đây có hai lệnh CLI hỏi thẳng dịch vụ, và tôi đã không chạy chúng trước khi viết.
 
 ---
 
