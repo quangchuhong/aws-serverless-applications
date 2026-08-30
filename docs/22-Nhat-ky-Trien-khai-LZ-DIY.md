@@ -1563,7 +1563,24 @@ Bỏ hẳn dòng `Compliance` cũng *"chạy được"*: finding `PASSED` thư�
 ]
 ```
 
-> **Bài học:** lỗi 33 hỏi *"đường cảnh báo có nguồn không?"* và câu trả lời là có. Lỗi 40 là câu hỏi tiếp theo mà tôi chưa từng hỏi: **nguồn đó có đi lọt qua bộ lọc không?** Một đường ống có thể có đủ nguồn, đủ đích, đủ subscriber đã xác nhận — và đứt ở khúc giữa, nơi không lệnh kiểm tra thành phần nào soi tới. Chỉ có sự kiện thật đi hết đường mới trả lời được.
+#### Đóng lại bằng thứ duy nhất đóng được nó
+
+Apply bản vá, tạo lại đúng finding mẫu đó. Ba phút sau, trong hộp thư:
+
+```
+"[HIGH] The EC2 instance i-99999999 queried a Bitcoin-related domain name."
+"Account : 458195083898"
+"Region  : ap-southeast-1"
+"Resource: arn:aws:ec2:ap-southeast-1:458195083898:instance/i-99999999"
+```
+
+Cả chuỗi chạy hết: **GuardDuty → Security Hub → EventBridge (`$or`) → SNS → hộp thư**.
+
+Bản tin còn xác nhận thêm một điều chưa ai kiểm: bộ định dạng thông báo — viết cho finding **control tuân thủ** — bóc đúng severity, account, region và resource ARN từ một finding **hành vi** có cấu trúc khác hẳn. Nếu nó hỏng, email vẫn tới nhưng rỗng nội dung, và không lệnh kiểm nào bắt được.
+
+> **Bài học:** lỗi 33 hỏi *"đường cảnh báo có nguồn không?"* và câu trả lời là có. Lỗi 40 là câu hỏi tiếp theo mà tôi chưa từng hỏi: **nguồn đó có đi lọt qua bộ lọc không?** Một đường ống có thể có đủ nguồn, đủ đích, đủ subscriber đã xác nhận — và đứt ở khúc giữa, nơi không lệnh kiểm tra thành phần nào soi tới.
+>
+> Cả bốn lỗi cùng họ — 28, 33, 38, 40 — đều đóng theo một cách: **một sự kiện thật, đi hết đường, tới một người thật.** Không có lệnh `describe-*` nào thay được, vì mỗi lệnh chỉ hỏi một mắt xích, còn hỏng nằm ở chỗ nối.
 
 ---
 
