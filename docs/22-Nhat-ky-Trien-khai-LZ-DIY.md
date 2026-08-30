@@ -91,9 +91,11 @@ Xếp theo thứ tự gặp phải.
 
 | 40 | Đường cảnh báo **lọc bỏ toàn bộ finding GuardDuty** | `notify.tf` khớp `Compliance.Status = ["FAILED"]`. `Compliance` là trường **chỉ có** ở finding sinh từ control tuân thủ; GuardDuty phát hiện hành vi nên không có nó — `Comp: null` trên finding thật. EventBridge gặp khoá không tồn tại thì không khớp | **Lỗi code** | *(mục 7n)* |
 
-**35/40 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 41 | `Provider produced inconsistent result after apply` khi kết nạp **management account** vào GuardDuty | `CreateMembers` chạy xong mà AWS không tạo bản ghi nào, nên provider đọc lại thấy rỗng. Bốn account kia cùng lệnh, cùng lần apply, đều `Enabled`. Thông báo *"bug in the provider"* đặt sai chỗ — GuardDuty từ chối, provider chỉ không biết diễn đạt | **Giới hạn dịch vụ** | *(mục 7o)* |
 
-> Mười một lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**35/41 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Mười hai lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1584,7 +1586,50 @@ Bản tin còn xác nhận thêm một điều chưa ai kiểm: bộ định d�
 
 ---
 
-## Liên quan
+### 7o. Lỗi 41 — lỗ hổng chưa vá được, và vì sao không vá bừa
+
+`auto_enable_organization_members = ALL` đúng ở mọi tầng, uỷ quyền trọn vẹn, mà sau **hơn 25 phút** `list-members` vẫn rỗng. GuardDuty đang giám sát đúng một account: `lz-security`, nơi không chạy gì.
+
+`aws guardduty create-members` xong việc trong một lần. Nhưng đó là khuôn đã sinh ra lỗi 33 và 36 — một bước tay ngoài Terraform mà `plan` không thấy, và account mới vào tổ chức sẽ không được ghi danh cho tới khi có người **nhớ** chạy lại. Nên việc đó vào code: `aws_guardduty_member`, danh sách dựng từ `data.aws_organizations_organization` đã có sẵn trong layer.
+
+Apply: **4/5 `Enabled`**, mỗi account một detector riêng. Account thứ năm hỏng:
+
+```
+Error: Provider produced inconsistent result after apply
+applying aws_guardduty_member.this["609320954321"] ... produced an
+unexpected new value: Root object was present, but now absent.
+This is a bug in the provider...
+```
+
+#### Đọc ngược thông báo đó
+
+Provider gọi `CreateMembers`, đọc lại, **không thấy gì**. AWS nhận lệnh rồi lặng lẽ không tạo bản ghi. Không `UnprocessedAccounts`, không `AccessDenied` — im lặng.
+
+Bốn account kia cùng lệnh, cùng lần apply, đều thành công. Khác biệt duy nhất: `609320954321` là **management account**.
+
+Câu *"This is a bug in the provider, which should be reported in the provider's own issue tracker"* đặt sai chỗ và rất dễ dẫn người ta đi lạc cả buổi. GuardDuty từ chối; provider chỉ không có cách diễn đạt cho một API trả về thành công rồi không làm gì.
+
+#### Vì sao không viết luôn bản vá
+
+Giả thuyết gọn gàng và có sức thuyết phục: GuardDuty đòi management account **tự tạo detector trước**, y hệt `aws_securityhub_account.management` bên Security Hub — một điểm mù, hai dịch vụ, cùng một hình dạng.
+
+Nó cũng có thể sai. Và nếu viết code theo nó, kết quả tệ nhất không phải apply lỗi lần nữa — mà là một detector đứng riêng trong management account, sinh finding **ở lại chính account đó**, không đi tới delegated admin, nên `notify.tf` ở security account không thấy gì. Tức là một lớp giám sát **trông như có**.
+
+Đó đúng là hình dạng của lỗi 28, 33 và 40. Viết thêm một cái nữa để vá một cái vừa tìm ra thì không đáng.
+
+Nên: management account bị **loại tường minh** khỏi `aws_guardduty_member`, và `check "management_account_not_monitored_by_guardduty"` nói thẳng ở mỗi lần `plan` rằng đây là lỗ hổng đã biết, kèm ba lệnh thử:
+
+```bash
+aws guardduty create-detector --enable --region ap-southeast-1   # tu management
+aws guardduty create-members --detector-id <admin-detector> \
+  --account-details AccountId=<management>,Email=<email> --profile <security>
+aws guardduty get-members --detector-id <admin-detector> \
+  --account-ids <management> --profile <security>
+```
+
+`get-members` trả về `Enabled` → thêm resource vào code và import cái detector vừa tạo. Rỗng → đây là giới hạn của dịch vụ, và nó phải nằm trong tài liệu như một **lỗ hổng được chấp nhận**, không phải một chỗ trống không ai nhắc.
+
+> **Bài học:** ba mục trước đóng bằng bằng chứng. Mục này không đóng được, và giá trị của nó nằm ở chỗ **nói ra điều đó** thay vì để một `for_each` lặng lẽ bỏ qua một account. Một `check` kêu mỗi lần `plan` khó chịu hơn hẳn một dòng comment — và đó chính là điều mong muốn: management account giữ Organizations, SCP và hoá đơn, đồng thời là account duy nhất SCP không bao giờ áp được. Nó là account đắt nhất để bỏ sót.
 
 | | |
 |---|---|
