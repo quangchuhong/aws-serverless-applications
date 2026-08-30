@@ -175,6 +175,11 @@ output "guardduty" {
 
     admin_detector_managed = var.guardduty_manage_admin_detector_features
 
+    # auto_enable_members o tren la CHINH SACH. Dong nay la SU KIEN -
+    # bao nhieu account thuc su duoc ghi danh. Tren to chuc that, hai
+    # con so nay tung lech nhau: chinh sach = ALL, ghi danh = 0.
+    members_enrolled = length(aws_guardduty_member.this)
+
     # GuardDuty khong co duong canh bao rieng - finding di nho Security
     # Hub. Ca hai cung bat thi finding moi toi duoc SNS.
     findings_reach_alerts = var.enable_guardduty && var.enable_security_hub

@@ -179,6 +179,76 @@ resource "aws_guardduty_organization_configuration" "this" {
 }
 
 ########################################
+# 3b. Ghi danh TUNG account - vi muc 3 la CHINH SACH, khong phai HANH DONG
+#
+# Do duoc tren to chuc that:
+#
+#   describe-organization-configuration
+#     AutoEnableOrganizationMembers = ALL      <- dung y
+#     AdminAccountId                = ENABLED  <- uy quyen tron ven
+#   list-members
+#     (rong)                                   <- sau HON 25 PHUT
+#
+# Sau khi cau hinh dung o moi tang, KHONG account nao duoc ghi danh.
+# GuardDuty chi con giam sat MOI account security - noi khong chay gi.
+#
+# ---------------------------------------------------------------
+# VI SAO KHONG DE MOT LENH CLI CHAY TAY LO VIEC NAY
+#
+# aws guardduty create-members lam xong trong mot lan. Nhung do dung
+# la khuon da sinh ra loi 33 va 36: mot buoc tay ngoai Terraform, plan
+# khong thay, khong ai bao neu no mat. Account moi vao to chuc cung se
+# khong duoc ghi danh cho toi khi co nguoi NHO chay lai lenh do.
+#
+# Dua vao code thi terraform plan tra loi duoc cau hoi "co account nao
+# chua duoc giam sat khong" - va do la cau hoi dang phai tra loi bang
+# code, khong phai bang tri nho.
+#
+# muc 3 VAN CAN GIU: no la chinh sach cho account tao SAU, va la thu
+# se ghi danh chung neu vong quet tu dong that su chay. Hai co che nay
+# bo tro nhau chu khong thay the nhau.
+#
+# ---------------------------------------------------------------
+# invite = false LA BAT BUOC O DAY, KHONG PHAI TUY CHON
+#
+# Account trong CUNG to chuc duoc nhan thang, khong qua thu moi.
+# Dat true thi GuardDuty gui loi moi toi email root cua account -
+# ma email cua cac LZ account la dia chi plus-addressing khong ai
+# doc, nen loi moi se nam do mai mai o trang thai "Invited".
+#
+# ---------------------------------------------------------------
+# MANAGEMENT ACCOUNT CO TRONG DANH SACH, VA PHAI CO.
+#
+# Cung diem mu voi loi 36: auto_enable KHONG voi toi management
+# account - Security Hub phai bat rieng bang aws_securityhub_account
+# .management, con GuardDuty thi phai liet ke o day. Mot dich vu, hai
+# co che, cung mot account bi bo sot.
+#
+# Do la account giu Organizations, SCP va hoa don, dong thoi la account
+# duy nhat SCP KHONG BAO GIO ap duoc. Bo sot no la bo sot dung cho
+# dang gia nhat.
+########################################
+
+resource "aws_guardduty_member" "this" {
+  for_each = local.gd == 0 ? {} : {
+    for a in data.aws_organizations_organization.this.accounts :
+    a.id => a.email
+    if a.status == "ACTIVE" && a.id != var.security_account_id
+  }
+
+  provider = aws.security
+
+  detector_id = aws_guardduty_detector.security[0].id
+  account_id  = each.key
+  email       = each.value
+
+  # Xem khoi comment tren - dung doi thanh true.
+  invite = false
+
+  depends_on = [aws_guardduty_organization_configuration.this]
+}
+
+########################################
 # 4. Feature them - KHAI BAO CA HAI CHIEU
 #
 # Moi feature la mot nguon du lieu rieng va mot dong hoa don rieng.
