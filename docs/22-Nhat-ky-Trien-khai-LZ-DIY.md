@@ -1215,6 +1215,30 @@ du SNS co subscriber da xac nhan.
 
 Cùng file đó cũng đưa **lỗi 14 vào code**: `aws_securityhub_organization_admin_account` là lệnh chỉ định riêng của Security Hub, và đăng ký `securityhub.amazonaws.com` ở tầng Organizations là chưa đủ — thiếu nó thì mọi lệnh gọi từ security account báo `InvalidAccessException: The account is not an administrator`, một thông báo không nhắc gì tới Organizations.
 
+#### Đóng lại — import chứ không apply thẳng
+
+Security Hub đang chạy thật, nên không thể apply `securityhub.tf` như dựng mới. Trình tự đã dùng:
+
+| Bước | Kết quả |
+|---|---|
+| Hỏi thẳng dịch vụ, cả hai account | Ba resource đã tồn tại, hai chưa |
+| `terraform plan` sau khi pull `1f94d2d` | `5 to add` — `fsbp` biến mất, `auto_enable_standards = "NONE"`, khớp live |
+| Import 3 resource | — |
+| `terraform plan` | **`2 to add, 0 to change`** |
+| `terraform apply` | management `hub/default` + finding aggregator |
+
+`0 to change` là con số đáng giá nhất ở bảng trên: nó nói code và trạng thái thật khớp **từng trường**, chứ không phải "apply chạy được".
+
+Ba điểm chỉ lộ ra khi làm thật:
+
+- **Thứ tự import có ý nghĩa.** Uỷ quyền phải vào state trước, vì hai resource sau dùng provider `aws.security` và chỉ đọc được khi account đó đang là delegated admin.
+- **zsh coi `[0]` là glob.** `terraform import aws_securityhub_account.security[0]` trên macOS ra `zsh: no matches found`. Phải quote địa chỉ.
+- **`-var` là cái bẫy đặt sẵn.** Ba resource nằm sau `count`. Lần nào ai đó `terraform apply` thiếu `-var enable_security_hub=true`, `count` tụt 1→0 và Terraform **destroy** cả ba — `DisableSecurityHub`, gỡ uỷ quyền, đường cảnh báo mất nguồn. Giá trị phải nằm trong `terraform.tfvars`, không phải trên dòng lệnh.
+
+RUNBOOK giai đoạn 7 mục (2) đã thay ba lệnh CLI bằng một biến, và giữ ba lệnh cũ lại **chỉ** làm đường import cho tổ chức đã bật tay.
+
+> Lỗi 33 đóng ở đây theo đúng nghĩa của nó: không phải "đường cảnh báo đã sống" — nó vẫn sống từ đầu — mà là **nguồn của nó giờ nằm trong code**. Ai tắt Security Hub thì `plan` sẽ nói, thay vì `notify.tf` lặng lẽ chờ một event không bao giờ tới.
+
 ### 7i. Lỗi 34 — `scope = "all"` nghĩa là *tất cả*, kể cả nơi giữ bằng chứng
 
 Câu hỏi của người dùng: *"sao account `lz-security` lại nhận nhiều permission set đến vậy?"*

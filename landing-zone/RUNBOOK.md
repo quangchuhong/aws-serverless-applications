@@ -594,7 +594,7 @@ Lớp **phát hiện**: SCP trả lời *"ai được làm gì"*, Config trả l
 delegated_administrators = {
   "config.amazonaws.com"                   = "<security-account-id>"
   "config-multiaccountsetup.amazonaws.com" = "<security-account-id>"   # PHAI co
-  "securityhub.amazonaws.com"              = "<security-account-id>"
+  "securityhub.amazonaws.com"              = "<security-account-id>"   # ngoai le lich su, xem duoi
 }
 ```
 
@@ -605,41 +605,70 @@ aws organizations list-delegated-administrators --output table
 
 Thiếu `config-multiaccountsetup` thì organization rule báo `AccessDeniedException` **không nói rõ thiếu gì**. Có `check` block bắt.
 
-**(2) Security Hub** — layer này **đọc** findings từ Security Hub chứ không bật nó. Ba lệnh, chạy ở **hai account khác nhau**, đúng thứ tự:
+> **Chỉ hai dòng `config` là bắt buộc ở đây.** Danh sách này gộp hai nhóm không cùng cơ chế:
+>
+> | Nhóm | Chỉ định delegated admin bằng gì | Khai ở đây? |
+> |---|---|---|
+> | `config`, `config-multiaccountsetup`, `access-analyzer`, `storage-lens` | đăng ký ở Organizations là **cách duy nhất** | **có** |
+> | `securityhub`, `guardduty` | có **lệnh chỉ định riêng**, và lệnh đó tự đăng ký ở Organizations giúp | **không** |
+>
+> Với nhóm hai, `aws_securityhub_organization_admin_account` và `aws_guardduty_organization_admin_account` (layer `config-detective`) đã làm trọn việc — layer `organization` chỉ cần **trusted access**, thứ đã có sẵn trong `enabled_service_principals`.
+>
+> Khai ở cả hai nơi là để **hai layer cùng sở hữu một sự thật**: bỏ khoá ra khỏi map, hoặc destroy layer `organization`, sẽ gọi `DeregisterDelegatedAdministrator` và rút admin ra từ dưới chân `config-detective` mà layer đó không hay biết.
+>
+> `securityhub.amazonaws.com` vẫn còn trong ví dụ vì tổ chức này đã khai nó **trước khi** `securityhub.tf` tồn tại, và `prevent_destroy` không cho gỡ vô tình. Vô hại vì `organization` luôn apply trước — nhưng là **ngoại lệ, không phải tiền lệ**. Có `check "guardduty_admin_belongs_to_config_detective"` chặn việc lặp lại với GuardDuty. Xem lỗi 35 doc 22.
 
-```bash
-# 1. TU MANAGEMENT ACCOUNT - chi dinh admin o tang Security Hub
-aws securityhub enable-organization-admin-account \
-  --admin-account-id <security-account-id> --region ap-southeast-1
+**(2) Security Hub** — **một biến, không còn lệnh tay nào.**
 
-# 2. TU SECURITY ACCOUNT - bat, KHONG kem standard
-aws securityhub enable-security-hub --no-enable-default-standards \
-  --profile <security> --region ap-southeast-1
-
-# 3. TU SECURITY ACCOUNT - gom findings moi account
-aws securityhub update-organization-configuration --auto-enable \
-  --auto-enable-standards NONE \
-  --profile <security> --region ap-southeast-1
+```hcl
+# landing-zone/config-detective/terraform.tfvars
+enable_security_hub = true
 ```
 
-> **Bỏ bước 1 thì bước 3 báo:**
-> ```
-> InvalidAccessException: Account <id> is not an administrator for this organization
-> ```
-> Đăng ký delegated administrator ở tầng **Organizations** là cần nhưng **chưa đủ** — Security Hub có cơ chế chỉ định riêng, và nó chỉ gọi được từ management account. GuardDuty cũng vậy (`guardduty enable-organization-admin-account`). Config thì không cần — với Config, đăng ký ở Organizations là đủ.
+`securityhub.tf` dựng cả sáu phần: bật ở management, chỉ định delegated admin, bật ở security account, `auto_enable` cho member, standard *(mặc định rỗng)*, và finding aggregator.
 
-> **`--no-enable-default-standards` và `--auto-enable-standards NONE` là bắt buộc, không phải tuỳ chọn.** Mặc định của `enable-security-hub` là **bật** AWS FSBP + CIS. Standard tính tiền theo **số lần kiểm tra**, mà FSBP có vài trăm control chạy liên tục trên mọi resource — đây là phần đắt nhất của Security Hub, đắt hơn Config nhiều. Layer này **không cần** standard nào.
+> **Đặt vào `terraform.tfvars`, đừng dùng `-var`.** Ba trong sáu resource nằm sau `count`. Lần nào ai đó chạy `terraform apply` thiếu `-var enable_security_hub=true` — CI, đồng nghiệp, chính bạn tuần sau — `count` tụt 1→0 và Terraform sẽ **destroy** chúng: `DisableSecurityHub` trên account security, gỡ uỷ quyền, đường cảnh báo mất nguồn. Plan có báo `3 to destroy`, nhưng đó là loại plan người ta hay lướt.
+
+**Nếu đã bật tay từ trước** *(runbook này trước đây dặn ba lệnh CLI)* — **import, đừng apply thẳng**, nếu không apply báo lỗi trùng. Hỏi thẳng dịch vụ trước, đừng suy từ plan:
+
+```bash
+aws securityhub describe-hub                        --profile <security> --region ap-southeast-1
+aws securityhub get-enabled-standards               --profile <security> --region ap-southeast-1
+aws securityhub describe-organization-configuration --profile <security> --region ap-southeast-1
+```
+
+Cái nào trả lời được thì import — nhớ **quote địa chỉ**, zsh coi `[0]` là glob:
+
+```bash
+SEC=<security-account-id>
+terraform import 'aws_securityhub_organization_admin_account.this[0]'  $SEC
+terraform import 'aws_securityhub_account.security[0]'                 $SEC
+terraform import 'aws_securityhub_organization_configuration.this[0]'  $SEC
+terraform plan     # phai ra 0 to change truoc khi apply
+```
+
+Hai resource **luôn là tạo mới** kể cả khi đã bật tay: `aws_securityhub_account.management` và `aws_securityhub_finding_aggregator` — ba lệnh CLI cũ không tạo cái nào trong hai cái đó.
+
+> **Uỷ quyền KHÔNG đòi Security Hub bật sẵn ở management account.** Phiên bản trước của runbook này ngụ ý ngược lại. Trạng thái thật bác bỏ: management `InvalidAccessException: not subscribed` trong khi `list-organization-admin-accounts` vẫn trả về admin `ENABLED`. Xem lỗi 36 doc 22.
 >
-> Lỡ bật rồi thì gỡ:
+> Vẫn bật ở management, nhưng vì lý do khác: `auto_enable` **không với tới management account** — nó bật đã lâu mà account đó vẫn không subscribe. Không bật ở đây thì không ai bật. Và đó là account đáng tiếc nhất nếu bỏ sót: giữ Organizations, SCP, hoá đơn — đồng thời là account duy nhất **SCP không bao giờ áp được**.
+
+> **Điều VẪN đúng:** đăng ký delegated administrator ở tầng **Organizations** là cần nhưng **chưa đủ** — Security Hub có cơ chế chỉ định riêng, chỉ gọi được từ management account. Thiếu nó thì mọi lệnh gọi từ security account báo `InvalidAccessException: Account <id> is not an administrator for this organization`. GuardDuty cũng vậy. Config thì không cần.
+
+> **Standard là quyết định chi phí, không phải cấu hình.** Mặc định của CLI `enable-security-hub` là **bật** FSBP + CIS; mặc định của layer này là **rỗng**, có chủ đích. Standard tính tiền theo **số lần kiểm tra**, mà FSBP có vài trăm control chạy liên tục trên mọi resource — phần đắt nhất của Security Hub, đắt hơn Config nhiều.
+>
+> Dùng Security Hub làm **nơi gom** finding của Config và GuardDuty rồi đẩy sang SNS thì **không cần standard nào**. Bật standard chỉ khi muốn độ phủ tương đương *detective control* của Control Tower (doc 21) — `security_hub_standards = ["fsbp"]`, một cái, đo một tuần ở Cost Explorer rồi mới thêm.
+>
+> Lỡ bật tay từ trước thì gỡ:
 > ```bash
 > aws securityhub get-enabled-standards --profile <security> --region ap-southeast-1
 > aws securityhub batch-disable-standards \
 >   --standards-subscription-arns <arn> --profile <security> --region ap-southeast-1
 > ```
 
-Security Hub là dịch vụ **theo region** — lặp cả ba bước cho mỗi region trong `aggregator_regions`.
+Security Hub là dịch vụ **theo region**. `aggregator_regions` chỉ điều khiển finding aggregator; muốn Security Hub chạy thật ở region thứ hai thì cần provider alias cho region đó — hiện layer này **chưa có**.
 
-Chưa bật thì recorder vẫn ghi, rule vẫn đánh giá, S3 vẫn có file — **và không một cảnh báo nào được gửi**. Không lỗi, không cảnh báo.
+Chưa bật thì recorder vẫn ghi, rule vẫn đánh giá, S3 vẫn có file — **và không một cảnh báo nào được gửi**. Không lỗi, không cảnh báo. `check "alerts_have_a_source"` bắt đúng trường hợp này.
 
 **(3) Trusted access cho CloudFormation StackSets** — chạy **một lần** từ management account:
 
