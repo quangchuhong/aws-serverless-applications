@@ -26,15 +26,40 @@ variable "delegated_administrators" {
     De RONG o giai doan dau. Chi dien khi da co account security
     tooling that su ton tai.
 
-    Service principal hay dung:
+    KHONG PHAI DICH VU NAO CUNG THUOC VE DAY. Chia lam hai nhom:
+
+    NHOM 1 - dang ky o Organizations la CACH DUY NHAT. Phai khai o day:
       config.amazonaws.com              - Config aggregator + organization rule
       config-multiaccountsetup.amazonaws.com
                                         - CAN THEM cai nay moi dung duoc
                                           aws_config_organization_managed_rule
-      securityhub.amazonaws.com         - Security Hub admin
-      guardduty.amazonaws.com           - GuardDuty admin
       access-analyzer.amazonaws.com     - IAM Access Analyzer
       storage-lens.s3.amazonaws.com
+
+    NHOM 2 - dich vu co LENH CHI DINH RIENG, va chinh lenh do da dang
+    ky delegated administrator o Organizations giup roi:
+      securityhub.amazonaws.com   <- aws_securityhub_organization_admin_account
+      guardduty.amazonaws.com     <- aws_guardduty_organization_admin_account
+
+    Ca hai resource do nam o layer config-detective. Khai them khoa
+    nhom 2 vao day la DE HAI LAYER CUNG SO HUU MOT SU THAT:
+
+      - Bo khoa ra khoi map (hoac destroy layer nay) se goi
+        DeregisterDelegatedAdministrator, rut admin ra tu duoi chan
+        config-detective ma layer do khong he hay biet.
+      - Thu tu apply tro thanh chuyen phai nho: dung layer nay truoc
+        thi con chay, dung config-detective truoc thi dong nay tao
+        lai mot dang ky da co.
+
+    => Voi nhom 2, chi can TRUSTED ACCESS (enabled_service_principals
+    trong variables.tf) la du. Viec chi dinh admin de layer
+    config-detective lam.
+
+    NGOAI LE DANG SONG: securityhub.amazonaws.com dang co trong map
+    that. No vao truoc khi securityhub.tf ton tai, va lifecycle
+    prevent_destroy ben duoi khong cho go ra ma khong co chu dich.
+    De nguyen - vo hai vi layer nay da apply truoc. Dung lay no lam
+    tien le de them guardduty.
 
     LUU Y hai dong config: chung la HAI service principal khac nhau
     va deu can. Thieu cai thu hai thi organization rule bao
@@ -80,6 +105,27 @@ check "config_needs_both_service_principals" {
       "config-multiaccountsetup.amazonaws.com.",
       "Thieu cai thu hai thi aws_config_organization_managed_rule se bao",
       "AccessDeniedException ma khong noi ro nguyen nhan.",
+    ])
+  }
+}
+
+check "guardduty_admin_belongs_to_config_detective" {
+  assert {
+    condition = !contains(keys(var.delegated_administrators), "guardduty.amazonaws.com")
+
+    error_message = join(" ", [
+      "guardduty.amazonaws.com dang nam trong delegated_administrators.",
+      "GuardDuty co lenh chi dinh admin rieng, va lenh do DA dang ky",
+      "delegated administrator o Organizations giup - resource",
+      "aws_guardduty_organization_admin_account trong layer",
+      "config-detective. Khai o ca hai noi la de hai layer cung so huu",
+      "mot su that: go khoa nay ra se goi",
+      "DeregisterDelegatedAdministrator va rut admin ra tu duoi chan",
+      "config-detective ma layer do khong biet.",
+      "Layer nay chi can trusted access cho guardduty.amazonaws.com -",
+      "no da co san trong enabled_service_principals.",
+      "(securityhub.amazonaws.com cung nhom nhung dang co trong map",
+      "vi ly do lich su - xem mo ta bien.)",
     ])
   }
 }

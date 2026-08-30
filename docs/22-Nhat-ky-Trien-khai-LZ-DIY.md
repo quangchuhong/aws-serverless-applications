@@ -79,10 +79,11 @@ Xếp theo thứ tự gặp phải.
 | 34 | `lz-server-admin` có `s3:*` **ngay trong account log archive** | 10/17 permission set khai `scope = "all"`, mà `all` suy ra từ Organizations nên gồm cả account giữ bằng chứng. `DenyTamperingWithGuardrails` chặn `cloudtrail:DeleteTrail` nhưng **không** chặn `s3:DeleteObject` | **Lỗi thiết kế** | *(mục 7i)* |
 | 33 | Nguồn của đường cảnh báo **nằm ngoài code** | `notify.tf` khớp `source = aws.securityhub`, nhưng không layer nào tạo hay quản Security Hub — nó được bật bằng ba lệnh tay ở RUNBOOK giai đoạn 7. Terraform không biết nó tồn tại, nên không ai được báo nếu nó tắt | **Lỗi thiết kế** | *(mục 7h)* |
 | 32 | TEARDOWN.md dặn *"giữ `create_organization = false`"* — làm theo là **xoá cả tổ chức** | Câu đó chỉ đúng khi tổ chức chưa nằm trong state. Đã nằm rồi thì đổi biến làm `count` tụt 1→0 = destroy. Mô tả biến ghi đúng, tài liệu teardown ghi ngược | **Tài liệu sai** | `d6f3d1d` |
+| 35 | Mô tả biến `delegated_administrators` **mời** khai `guardduty.amazonaws.com`, trong khi layer khác đã sở hữu việc đó | Danh sách "service principal hay dùng" gộp chung hai nhóm khác hẳn nhau: nhóm chỉ đăng ký được qua Organizations, và nhóm có lệnh chỉ định riêng *(lệnh đó tự đăng ký giúp)*. Khai nhóm hai vào map = hai layer cùng sở hữu một sự thật | **Tài liệu sai** | *(mục 7j)* |
 
-**30/34 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**31/35 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
-> Năm lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+> Sáu lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1266,6 +1267,31 @@ Terraform báo `16 to change`, đúng bằng 7 tag `PermissionSetScope` đổi g
 > **Bài học:** phân quyền có hai câu hỏi, và tôi chỉ hỏi một. *"Set này cho quyền gì?"* đọc trong policy. *"Set này gán vào đâu?"* đọc ở chỗ khác hoàn toàn. Một set vô hại ở account workload thành nguy hiểm ở account log archive mà **nội dung policy không đổi một chữ**.
 >
 > Output `scope_map` thêm vào để câu hỏi thứ hai trả lời được bằng một lệnh.
+
+---
+
+### 7j. Lỗi 35 — "service principal hay dùng" gộp hai nhóm không cùng loại
+
+Câu hỏi bắt được lỗi này rất ngắn: *đã có `config`, `config-multiaccountsetup`, `securityhub` trong `delegated_administrators` — có thêm `guardduty` không?*
+
+Câu trả lời là **không**, và lý do cho thấy mô tả biến do tôi viết đang sai.
+
+**Hai nhóm dịch vụ, không cùng cơ chế:**
+
+| Nhóm | Cách chỉ định delegated admin | Khai trong `delegated_administrators`? |
+|---|---|---|
+| `config`, `config-multiaccountsetup`, `access-analyzer`, `storage-lens` | Đăng ký ở Organizations là **cách duy nhất** | **Có** — bắt buộc |
+| `securityhub`, `guardduty` | Có lệnh chỉ định **riêng**, và lệnh đó tự đăng ký ở Organizations giúp | **Không** |
+
+Với nhóm hai, `aws_securityhub_organization_admin_account` và `aws_guardduty_organization_admin_account` — cả hai nằm ở `config-detective` — đã làm trọn việc. Layer `organization` chỉ cần **trusted access** cho chúng, thứ đã có sẵn trong `enabled_service_principals`.
+
+**Khai ở cả hai nơi hỏng ở đâu:** hai layer cùng sở hữu một sự thật. Bỏ khoá ra khỏi map — hoặc destroy layer `organization` — sẽ gọi `DeregisterDelegatedAdministrator`, rút admin ra **từ dưới chân** `config-detective` mà layer đó không hay biết. Nó cũng biến thứ tự apply thành chuyện phải nhớ, thay vì thứ Terraform tự lo.
+
+**`securityhub.amazonaws.com` đang nằm trong map thật.** Nó vào từ trước khi `securityhub.tf` tồn tại, và `prevent_destroy` không cho gỡ ra một cách vô tình. Để nguyên — vô hại vì layer `organization` luôn apply trước. Nhưng nó là **ngoại lệ lịch sử, không phải tiền lệ**.
+
+Mô tả biến giờ tách rõ hai nhóm, và có `check "guardduty_admin_belongs_to_config_detective"` cảnh báo nếu khoá `guardduty.amazonaws.com` lọt vào map.
+
+> **Bài học:** một danh sách gợi ý trong mô tả biến là **tài liệu có sức nặng ngang code** — nó là thứ người dùng đọc ngay lúc sắp gõ giá trị. Tôi liệt kê `guardduty.amazonaws.com` như một lựa chọn hợp lệ trong khi đang viết layer khác sở hữu chính việc đó. Danh sách phẳng che mất chuyện các mục trong nó không cùng loại.
 
 ---
 

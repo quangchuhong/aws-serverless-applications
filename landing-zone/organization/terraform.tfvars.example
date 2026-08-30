@@ -138,6 +138,19 @@ scp_exempt_role_names = []
 # Thieu config-multiaccountsetup thi
 # aws_config_organization_managed_rule bao AccessDeniedException ma
 # KHONG noi ro thieu gi. Co check block bat viec nay.
+#
+# ---------------------------------------------------------------
+# DUNG THEM guardduty.amazonaws.com VAO DAY.
+#
+# GuardDuty (va Security Hub) co lenh chi dinh admin RIENG, va lenh
+# do da dang ky delegated administrator o Organizations giup roi -
+# aws_guardduty_organization_admin_account trong config-detective.
+# Khai o ca hai noi = hai layer cung so huu mot su that, va go khoa
+# nay ra se rut admin tu duoi chan config-detective.
+#
+# Voi hai dich vu do, layer nay chi can TRUSTED ACCESS
+# (enabled_service_principals) - da co san.
+# ---------------------------------------------------------------
 ########################################
 
 delegated_administrators = {}
@@ -145,7 +158,7 @@ delegated_administrators = {}
 # delegated_administrators = {
 #   "config.amazonaws.com"                   = "333333333333"  # security account
 #   "config-multiaccountsetup.amazonaws.com" = "333333333333"  # PHAI co ca dong nay
-#   "securityhub.amazonaws.com"              = "333333333333"
+#   "securityhub.amazonaws.com"              = "333333333333"  # ngoai le lich su, xem tren
 # }
 
 ########################################
