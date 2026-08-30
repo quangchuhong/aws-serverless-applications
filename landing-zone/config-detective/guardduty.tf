@@ -75,6 +75,26 @@ locals {
   gd_features = local.gd == 0 ? {} : {
     for f in local.gd_manageable_features : f => contains(var.guardduty_features, f)
   }
+
+  # Feature LONG NHAU - loi 39.
+  #
+  # RUNTIME_MONITORING khong phai mot cong tac. AWS luon tra ve ba
+  # sub-config ben trong no. Khong khai chung thi Terraform doc duoc
+  # tu API, thay config khong co, va doi GO chung di - ma name la
+  # ForceNew nen "go" thanh REPLACE ca resource.
+  #
+  # Te hon: replace xong AWS dien lai mac dinh, nen lan plan sau lai
+  # doi replace tiep. Mot vong lap khong bao gio hoi tu, va no khong
+  # bao loi - chi la moi lan plan deu ban ra mot thay doi gia.
+  #
+  # Khai tuong minh, cung gia tri voi feature cha.
+  gd_feature_addons = {
+    RUNTIME_MONITORING = [
+      "EKS_ADDON_MANAGEMENT",
+      "ECS_FARGATE_AGENT_MANAGEMENT",
+      "EC2_AGENT_MANAGEMENT",
+    ]
+  }
 }
 
 ########################################
@@ -213,6 +233,16 @@ resource "aws_guardduty_detector_feature" "security" {
   detector_id = aws_guardduty_detector.security[0].id
   name        = each.key
   status      = each.value ? "ENABLED" : "DISABLED"
+
+  # Xem loi 39 o locals. Bo qua khoi nay thi resource bi REPLACE moi
+  # lan plan, mai mai.
+  dynamic "additional_configuration" {
+    for_each = toset(lookup(local.gd_feature_addons, each.key, []))
+    content {
+      name   = additional_configuration.value
+      status = each.value ? "ENABLED" : "DISABLED"
+    }
+  }
 }
 
 resource "aws_guardduty_organization_configuration_feature" "this" {
@@ -222,6 +252,16 @@ resource "aws_guardduty_organization_configuration_feature" "this" {
   detector_id = aws_guardduty_detector.security[0].id
   name        = each.key
   auto_enable = each.value ? "ALL" : "NONE"
+
+  # Xem loi 39 o locals. Bo qua khoi nay thi resource bi REPLACE moi
+  # lan plan, mai mai.
+  dynamic "additional_configuration" {
+    for_each = toset(lookup(local.gd_feature_addons, each.key, []))
+    content {
+      name        = additional_configuration.value
+      auto_enable = each.value ? "ALL" : "NONE"
+    }
+  }
 
   depends_on = [aws_guardduty_organization_configuration.this]
 }

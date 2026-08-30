@@ -87,9 +87,11 @@ Xếp theo thứ tự gặp phải.
 
 | 38 | `AccessDeniedException` — **SCP của chính chúng ta** chặn Terraform tắt feature GuardDuty | `deny_guardrails` cấm `guardduty:UpdateDetector`, mà đó là API **duy nhất** để đổi feature. AWS không tách *"tắt detector"* khỏi *"đổi feature"*. Guardrail chặn đúng thứ nó sinh ra để chặn — kể cả khi người gọi là chính mình | **Xung đột thiết kế** | *(mục 7m)* |
 
-**33/38 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 39 | `RUNTIME_MONITORING` bị **replace ở mọi lần plan**, không bao giờ hội tụ | AWS luôn trả về ba `additional_configuration` bên trong feature đó. Config không khai → Terraform đòi gỡ → `name` là ForceNew → replace. Apply xong AWS điền lại mặc định, plan sau lại đòi replace | **Lỗi code** | *(mục 7m)* |
 
-> Chín lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**34/39 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Mười lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1460,6 +1462,29 @@ Cái còn lại là detector của một account: `lz-security`, nơi không ch�
 Output đổi tên `features_on`/`features_off` thành `member_features_on`/`member_features_off` — vì phạm vi của chúng là account thành viên, và tên cũ để người đọc tưởng nó nói về mọi detector.
 
 > **Bài học:** khi tầng dựng guardrail và tầng cấu hình dịch vụ bị canh giữ **cùng là Terraform, chạy bằng cùng một principal**, thì sớm muộn cái này sẽ chặn cái kia. Câu hỏi đúng lúc đó không phải *"làm sao để qua được?"* mà *"cái bị chặn có phải thứ guardrail sinh ra để chặn không?"* Ở đây câu trả lời là **có**, nên đáp án đúng là lùi lại, không phải khoan thủng.
+
+#### Lỗi 39 — cùng bản vá, một vòng lặp không hội tụ
+
+Plan tiếp theo sạch mọi thứ trừ một dòng:
+
+```
+# aws_guardduty_organization_configuration_feature.this["RUNTIME_MONITORING"]
+#   must be replaced
+- additional_configuration {           # forces replacement
+    - name = "ECS_FARGATE_AGENT_MANAGEMENT" -> null
+    - name = "EC2_AGENT_MANAGEMENT"         -> null
+    - name = "EKS_ADDON_MANAGEMENT"         -> null
+  }
+Plan: 1 to add, 0 to change, 1 to destroy.
+```
+
+`RUNTIME_MONITORING` không phải một công tắc — AWS **luôn** trả về ba sub-config bên trong nó. Code tôi vừa viết coi mọi feature như nhau, nên Terraform đọc ba khối đó từ API, thấy config không có, và đòi gỡ. Mà `name` là `ForceNew`, nên "gỡ" thành **replace cả resource**.
+
+Phần tệ nằm ở chỗ nó **không hội tụ**: replace xong AWS điền lại mặc định, và lần plan sau lại đòi replace tiếp. Không lỗi nào được in ra — chỉ là mọi lần `plan` từ nay đều báo một thay đổi giả, và đó đúng là thứ làm người ta ngừng đọc plan.
+
+Bản sửa khai ba sub-config tường minh, cùng giá trị với feature cha, qua `dynamic` block ở cả hai resource feature.
+
+> Đây là lần thứ hai trong một mục: `[]` không phải *tắt* (lỗi 37), và một feature không phải *một công tắc* (lỗi 39). Cùng một gốc — tôi giả định hình dạng của thứ AWS trả về thay vì đọc nó.
 
 ---
 
