@@ -491,6 +491,22 @@ variable "security_hub_standards" {
       nist-800-53   NIST SP 800-53 Rev 5
       pci-dss       PCI DSS 3.2.1
 
+    ---------------------------------------------------------------
+    MAC DINH RONG, VA DO LA CO Y.
+
+    Layer nay dung Security Hub lam NOI GOM finding cua Config va
+    GuardDuty, roi day sang SNS. Viec do KHONG CAN standard nao ca.
+
+    Standard la mot thu khac han: no tu chay hang tram control kiem
+    tra bao mat, va do la PHAN DAT NHAT cua Security Hub - dat hon
+    Config nhieu. RUNBOOK giai doan 7 ghi ro
+    "--no-enable-default-standards ... la bat buoc, khong phai tuy chon".
+
+    Bat standard chi khi ban muon do phu tuong duong DETECTIVE CONTROL
+    cua Control Tower (xem doc 21). Do la mot quyet dinh chi phi rieng,
+    khong phai phan dinh kem cua duong canh bao.
+    ---------------------------------------------------------------
+
     Bat DUNG MOT CAI truoc. Cac standard trung nhau rat nhieu, nen cai
     thu hai them it phat hien moi ma nhan doi so lan kiem tra phai tra
     tien. check "security_hub_costs_money" canh bao khi khai hon mot.
@@ -500,7 +516,7 @@ variable "security_hub_standards" {
     da bi thay the boi 1.4 va 3.0.
   EOT
   type        = list(string)
-  default     = ["fsbp"]
+  default     = []
 
   validation {
     condition = alltrue([
@@ -529,13 +545,29 @@ variable "security_hub_auto_enable_standards" {
 
     AWS chi cho hai gia tri nay. DEFAULT = chi FSBP.
 
+    ---------------------------------------------------------------
+    MAC DINH "NONE", VA DOI SANG "DEFAULT" LA MOT QUYET DINH CHI PHI.
+
+    "DEFAULT" bat FSBP o MOI account thanh vien - vai tram control
+    chay lien tuc, nhan voi so account, nhan voi so region. Day la
+    duong nhanh nhat de hoa don Security Hub vuot han Config.
+
+    RUNBOOK giai doan 7 ghi thang: "--auto-enable-standards NONE la
+    bat buoc, khong phai tuy chon". Bien nay giu dung cau do.
+
+    "NONE" khong lam yeu duong canh bao: account thanh vien VAN duoc
+    bat Security Hub (auto_enable), van gui finding cua Config va
+    GuardDuty ve delegated admin. Chi la chung khong tu chay them
+    hang tram control kiem tra bao mat.
+    ---------------------------------------------------------------
+
     Muon CIS hoac NIST tren MOI account thanh vien thi bien nay KHONG
     lam duoc - phai dung central configuration policy (API moi hon)
     hoac dang ky tung account. security_hub_standards o tren CHI ap
     cho security account.
   EOT
   type        = string
-  default     = "DEFAULT"
+  default     = "NONE"
 
   validation {
     condition     = contains(["DEFAULT", "NONE"], var.security_hub_auto_enable_standards)
