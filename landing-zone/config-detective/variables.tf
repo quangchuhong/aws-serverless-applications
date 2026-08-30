@@ -679,6 +679,49 @@ variable "guardduty_features" {
   }
 }
 
+variable "guardduty_manage_admin_detector_features" {
+  description = <<-EOT
+    Terraform co quan feature tren detector cua CHINH security account
+    khong. MAC DINH FALSE, va do khong phai su cau tha.
+
+    ---------------------------------------------------------------
+    SCP CHAN VIEC NAY, VA DO LA HANH VI DUNG.
+
+    Resource aws_guardduty_detector_feature goi guardduty:UpdateDetector.
+    SCP deny_guardrails (statement ProtectAuditTrail, layer organization)
+    cam action do. Bat bien nay ma khong mien tru truoc thi apply bao:
+
+      AccessDeniedException: ... not authorized to perform:
+      guardduty:UpdateDetector ... with an explicit deny in a service
+      control policy
+
+    UpdateDetector la API DUY NHAT de doi feature - AWS khong tach "tat
+    detector" khoi "doi feature". Guardrail chan ca hai, va chan chieu
+    TAT dung la viec no sinh ra de lam.
+    ---------------------------------------------------------------
+
+    MUON BAT THI PHAI LAM GI:
+    them ten role dang chay Terraform vao scp_exempt_role_names cua
+    layer organization.
+
+    DUNG them OrganizationAccountAccessRole. Do la chia khoa van nang
+    vao moi member account; mien tru no khoi SCP baseline thi ai cam no
+    cung StopLogging, DeleteTrail, DeleteDetector, CloseAccount duoc.
+    Tao mot role RIENG cho pipeline va chi mien tru role do.
+
+    KHONG BAT THI MAT GI: feature dang bat san tren detector cua
+    security account nam ngoai Terraform. Do la MOT account, khong chay
+    workload. Phan chi phi that nam o ACCOUNT THANH VIEN, va
+    aws_guardduty_organization_configuration_feature lo phan do - no
+    goi UpdateOrganizationConfiguration, action khac, khong bi chan.
+
+    Do o Cost Explorer (Service = "Amazon GuardDuty", loc theo account)
+    truoc khi quyet dinh danh doi mot lop guardrail lay no.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "guardduty_publishing_frequency" {
   description = <<-EOT
     Tan suat gui finding DA CO sang EventBridge khi no duoc cap nhat.

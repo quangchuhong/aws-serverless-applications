@@ -165,8 +165,15 @@ output "guardduty" {
 
     # Ca hai chieu, vi "rong" tung bi doc nham thanh "khong bat gi"
     # trong khi AWS da bat san - xem loi 37.
-    features_on  = sort(var.guardduty_features)
-    features_off = sort([for f, on in local.gd_features : f if !on])
+    #
+    # LUU Y PHAM VI: hai dong nay noi ve ACCOUNT THANH VIEN. Detector
+    # cua chinh security account chi duoc quan khi
+    # guardduty_manage_admin_detector_features = true, va bat no doi
+    # mot mien tru SCP - xem loi 38.
+    member_features_on  = sort(var.guardduty_features)
+    member_features_off = sort([for f, on in local.gd_features : f if !on])
+
+    admin_detector_managed = var.guardduty_manage_admin_detector_features
 
     # GuardDuty khong co duong canh bao rieng - finding di nho Security
     # Hub. Ca hai cung bat thi finding moi toi duoc SNS.

@@ -175,10 +175,39 @@ resource "aws_guardduty_organization_configuration" "this" {
 # vien sach se con chinh detector cua security account van bat day du
 # feature tinh tien - va do la detector duy nhat ban nhin thay khi go
 # lenh get-detector, nen sai sot nay rat de tu ru ngu minh.
-########################################
+#
+# ---------------------------------------------------------------
+# NHUNG SCP CHAN CAI THU NHAT - VA DO LA HANH VI DUNG. Loi 38.
+#
+#   AccessDeniedException: ... guardduty:UpdateDetector ...
+#   with an explicit deny in a service control policy: p-...
+#
+# SCP deny_guardrails (statement ProtectAuditTrail, layer organization)
+# co guardduty:UpdateDetector trong danh sach cam. Ma UpdateDetector la
+# API DUY NHAT de doi feature - AWS khong tach "tat detector" khoi
+# "doi feature". Guardrail chan ca hai.
+#
+# Chan Terraform TAT feature la dung: tat feature la lam yeu lop phat
+# hien, chinh thu SCP sinh ra de chan. Viec no chan luon chieu BAT chi
+# la thiet hai kem theo, va AWS khong cho phan biet.
+#
+# => Mac dinh KHONG quan detector cua security account. Xem bien
+#    guardduty_manage_admin_detector_features.
+#
+# DUNG mien tru OrganizationAccountAccessRole de vuot qua. Do la chia
+# khoa van nang vao moi member account; mien tru no khoi SCP baseline
+# thi ai cam no cung StopLogging, DeleteTrail, DeleteDetector,
+# CloseAccount duoc - toan bo deny_guardrails sup theo. Neu that su
+# can, tao mot role RIENG cho pipeline va chi mien tru role do.
+#
+# CHI PHI: phan tien that nam o ACCOUNT THANH VIEN, va resource thu
+# hai lo viec do - no goi UpdateOrganizationConfiguration, mot action
+# KHAC, khong bi SCP chan. Detector con lai la cua security account,
+# noi khong chay workload. Do o Cost Explorer truoc khi lo lang.
+# ---------------------------------------------------------------
 
 resource "aws_guardduty_detector_feature" "security" {
-  for_each = local.gd_features
+  for_each = var.guardduty_manage_admin_detector_features ? local.gd_features : {}
   provider = aws.security
 
   detector_id = aws_guardduty_detector.security[0].id
@@ -214,6 +243,27 @@ check "guardduty_findings_reach_someone" {
       "check alerts_have_a_source), nhung neu khong thi ban dang tra tien",
       "cho GuardDuty phan tich log ma khong ai doc ket qua.",
       "Kiem: aws securityhub describe-hub --profile <security> --region <region>",
+    ])
+  }
+}
+
+check "admin_detector_features_need_an_scp_exemption" {
+  assert {
+    condition = local.gd == 0 || !var.guardduty_manage_admin_detector_features
+    error_message = join(" ", [
+      "guardduty_manage_admin_detector_features = true.",
+      "aws_guardduty_detector_feature goi guardduty:UpdateDetector, ma SCP",
+      "deny_guardrails (statement ProtectAuditTrail) cam action do -",
+      "apply se bao AccessDeniedException voi 'explicit deny in a service",
+      "control policy'.",
+      "Chi bat khi principal chay Terraform DA nam trong",
+      "scp_exempt_role_names cua layer organization.",
+      "DUNG them OrganizationAccountAccessRole vao danh sach do: no la",
+      "chia khoa van nang vao moi member account, mien tru no lam sup ca",
+      "deny_guardrails. Tao mot role rieng cho pipeline neu can.",
+      "Nho: feature cua ACCOUNT THANH VIEN khong can bien nay - resource",
+      "aws_guardduty_organization_configuration_feature dung mot action",
+      "khac va khong bi chan.",
     ])
   }
 }

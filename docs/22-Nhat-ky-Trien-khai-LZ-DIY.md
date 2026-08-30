@@ -85,9 +85,11 @@ Xếp theo thứ tự gặp phải.
 
 | 37 | `guardduty_features = []` được ghi là *"mặc định không bật cái nào"* — thực tế **năm feature tính tiền đang chạy** | Danh sách rỗng sinh ra **không resource nào**, nghĩa là *"Terraform không quản"*, không phải *"tắt"*. Mà AWS **bật sẵn** phần lớn feature khi tạo detector. `check "guardduty_features_cost_money"` đếm `length(var.guardduty_features) = 0` nên im lặng | **Lỗi thiết kế** | *(mục 7l)* |
 
-**33/37 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 38 | `AccessDeniedException` — **SCP của chính chúng ta** chặn Terraform tắt feature GuardDuty | `deny_guardrails` cấm `guardduty:UpdateDetector`, mà đó là API **duy nhất** để đổi feature. AWS không tách *"tắt detector"* khỏi *"đổi feature"*. Guardrail chặn đúng thứ nó sinh ra để chặn — kể cả khi người gọi là chính mình | **Xung đột thiết kế** | *(mục 7m)* |
 
-> Tám lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**33/38 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Chín lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1408,6 +1410,56 @@ terraform plan                          ->  No changes.
 `enable_guardduty` vẫn `false`. **Terraform chưa từng apply GuardDuty** — detector đang chạy là do bật tay, đúng khuôn Security Hub ở mục 7h.
 
 > **Bài học:** tôi suy trạng thái Terraform từ một lệnh AWS, đúng lúc đang viết mục về việc không được suy trạng thái AWS từ repo. Cùng một lỗi, hướng ngược lại. `terraform state list` là câu hỏi rẻ nhất trong cả phiên và tôi đã đoán thay vì hỏi nó.
+
+---
+
+### 7m. Lỗi 38 — guardrail chặn chính người dựng ra nó
+
+Bản sửa lỗi 37 apply, và sáu resource cùng hỏng một kiểu:
+
+```
+AccessDeniedException: User: arn:aws:sts::458195083898:assumed-role/
+OrganizationAccountAccessRole/... is not authorized to perform:
+guardduty:UpdateDetector ... with an explicit deny in a service
+control policy: p-2oni53yp
+```
+
+`p-2oni53yp` là `deny_guardrails`, statement `ProtectAuditTrail`, do chính repo này dựng. Trong danh sách cấm có `guardduty:UpdateDetector`.
+
+**Đây là lần đầu SCP đó chặn được một thứ thật.** Nó ngồi im từ giai đoạn 3, và bằng chứng duy nhất rằng nó hoạt động là nó vừa chặn tôi.
+
+#### Vì sao không phải chỉ nới SCP ra
+
+`UpdateDetector` là API **duy nhất** để đổi feature. AWS không tách *"tắt detector"* khỏi *"đổi feature"* — cùng một action.
+
+Mà **chặn Terraform tắt feature là hành vi đúng**: tắt feature là làm yếu lớp phát hiện, đúng thứ `ProtectAuditTrail` sinh ra để chặn. Việc nó chặn luôn chiều *bật* chỉ là thiệt hại kèm theo, và AWS không cho phân biệt.
+
+#### Đường tắt sai, và vì sao nó hấp dẫn
+
+Cơ chế miễn trừ có sẵn: `scp_exempt_role_names`. Thêm `OrganizationAccountAccessRole` vào là hết lỗi ngay, một dòng.
+
+Và nó sẽ **phá sập** `deny_guardrails`. Role đó là chìa khoá vạn năng vào mọi member account. Miễn trừ nó khỏi SCP baseline nghĩa là ai cầm nó cũng `StopLogging`, `DeleteTrail`, `DeleteDetector`, `DisableSecurityHub`, `CloseAccount` được — cả bốn thứ mà lỗi 34 vừa mất công bịt ở tầng permission set. Guardrail cuối cùng biến mất để một feature cost tuning chạy được.
+
+> Đây là dạng đánh đổi nguy hiểm nhất trong cả nhật ký này: **lối thoát một dòng, hợp lệ về cú pháp, và nó gỡ đúng lớp bảo vệ mà mọi lớp khác đang dựa vào.** Không có gì trong output Terraform gợi ý điều đó — thông báo lỗi chỉ nói "explicit deny in a service control policy", nghe như một trở ngại cấu hình.
+
+#### Điều thật sự cần biết: chi phí nằm ở đâu
+
+| Resource | API | SCP chặn? | Phạm vi |
+|---|---|---|---|
+| `aws_guardduty_detector_feature` | `UpdateDetector` | **có** | detector của security account |
+| `aws_guardduty_organization_configuration_feature` | `UpdateOrganizationConfiguration` | không | mặc định cho **account thành viên** |
+
+Phần tiền thật nằm ở **account thành viên** — nhân với số account, và nhân tiếp mỗi khi tổ chức có account mới. Resource thứ hai lo đúng phần đó, gọi action khác, **không bị chặn**, và đã apply được.
+
+Cái còn lại là detector của một account: `lz-security`, nơi không chạy workload nào.
+
+#### Bản sửa
+
+`guardduty_manage_admin_detector_features` mặc định `false` — Terraform không đụng detector của security account, apply chạy sạch, guardrail nguyên vẹn. Muốn bật thì phải cố ý tạo một role riêng cho pipeline và miễn trừ role **đó**, không phải `OrganizationAccountAccessRole`. `check "admin_detector_features_need_an_scp_exemption"` nói thẳng điều này lúc `plan`, kèm cả câu đừng-làm.
+
+Output đổi tên `features_on`/`features_off` thành `member_features_on`/`member_features_off` — vì phạm vi của chúng là account thành viên, và tên cũ để người đọc tưởng nó nói về mọi detector.
+
+> **Bài học:** khi tầng dựng guardrail và tầng cấu hình dịch vụ bị canh giữ **cùng là Terraform, chạy bằng cùng một principal**, thì sớm muộn cái này sẽ chặn cái kia. Câu hỏi đúng lúc đó không phải *"làm sao để qua được?"* mà *"cái bị chặn có phải thứ guardrail sinh ra để chặn không?"* Ở đây câu trả lời là **có**, nên đáp án đúng là lùi lại, không phải khoan thủng.
 
 ---
 
