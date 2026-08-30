@@ -1325,6 +1325,25 @@ Với nhóm hai, `aws_securityhub_organization_admin_account` và `aws_guardduty
 
 Mô tả biến giờ tách rõ hai nhóm, và có `check "guardduty_admin_belongs_to_config_detective"` cảnh báo nếu khoá `guardduty.amazonaws.com` lọt vào map.
 
+#### Kiểm chứng: bằng chứng, không phải lập luận
+
+Lúc viết mục này, "lệnh chỉ định riêng tự đăng ký giúp ở Organizations" mới chỉ là **khẳng định của tôi** — đúng loại thứ mà lỗi 36 và 40 dạy là phải đo. Khi `config-detective` apply GuardDuty, dấu thời gian trả lời:
+
+```bash
+aws organizations list-delegated-services-for-account --account-id <security>
+```
+
+```
+config-multiaccountsetup.amazonaws.com   2026-08-21T14:13:50+07:00
+config.amazonaws.com                     2026-08-21T14:13:49+07:00
+guardduty.amazonaws.com                  2026-08-30T09:59:08+07:00   <- moi
+securityhub.amazonaws.com                2026-08-21T14:13:50+07:00
+```
+
+Ba dòng cũ là ngày khai `delegated_administrators`. Dòng GuardDuty mang dấu thời gian của lần apply `config-detective`, và `guardduty.amazonaws.com` **chưa từng** xuất hiện trong map. `aws_guardduty_organization_admin_account` đăng ký nó ở tầng Organizations, không cần ai khai.
+
+> Đây cũng là mẫu ngược của cả mục 7: một khẳng định tôi đưa ra **trước** khi có dữ liệu, và lần này dữ liệu xác nhận nó. Điểm đáng giữ không phải "tôi đúng" mà là lệnh kiểm tồn tại và rẻ — cùng một lệnh đó, chạy sớm hơn, đã ngăn được lỗi 36.
+
 > **Bài học:** một danh sách gợi ý trong mô tả biến là **tài liệu có sức nặng ngang code** — nó là thứ người dùng đọc ngay lúc sắp gõ giá trị. Tôi liệt kê `guardduty.amazonaws.com` như một lựa chọn hợp lệ trong khi đang viết layer khác sở hữu chính việc đó. Danh sách phẳng che mất chuyện các mục trong nó không cùng loại.
 
 ---
