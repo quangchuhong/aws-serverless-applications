@@ -290,6 +290,76 @@ Chạy **một tuần** rồi mới mở rộng, và mở **từng thứ một**
 
 ---
 
+## GuardDuty — mặc định tắt
+
+Tầng còn thiếu của lớp phát hiện. Config và GuardDuty trả lời **hai câu hỏi khác nhau**:
+
+| | Trả lời câu hỏi |
+|---|---|
+| **AWS Config** | Cấu hình có đúng chuẩn không? |
+| **GuardDuty** | Có **hành vi** bất thường đang xảy ra không? |
+
+Một instance đang đào coin, một credential đang được dùng từ IP lạ, một lệnh gọi API qua Tor — **cấu hình của chúng vẫn đúng chuẩn**, và Config im lặng hoàn toàn.
+
+```hcl
+enable_guardduty              = true
+guardduty_auto_enable_members = "ALL"
+guardduty_features            = []      # bat tung cai, do mot tuan
+```
+
+### Không cần thêm đường cảnh báo
+
+GuardDuty tự đẩy finding sang Security Hub, và `notify.tf` đã đọc từ đó. Bật lên là finding chảy vào đúng SNS topic đang có — không phải dựng thêm EventBridge rule nào.
+
+**Đổi lại là một phụ thuộc:** tắt Security Hub thì finding của GuardDuty **không tới ai**, và bạn vẫn trả tiền cho việc phân tích log. `check "guardduty_findings_reach_someone"` bắt trường hợp đó.
+
+### `ALL` chứ không chọn lọc OU — khác hẳn Config
+
+`recorder_target_ous` của Config cố ý bỏ Sandbox và Non-Production vì Config tính tiền theo khối lượng ghi. GuardDuty thì ngược lại: **`auto_enable_organization_members = "ALL"`**.
+
+Lý do: một account không được giám sát là một chỗ kẻ tấn công ở lại mà không ai thấy. Với lớp phát hiện hành vi, khoảng trống nguy hiểm hơn khoản tiết kiệm.
+
+### Chi phí tính theo thứ khác
+
+| | Tính theo |
+|---|---|
+| Config | Số configuration item ghi được |
+| GuardDuty | **Lượng log phân tích** — CloudTrail management event, VPC Flow Log, DNS log |
+
+Phần nền thường khiêm tốn. Chỗ tiền nhảy là các **feature thêm**: `S3_DATA_EVENTS` và `EBS_MALWARE_PROTECTION` là hai cái đắt nhất. Mỗi feature là một nguồn dữ liệu riêng và một dòng hoá đơn riêng — `check "guardduty_features_cost_money"` cảnh báo khi khai hơn một.
+
+> Mỗi account có **30 ngày dùng thử** mỗi region. Đo chi phí thật ở console sau khi hết thử, đừng ước lượng.
+
+### Cùng cái bẫy với Security Hub
+
+`aws_guardduty_organization_admin_account` là lệnh chỉ định **riêng của GuardDuty** — đăng ký `guardduty.amazonaws.com` ở tầng Organizations là chưa đủ, giống hệt [lỗi 14](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
+**Nhưng khác Security Hub ở một chỗ nghiêm trọng hơn:** đổi delegated admin của GuardDuty sang account khác **sau khi đã có member đang enable thì không đổi được** — phải gỡ hết member trước. Chọn account một lần, chọn đúng.
+
+### Kiểm chứng
+
+```bash
+aws guardduty list-detectors --profile lz-security --region ap-southeast-1
+
+# Account thanh vien da duoc bat chua
+aws guardduty list-members --detector-id <id> \
+  --profile lz-security --region ap-southeast-1 \
+  --query 'Members[].[AccountId,RelationshipStatus]' --output table
+```
+
+`RelationshipStatus` phải là `Enabled` ở mọi account. Rồi kiểm chéo rằng finding thật sự tới được Security Hub — đó mới là bằng chứng đường cảnh báo thông:
+
+```bash
+aws securityhub get-findings \
+  --filters '{"ProductName":[{"Value":"GuardDuty","Comparison":"EQUALS"}]}' \
+  --max-results 5 --profile lz-security --region ap-southeast-1 \
+  --query 'Findings[].[Title,Severity.Label]' --output table
+```
+
+Chưa có finding nào là bình thường với một tổ chức sạch. Muốn thử đường ống thật thì dùng **GuardDuty sample findings** trong console — nó sinh finding giả, đi đúng đường thật, và bạn xem thư có tới không.
+
+---
+
 ## Xoá
 
 ```bash

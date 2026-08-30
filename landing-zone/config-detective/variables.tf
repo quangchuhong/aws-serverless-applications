@@ -542,3 +542,117 @@ variable "security_hub_auto_enable_standards" {
     error_message = "Chi nhan DEFAULT hoac NONE."
   }
 }
+
+########################################
+# GUARDDUTY
+########################################
+
+variable "enable_guardduty" {
+  description = <<-EOT
+    Bat GuardDuty o pham vi to chuc.
+
+    MAC DINH TAT vi no tinh tien. Nhung day la tang con thieu cua lop
+    phat hien, va no tra loi mot cau hoi Config khong bao gio tra loi duoc:
+
+      Config      cau hinh co dung chuan khong
+      GuardDuty   co HANH VI bat thuong dang xay ra khong
+
+    Mot instance dang dao coin, mot credential dang duoc dung tu IP la,
+    mot lenh goi API tu Tor - cau hinh cua chung van dung chuan, va
+    Config im lang hoan toan.
+
+    KHONG CAN THEM DUONG CANH BAO: GuardDuty tu day finding sang
+    Security Hub, va notify.tf da doc tu do. Nhung vi vay no PHU THUOC
+    vao Security Hub - xem check "guardduty_findings_reach_someone".
+
+    CHI PHI: tinh theo LUONG LOG phan tich (CloudTrail management event,
+    VPC Flow Log, DNS log), khac Config von tinh theo configuration item.
+    Phan nen thuong khiem ton; cho dat la cac feature them.
+
+    Moi account co 30 ngay dung thu moi region. Do chi phi that o console
+    sau khi het thu, dung uoc luong.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "guardduty_auto_enable_members" {
+  description = <<-EOT
+    Account thanh vien nao duoc tu bat GuardDuty.
+
+      ALL    moi account hien tai VA tuong lai
+      NEW    chi account tao SAU thoi diem nay
+      NONE   khong tu bat cho ai
+
+    ALL la lua chon dung cho mot lop phat hien: mot account khong duoc
+    giam sat la mot cho ke tan cong o lai ma khong ai thay.
+
+    Khac han cach lam voi Config o layer nay - Config chon loc OU vi
+    tinh tien theo khoi luong ghi. Voi GuardDuty thi khoang trong nguy
+    hiem hon khoan tiet kiem.
+  EOT
+  type        = string
+  default     = "ALL"
+
+  validation {
+    condition     = contains(["ALL", "NEW", "NONE"], var.guardduty_auto_enable_members)
+    error_message = "Chi nhan ALL, NEW hoac NONE."
+  }
+}
+
+variable "guardduty_features" {
+  description = <<-EOT
+    Feature them cua GuardDuty. MAC DINH RONG.
+
+      S3_DATA_EVENTS              theo doi truy cap S3 - DAT
+      EBS_MALWARE_PROTECTION      quet EBS khi co finding - DAT
+      EKS_AUDIT_LOGS              audit log cua EKS
+      RDS_LOGIN_EVENTS            dang nhap RDS bat thuong
+      LAMBDA_NETWORK_LOGS         luu luong mang cua Lambda
+      RUNTIME_MONITORING          agent trong container/EC2
+
+    Moi feature la mot NGUON DU LIEU rieng va mot dong hoa don rieng.
+    Hai cai dau dat nhat.
+
+    Bat TUNG CAI MOT, do mot tuan o Cost Explorer roi moi them - cung
+    cach lam voi security_hub_standards. check
+    "guardduty_features_cost_money" canh bao khi khai hon mot.
+
+    Phan nen (CloudTrail + VPC Flow Log + DNS) luon chay, khong tat duoc
+    va khong nam trong danh sach nay.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for f in var.guardduty_features : contains([
+        "S3_DATA_EVENTS", "EKS_AUDIT_LOGS", "EBS_MALWARE_PROTECTION",
+        "RDS_LOGIN_EVENTS", "LAMBDA_NETWORK_LOGS", "RUNTIME_MONITORING",
+      ], f)
+    ])
+    error_message = "Feature khong hop le. Xem danh sach trong mo ta bien."
+  }
+}
+
+variable "guardduty_publishing_frequency" {
+  description = <<-EOT
+    Tan suat gui finding DA CO sang EventBridge khi no duoc cap nhat.
+
+    Finding MOI luon day ngay lap tuc, bat ke gia tri nay - nen doi
+    gia tri nay KHONG lam bao dong den cham hon.
+
+    SIX_HOURS la mac dinh cua AWS. Khong doi chi phi: tien tinh theo
+    luong log phan tich, khong theo so lan gui.
+  EOT
+  type        = string
+  default     = "SIX_HOURS"
+
+  validation {
+    condition = contains(
+      ["FIFTEEN_MINUTES", "ONE_HOUR", "SIX_HOURS"],
+      var.guardduty_publishing_frequency,
+    )
+    error_message = "Chi nhan FIFTEEN_MINUTES, ONE_HOUR hoac SIX_HOURS."
+  }
+}

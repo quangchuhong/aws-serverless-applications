@@ -153,3 +153,19 @@ output "security_hub" {
     alert_path_live = var.enable_security_hub && length(var.alert_emails) > 0
   }
 }
+
+output "guardduty" {
+  description = "GuardDuty: dang chay chua, va finding co toi duoc ai khong"
+  value = {
+    enabled       = var.enable_guardduty
+    admin_account = var.enable_guardduty ? var.security_account_id : null
+    detector_id   = try(aws_guardduty_detector.security[0].id, null)
+
+    auto_enable_members = var.guardduty_auto_enable_members
+    features            = sort(var.guardduty_features)
+
+    # GuardDuty khong co duong canh bao rieng - finding di nho Security
+    # Hub. Ca hai cung bat thi finding moi toi duoc SNS.
+    findings_reach_alerts = var.enable_guardduty && var.enable_security_hub
+  }
+}
