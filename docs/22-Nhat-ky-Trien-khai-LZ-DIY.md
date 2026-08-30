@@ -91,7 +91,7 @@ Xếp theo thứ tự gặp phải.
 
 | 40 | Đường cảnh báo **lọc bỏ toàn bộ finding GuardDuty** | `notify.tf` khớp `Compliance.Status = ["FAILED"]`. `Compliance` là trường **chỉ có** ở finding sinh từ control tuân thủ; GuardDuty phát hiện hành vi nên không có nó — `Comp: null` trên finding thật. EventBridge gặp khoá không tồn tại thì không khớp | **Lỗi code** | *(mục 7n)* |
 
-| 41 | `Provider produced inconsistent result after apply` khi kết nạp **management account** vào GuardDuty | `CreateMembers` chạy xong mà AWS không tạo bản ghi nào, nên provider đọc lại thấy rỗng. Bốn account kia cùng lệnh, cùng lần apply, đều `Enabled`. Thông báo *"bug in the provider"* đặt sai chỗ — GuardDuty từ chối, provider chỉ không biết diễn đạt | **Giới hạn dịch vụ** | *(mục 7o)* |
+| 41 | `Provider produced inconsistent result after apply` khi kết nạp **management account** vào GuardDuty | Management account phải **tự bật GuardDuty trước** mới được kết nạp. AWS nói rõ điều đó trong `UnprocessedAccounts`, nhưng `CreateMembers` trả HTTP 200 nên provider coi là thành công, không đọc trường đó, rồi đọc lại thấy rỗng | **Lỗi code** *(+ bug provider)* | *(mục 7o)* |
 
 | 42 | `4 to add, 4 to destroy` ở **mọi lần plan** — và "destroy" là gỡ account thật khỏi GuardDuty | `email` provider không đọc lại nên state rỗng, mà nó là ForceNew; `invite` provider suy từ `relationship_status` nên luôn đọc ra `true`. Cả hai chỉ có nghĩa lúc tạo | **Lỗi code** | *(mục 7o)* |
 
@@ -1603,23 +1603,13 @@ unexpected new value: Root object was present, but now absent.
 This is a bug in the provider...
 ```
 
-#### Đọc ngược thông báo đó
-
-Provider gọi `CreateMembers`, đọc lại, **không thấy gì**. AWS nhận lệnh rồi lặng lẽ không tạo bản ghi. Không `UnprocessedAccounts`, không `AccessDenied` — im lặng.
-
-Bốn account kia cùng lệnh, cùng lần apply, đều thành công. Khác biệt duy nhất: `609320954321` là **management account**.
-
-Câu *"This is a bug in the provider, which should be reported in the provider's own issue tracker"* đặt sai chỗ và rất dễ dẫn người ta đi lạc cả buổi. GuardDuty từ chối; provider chỉ không có cách diễn đạt cho một API trả về thành công rồi không làm gì.
-
-#### Vì sao không viết luôn bản vá
+#### Không viết bản vá theo giả thuyết — mà đi hỏi
 
 Giả thuyết gọn gàng và có sức thuyết phục: GuardDuty đòi management account **tự tạo detector trước**, y hệt `aws_securityhub_account.management` bên Security Hub — một điểm mù, hai dịch vụ, cùng một hình dạng.
 
-Nó cũng có thể sai. Và nếu viết code theo nó, kết quả tệ nhất không phải apply lỗi lần nữa — mà là một detector đứng riêng trong management account, sinh finding **ở lại chính account đó**, không đi tới delegated admin, nên `notify.tf` ở security account không thấy gì. Tức là một lớp giám sát **trông như có**.
+Nó cũng có thể sai. Và nếu viết code theo nó rồi sai, kết quả tệ nhất **không phải** apply lỗi lần nữa — mà là một detector đứng riêng trong management account, sinh finding **ở lại chính account đó**, không đi tới delegated admin, nên `notify.tf` không thấy gì. Một lớp giám sát **trông như có**: đúng hình dạng lỗi 28, 33 và 40.
 
-Đó đúng là hình dạng của lỗi 28, 33 và 40. Viết thêm một cái nữa để vá một cái vừa tìm ra thì không đáng.
-
-Nên: management account bị **loại tường minh** khỏi `aws_guardduty_member`, và `check "management_account_not_monitored_by_guardduty"` nói thẳng ở mỗi lần `plan` rằng đây là lỗ hổng đã biết, kèm ba lệnh thử:
+Nên tạm loại management account khỏi `for_each`, dựng một `check` kêu ở mỗi lần `plan`, và đi thử bằng ba lệnh:
 
 ```bash
 aws guardduty create-detector --enable --region ap-southeast-1   # tu management
@@ -1629,7 +1619,39 @@ aws guardduty get-members --detector-id <admin-detector> \
   --account-ids <management> --profile <security>
 ```
 
-`get-members` trả về `Enabled` → thêm resource vào code và import cái detector vừa tạo. Rỗng → đây là giới hạn của dịch vụ, và nó phải nằm trong tài liệu như một **lỗ hổng được chấp nhận**, không phải một chỗ trống không ai nhắc.
+#### Câu trả lời, bằng chữ của chính AWS
+
+```json
+"UnprocessedAccounts": [{
+  "AccountId": "609320954321",
+  "Result": "Operation failed because your organization master must
+             first enable GuardDuty to be added as a member"
+}]
+```
+
+Giả thuyết đúng. Chạy lại sau khi detector đã lan:
+
+```json
+"Members": [{ "AccountId": "609320954321",
+              "RelationshipStatus": "Enabled" }],
+"UnprocessedAccounts": []
+```
+
+#### Và điều này sửa lại chính chẩn đoán ở trên
+
+Bản đầu của mục này viết *"AWS nhận lệnh rồi lặng lẽ không tạo bản ghi. Không `UnprocessedAccounts`, không `AccessDenied` — im lặng"*, và kết luận câu *"This is a bug in the provider"* **đặt sai chỗ**. Cả hai đều sai.
+
+AWS **không** im lặng. Nó trả về lý do chính xác, ngay lần đầu, trong `UnprocessedAccounts`. Terraform mới là chỗ nuốt mất câu đó: `CreateMembers` trả **HTTP 200** kèm `UnprocessedAccounts`, provider không kiểm trường ấy, coi là thành công, rồi đọc lại thấy rỗng.
+
+Nên `This is a bug in the provider` **đúng** — chỉ không phải cái bug nó tự nghĩ. Bug thật là bỏ qua `UnprocessedAccounts`, và cái giá là một câu tiếng Anh nói rõ phải làm gì bị đổi thành một câu vô nghĩa.
+
+> Đây là lần **duy nhất** trong cả nhật ký mà CLI trả lời tốt hơn Terraform. Mọi lần trước, hỏi thẳng dịch vụ là cách **kiểm chứng** thứ Terraform nói. Lần này nó là cách **đọc được** thứ Terraform nuốt mất.
+
+#### Bản vá
+
+`aws_guardduty_detector.management` — cùng khuôn với `aws_securityhub_account.management`, và management account quay lại `for_each` với `depends_on` trỏ vào detector đó để Terraform không lặp lại đúng thứ tự sai. `check` tạm thời gỡ bỏ: lỗ hổng đã đóng, không còn gì để nhắc.
+
+Còn lại một khoảng đã biết và đã ghi: **feature tính tiền trên detector của management account chưa được quản.** Ở đó SCP không chặn — SCP không bao giờ áp lên management account — nên quản được, chỉ là chưa. Khác hẳn detector của security account, nơi SCP chặn thật (lỗi 38).
 
 #### Lỗi 42 — cùng resource, một vòng lặp phá thật
 

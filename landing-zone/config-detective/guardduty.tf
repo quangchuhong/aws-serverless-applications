@@ -132,6 +132,53 @@ resource "aws_guardduty_organization_admin_account" "this" {
 }
 
 ########################################
+# 1b. Detector o MANAGEMENT account - DIEU KIEN TIEN QUYET, loi 41
+#
+# Khong phai de uy quyen duoc (muc 1 chay tot khi chua co no). La de
+# management account CO THE DUOC KET NAP lam member o muc 3b.
+#
+# AWS noi thang khi thieu no - nhung chi qua CLI:
+#
+#   aws guardduty create-members --account-details AccountId=<management>,...
+#   -> UnprocessedAccounts: [{ Result: "Operation failed because your
+#      organization master must first enable GuardDuty to be added as
+#      a member" }]
+#
+# Terraform nuot mat cau do: CreateMembers tra HTTP 200 kem
+# UnprocessedAccounts, provider KHONG kiem truong day, coi la thanh
+# cong, roi doc lai thay rong va bao:
+#
+#   Provider produced inconsistent result after apply ...
+#   Root object was present, but now absent.
+#
+# Mot cau tieng Anh noi ro phai lam gi, doi thanh mot cau vo nghia.
+#
+# ---------------------------------------------------------------
+# CUNG KHUON VOI aws_securityhub_account.management
+#
+# Hai dich vu, cung mot diem mu: co che tu bat cho account thanh vien
+# KHONG voi toi management account. Security Hub can resource rieng de
+# BAT; GuardDuty can detector rieng de DUOC KET NAP. Khac ly do, cung
+# ket qua neu bo sot - account giu Organizations, SCP va hoa don khong
+# duoc giam sat, dong thoi la account duy nhat SCP khong bao gio ap duoc.
+#
+# ---------------------------------------------------------------
+# CHUA QUAN FEATURE CUA DETECTOR NAY.
+#
+# AWS bat san phan lon feature tinh tien khi tao detector (loi 37), va
+# o day KHONG bi SCP chan vi SCP khong bao gio ap len management
+# account. Tuc la quan duoc, chi la chua quan. Kiem bang:
+#   aws guardduty get-detector --detector-id <id> --query 'Features'
+########################################
+
+resource "aws_guardduty_detector" "management" {
+  count = local.gd
+
+  enable                       = true
+  finding_publishing_frequency = var.guardduty_publishing_frequency
+}
+
+########################################
 # 2. Detector o security account
 #
 # Detector la "cong tac bat" cua GuardDuty trong mot account + region.
@@ -217,46 +264,28 @@ resource "aws_guardduty_organization_configuration" "this" {
 # doc, nen loi moi se nam do mai mai o trang thai "Invited".
 #
 # ---------------------------------------------------------------
-# MANAGEMENT ACCOUNT BI LOAI RA - LOI 41, va KHONG PHAI vi no khong
-# dang giam sat.
+# MANAGEMENT ACCOUNT CO TRONG DANH SACH, VA PHAI CO - loi 41.
 #
-# Ban dau khoi nay liet ke ca management account, voi ly do dung: cung
-# diem mu voi loi 36, no giu Organizations/SCP/hoa don va la account
-# duy nhat SCP khong bao gio ap duoc. Ly do do van dung. Nhung AWS
-# khong cho:
+# Lan dau resource nay chay, rieng management account hong voi mot
+# thong bao khong noi len gi:
 #
-#   Error: Provider produced inconsistent result after apply
-#   applying aws_guardduty_member.this["<management>"] ... produced an
-#   unexpected new value: Root object was present, but now absent.
+#   Provider produced inconsistent result after apply ...
+#   Root object was present, but now absent.
 #
-# Doc nguoc lai: provider goi CreateMembers, doc lai, va KHONG THAY GI.
-# AWS nhan lenh roi lang le khong tao ban ghi. Bon account kia cung
-# lenh do, cung lan apply, deu Enabled.
+# Nguyen nhan that khong nam o day ma o muc 1b: management account
+# phai TU BAT GuardDuty truoc khi duoc ket nap. Thieu detector do thi
+# CreateMembers tra ve UnprocessedAccounts voi ly do ro rang - nhung
+# provider khong doc truong do nen cau giai thich bi mat.
 #
-# Thong bao "This is a bug in the provider" DAT SAI CHO - GuardDuty
-# tu choi, provider chi khong biet dien dat.
-#
+# depends_on ben duoi dinh dung thu tu ay. Khong co no thi Terraform
+# co the tao member truoc detector cua management va hong y het.
 # ---------------------------------------------------------------
-# HE QUA PHAI NOI RO: MANAGEMENT ACCOUNT DANG KHONG DUOC GUARDDUTY
-# GIAM SAT, va do la mot lo hong that, khong phai mot lua chon.
-#
-# Chua co bang chung ve cach vao dung. Gia thuyet chua kiem chung:
-# GuardDuty doi management account TU tao detector truoc (giong het
-# aws_securityhub_account.management ben Security Hub), roi moi ket
-# nap duoc. Neu dung thi phai them mot resource nua o day.
-#
-# DUNG viet code theo gia thuyet do truoc khi thu bang tay - xem
-# check "management_account_not_monitored_by_guardduty" va muc 7o
-# doc 22 de biet ba lenh thu.
-########################################
 
 resource "aws_guardduty_member" "this" {
   for_each = local.gd == 0 ? {} : {
     for a in data.aws_organizations_organization.this.accounts :
     a.id => a.email
-    if a.status == "ACTIVE"
-    && a.id != var.security_account_id
-    && a.id != data.aws_organizations_organization.this.master_account_id
+    if a.status == "ACTIVE" && a.id != var.security_account_id
   }
 
   provider = aws.security
@@ -268,7 +297,10 @@ resource "aws_guardduty_member" "this" {
   # Xem khoi comment tren - dung doi thanh true.
   invite = false
 
-  depends_on = [aws_guardduty_organization_configuration.this]
+  depends_on = [
+    aws_guardduty_organization_configuration.this,
+    aws_guardduty_detector.management,
+  ]
 
   ########################################
   # LOI 42 - KHONG BO KHOI NAY.
@@ -428,29 +460,6 @@ check "guardduty_findings_reach_someone" {
       "check alerts_have_a_source), nhung neu khong thi ban dang tra tien",
       "cho GuardDuty phan tich log ma khong ai doc ket qua.",
       "Kiem: aws securityhub describe-hub --profile <security> --region <region>",
-    ])
-  }
-}
-
-check "management_account_not_monitored_by_guardduty" {
-  assert {
-    condition = local.gd == 0
-    error_message = join(" ", [
-      "LO HONG DA BIET, chua co cach vao: management account",
-      data.aws_organizations_organization.this.master_account_id,
-      "KHONG duoc GuardDuty giam sat.",
-      "aws_guardduty_member loai no ra vi AWS tu choi ket nap -",
-      "CreateMembers chay xong ma khong tao ban ghi nao, provider bao",
-      "'Root object was present, but now absent'. Xem loi 41 doc 22.",
-      "Day la account giu Organizations, SCP va hoa don, dong thoi la",
-      "account duy nhat SCP khong bao gio ap duoc.",
-      "GIA THUYET CHUA KIEM CHUNG: phai tao detector o chinh management",
-      "account truoc, giong aws_securityhub_account.management.",
-      "THU BANG TAY TRUOC KHI VIET CODE:",
-      "aws guardduty create-detector --enable   (tu management)",
-      "roi create-members lai tu security account, roi get-members.",
-      "Thanh cong thi them resource; that bai thi day la gioi han cua",
-      "dich vu va phai ghi vao tai lieu nhu mot lo hong duoc chap nhan.",
     ])
   }
 }
