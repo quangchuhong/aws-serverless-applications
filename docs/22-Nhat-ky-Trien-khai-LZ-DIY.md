@@ -89,9 +89,11 @@ Xếp theo thứ tự gặp phải.
 
 | 39 | `RUNTIME_MONITORING` bị **replace ở mọi lần plan**, không bao giờ hội tụ | AWS luôn trả về ba `additional_configuration` bên trong feature đó. Config không khai → Terraform đòi gỡ → `name` là ForceNew → replace. Apply xong AWS điền lại mặc định, plan sau lại đòi replace | **Lỗi code** | *(mục 7m)* |
 
-**34/39 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 40 | Đường cảnh báo **lọc bỏ toàn bộ finding GuardDuty** | `notify.tf` khớp `Compliance.Status = ["FAILED"]`. `Compliance` là trường **chỉ có** ở finding sinh từ control tuân thủ; GuardDuty phát hiện hành vi nên không có nó — `Comp: null` trên finding thật. EventBridge gặp khoá không tồn tại thì không khớp | **Lỗi code** | *(mục 7n)* |
 
-> Mười lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**35/40 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Mười một lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1485,6 +1487,64 @@ Phần tệ nằm ở chỗ nó **không hội tụ**: replace xong AWS điền 
 Bản sửa khai ba sub-config tường minh, cùng giá trị với feature cha, qua `dynamic` block ở cả hai resource feature.
 
 > Đây là lần thứ hai trong một mục: `[]` không phải *tắt* (lỗi 37), và một feature không phải *một công tắc* (lỗi 39). Cùng một gốc — tôi giả định hình dạng của thứ AWS trả về thay vì đọc nó.
+
+---
+
+### 7n. Lỗi 40 — đường cảnh báo lọc bỏ đúng thứ vừa dựng xong
+
+GuardDuty đã nằm trọn trong Terraform, `apply` sạch, output `findings_reach_alerts = true`. Một phép thử:
+
+```bash
+aws guardduty create-sample-findings --detector-id <id> \
+  --finding-types 'CryptoCurrency:EC2/BitcoinTool.B!DNS'
+
+aws securityhub get-findings --filters ProductName=GuardDuty \
+  --query 'Findings[].{Sev:Severity.Label,Comp:Compliance.Status}'
+```
+
+```json
+{ "T": "The EC2 instance i-99999999 queried a Bitcoin-related domain name.",
+  "Sev": "HIGH",
+  "Comp": null }
+```
+
+`Comp: null`. Còn `notify.tf` khớp:
+
+```hcl
+Compliance = { Status = ["FAILED"] }
+```
+
+`Compliance` là trường **chỉ có** ở finding sinh từ control tuân thủ. GuardDuty phát hiện **hành vi** — nó không kiểm tra tuân thủ nên không có trường đó. Mà EventBridge: khoá không tồn tại trong event thì pattern **không khớp**.
+
+Toàn bộ finding GuardDuty bị chặn tại rule. IAM Access Analyzer, Inspector, Macie sẽ y hệt.
+
+#### Vì sao nó sống sót qua ba lần rà
+
+`guardduty.tf` mở đầu bằng khẳng định của tôi: *"KHÔNG CẦN THÊM ĐƯỜNG CẢNH BÁO NÀO — GuardDuty tự đẩy finding sang Security Hub, và `notify.tf` đã đọc từ đó rồi."*
+
+Nửa đầu đúng: GuardDuty **có** đẩy finding sang Security Hub, `get-findings` chứng minh. Nửa sau tôi suy ra từ nửa đầu mà không đọc lại `event_pattern`. Và output `findings_reach_alerts` củng cố niềm tin đó bằng cách tính `enable_guardduty && enable_security_hub` — nó khẳng định một điều nó **không có cách nào biết**.
+
+> Ba nguồn cùng nói "ổn": `apply` xanh, output `true`, finding có thật trong Security Hub. Không nguồn nào trong ba nguồn đó nhìn vào `event_pattern`. Đúng khuôn lỗi 28 — nơi `plan` sạch, state có ARN thật, và SNS đã xoá subscription.
+
+#### Bản sửa: `$or`, không phải bỏ điều kiện
+
+Hai loại finding cần hai câu hỏi khác nhau:
+
+| Loại | Điều kiện đúng |
+|---|---|
+| control tuân thủ | `Compliance.Status` ∈ `FAILED`/`WARNING` — vì Security Hub gửi cả finding `PASSED` |
+| hành vi | không có `Compliance`, chỉ cần tồn tại |
+
+Bỏ hẳn dòng `Compliance` cũng *"chạy được"*: finding `PASSED` thường mang `Severity = INFORMATIONAL` nên rơi khỏi bộ lọc severity. Nhưng đó là dựa vào một **trùng hợp**, không phải một điều kiện — và lớp cảnh báo không nên đứng trên trùng hợp.
+
+```hcl
+"$or" = [
+  { Compliance = { Status = ["FAILED", "WARNING"] } },
+  { Compliance = { Status = [{ exists = false }] } },
+]
+```
+
+> **Bài học:** lỗi 33 hỏi *"đường cảnh báo có nguồn không?"* và câu trả lời là có. Lỗi 40 là câu hỏi tiếp theo mà tôi chưa từng hỏi: **nguồn đó có đi lọt qua bộ lọc không?** Một đường ống có thể có đủ nguồn, đủ đích, đủ subscriber đã xác nhận — và đứt ở khúc giữa, nơi không lệnh kiểm tra thành phần nào soi tới. Chỉ có sự kiện thật đi hết đường mới trả lời được.
 
 ---
 

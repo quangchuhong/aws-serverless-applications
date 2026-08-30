@@ -104,21 +104,74 @@ resource "aws_cloudwatch_event_rule" "findings" {
   provider = aws.security
 
   name        = "${var.project}-security-findings"
-  description = "Finding FAILED muc ${join("/", var.alert_severities)} tu Security Hub"
+  description = "Finding muc ${join("/", var.alert_severities)} tu Security Hub - ca tuan thu lan hanh vi"
+
+  ########################################
+  # LOI 40 NAM O DAY - doc truoc khi sua.
+  #
+  # Ban dau rule nay khai thang:
+  #
+  #   Compliance = { Status = ["FAILED"] }
+  #
+  # va no LOAI BO TOAN BO finding cua GuardDuty. Compliance la truong
+  # CHI CO o finding sinh tu control tuan thu. GuardDuty phat hien
+  # HANH VI, khong kiem tra tuan thu, nen finding cua no khong co
+  # truong do:
+  #
+  #   aws securityhub get-findings --filters ProductName=GuardDuty \
+  #     --query 'Findings[].{Sev:Severity.Label,Comp:Compliance.Status}'
+  #   -> { "Sev": "HIGH", "Comp": null }
+  #
+  # Ma EventBridge: khoa khong ton tai trong event thi pattern KHONG
+  # KHOP. Khong loi nao bao. GuardDuty chay, tinh tien, va bi chinh
+  # rule nay chan truoc SNS.
+  #
+  # ---------------------------------------------------------------
+  # $or DUOI DAY LA BAT BUOC, KHONG PHAI CHO SANG
+  #
+  # Hai loai finding can hai cau hoi khac nhau:
+  #
+  #   control tuan thu  -> Compliance.Status phai la FAILED/WARNING,
+  #                        vi Security Hub gui ca finding PASSED
+  #   hanh vi           -> khong co Compliance, chi can ton tai
+  #
+  # Bo han dieu kien Compliance cung "chay duoc" vi finding PASSED
+  # thuong mang Severity INFORMATIONAL nen bi loc o dong Severity.
+  # Nhung do la dua vao mot trung hop, khong phai mot dieu kien -
+  # va lop canh bao khong nen dung tren trung hop.
+  #
+  # SAU KHI DOI FILE NAY, PHAI THU LAI BANG SU KIEN THAT. Pattern
+  # sai cu phap thi apply bao loi; pattern dung cu phap ma khong khop
+  # thi IM LANG - dung kieu hong da sinh ra loi 28, 33 va 40:
+  #
+  #   aws guardduty create-sample-findings --detector-id <id> \
+  #     --finding-types 'CryptoCurrency:EC2/BitcoinTool.B!DNS' \
+  #     --profile <security> --region <region>
+  #
+  # Co email = xong. Khong co = pattern van sai, dung doan tiep.
+  ########################################
 
   event_pattern = jsonencode({
     source        = ["aws.securityhub"]
     "detail-type" = ["Security Hub Findings - Imported"]
     detail = {
       findings = {
-        # Chi bao cai DANG sai va CHUA duoc xu ly.
-        # Thieu hai dieu kien duoi thi moi lan finding duoc cap nhat
-        # trang thai cung ban thong bao - rat nhanh thanh nhieu.
-        Compliance  = { Status = ["FAILED"] }
+        # Chi bao cai DANG mo va CHUA duoc xu ly. Thieu hai dieu kien
+        # nay thi moi lan finding duoc cap nhat trang thai cung ban
+        # thong bao - rat nhanh thanh nhieu.
         RecordState = ["ACTIVE"]
         Workflow    = { Status = ["NEW", "NOTIFIED"] }
 
         Severity = { Label = var.alert_severities }
+
+        "$or" = [
+          # Finding tuan thu: chi cai DANG sai.
+          { Compliance = { Status = ["FAILED", "WARNING"] } },
+
+          # Finding hanh vi: khong co truong Compliance. GuardDuty,
+          # IAM Access Analyzer, Inspector, Macie deu roi vao nhanh nay.
+          { Compliance = { Status = [{ exists = false }] } },
+        ]
       }
     }
   })
