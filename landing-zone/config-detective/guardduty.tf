@@ -88,11 +88,26 @@ locals {
   # bao loi - chi la moi lan plan deu ban ra mot thay doi gia.
   #
   # Khai tuong minh, cung gia tri voi feature cha.
+  #
+  # THU TU O DAY LA MOT PHAN CUA CAU TRA LOI, KHONG PHAI SO THICH.
+  #
+  # additional_configuration la LIST co thu tu, khong phai set. Lan sua
+  # dau tien boc no trong toset() - toset() sap xep theo alphabet, ra
+  # EC2 / ECS_FARGATE / EKS_ADDON, con API tra ve ECS_FARGATE / EC2 /
+  # EKS_ADDON. Terraform doc thanh "phan tu 0 va 1 doi ten", ma name la
+  # ForceNew, nen van REPLACE - cung benh, khac nguyen nhan.
+  #
+  # Danh sach duoi day chep DUNG thu tu API tra ve. dynamic block nhan
+  # list va giu nguyen thu tu, nen KHONG duoc boc toset().
+  #
+  # Neu mot ngay AWS doi thu tu tra ve, trieu chung se la plan bao
+  # replace resource nay ma khong co gi thay doi that. Doc lai thu tu
+  # trong plan roi sua o day.
   gd_feature_addons = {
     RUNTIME_MONITORING = [
-      "EKS_ADDON_MANAGEMENT",
       "ECS_FARGATE_AGENT_MANAGEMENT",
       "EC2_AGENT_MANAGEMENT",
+      "EKS_ADDON_MANAGEMENT",
     ]
   }
 }
@@ -237,7 +252,7 @@ resource "aws_guardduty_detector_feature" "security" {
   # Xem loi 39 o locals. Bo qua khoi nay thi resource bi REPLACE moi
   # lan plan, mai mai.
   dynamic "additional_configuration" {
-    for_each = toset(lookup(local.gd_feature_addons, each.key, []))
+    for_each = lookup(local.gd_feature_addons, each.key, [])
     content {
       name   = additional_configuration.value
       status = each.value ? "ENABLED" : "DISABLED"
@@ -256,7 +271,7 @@ resource "aws_guardduty_organization_configuration_feature" "this" {
   # Xem loi 39 o locals. Bo qua khoi nay thi resource bi REPLACE moi
   # lan plan, mai mai.
   dynamic "additional_configuration" {
-    for_each = toset(lookup(local.gd_feature_addons, each.key, []))
+    for_each = lookup(local.gd_feature_addons, each.key, [])
     content {
       name        = additional_configuration.value
       auto_enable = each.value ? "ALL" : "NONE"
