@@ -93,9 +93,11 @@ Xếp theo thứ tự gặp phải.
 
 | 41 | `Provider produced inconsistent result after apply` khi kết nạp **management account** vào GuardDuty | `CreateMembers` chạy xong mà AWS không tạo bản ghi nào, nên provider đọc lại thấy rỗng. Bốn account kia cùng lệnh, cùng lần apply, đều `Enabled`. Thông báo *"bug in the provider"* đặt sai chỗ — GuardDuty từ chối, provider chỉ không biết diễn đạt | **Giới hạn dịch vụ** | *(mục 7o)* |
 
-**35/41 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 42 | `4 to add, 4 to destroy` ở **mọi lần plan** — và "destroy" là gỡ account thật khỏi GuardDuty | `email` provider không đọc lại nên state rỗng, mà nó là ForceNew; `invite` provider suy từ `relationship_status` nên luôn đọc ra `true`. Cả hai chỉ có nghĩa lúc tạo | **Lỗi code** | *(mục 7o)* |
 
-> Mười hai lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**36/42 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1629,7 +1631,35 @@ aws guardduty get-members --detector-id <admin-detector> \
 
 `get-members` trả về `Enabled` → thêm resource vào code và import cái detector vừa tạo. Rỗng → đây là giới hạn của dịch vụ, và nó phải nằm trong tài liệu như một **lỗ hổng được chấp nhận**, không phải một chỗ trống không ai nhắc.
 
-> **Bài học:** ba mục trước đóng bằng bằng chứng. Mục này không đóng được, và giá trị của nó nằm ở chỗ **nói ra điều đó** thay vì để một `for_each` lặng lẽ bỏ qua một account. Một `check` kêu mỗi lần `plan` khó chịu hơn hẳn một dòng comment — và đó chính là điều mong muốn: management account giữ Organizations, SCP và hoá đơn, đồng thời là account duy nhất SCP không bao giờ áp được. Nó là account đắt nhất để bỏ sót.
+#### Lỗi 42 — cùng resource, một vòng lặp phá thật
+
+Plan ngay sau đó:
+
+```
+# aws_guardduty_member.this["169873795883"] must be replaced
++ email  = "quang.hong.0991+lz-app-dev-01@gmail.com"  # forces replacement
+~ invite = true -> false
+Plan: 4 to add, 0 to change, 4 to destroy
+```
+
+Bốn member vừa kết nạp xong, plan đã đòi phá đi dựng lại. Và ở đây `destroy` **không phải thao tác giấy tờ** — là gỡ account thật khỏi GuardDuty rồi kết nạp lại, trên chính lớp đang giám sát toàn tổ chức.
+
+Hai thuộc tính, hai nguyên nhân khác nhau:
+
+| | Vì sao lệch |
+|---|---|
+| `email` | provider **không đọc lại** từ API. Sau refresh nó rỗng trong state, config có giá trị → khác nhau. Mà `email` là `ForceNew`, nên "khác nhau" thành **replace** |
+| `invite` | provider **suy** nó từ `relationship_status`: member đã `Enabled` thì đọc ra `true`. Config khai `false` — đúng, vì account cùng tổ chức không cần thư mời — nên luôn lệch |
+
+Cả hai chỉ có ý nghĩa **lúc tạo**. Đổi email root của một account không phải lý do để gỡ nó khỏi GuardDuty rồi mời lại.
+
+`lifecycle { ignore_changes = [email, invite] }`.
+
+**Đánh đổi phải nói ra:** bỏ qua hai trường đó nghĩa là Terraform **không phát hiện được** việc ai đó gỡ một member ra ngoài Terraform — `relationship_status` là computed nên nó đổi trong im lặng. Resource này bảo đảm **ghi danh lúc tạo**, không phải giám sát liên tục. Câu hỏi *"có account nào rớt ra không"* vẫn phải hỏi thẳng dịch vụ bằng `list-members`.
+
+> Đây là lần thứ ba trong một mục cùng một gốc: `[]` không phải *tắt* (37), một feature không phải *một công tắc* (39), và một thuộc tính trong config không chắc là thuộc tính provider đọc về (42). Cả ba đều là giả định về **hình dạng thứ AWS trả về**, và cả ba chỉ lộ ra ở lần `plan` thứ hai — sau khi apply đã "thành công".
+
+> **Bài học:** ba mục trước đóng bằng bằng chứng. Lỗ hổng management account thì không đóng được, và giá trị của nó nằm ở chỗ **nói ra điều đó** thay vì để một `for_each` lặng lẽ bỏ qua một account. Một `check` kêu mỗi lần `plan` khó chịu hơn hẳn một dòng comment — và đó chính là điều mong muốn: management account giữ Organizations, SCP và hoá đơn, đồng thời là account duy nhất SCP không bao giờ áp được. Nó là account đắt nhất để bỏ sót.
 
 | | |
 |---|---|

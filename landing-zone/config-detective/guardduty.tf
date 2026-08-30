@@ -269,6 +269,43 @@ resource "aws_guardduty_member" "this" {
   invite = false
 
   depends_on = [aws_guardduty_organization_configuration.this]
+
+  ########################################
+  # LOI 42 - KHONG BO KHOI NAY.
+  #
+  # Thieu no thi MOI lan plan deu doi replace ca 4 member:
+  #
+  #   + email  = "..."           # forces replacement
+  #   ~ invite = true -> false
+  #   Plan: 4 to add, 0 to change, 4 to destroy
+  #
+  # Va "destroy" o day khong phai thao tac giay to - la go account that
+  # khoi GuardDuty roi ket nap lai. Mot vong lap khong hoi tu, tren
+  # dung lop dang giam sat toan bo to chuc.
+  #
+  # HAI THUOC TINH, HAI NGUYEN NHAN KHAC NHAU:
+  #
+  #   email   provider KHONG doc lai tu API. Sau refresh no rong trong
+  #           state, con config co gia tri -> khac nhau. Ma email la
+  #           ForceNew, nen "khac nhau" thanh REPLACE.
+  #
+  #   invite  provider SUY no tu relationship_status: member da Enabled
+  #           thi doc ra true. Config khai false (dung, xem tren) nen
+  #           luon lech.
+  #
+  # Ca hai chi co y nghia LUC TAO. Doi email root cua mot account khong
+  # phai ly do de go no khoi GuardDuty roi moi lai.
+  #
+  # DANH DOI PHAI BIET: bo qua hai truong nay dong nghia Terraform
+  # KHONG phat hien duoc viec ai do go mot member ra ngoai Terraform.
+  # relationship_status la computed nen no doi trong im lang. Resource
+  # nay bao dam GHI DANH LUC TAO, khong phai giam sat lien tuc.
+  # Lenh tra loi cau hoi do van la:
+  #   aws guardduty list-members --detector-id <id> --only-associated false
+  ########################################
+  lifecycle {
+    ignore_changes = [email, invite]
+  }
 }
 
 ########################################
