@@ -162,7 +162,11 @@ output "guardduty" {
     detector_id   = try(aws_guardduty_detector.security[0].id, null)
 
     auto_enable_members = var.guardduty_auto_enable_members
-    features            = sort(var.guardduty_features)
+
+    # Ca hai chieu, vi "rong" tung bi doc nham thanh "khong bat gi"
+    # trong khi AWS da bat san - xem loi 37.
+    features_on  = sort(var.guardduty_features)
+    features_off = sort([for f, on in local.gd_features : f if !on])
 
     # GuardDuty khong co duong canh bao rieng - finding di nho Security
     # Hub. Ca hai cung bat thi finding moi toi duoc SNS.

@@ -634,7 +634,19 @@ variable "guardduty_auto_enable_members" {
 
 variable "guardduty_features" {
   description = <<-EOT
-    Feature them cua GuardDuty. MAC DINH RONG.
+    Feature them cua GuardDuty. MAC DINH RONG = TAT HET.
+
+    "Tat het" o day la tuong minh, khong phai "khong dong toi": layer
+    khai ca sau feature duoi day theo hai chieu - co trong danh sach
+    thi ENABLED, khong co thi DISABLED. Phai lam vay vi AWS BAT SAN
+    phan lon chung khi tao detector; chi sinh resource cho cac feature
+    duoc chon thi [] tao ra khong resource nao, va do la "khong quan"
+    chu khong phai "tat". Xem loi 37 doc 22.
+
+    => AP LAN DAU LEN DETECTOR DA CHAY thi apply se TAT that. Chay
+       aws guardduty get-detector --detector-id <id> --query 'Features'
+       truoc, va dua cai muon giu vao day.
+
 
       S3_DATA_EVENTS              theo doi truy cap S3 - DAT
       EBS_MALWARE_PROTECTION      quet EBS khi co finding - DAT

@@ -30,7 +30,8 @@
 # Phan nen thuong khiem ton. Cho tien nhay la cac FEATURE them:
 # S3 Protection, Malware Protection, EKS, RDS, Lambda - moi cai mot
 # nguon du lieu rieng va mot hoa don rieng. Vi vay guardduty_features
-# mac dinh RONG.
+# mac dinh RONG - va muc 4 khai ca hai chieu de "rong" that su la TAT,
+# chu khong phai "khong dong toi". AWS bat san phan lon chung.
 #
 # Moi account co 30 ngay dung thu moi region. Do chi phi that o
 # console sau khi het thu, dung uoc luong.
@@ -38,6 +39,42 @@
 
 locals {
   gd = local.enabled && var.enable_guardduty ? 1 : 0
+
+  # MOI feature tat duoc, khong chi cai duoc chon.
+  #
+  # VI SAO PHAI LIET KE CA DANH SACH - loi 37:
+  # AWS BAT SAN phan lon feature tinh tien khi tao detector. Neu chi
+  # sinh resource cho cac feature trong guardduty_features thi
+  # guardduty_features = [] tao ra KHONG resource nao, va "khong
+  # resource nao" nghia la "Terraform khong quan", KHONG phai "tat".
+  # Ket qua do o mot detector that:
+  #
+  #   S3_DATA_EVENTS          ENABLED
+  #   EKS_AUDIT_LOGS          ENABLED
+  #   EBS_MALWARE_PROTECTION  ENABLED
+  #   RDS_LOGIN_EVENTS        ENABLED
+  #   LAMBDA_NETWORK_LOGS     ENABLED
+  #
+  # Nam dong hoa don, trong khi tai lieu cua chinh file nay ghi "mac
+  # dinh khong bat cai nao" va check guardduty_features_cost_money dem
+  # length(var.guardduty_features) = 0 nen im lang.
+  #
+  # Liet ke ca danh sach thi [] moi that su la TAT HET.
+  #
+  # CLOUD_TRAIL / DNS_LOGS / FLOW_LOGS khong co o day: do la phan nen,
+  # luon chay va khong tat duoc.
+  gd_manageable_features = [
+    "S3_DATA_EVENTS",
+    "EKS_AUDIT_LOGS",
+    "EBS_MALWARE_PROTECTION",
+    "RDS_LOGIN_EVENTS",
+    "LAMBDA_NETWORK_LOGS",
+    "RUNTIME_MONITORING",
+  ]
+
+  gd_features = local.gd == 0 ? {} : {
+    for f in local.gd_manageable_features : f => contains(var.guardduty_features, f)
+  }
 }
 
 ########################################
@@ -107,22 +144,55 @@ resource "aws_guardduty_organization_configuration" "this" {
 }
 
 ########################################
-# 4. Feature them - MAC DINH KHONG BAT CAI NAO
+# 4. Feature them - KHAI BAO CA HAI CHIEU
 #
 # Moi feature la mot nguon du lieu rieng va mot dong hoa don rieng.
 # S3 Protection va Malware Protection la hai cai dat nhat.
 #
+# Ca hai resource duoi day duyet HET local.gd_manageable_features chu
+# khong chi cac feature duoc chon: cai co trong guardduty_features thi
+# BAT, cai khong co thi TAT tuong minh. Do la cach duy nhat de
+# guardduty_features = [] co nghia dung nhu tai lieu noi - xem loi 37.
+#
+# CANH BAO KHI AP LAN DAU LEN MOT DETECTOR DA CHAY:
+# apply se TAT that cac feature dang bat. Kiem truoc bang
+#   aws guardduty get-detector --detector-id <id> --query 'Features'
+# roi dua cai muon giu vao guardduty_features TRUOC khi apply.
+#
 # Bat TUNG CAI MOT, do mot tuan o Cost Explorer roi moi them tiep -
 # cung cach lam voi Security Hub standard.
+#
+# ---------------------------------------------------------------
+# VI SAO CAN HAI RESOURCE, KHONG PHAI MOT
+#
+#   aws_guardduty_detector_feature              detector cua CHINH
+#                                               security account
+#   aws_guardduty_organization_configuration_feature
+#                                               mac dinh cho ACCOUNT
+#                                               THANH VIEN
+#
+# Chung goi hai API khac nhau. Chi khai cai thu hai thi account thanh
+# vien sach se con chinh detector cua security account van bat day du
+# feature tinh tien - va do la detector duy nhat ban nhin thay khi go
+# lenh get-detector, nen sai sot nay rat de tu ru ngu minh.
 ########################################
 
-resource "aws_guardduty_organization_configuration_feature" "this" {
-  for_each = local.gd == 1 ? toset(var.guardduty_features) : []
+resource "aws_guardduty_detector_feature" "security" {
+  for_each = local.gd_features
   provider = aws.security
 
   detector_id = aws_guardduty_detector.security[0].id
-  name        = each.value
-  auto_enable = "ALL"
+  name        = each.key
+  status      = each.value ? "ENABLED" : "DISABLED"
+}
+
+resource "aws_guardduty_organization_configuration_feature" "this" {
+  for_each = local.gd_features
+  provider = aws.security
+
+  detector_id = aws_guardduty_detector.security[0].id
+  name        = each.key
+  auto_enable = each.value ? "ALL" : "NONE"
 
   depends_on = [aws_guardduty_organization_configuration.this]
 }

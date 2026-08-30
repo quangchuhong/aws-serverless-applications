@@ -83,9 +83,11 @@ Xếp theo thứ tự gặp phải.
 
 | 36 | Comment trong `securityhub.tf` khẳng định một **điều kiện tiên quyết không tồn tại** | Ghi rằng `EnableOrganizationAdminAccount` đòi Security Hub bật sẵn ở management account. Trạng thái thật bác bỏ: management `InvalidAccessException: not subscribed`, mà `list-organization-admin-accounts` vẫn trả về admin `ENABLED` | **Tài liệu sai** | *(mục 7k)* |
 
-**32/36 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 37 | `guardduty_features = []` được ghi là *"mặc định không bật cái nào"* — thực tế **năm feature tính tiền đang chạy** | Danh sách rỗng sinh ra **không resource nào**, nghĩa là *"Terraform không quản"*, không phải *"tắt"*. Mà AWS **bật sẵn** phần lớn feature khi tạo detector. `check "guardduty_features_cost_money"` đếm `length(var.guardduty_features) = 0` nên im lặng | **Lỗi thiết kế** | *(mục 7l)* |
 
-> Bảy lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
+**33/37 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+
+> Tám lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
 > Lỗi 27 là loại tệ nhất trong cả bảng: nó không báo hỏng. Nó nói *"không có gì"* — và "không có gì" đúng là câu trả lời mình **mong đợi** sau khi đã dọn tay. Suýt nữa thì viết vào tài liệu rằng lớp mới không tìm thấy gì, trong khi nó vừa xoá năm cái VPC thật.
 
@@ -1348,6 +1350,64 @@ Hệ quả thực tế: khi import Security Hub sẵn có, ba resource import đ
 `depends_on` giữ nguyên nhưng đổi lý do: không phải ràng buộc kỹ thuật lúc tạo, mà để **định thứ tự destroy** — gỡ uỷ quyền trước khi tắt Security Hub ở management.
 
 > **Bài học:** lỗi 32 là câu dặn sai trong tài liệu vận hành; lỗi 36 là cùng loại nhưng nằm trong **comment giải thích code**, chỗ khó soi hơn nhiều vì không ai chạy comment. Cả hai đều là thứ tôi *suy ra* rồi viết như thể đã kiểm chứng. Khác biệt duy nhất giữa hai lỗi đó và phần còn lại của repo: ở đây có hai lệnh CLI hỏi thẳng dịch vụ, và tôi đã không chạy chúng trước khi viết.
+
+---
+
+### 7l. Lỗi 37 — "rỗng" nghĩa là *không quản*, không phải *tắt*
+
+Câu hỏi mở đầu vẫn vô hại như mọi lần: *"GuardDuty apply xong rồi, có cách nào kiểm tra cấu hình không?"*
+
+`get-detector` trả về:
+
+```
+S3_DATA_EVENTS          ENABLED
+EKS_AUDIT_LOGS          ENABLED
+EBS_MALWARE_PROTECTION  ENABLED
+RDS_LOGIN_EVENTS        ENABLED
+LAMBDA_NETWORK_LOGS     ENABLED
+```
+
+Năm feature tính tiền. Trong khi `guardduty.tf` mục 4 mang tiêu đề **"MẶC ĐỊNH KHÔNG BẬT CÁI NÀO"**, mô tả biến ghi **"MẶC ĐỊNH RỖNG"**, và `check "guardduty_features_cost_money"` — cái `check` dựng riêng để cảnh báo chuyện này — **im lặng hoàn toàn**, vì nó đếm `length(var.guardduty_features)` và con số đó bằng 0.
+
+#### Bước suy luận sai
+
+```hcl
+for_each = local.gd == 1 ? toset(var.guardduty_features) : []
+```
+
+Rỗng → **không resource nào**. Và "không resource nào" nghĩa là *Terraform không đụng tới feature*, chứ không phải *feature bị tắt*. Hai câu đó nghe giống hệt nhau và khác nhau ở đúng chỗ ra hoá đơn — vì **AWS bật sẵn** phần lớn feature khi tạo detector.
+
+Ba dòng tài liệu tôi viết đều nói *tắt*. Code làm *không quản*. Không dòng nào sai về cú pháp, và `terraform apply` xanh.
+
+#### Bản sửa: khai cả hai chiều
+
+Không thể chỉ sinh resource cho feature được chọn. Phải duyệt **hết** danh sách feature quản được — có trong `guardduty_features` thì `ENABLED`, không có thì `DISABLED` tường minh. Chỉ khi đó `[]` mới thật sự là "tắt hết".
+
+Và cần **hai** resource, không phải một:
+
+| Resource | Phạm vi |
+|---|---|
+| `aws_guardduty_detector_feature` | detector của **chính** security account |
+| `aws_guardduty_organization_configuration_feature` | mặc định cho **account thành viên** |
+
+Hai API khác nhau. Chỉ khai cái thứ hai thì account thành viên sạch, còn detector của security account vẫn bật đủ feature tính tiền — mà đó lại là detector **duy nhất** hiện ra khi gõ `get-detector`, nên thiếu sót này rất dễ tự ru ngủ mình.
+
+Output `guardduty` giờ in cả `features_on` lẫn `features_off`, vì "rỗng" đã một lần bị đọc nhầm.
+
+> **Cảnh báo áp lần đầu:** trên một detector đã chạy, apply sẽ **tắt thật** những feature đang bật. Chạy `get-detector --query 'Features'` trước và đưa cái muốn giữ vào `guardduty_features`.
+
+#### Chẩn đoán sai của tôi trong cùng phiên đó
+
+Thấy `list-organization-admin-accounts` trả về `AdminAccounts: []`, tôi kết luận *"apply không trọn vẹn, có resource lỗi giữa chừng"*. Sai. Hai lệnh sau đó cho câu trả lời thật:
+
+```
+terraform state list | grep guardduty   ->  (rong)
+terraform plan                          ->  No changes.
+```
+
+`enable_guardduty` vẫn `false`. **Terraform chưa từng apply GuardDuty** — detector đang chạy là do bật tay, đúng khuôn Security Hub ở mục 7h.
+
+> **Bài học:** tôi suy trạng thái Terraform từ một lệnh AWS, đúng lúc đang viết mục về việc không được suy trạng thái AWS từ repo. Cùng một lỗi, hướng ngược lại. `terraform state list` là câu hỏi rẻ nhất trong cả phiên và tôi đã đoán thay vì hỏi nó.
 
 ---
 
