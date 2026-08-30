@@ -158,3 +158,112 @@ alert_severities = ["CRITICAL", "HIGH"]
 # KHONG dat webhook URL vao bien Terraform - no se vao state dang ro.
 enable_slack              = false
 slack_webhook_secret_name = "lz/slack/security-alerts"
+
+########################################
+# 6. Security Hub - NGUON cua duong canh bao o muc 5
+#
+# notify.tf khop event theo source = "aws.securityhub". De false thi
+# muc 5 dung day du - EventBridge rule, SNS topic, email da xac nhan -
+# ma KHONG CO GI DI QUA. Khong loi nao bao.
+# check "alerts_have_a_source" bat dung truong hop do.
+#
+# ---------------------------------------------------------------
+# DA BAT BANG TAY ROI? PHAI IMPORT, DUNG APPLY THANG.
+#
+# RUNBOOK giai doan 7 co ba lenh bat tay. Da chay chung thi ba resource
+# duoi day DA TON TAI trong AWS, va apply se bao loi trung:
+#
+#   terraform import aws_securityhub_organization_admin_account.this[0]  <security-id>
+#   terraform import aws_securityhub_account.security[0]                 <security-id>
+#   terraform import aws_securityhub_organization_configuration.this[0]  <security-id>
+#
+# Hoi thang dich vu truoc khi import, dung suy tu plan:
+#   aws securityhub describe-hub                     --profile <security>
+#   aws securityhub get-enabled-standards            --profile <security>
+#   aws securityhub describe-organization-configuration --profile <security>
+#
+# Hai resource CON LAI luon la tao moi, ke ca khi da bat tay:
+# aws_securityhub_account.management (ba lenh trong RUNBOOK khong bat o
+# management) va aws_securityhub_finding_aggregator (khong co trong RUNBOOK).
+# ---------------------------------------------------------------
+########################################
+
+enable_security_hub = false
+
+# Account tao SAU co tu duoc bat khong. Thu gi phai nho lam tay cho
+# tung account moi thi som muon cung bi quen o mot account.
+#
+# LUU Y: KHONG voi toi management account - do la ly do
+# aws_securityhub_account.management ton tai rieng.
+security_hub_auto_enable_new_accounts = true
+
+# ---------------------------------------------------------------
+# HAI BIEN DUOI DAY LA QUYET DINH CHI PHI, KHONG PHAI CAU HINH.
+#
+# De nguyen mac dinh thi Security Hub chi lam NOI GOM finding cua
+# Config va GuardDuty roi day sang SNS - dung viec muc 5 can, va
+# KHONG chay standard nao.
+#
+# Doi chung la bat hang tram control kiem tra bao mat, nhan voi so
+# account, nhan voi so region. Day la duong nhanh nhat de hoa don
+# Security Hub vuot han Config.
+#
+# RUNBOOK giai doan 7 ghi thang: "--no-enable-default-standards va
+# --auto-enable-standards NONE la bat buoc, khong phai tuy chon".
+# ---------------------------------------------------------------
+
+# Standard tai RIENG security account. Bat DUNG MOT CAI, do mot tuan o
+# Cost Explorer (Service = "AWS Security Hub") roi moi them cai tiep.
+# check "security_hub_costs_money" canh bao khi khai hon mot.
+security_hub_standards = []
+# security_hub_standards = ["fsbp"]   # cis-1.4 | cis-3.0 | nist-800-53 | pci-dss
+
+# Standard tu bat o MOI account thanh vien. Chi nhan "DEFAULT" (= FSBP)
+# hoac "NONE". "NONE" KHONG lam yeu duong canh bao: member van duoc bat
+# Security Hub va van gui finding cua Config/GuardDuty ve delegated
+# admin - chi la khong tu chay them hang tram control.
+security_hub_auto_enable_standards = "NONE"
+
+########################################
+# 7. GuardDuty - tang con thieu cua lop phat hien
+#
+#   Config      cau hinh co dung chuan khong
+#   GuardDuty   co HANH VI bat thuong dang xay ra khong
+#
+# Mot instance dang dao coin, mot credential dung tu IP la: cau hinh
+# van dung chuan, Config im lang hoan toan.
+#
+# KHONG CAN THEM DUONG CANH BAO: GuardDuty day finding sang Security
+# Hub, va muc 5 da doc tu do. Nhung vi vay no PHU THUOC vao muc 6 -
+# bat GuardDuty ma tat Security Hub thi finding khong toi ai.
+# check "guardduty_findings_reach_someone" bat truong hop do.
+#
+# KHONG DAO NGUOC: doi delegated admin cua GuardDuty sau khi da co
+# member enable la KHONG LAM DUOC - phai go het member truoc.
+########################################
+
+enable_guardduty = false
+
+# ALL | NEW | NONE. ALL la lua chon dung cho mot lop phat hien: mot
+# account khong duoc giam sat la mot cho ke tan cong o lai ma khong ai
+# thay. Khac cach lam voi Config o muc 2 - Config chon loc OU vi tinh
+# tien theo khoi luong ghi; voi GuardDuty khoang trong nguy hiem hon
+# khoan tiet kiem.
+guardduty_auto_enable_members = "ALL"
+
+# Feature them - MOI CAI mot nguon du lieu rieng va mot dong hoa don
+# rieng. Phan nen (CloudTrail + VPC Flow Log + DNS) luon chay, khong
+# nam trong danh sach nay.
+#
+# Bat TUNG CAI MOT, do mot tuan roi moi them - cung cach lam voi
+# security_hub_standards. Moi account co 30 ngay dung thu moi region,
+# nen do chi phi SAU khi het thu, dung uoc luong.
+guardduty_features = []
+# guardduty_features = ["S3_DATA_EVENTS"]   # EBS_MALWARE_PROTECTION | EKS_AUDIT_LOGS
+#                                           # RDS_LOGIN_EVENTS | LAMBDA_NETWORK_LOGS
+#                                           # RUNTIME_MONITORING
+
+# Tan suat gui finding DA CO sang EventBridge khi no duoc cap nhat.
+# Finding MOI luon day ngay lap tuc, bat ke gia tri nay - doi cai nay
+# KHONG lam bao dong den cham hon, va khong doi chi phi.
+guardduty_publishing_frequency = "SIX_HOURS"
