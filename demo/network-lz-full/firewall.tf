@@ -155,6 +155,26 @@ resource "aws_networkfirewall_rule_group" "egress_domains" {
   type     = "STATEFUL"
 
   rule_group {
+    # PHAI KHAI DUNG RULE ORDER VOI POLICY - loi 47.
+    #
+    # Policy o tren dat stateful_engine_options.rule_order =
+    # STRICT_ORDER. Khi do MOI rule group duoc tham chieu cung phai
+    # khai STRICT_ORDER. Thieu o day thi CreateFirewallPolicy bao:
+    #
+    #   InvalidRequestException: ResourceArn has invalid rule order,
+    #   context: StatefulRuleGroupReferences[1].ResourceArn
+    #
+    # Mac dinh cua rule group la DEFAULT_ACTION_ORDER, nen "khong khai"
+    # KHONG phai la "thua ke tu policy" - no la mot lua chon khac han.
+    #
+    # terraform plan KHONG BAT DUOC loi nay: rule group va policy la
+    # hai resource rieng, plan khong doi chieu thuoc tinh giua chung.
+    # Chi API tu choi luc apply. plan-check.sh chay 9 to hop, bao 136
+    # resource cho nhanh firewall, va van khong thay.
+    stateful_rule_options {
+      rule_order = "STRICT_ORDER"
+    }
+
     rule_variables {
       ip_sets {
         key = "HOME_NET"

@@ -102,7 +102,9 @@ Xếp theo thứ tự gặp phải.
 
 | 46 | `plan-check.sh` báo **10 lỗi hành vi** trên một plan 175 resource có đủ mọi thứ nó tìm | `set -o pipefail` + `echo "$BIG" \| grep -q X`: `grep -q` thoát ngay khi khớp, `echo` chết vì SIGPIPE (141), `pipefail` lấy 141 làm mã thoát → **tìm thấy** đọc thành **không thấy**. Chỉ lộ khi đầu vào đủ lớn | **Lỗi code** | *(mục 7q)* |
 
-**40/46 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 47 | `InvalidRequestException: ResourceArn has invalid rule order` — apply chết giữa chừng ở phút thứ 10 | Policy đặt `rule_order = STRICT_ORDER`, nhưng rule group `egress_domains` không khai — mặc định là `DEFAULT_ACTION_ORDER`. **`terraform plan` không bắt được**: hai resource riêng biệt, plan không đối chiếu thuộc tính giữa chúng | **Lỗi code** | *(mục 7r)* |
+
+**41/47 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1828,6 +1830,43 @@ Thay pipeline bằng **herestring** — `grep -q "$pattern" <<<"$FULL"` không t
 Và một khẳng định phủ nhận vẫn "đạt" suốt cả thời gian đó: `grep -q app_direct` không khớp thật, `echo` chạy trọn, pipeline trả 1, nhánh `||` chạy → ✓. Bảng kết quả có đúng một dấu tích, đủ để mục đó trông như đã chạy.
 
 > **Bài học:** đây là lỗi thứ **năm** trong một phiên cùng hình dạng — 27, 28, 41, 43, và giờ 46: một kết quả rỗng hoặc một mã thoát sai bị đọc thành sự thật. Bốn lần trước nguyên nhân là `|| true` hoặc quên kiểm exit code. Lần này thì ngược đời: `pipefail` — một cờ **dựng ra để tăng độ nghiêm ngặt** — chính là thứ tạo ra câu trả lời sai.
+
+---
+
+### 7r. Lỗi 47 — thứ `plan` không bao giờ bắt được
+
+`plan-check.sh` vừa ra **24 đạt, 0 lỗi**. Chín tổ hợp, 136 resource cho nhánh firewall, mười khẳng định hành vi đều xanh. `terraform apply` chạy được 10 phút rồi chết:
+
+```
+Error: creating NetworkFirewall Firewall Policy (quh11-net-policy):
+InvalidRequestException: ResourceArn has invalid rule order,
+parameter: [.../quh11-net-egress-domains],
+context: StatefulRuleGroupReferences[1].ResourceArn
+```
+
+Policy khai `stateful_engine_options { rule_order = "STRICT_ORDER" }`. Rule group `east_west` khai `stateful_rule_options { rule_order = "STRICT_ORDER" }`. Rule group `egress_domains` **không khai gì** — và mặc định của rule group là `DEFAULT_ACTION_ORDER`, nên "không khai" không phải là "thừa kế từ policy" mà là **một lựa chọn khác hẳn**.
+
+`StatefulRuleGroupReferences[1]` là tham chiếu thứ hai, đúng `egress_domains`.
+
+#### Vì sao mọi lớp kiểm tra đều bỏ lọt
+
+| Lớp | Vì sao không thấy |
+|---|---|
+| `terraform validate` | Cú pháp đúng, tham chiếu đúng |
+| `terraform plan` | Rule group và policy là **hai resource riêng**. Plan không đối chiếu thuộc tính giữa chúng — nó không biết `rule_order` của cái này phải khớp cái kia |
+| `plan-check.sh` × 9 tổ hợp | Đếm resource và tìm chuỗi trong plan. Cả hai rule group **đều có mặt** trong plan, đúng như mong đợi |
+
+Ràng buộc này sống **hoàn toàn ở phía API**. Không công cụ tĩnh nào thấy được, và chỉ `apply` thật mới hỏi tới.
+
+> **Đây là giới hạn của mọi thứ đã làm ở mục 7q.** Sửa xong `plan-check.sh` để nó báo trung thực là việc đúng — nhưng một script chạy `plan` chỉ kiểm được thứ `plan` biết. Ranh giới đó không dịch chuyển bằng cách viết script tốt hơn.
+>
+> Cùng bài học với lỗi 28, 33, 40 và 45, chỉ đổi tầng: ở đó là *cấu hình đúng nhưng sự kiện không đi qua*; ở đây là *plan đúng nhưng API từ chối*. Cả hai chỉ đóng được bằng một lần chạy thật.
+
+#### Giá của việc phát hiện muộn
+
+Apply chết giữa chừng để lại TGW, ba route table, hai VPC, các attachment — đã tạo, đang tính tiền, và state **không đầy đủ**. Không hỏng: `terraform apply` lại sau khi vá sẽ tạo tiếp phần còn thiếu. Nhưng nếu bỏ dở lúc này thì đó là hạ tầng mồ côi mà `plan` vẫn thấy, còn người thì quên.
+
+Sửa: thêm `stateful_rule_options { rule_order = "STRICT_ORDER" }` vào `egress_domains`.
 
 ---
 
