@@ -100,15 +100,25 @@ QT3 **chỉ lộ ra khi chạy từ hai AZ trở lên**. Với một AZ nó khô
 
 ---
 
-## Hai chỗ khác bản demo
+## Khác bản demo ở đâu
 
-Bản [`demo/network-lz-full`](../../demo/network-lz-full/) chạy **một AZ, một account**. Hai chỗ vì thế mà khác:
+> **Bản trước của mục này sai ba chỗ** — nó viết rằng [`demo/network-lz-full`](../../demo/network-lz-full/) chạy *"một AZ"*, dùng chung route table, và tắt cứng `delete_protection`. Đọc code demo thì cả ba đều không đúng: demo có `validation` **từ chối** dưới 2 AZ, route table `security_tgw` / `security_firewall` / `egress_tgw` đều `for_each = local.azs`, và `delete_protection = !var.ephemeral` là một biến. Ai đọc mục cũ sẽ chọn nhầm codebase vì một lý do không có thật.
 
-**Route table theo từng AZ.** Gói vào subnet `tgw` của AZ-a phải đi vào firewall endpoint **của chính AZ-a**, và subnet `tgw` của egress phải ra NAT cùng AZ. Dùng chung một bảng thì một nửa lưu lượng đi chéo AZ — trả thêm tiền truyền, và phá vỡ tính đối xứng mà firewall stateful cần.
+Khác biệt thật nằm ở **mô hình account**, không ở kỹ thuật định tuyến:
 
-`sync_states` của firewall là một **set, không phải list có thứ tự** — nên không lấy theo chỉ số được. Code lập map `AZ → endpoint id` rồi tra cứu.
+| | `landing-zone/network` | `demo/network-lz-full` |
+|---|---|---|
+| Account | Chạy từ management, tạo mọi thứ trong **account network** qua `assume_role` | **Một account** — nơi credential trỏ tới |
+| Spoke VPC | Do account workload tự tạo, layer này chỉ nối attachment | Demo **tự tạo** spoke qua biến `spokes` |
+| EC2 thử | không | `enable_test_instances = true` |
+| ingress VPC + NLB | ⏸ chờ license | ✅ `enable_ingress = true` |
+| CloudFront + WAF | không | ✅ `enable_cdn` (tuỳ chọn) |
+| Palo Alto / F5 | không | ⏸ code sẵn, `enable_appliances = false` |
+| Vòng đời | Hạ tầng thường trực | `ephemeral` — dựng, xem, xoá |
 
-**Bảo vệ bật thật.** Demo tắt `delete_protection` để `terraform destroy` chạy được. Ở đây bật — xoá firewall là mọi route trỏ vào endpoint của nó thành mồ côi, toàn bộ LZ mất kết nối. Muốn xoá thật thì đổi `false` riêng một lần apply, rồi mới destroy.
+**Chọn cái nào:** muốn thấy **cả chuỗi** chạy end-to-end trong một buổi thì dùng demo. Muốn hạ tầng mạng **thường trực của LZ**, nằm đúng account `lz-network`, spoke ở account workload — thì dùng layer này.
+
+Hai bộ code **không thay thế nhau** và không dùng chung state.
 
 ---
 
