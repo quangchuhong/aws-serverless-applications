@@ -967,6 +967,21 @@ cd landing-zone
 
 Mọi layer phải ra **"No changes"**. Layer nào ra diff nghĩa là có gì đó lệch giữa code và thực tế.
 
+### Lớp phát hiện — `plan-all.sh` không đủ
+
+`terraform plan` nói code khớp state. Nó **không** nói account nào đang thực sự được giám sát — trên tổ chức này hai thứ đó đã lệch nhau: plan sạch, `list-members` rỗng.
+
+```bash
+./verify-detection.sh                          # can credential mgmt + security
+./verify-detection.sh --security lz-security
+```
+
+Bốn mục: uỷ quyền, phủ sóng theo từng account, khả năng phủ **account thêm sau này**, và đường cảnh báo. Chỉ đọc, mã thoát `1` khi có khoảng trống nên dùng được trong CI. Chi tiết: [doc 23 mục 10](../docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md#10-verify-detectionsh--kiểm-tra-tự-động).
+
+> **Sau khi thêm account mới vào tổ chức:** chạy `terraform apply` ở `config-detective` rồi chạy lại `verify-detection.sh`.
+>
+> Config tự phủ được nhờ `auto_deployment` của StackSet. **GuardDuty thì không** — `auto_enable_organization_members = ALL` đã được đo là không ghi danh account nào sau hơn 25 phút (lỗi 41). Account mới được phủ là nhờ `aws_guardduty_member`, và resource đó chỉ chạy khi có người `apply`.
+
 ---
 
 ## Khi kẹt

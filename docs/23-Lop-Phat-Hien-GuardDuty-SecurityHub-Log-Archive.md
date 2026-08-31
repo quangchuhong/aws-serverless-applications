@@ -23,6 +23,7 @@ Ví dụ 23: GuardDuty và Security Hub hoạt động ra sao trong tổ chức 
 | Feature trên detector management account | ⬜ Chưa quản — SCP không chặn ở đó |
 | Object Lock trên bucket trail | ⬜ `enable_object_lock = false` |
 | Kiểm bucket log archive có object thật | ⬜ **Chưa chạy** |
+| Script kiểm tra `verify-detection.sh` | ✅ Mục 10 |
 
 ---
 
@@ -293,6 +294,59 @@ Finding mẫu này ở mức **HIGH**, nằm trong bộ lọc severity. Có emai
 
 ---
 
+## 10. `verify-detection.sh` — kiểm tra tự động
+
+Bảy lệnh ở mục 9 gói lại thành một script, cộng thêm phần mà **không lệnh `describe-*` nào trả lời trực tiếp được**: account thêm sau này có tự được phủ sóng không.
+
+```bash
+cd landing-zone
+./verify-detection.sh                                    # mac dinh
+./verify-detection.sh --security lz-security             # chi ro profile
+./verify-detection.sh --mgmt lz-management --region us-east-1
+```
+
+**Chỉ cần hai credential** — management account và security account. Script đọc từ góc nhìn của delegated admin thay vì assume-role vào từng account, vì đó cũng là góc nhìn người vận hành dùng hàng ngày. **Chỉ đọc**, không tạo/sửa/xoá gì.
+
+### 10.1 Bốn mục nó kiểm
+
+| Mục | Kiểm gì | Bắt được lỗi nào |
+|---|---|---|
+| **1 · Uỷ quyền** | GuardDuty admin, Security Hub admin, cả **hai** service principal của Config | 14, 35 |
+| **2 · Phủ sóng theo account** | Bảng từng account × GuardDuty / Security Hub / Config, đối chiếu với danh sách account thật của tổ chức | 41 |
+| **3 · Account thêm sau** | `AutoEnableOrganizationMembers`, `auto_enable`, `AutoDeployment`, và OU nào đang được StackSet phủ | 41 |
+| **4 · Đường cảnh báo** | Subscriber SNS đã xác nhận chưa, và EventBridge pattern có `$or` chưa | 28, 40 |
+
+Mã thoát `0` khi không có khoảng trống, `1` khi có — dùng được trong CI.
+
+### 10.2 Hai ngoại lệ *không* phải khoảng trống
+
+Script phân biệt tường minh, vì cả hai trông y hệt một lỗi:
+
+- **Security account không phải member của chính nó.** Cột GuardDuty và Security Hub in `admin`, không phải `THIEU`.
+- **Management account nằm ngoài StackSet.** StackSet `SERVICE_MANAGED` không triển khai vào management account — đó là giới hạn của AWS, không phải lỗi cấu hình. Cột Config in `ngoai StackSet`.
+
+### 10.3 Ba cơ chế tự động, ba mức tin cậy khác nhau
+
+Đây là phần đáng đọc nhất của output, và là lý do script này tồn tại thay vì một dòng `describe-organization-configuration`:
+
+| Cơ chế | Trạng thái | Tin được không |
+|---|---|---|
+| **Config** — `auto_deployment` của StackSet | `ALL` | **Có.** Đã chạy thật: account mới vào một OU đích được triển khai recorder |
+| **Security Hub** — `auto_enable` | `true` | **Chưa biết.** Là cơ chế AWS ghi trong tài liệu, nhưng chưa có account mới nào được tạo kể từ khi bật |
+| **GuardDuty** — `auto_enable_organization_members` | `ALL` | **Không.** Đã đo: `ALL` ở mọi tầng, uỷ quyền trọn vẹn, và sau **hơn 25 phút** không account nào được ghi danh — lỗi 41 |
+
+> **Hệ quả vận hành:** sau khi thêm account mới, **chạy `terraform apply` ở `config-detective`** rồi chạy lại script. Đừng chờ auto-enable của GuardDuty.
+>
+> `aws_guardduty_member` lấy danh sách từ `data.aws_organizations_organization`, nên một lần `apply` là đủ — không phải sửa code, không phải nhớ account ID. Nhưng nó **không tự chạy**.
+
+### 10.4 Việc script không làm được
+
+Cả bốn mục đều hỏi **từng mắt xích**. Chỗ đứt thường nằm ở **chỗ nối**, nơi không lệnh nào soi tới — đó chính là cách lỗi 40 sống sót qua `apply` xanh, output `findings_reach_alerts = true`, và finding có thật trong Security Hub.
+
+Khi script báo sạch, nó in ra lệnh cuối cùng để tự chạy: `create-sample-findings`. Đó vẫn là phép thử duy nhất đi hết đường.
+
+---
+
 ## Liên quan
 
 | | |
@@ -302,4 +356,5 @@ Finding mẫu này ở mức **HIGH**, nằm trong bộ lọc severity. Có emai
 | [11 – Tag Policy và Cost Allocation](./11-Tag-Policy-va-Cost-Allocation.md) | Đo chi phí theo account bằng cost allocation tag |
 | [19 – Permission Set cho LZ](./19-Permission-Set-cho-Landing-Zone.md) | Lỗi 34 — quyền chạm tới account giữ bằng chứng |
 | [RUNBOOK](../landing-zone/RUNBOOK.md) | Thứ tự dựng, giai đoạn 7 |
+| [`verify-detection.sh`](../landing-zone/verify-detection.sh) | Script kiểm tra bốn mục — xem mục 10 |
 | [config-detective](../landing-zone/config-detective/) | Code |
