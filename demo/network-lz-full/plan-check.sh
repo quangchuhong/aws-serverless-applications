@@ -68,8 +68,24 @@ run_plan() {
     return
   fi
 
-  local n
+  # DEM HAI CACH, VI MOT CACH DA TUNG IM LANG TRA VE RONG.
+  #
+  #   n   doc dong tong ket "Plan: N to add" - gon, nhung phu thuoc
+  #       dinh dang cua ban Terraform dang chay
+  #   n2  dem dong "will be created" - Terraform in cho TUNG resource,
+  #       on dinh qua cac ban
+  #
+  # Hai so lech nhau la dau hieu output bi cat giua chung (pipe dong
+  # som, plan bi ngat) - va do la thu can biet, khong phai thu de doan.
+  local n n2
   n=$(echo "$out" | grep -oE '^Plan: [0-9]+ to add' | grep -oE '[0-9]+' | head -1)
+  n2=$(echo "$out" | grep -c 'will be created')
+
+  if [[ -z "$n" && "$n2" -gt 0 ]]; then
+    bad "$label  (co $n2 resource nhung KHONG co dong 'Plan:' - output bi cat?)"
+    echo "$out" | tail -6 | sed 's/^/      /'
+    return
+  fi
 
   # KHONG BAO CAO 0 LA DAT.
   #
@@ -82,15 +98,11 @@ run_plan() {
   #
   # Cung kieu hong voi `|| true` trong verify-detection.sh: mot so
   # khong bi doc thanh mot thanh cong.
-  if [[ -z "$n" ]]; then
-    bad "$label  (plan ra 'No changes' - khong resource nao)"
-    echo "      Plan tren state RONG phai tao resource. Kiem:"
-    echo "        terraform state list      # co state cu khong?"
-    echo "        pwd                       # dung thu muc chua?"
-    return
-  fi
-  if [[ "$n" -eq 0 ]]; then
-    bad "$label  (0 resource - xem ghi chu tren)"
+  if [[ -z "$n" || "$n" -eq 0 ]]; then
+    bad "$label  (plan khong tao resource nao)"
+    echo "      Plan tren state RONG phai tao resource - aws_vpc.egress"
+    echo "      khong co count/for_each nao ca. Sau day la 6 dong cuoi:"
+    echo "$out" | tail -6 | sed 's/^/      /'
     return
   fi
 
