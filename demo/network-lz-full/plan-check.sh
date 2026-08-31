@@ -81,24 +81,18 @@ run_plan() {
   n=$(echo "$out" | grep -oE '^Plan: [0-9]+ to add' | grep -oE '[0-9]+' | head -1)
   n2=$(echo "$out" | grep -c 'will be created')
 
-  if [[ -z "$n" && "$n2" -gt 0 ]]; then
-    bad "$label  (co $n2 resource nhung KHONG co dong 'Plan:' - output bi cat?)"
-    echo "$out" | tail -6 | sed 's/^/      /'
-    return
-  fi
-
-  # KHONG BAO CAO 0 LA DAT.
+  # n2 LA CON SO DUNG, n CHI LA PHU.
   #
-  # Mot to hop bat ca firewall lan ingress lan CDN ma plan ra 0 resource
-  # thi khong phai "code dung", ma la plan KHONG NHIN THAY config -
-  # state cu, sai thu muc, hoac plan in ra "No changes" vi mot ly do
-  # khac han. Ban dau ham nay in "(0 resource se duoc tao)" kem dau ✓,
-  # va ca chin muc kiem tra hanh vi ben duoi truot theo ma khong ai
-  # hieu vi sao.
+  # Do tren Terraform v1.11.3: dong "Plan: N to add" CO THAT trong
+  # output khi ghi thang ra file (tim thay o dong 2280), nhung KHONG
+  # tim thay duoc khi bat qua $(... 2>&1) trong script nay. Chua giai
+  # thich duoc vi sao - va khong can: dem dong "will be created" cho
+  # cung con so, on dinh qua cac ban Terraform, khong phu thuoc dinh
+  # dang dong tom tat.
   #
-  # Cung kieu hong voi `|| true` trong verify-detection.sh: mot so
-  # khong bi doc thanh mot thanh cong.
-  if [[ -z "$n" || "$n" -eq 0 ]]; then
+  # Bai hoc chung: dua vao dau hieu CO SAN o moi phien ban, thay vi
+  # mot dong tom tat co the doi cach in.
+  if [[ "$n2" -eq 0 ]]; then
     bad "$label  (plan khong tao resource nao)"
     echo "      Plan tren state RONG phai tao resource - aws_vpc.egress"
     echo "      khong co count/for_each nao ca. Sau day la 6 dong cuoi:"
@@ -106,7 +100,12 @@ run_plan() {
     return
   fi
 
-  ok "$label  ($n resource se duoc tao)"
+  if [[ -n "$n" && "$n" != "$n2" ]]; then
+    bad "$label  (dong 'Plan:' noi $n, dem duoc $n2 - output bi cat?)"
+    return
+  fi
+
+  ok "$label  ($n2 resource se duoc tao)"
 }
 
 hdr "1. Cac to hop khong co appliance"
@@ -166,6 +165,36 @@ FULL=$(terraform plan -input=false -lock=false -refresh=false -no-color \
   -var='enable_firewall=true' -var='enable_ingress=true' \
   -var='enable_cdn=false' -var='enable_appliances=true' \
   -var="pa_ami_id=$DUMMY_AMI" -var="f5_ami_id=$DUMMY_AMI" 2>&1)
+FULL_RC=$?
+
+# KIEM MA THOAT TRUOC KHI GREP.
+#
+# Thieu doan nay thi mot plan HONG cho ra chuoi rong, va chin lenh
+# grep ben duoi deu bao "khong thay X trong plan" - doc y het nhu
+# chin loi code, trong khi thuc te la MOT loi va no o day.
+#
+# Te hon: khang dinh phu nhan cuoi cung ("khong con attachment tro
+# thang vao app") se DAT tren chuoi rong, nen bang ket qua co mot dau
+# tich lam ca muc trong nhu da chay that.
+#
+# Cung kieu hong voi `|| true` o verify-detection.sh: mot ket qua
+# rong bi doc thanh mot su that.
+FULL_N=$(echo "$FULL" | grep -c 'will be created')
+
+if [[ $FULL_RC -ne 0 || $FULL_N -eq 0 ]]; then
+  bad "Plan day du that bai - BO QUA 10 kiem tra hanh vi ben duoi"
+  echo "      Chung se bao 'khong thay X' nhung nguyen nhan la o day:"
+  echo "$FULL" | grep -E '^(Error|╷|│|╵)' | head -20 | sed 's/^/      /'
+  [[ $FULL_RC -eq 0 ]] && echo "      (exit 0 nhung khong resource nao - xem 6 dong cuoi)" \
+    && echo "$FULL" | tail -6 | sed 's/^/      /'
+  echo
+  echo "════════════════════════════════════════════════════"
+  printf " \033[32m%d dat\033[0m   \033[31m%d loi\033[0m\n" "$PASS" "$FAIL"
+  echo "════════════════════════════════════════════════════"
+  exit 1
+fi
+
+ok "Plan day du: $FULL_N resource - chay 10 kiem tra hanh vi"
 
 check_in_plan() {
   local pattern="$1" label="$2"
