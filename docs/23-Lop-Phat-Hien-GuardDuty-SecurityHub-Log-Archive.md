@@ -15,7 +15,8 @@ Ví dụ 23: GuardDuty và Security Hub hoạt động ra sao trong tổ chức 
 | Phần | Trạng thái |
 |---|---|
 | Config recorder + 8 organization rule | ✅ 5 account |
-| Security Hub — uỷ quyền, aggregator, auto-enable | ✅ 5 resource, `0 to change` |
+| Security Hub — uỷ quyền, aggregator, auto-enable | ✅ `0 to change` |
+| Security Hub — ghi danh 5/5 account thành viên | ✅ Lỗi 45, đã vá |
 | GuardDuty — admin, org config, 5/5 member | ✅ `Enabled` |
 | Đường cảnh báo EventBridge → SNS → email | ✅ Đã nhận email thật |
 | Feature tính tiền của GuardDuty | ✅ `NONE` toàn bộ account thành viên |
@@ -23,7 +24,7 @@ Ví dụ 23: GuardDuty và Security Hub hoạt động ra sao trong tổ chức 
 | Feature trên detector management account | ⬜ Chưa quản — SCP không chặn ở đó |
 | Object Lock trên bucket trail | ⬜ `enable_object_lock = false` |
 | Kiểm bucket log archive có object thật | ⬜ **Chưa chạy** |
-| Script kiểm tra `verify-detection.sh` | ✅ Mục 10 |
+| Script kiểm tra `verify-detection.sh` | ✅ Mục 10 — chạy sạch, `Khong tim thay khoang trong` |
 
 ---
 
@@ -155,8 +156,21 @@ Security Hub theo region. Không có aggregator thì phải mở console từng 
 
 | Thiết lập | Giá trị | Nghĩa là gì |
 |---|---|---|
-| `auto_enable` | `true` | Account tạo sau tự được bật. Thứ gì phải nhớ làm tay cho từng account mới thì sớm muộn cũng bị quên |
+| `auto_enable` | `true` | Account tạo **sau** tự được bật. **Không phủ account đã có** — xem cảnh báo dưới |
 | `auto_enable_standards` | `NONE` | Chỉ nhận `DEFAULT` hoặc `NONE`. `DEFAULT` bật FSBP trên *mọi* account thành viên — đường nhanh nhất để hoá đơn vượt Config. `NONE` **không** làm yếu cảnh báo: member vẫn được bật Security Hub và vẫn gửi finding của Config, GuardDuty về admin |
+| `aws_securityhub_member` | 5 account | Ghi danh account **đã tồn tại**. Đây mới là thứ tạo ra member |
+
+> **`auto_enable` là chính sách, không phải sự kiện — y hệt GuardDuty ở mục 3.1.**
+>
+> Đo được trên tổ chức này: `auto_enable = true`, uỷ quyền trọn vẹn, aggregator chạy, email cảnh báo tới thật — và `list-members` trả về **rỗng**. Năm account đã tồn tại trước thời điểm bật chưa bao giờ được gọi `CreateMembers`.
+>
+> Lỗ hổng ẩn được lâu vì finding GuardDuty đi **thẳng** vào Security Hub của delegated admin, không qua Security Hub của account thành viên. Thứ **không** tới là finding sinh trong account thành viên — điển hình là kết quả đánh giá của Config rule. Đường cảnh báo khi đó mang **một trong hai nguồn**.
+>
+> Xem lỗi 45 doc 22. Kiểm bằng `./verify-detection.sh`, hoặc:
+> ```bash
+> aws securityhub list-members --no-only-associated --profile <security>
+> ```
+> Lưu ý cú pháp: Security Hub dùng cờ boolean `--no-only-associated`, còn GuardDuty dùng chuỗi `--only-associated false`. Viết nhầm thì lệnh **không chạy** và output rỗng trông y hệt "không có member nào" — đó là lỗi 43.
 
 ---
 
