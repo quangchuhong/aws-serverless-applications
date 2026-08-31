@@ -220,18 +220,20 @@ resource "aws_securityhub_member" "this" {
 
   depends_on = [aws_securityhub_organization_configuration.this]
 
-  # PHONG THEO LOI 42, chua do rieng cho resource nay.
+  # DA DO - khong con la phong doan.
   #
-  # aws_guardduty_member co dung hai truong nay va ca hai deu gay
-  # REPLACE moi lan plan: email khong duoc doc lai tu API nen state
-  # rong trong khi config co gia tri, ma email la ForceNew; invite thi
-  # provider suy tu trang thai member nen luon doc ra true.
+  # Khoi nay ban dau them theo LOI 42 ben aws_guardduty_member, noi ca
+  # hai truong deu gay REPLACE moi lan plan: email khong duoc doc lai
+  # tu API nen state rong trong khi config co gia tri, ma email la
+  # ForceNew; invite thi provider suy tu trang thai member nen luon
+  # doc ra true.
   #
-  # Chua chac aws_securityhub_member hanh xu y het. Nhung phep danh
-  # doi lech han mot phia: neu thua thi vo hai, neu thieu thi moi lan
-  # plan doi GO 5 account that ra khoi Security Hub roi ket nap lai.
+  # Luc viet, chua ai biet aws_securityhub_member co hanh xu y het
+  # khong. Van them, vi phep danh doi lech han mot phia: thua thi vo
+  # hai, thieu thi moi lan plan doi GO 5 account that ra khoi Security
+  # Hub roi ket nap lai.
   #
-  # KIEM: sau khi apply, chay plan lan hai. Ra "No changes" la xong.
+  # Plan lan hai sau apply: "No changes". Giu nguyen khoi nay.
   lifecycle {
     ignore_changes = [email, invite]
   }
