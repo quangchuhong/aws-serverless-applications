@@ -197,7 +197,16 @@ if ! aws_sec guardduty list-members --detector-id "$DETECTOR" --only-associated 
   note
 fi
 
-if ! aws_sec securityhub list-members --only-associated false \
+# CU PHAP KHAC GUARDDUTY - loi 43.
+#
+#   guardduty    list-members --only-associated false      (chuoi)
+#   securityhub  list-members --no-only-associated         (co boolean)
+#
+# Viet nham thanh "--only-associated false" thi AWS CLI bao
+# "Unknown options: false" va lenh khong chay. Ban dau loi do bi
+# `|| true` nuot, nen ca cot SEC HUB bao THIEU tren MOI account -
+# trong y het mot lo hong dien rong.
+if ! aws_sec securityhub list-members --no-only-associated \
      --query 'Members[].[AccountId,MemberStatus]' --output text > "$TMP/sh"; then
   sh_ok=0
   red "   securityhub list-members THAT BAI - cot SEC HUB khong doc duoc"; echo
@@ -226,8 +235,26 @@ fi
 
 lookup() { grep "^$1	" "$2" 2>/dev/null | head -n1 | cut -f2; }
 
-printf '   %-14s %-16s %-11s %-11s %-11s\n' ACCOUNT TEN GUARDDUTY "SEC HUB" CONFIG
-printf '   %s\n' "$(grey '------------------------------------------------------------------------')"
+# Tap OU DANG CO stack instance. Dung de phan biet hai truong hop
+# trong y het nhau o cot CONFIG:
+#
+#   OU nam trong pham vi, account thieu recorder   -> LO HONG THAT
+#   OU co y khong bat recorder (vi du OU dev)      -> BINH THUONG
+#
+# Khong co phep so nay thi moi OU bi loai tru co chu dich deu bi to
+# do nhu loi - va mot script kiem tra bao duong tinh gia se day nguoi
+# ta toi cho bo qua output cua no.
+#
+# Pham vi THAT nam o recorder_target_ous ben Terraform, khong doc
+# duoc tu CloudFormation. Suy tu noi da co instance la cach xap xi
+# gan nhat ma khong can doc tfvars.
+aws_mgmt cloudformation list-stack-instances --stack-set-name "${PROJECT}-config-recorder" \
+  --query 'Summaries[].OrganizationalUnitId' --output text 2>/dev/null \
+  | tr '\t' '\n' | sed '/^$/d' | sort -u > "$TMP/ous"
+n_ous=$(wc -l < "$TMP/ous" | tr -d ' ')
+
+printf '   %-14s %-16s %-14s %-11s %-11s %-11s\n' ACCOUNT TEN OU GUARDDUTY "SEC HUB" CONFIG
+printf '   %s\n' "$(grey '--------------------------------------------------------------------------------------')"
 
 while IFS=$'\t' read -r acct name; do
   [ -z "$acct" ] && continue
@@ -235,6 +262,16 @@ while IFS=$'\t' read -r acct name; do
   gd=$(lookup "$acct" "$TMP/gd")
   sh=$(lookup "$acct" "$TMP/sh")
   cf=$(lookup "$acct" "$TMP/cfg")
+
+  parent=$(aws_mgmt organizations list-parents --child-id "$acct" \
+    --query 'Parents[0].Id' --output text)
+  case "$parent" in
+    ou-*) ou_name=$(aws_mgmt organizations describe-organizational-unit \
+            --organizational-unit-id "$parent" \
+            --query 'OrganizationalUnit.Name' --output text) ;;
+    *)    ou_name="(root)" ;;
+  esac
+  [ -z "$ou_name" ] && ou_name="?"
 
   # Security account KHONG la member cua chinh no - do la binh thuong,
   # khong phai khoang trong.
@@ -273,11 +310,18 @@ while IFS=$'\t' read -r acct name; do
     cf_txt=$(green CURRENT)
   elif [ -n "$cf" ]; then
     cf_txt=$(amber "$cf"); note
+  elif ! grep -qx "$parent" "$TMP/ous" 2>/dev/null; then
+    # OU nay khong co stack instance nao ca - la LUA CHON, khong phai
+    # thieu sot. Vi du OU dev co y khong bat recorder de tiet kiem.
+    cf_txt=$(grey 'OU ngoai pham vi')
   else
+    # OU CO instance cho account khac ma account nay thi khong => that.
     cf_txt=$(red 'THIEU'); note
   fi
 
-  printf '   %-14s %-16s %-20s %-20s %-20s\n' "$acct" "$(echo "$name" | cut -c1-16)" "$gd_txt" "$sh_txt" "$cf_txt"
+  printf '   %-14s %-16s %-14s %-20s %-20s %-20s\n' \
+    "$acct" "$(echo "$name" | cut -c1-16)" "$(echo "$ou_name" | cut -c1-14)" \
+    "$gd_txt" "$sh_txt" "$cf_txt"
 done < "$TMP/accounts"
 echo
 
@@ -296,11 +340,6 @@ SH_AUTO=$(aws_sec securityhub describe-organization-configuration \
   --query 'AutoEnable' --output text)
 CF_AUTO=$(aws_mgmt cloudformation describe-stack-set --stack-set-name "${PROJECT}-config-recorder" \
   --query 'StackSet.AutoDeployment.Enabled' --output text)
-aws_mgmt cloudformation list-stack-instances --stack-set-name "${PROJECT}-config-recorder" \
-  --query 'Summaries[].OrganizationalUnitId' --output text 2>/dev/null \
-  | tr '\t' '\n' | sed '/^$/d' | sort -u > "$TMP/ous"
-n_ous=$(wc -l < "$TMP/ous" | tr -d ' ')
-
 state() {
   # $1 nhan, $2 gia tri, $3 gia tri mong doi, $4 ghi chu
   #

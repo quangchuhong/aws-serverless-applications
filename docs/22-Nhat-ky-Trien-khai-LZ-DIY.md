@@ -95,7 +95,10 @@ Xếp theo thứ tự gặp phải.
 
 | 42 | `4 to add, 4 to destroy` ở **mọi lần plan** — và "destroy" là gỡ account thật khỏi GuardDuty | `email` provider không đọc lại nên state rỗng, mà nó là ForceNew; `invite` provider suy từ `relationship_status` nên luôn đọc ra `true`. Cả hai chỉ có nghĩa lúc tạo | **Lỗi code** | *(mục 7o)* |
 
-**36/42 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 43 | `verify-detection.sh` báo **`SEC HUB THIEU` trên cả 5 account** — một lỗ hổng diện rộng không có thật | Hai dịch vụ có cú pháp CLI khác nhau: `guardduty list-members --only-associated false` (chuỗi) vs `securityhub list-members --no-only-associated` (cờ boolean). Lệnh sai báo `Unknown options: false` và không chạy — nhưng `\|\| true` nuốt mã lỗi, nên "lệnh hỏng" trông y hệt "không account nào được ghi danh" | **Lỗi code** | *(mục 7p)* |
+| 44 | Cùng script báo `CONFIG THIEU` cho một OU **cố ý không bật recorder** | Suy phạm vi từ nơi *đã có* stack instance thì không phân biệt được "trong phạm vi mà thiếu" với "ngoài phạm vi có chủ đích" | **Lỗi thiết kế** | *(mục 7p)* |
+
+**38/44 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1683,9 +1686,69 @@ Cả hai chỉ có ý nghĩa **lúc tạo**. Đổi email root của một accou
 
 > **Bài học:** ba mục trước đóng bằng bằng chứng. Lỗ hổng management account thì không đóng được, và giá trị của nó nằm ở chỗ **nói ra điều đó** thay vì để một `for_each` lặng lẽ bỏ qua một account. Một `check` kêu mỗi lần `plan` khó chịu hơn hẳn một dòng comment — và đó chính là điều mong muốn: management account giữ Organizations, SCP và hoá đơn, đồng thời là account duy nhất SCP không bao giờ áp được. Nó là account đắt nhất để bỏ sót.
 
+---
+
+### 7p. Lỗi 43 và 44 — script kiểm tra mắc đúng bệnh nó sinh ra để bắt
+
+`verify-detection.sh` viết xong, chạy thật lần đầu:
+
+```
+2. PHU SONG THEO ACCOUNT
+   169873795883   lz-app-dev       Enabled     THIEU       THIEU
+   436908791055   lz-network       Enabled     THIEU       CURRENT
+   609320954321   quangch.cloud.9  Enabled     THIEU       ngoai StackSet
+   654560867047   lz-logarchive    Enabled     THIEU       CURRENT
+   761558631239   lz-app-prod      Enabled     THIEU       CURRENT
+```
+
+Cột `SEC HUB` đỏ trên **mọi** account. Đọc như một lỗ hổng diện rộng: Security Hub chỉ chạy ở `lz-security`, còn finding từ Config rule ở account thành viên không tới ai.
+
+Tôi đã bắt đầu dựng bản vá `aws_securityhub_member` theo hướng đó. Người dùng hỏi ngược lại — *"sec-hub là ok nhỉ"* — rồi chạy thẳng lệnh:
+
+```
+$ aws securityhub list-members --only-associated false --profile lz-security
+usage: aws [options] <command> <subcommand> ...
+Unknown options: false
+```
+
+**Lệnh chưa từng chạy.** Hai dịch vụ có cú pháp khác nhau:
+
+| Lệnh | Cú pháp | Kiểu |
+|---|---|---|
+| `guardduty list-members` | `--only-associated false` | chuỗi |
+| `securityhub list-members` | `--no-only-associated` | cờ boolean |
+
+Tôi chép cú pháp GuardDuty sang Security Hub. AWS CLI từ chối, lệnh không chạy, file kết quả rỗng — và `|| true` nuốt mã lỗi, nên **"lệnh hỏng" trông y hệt "không account nào được ghi danh"**.
+
+#### Đây là chỗ đáng dừng lại
+
+Script này tồn tại để bắt đúng kiểu hỏng đó. Tài liệu của nó mở đầu bằng lỗi 27, 28 và 41 — cả ba đều là *một câu trả lời rỗng bị đọc thành một sự thật*. Rồi nó lặp lại chính xác lỗi ấy, ngay ở dòng đầu tiên có ý nghĩa.
+
+Bản vá không phải chỉ đổi cờ. Ba lệnh giờ **giữ mã thoát**: thất bại thì in dòng đầu của `stderr` và cột ghi `khong doc duoc`; chạy được mà rỗng thì nói rõ *"chay duoc nhung KHONG co member nao"*. Hai câu đó không được phép trông giống nhau nữa.
+
+> **Bài học:** `|| true` là cách viết ra một khẳng định mà không có gì đứng sau. Trong một script kiểm tra, nó tệ hơn hẳn ở nơi khác — vì đầu ra của nó là thứ người ta **dùng thay cho** việc tự kiểm tra. Một script báo dương tính giả không chỉ sai một lần; nó dạy người ta ngừng đọc.
+
+#### Lỗi 44 — dương tính giả thứ hai, cùng lần chạy
+
+`lz-app-dev` báo `CONFIG THIEU`. Người dùng trả lời ngay: *"cái này đúng rồi nhé, vì không bật trong OU lz-dev"* — OU dev **cố ý** không có recorder, một quyết định chi phí.
+
+Script suy phạm vi từ nơi *đã có* stack instance, nên không phân biệt được hai thứ:
+
+| Trạng thái | Thực chất |
+|---|---|
+| OU nằm trong phạm vi, account thiếu recorder | **lỗ hổng thật** |
+| OU không có instance nào cả | **lựa chọn**, không phải thiếu sót |
+
+Bản vá thêm cột `OU` và so OU của account với tập OU đang có instance: OU nào hoàn toàn không có instance thì in `OU ngoai pham vi` màu xám, không tính là khoảng trống.
+
+> Hai lỗi trong một lần chạy, và cả hai đều **báo sai theo hướng hoảng loạn**. Với một script kiểm tra bảo mật, đó không phải phía an toàn để sai — nó tiêu đúng thứ mà công cụ loại này sống nhờ vào.
+
+---
+
+## Liên quan
 | | |
 |---|---|
-| [23 – Lớp phát hiện](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | Cơ chế GuardDuty / Security Hub / log archive — kết quả của mục 7h–7o |
+| [23 – Lớp phát hiện](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | Cơ chế GuardDuty / Security Hub / log archive — kết quả của mục 7h–7p |
 | [TEARDOWN](../landing-zone/TEARDOWN.md) | Chiều ngược lại — hai cổng khoá, parking account |
 | [RUNBOOK](../landing-zone/RUNBOOK.md) | Làm gì, theo thứ tự nào — bảng lỗi ở cuối |
 | [21 – Control Tower vs DIY](./21-Control-Tower-vs-DIY.md) | Vì sao chọn DIY, 4 SCP |
