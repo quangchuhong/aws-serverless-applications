@@ -60,14 +60,41 @@ run_plan() {
   local label="$1"; shift
   local out
   out=$(terraform plan -input=false -lock=false -refresh=false "$@" 2>&1)
-  if [[ $? -eq 0 ]]; then
-    local n
-    n=$(echo "$out" | grep -oE '^Plan: [0-9]+ to add' | grep -oE '[0-9]+' | head -1)
-    ok "$label  (${n:-0} resource se duoc tao)"
-  else
+  local rc=$?
+
+  if [[ $rc -ne 0 ]]; then
     bad "$label"
     echo "$out" | grep -E '^(Error|│)' | head -20 | sed 's/^/      /'
+    return
   fi
+
+  local n
+  n=$(echo "$out" | grep -oE '^Plan: [0-9]+ to add' | grep -oE '[0-9]+' | head -1)
+
+  # KHONG BAO CAO 0 LA DAT.
+  #
+  # Mot to hop bat ca firewall lan ingress lan CDN ma plan ra 0 resource
+  # thi khong phai "code dung", ma la plan KHONG NHIN THAY config -
+  # state cu, sai thu muc, hoac plan in ra "No changes" vi mot ly do
+  # khac han. Ban dau ham nay in "(0 resource se duoc tao)" kem dau ✓,
+  # va ca chin muc kiem tra hanh vi ben duoi truot theo ma khong ai
+  # hieu vi sao.
+  #
+  # Cung kieu hong voi `|| true` trong verify-detection.sh: mot so
+  # khong bi doc thanh mot thanh cong.
+  if [[ -z "$n" ]]; then
+    bad "$label  (plan ra 'No changes' - khong resource nao)"
+    echo "      Plan tren state RONG phai tao resource. Kiem:"
+    echo "        terraform state list      # co state cu khong?"
+    echo "        pwd                       # dung thu muc chua?"
+    return
+  fi
+  if [[ "$n" -eq 0 ]]; then
+    bad "$label  (0 resource - xem ghi chu tren)"
+    return
+  fi
+
+  ok "$label  ($n resource se duoc tao)"
 }
 
 hdr "1. Cac to hop khong co appliance"
