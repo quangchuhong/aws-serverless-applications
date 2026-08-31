@@ -170,6 +170,74 @@ resource "aws_securityhub_organization_configuration" "this" {
 }
 
 ########################################
+# 4b. Ghi danh TUNG account - vi muc 4 chi lo cho account TAO SAU
+#
+# LOI 45. Do duoc bang mot lenh:
+#
+#   aws securityhub list-members --no-only-associated --profile <security>
+#   -> { "Members": [] }
+#
+# auto_enable = true o muc 4, uy quyen tron ven, aggregator chay,
+# email canh bao toi that - va KHONG account thanh vien nao duoc ghi
+# danh. auto_enable la chinh sach cho account TAO SAU thoi diem bat;
+# nam account da ton tai truoc do khong bao gio duoc goi CreateMembers.
+#
+# CUNG HINH DANG VOI LOI 41 ben GuardDuty, va cung cach vao:
+# chinh sach lo tuong lai, resource nay lo hien tai. Hai co che bo tro
+# nhau chu khong thay the nhau.
+#
+# ---------------------------------------------------------------
+# HAU QUA KHI THIEU - khong phai "khong co gi hoat dong"
+#
+# Finding cua GuardDuty VAN toi: chung di thang vao Security Hub cua
+# delegated admin, khong qua Security Hub cua account thanh vien.
+# Do la ly do duong canh bao van gui duoc email that va lo hong nay
+# van an duoc.
+#
+# Thu KHONG toi la finding sinh TRONG account thanh vien - dien hinh
+# la ket qua danh gia cua Config rule. Chung tro thanh finding trong
+# chinh account do, ma account do chua bat Security Hub.
+#
+# => Duong canh bao dang mang MOT trong HAI nguon.
+########################################
+
+resource "aws_securityhub_member" "this" {
+  for_each = local.sh == 0 ? {} : {
+    for a in data.aws_organizations_organization.this.accounts :
+    a.id => a.email
+    if a.status == "ACTIVE" && a.id != var.security_account_id
+  }
+
+  provider = aws.security
+
+  account_id = each.key
+  email      = each.value
+
+  # Account trong CUNG to chuc duoc nhan thang. Dat true thi Security
+  # Hub gui loi moi toi email root - ma email cua cac LZ account la
+  # dia chi plus-addressing khong ai doc.
+  invite = false
+
+  depends_on = [aws_securityhub_organization_configuration.this]
+
+  # PHONG THEO LOI 42, chua do rieng cho resource nay.
+  #
+  # aws_guardduty_member co dung hai truong nay va ca hai deu gay
+  # REPLACE moi lan plan: email khong duoc doc lai tu API nen state
+  # rong trong khi config co gia tri, ma email la ForceNew; invite thi
+  # provider suy tu trang thai member nen luon doc ra true.
+  #
+  # Chua chac aws_securityhub_member hanh xu y het. Nhung phep danh
+  # doi lech han mot phia: neu thua thi vo hai, neu thieu thi moi lan
+  # plan doi GO 5 account that ra khoi Security Hub roi ket nap lai.
+  #
+  # KIEM: sau khi apply, chay plan lan hai. Ra "No changes" la xong.
+  lifecycle {
+    ignore_changes = [email, invite]
+  }
+}
+
+########################################
 # 5. Standard - tai security account
 ########################################
 

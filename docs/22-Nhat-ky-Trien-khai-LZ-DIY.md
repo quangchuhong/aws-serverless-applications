@@ -98,7 +98,9 @@ Xếp theo thứ tự gặp phải.
 | 43 | `verify-detection.sh` báo **`SEC HUB THIEU` trên cả 5 account** — một lỗ hổng diện rộng không có thật | Hai dịch vụ có cú pháp CLI khác nhau: `guardduty list-members --only-associated false` (chuỗi) vs `securityhub list-members --no-only-associated` (cờ boolean). Lệnh sai báo `Unknown options: false` và không chạy — nhưng `\|\| true` nuốt mã lỗi, nên "lệnh hỏng" trông y hệt "không account nào được ghi danh" | **Lỗi code** | *(mục 7p)* |
 | 44 | Cùng script báo `CONFIG THIEU` cho một OU **cố ý không bật recorder** | Suy phạm vi từ nơi *đã có* stack instance thì không phân biệt được "trong phạm vi mà thiếu" với "ngoài phạm vi có chủ đích" | **Lỗi thiết kế** | *(mục 7p)* |
 
-**38/44 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 45 | Security Hub **không có member nào** — `auto_enable = true` nhưng `list-members` rỗng | `auto_enable` là chính sách cho account **tạo sau**; năm account đã tồn tại từ trước chưa bao giờ được gọi `CreateMembers`. Cùng hình dạng lỗi 41 ở GuardDuty | **Lỗi thiết kế** | *(mục 7p)* |
+
+**39/45 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1740,6 +1742,33 @@ Script suy phạm vi từ nơi *đã có* stack instance, nên không phân bi�
 | OU không có instance nào cả | **lựa chọn**, không phải thiếu sót |
 
 Bản vá thêm cột `OU` và so OU của account với tập OU đang có instance: OU nào hoàn toàn không có instance thì in `OU ngoai pham vi` màu xám, không tính là khoảng trống.
+
+#### Lỗi 45 — chạy lại script đã vá, và lần này cột đỏ là thật
+
+```
+securityhub list-members chay duoc nhung KHONG co member nao.
+
+   169873795883   lz-app-dev       Non-Production  Enabled   THIEU   OU ngoai pham vi
+   436908791055   lz-network       Infrastructure  Enabled   THIEU   CURRENT
+   458195083898   lz-security      Security        admin     admin   CURRENT
+   609320954321   quangch.cloud.9  (root)          Enabled   THIEU   ngoai StackSet
+   654560867047   lz-logarchive    Security        Enabled   THIEU   CURRENT
+   761558631239   lz-app-prod      Production      Enabled   THIEU   CURRENT
+```
+
+Dòng đầu là câu mà bản vá lỗi 43 thêm vào, và nó làm đúng việc của mình: **lệnh chạy được, kết quả rỗng** — hai chuyện khác nhau, giờ nói bằng hai câu khác nhau. `lz-app-dev` cũng đã ra `OU ngoai pham vi` thay vì `THIEU`.
+
+Còn lại là sự thật: **Security Hub không có account thành viên nào.**
+
+`auto_enable = true` là chính sách cho account **tạo sau** thời điểm bật. Năm account đã tồn tại từ trước chưa bao giờ được gọi `CreateMembers` — y hệt GuardDuty ở lỗi 41, khác dịch vụ, giống hình dạng.
+
+**Vì sao nó ẩn được lâu đến vậy:** finding của GuardDuty đi **thẳng** vào Security Hub của delegated admin, không qua Security Hub của account thành viên. Nên email cảnh báo thật vẫn tới, `alert_path_live` vẫn `true`, và cả mục 7n đóng lại được mà không ai chạm tới lỗ hổng này.
+
+Thứ **không** tới là finding sinh trong account thành viên — điển hình là kết quả đánh giá của Config rule. Chúng trở thành finding trong chính account đó, mà account đó chưa bật Security Hub.
+
+> Đường cảnh báo đang mang **một trong hai nguồn**. Nó hoạt động, có bằng chứng, và vẫn thiếu một nửa.
+
+Bản vá là `aws_securityhub_member`, cùng khuôn `aws_guardduty_member` — chính sách lo tương lai, resource lo hiện tại.
 
 > Hai lỗi trong một lần chạy, và cả hai đều **báo sai theo hướng hoảng loạn**. Với một script kiểm tra bảo mật, đó không phải phía an toàn để sai — nó tiêu đúng thứ mà công cụ loại này sống nhờ vào.
 

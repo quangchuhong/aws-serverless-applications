@@ -149,6 +149,13 @@ output "security_hub" {
     admin_account = var.enable_security_hub ? var.security_account_id : null
     standards     = keys(local.sh_selected)
 
+    # auto_enable_new_accounts la CHINH SACH cho account tao sau.
+    # members_enrolled la SU KIEN - bao nhieu account thuc su duoc ghi
+    # danh. Hai con so nay tung lech nhau: chinh sach true, ghi danh 0.
+    # Xem loi 45.
+    auto_enable_new_accounts = var.security_hub_auto_enable_new_accounts
+    members_enrolled         = length(aws_securityhub_member.this)
+
     # Duong canh bao chi song khi CA HAI cung co.
     alert_path_live = var.enable_security_hub && length(var.alert_emails) > 0
   }
