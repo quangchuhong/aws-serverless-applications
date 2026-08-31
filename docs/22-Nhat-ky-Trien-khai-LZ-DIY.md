@@ -1770,6 +1770,8 @@ Thứ **không** tới là finding sinh trong account thành viên — điển h
 
 Bản vá là `aws_securityhub_member`, cùng khuôn `aws_guardduty_member` — chính sách lo tương lai, resource lo hiện tại.
 
+Nó mang theo `ignore_changes = [email, invite]` **theo phỏng đoán**: chưa đo cho resource này, mà suy từ lỗi 42 ở resource anh em. Phép đánh đổi lệch hẳn một phía — thừa thì vô hại, thiếu thì mỗi lần plan đòi gỡ 5 account thật ra khỏi Security Hub rồi kết nạp lại. `plan` lần thứ hai sau apply ra **`No changes`**, nên phỏng đoán đúng, và giờ nó là phép đo.
+
 > Hai lỗi trong một lần chạy, và cả hai đều **báo sai theo hướng hoảng loạn**. Với một script kiểm tra bảo mật, đó không phải phía an toàn để sai — nó tiêu đúng thứ mà công cụ loại này sống nhờ vào.
 
 ---
