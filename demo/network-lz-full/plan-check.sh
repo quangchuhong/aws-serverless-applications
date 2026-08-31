@@ -78,8 +78,10 @@ run_plan() {
   # Hai so lech nhau la dau hieu output bi cat giua chung (pipe dong
   # som, plan bi ngat) - va do la thu can biet, khong phai thu de doan.
   local n n2
-  n=$(echo "$out" | grep -oE '^Plan: [0-9]+ to add' | grep -oE '[0-9]+' | head -1)
-  n2=$(echo "$out" | grep -c 'will be created')
+  # Khong dung `| head -1` - no dong pipe som va gay dung SIGPIPE ma
+  # check_in_plan mac phai. sed lay dong dau, doc het dau vao.
+  n=$(grep -oE '^Plan: [0-9]+ to add' <<<"$out" | grep -oE '[0-9]+' | sed -n '1p')
+  n2=$(grep -c 'will be created' <<<"$out")
 
   # n2 LA CON SO DUNG, n CHI LA PHU.
   #
@@ -179,7 +181,7 @@ FULL_RC=$?
 #
 # Cung kieu hong voi `|| true` o verify-detection.sh: mot ket qua
 # rong bi doc thanh mot su that.
-FULL_N=$(echo "$FULL" | grep -c 'will be created')
+FULL_N=$(grep -c 'will be created' <<<"$FULL")
 
 if [[ $FULL_RC -ne 0 || $FULL_N -eq 0 ]]; then
   bad "Plan day du that bai - BO QUA 10 kiem tra hanh vi ben duoi"
@@ -196,11 +198,30 @@ fi
 
 ok "Plan day du: $FULL_N resource - chay 10 kiem tra hanh vi"
 
+# DUNG HERESTRING, KHONG DUNG `echo | grep -q`.
+#
+# Voi `set -o pipefail` (khai o dau file), `echo "$FULL" | grep -q X`
+# tra ve SAI khi $FULL lon:
+#
+#   grep -q thoat NGAY khi khop dau tien
+#   -> echo chet vi SIGPIPE (141)
+#   -> pipefail lay 141 lam ma thoat cua ca pipeline
+#   -> nhanh && khong chay, bao "khong thay X"
+#
+# TIM THAY bi doc thanh KHONG THAY. Chin khang dinh o duoi deu truot
+# vi ly do nay, tren mot plan 175 resource co du moi thu chung tim.
+#
+# Chi lo ra khi dau vao du lon de echo chua ghi xong - nen thu tren
+# chuoi ngan thi khong bao gio thay.
+#
+# Herestring khong tao pipeline nen khong co SIGPIPE.
 check_in_plan() {
   local pattern="$1" label="$2"
-  echo "$FULL" | grep -q "$pattern" \
-    && ok "$label" \
-    || bad "$label  (khong thay '$pattern' trong plan)"
+  if grep -q "$pattern" <<<"$FULL"; then
+    ok "$label"
+  else
+    bad "$label  (khong thay '$pattern' trong plan)"
+  fi
 }
 
 check_in_plan "aws_ec2_transit_gateway_vpc_attachment.security"  "TGW attachment cua security VPC"
@@ -214,9 +235,11 @@ check_in_plan "aws_instance.f5"                                  "Instance F5"
 check_in_plan "aws_lb_target_group_attachment.app_via_f5"        "NLB tro vao F5 (khong tro thang app)"
 
 # Khi co appliance thi KHONG duoc con attachment tro thang vao app
-echo "$FULL" | grep -q "aws_lb_target_group_attachment.app_direct" \
-  && bad "Van con attachment tro THANG vao app - dang le phai di qua F5" \
-  || ok "Khong con attachment tro thang vao app"
+if grep -q "aws_lb_target_group_attachment.app_direct" <<<"$FULL"; then
+  bad "Van con attachment tro THANG vao app - dang le phai di qua F5"
+else
+  ok "Khong con attachment tro thang vao app"
+fi
 
 ########################################
 echo

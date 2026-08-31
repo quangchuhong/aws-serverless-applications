@@ -100,7 +100,9 @@ Xếp theo thứ tự gặp phải.
 
 | 45 | Security Hub **không có member nào** — `auto_enable = true` nhưng `list-members` rỗng | `auto_enable` là chính sách cho account **tạo sau**; năm account đã tồn tại từ trước chưa bao giờ được gọi `CreateMembers`. Cùng hình dạng lỗi 41 ở GuardDuty | **Lỗi thiết kế** | *(mục 7p)* |
 
-**39/45 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 46 | `plan-check.sh` báo **10 lỗi hành vi** trên một plan 175 resource có đủ mọi thứ nó tìm | `set -o pipefail` + `echo "$BIG" \| grep -q X`: `grep -q` thoát ngay khi khớp, `echo` chết vì SIGPIPE (141), `pipefail` lấy 141 làm mã thoát → **tìm thấy** đọc thành **không thấy**. Chỉ lộ khi đầu vào đủ lớn | **Lỗi code** | *(mục 7q)* |
+
+**40/46 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1773,6 +1775,59 @@ Bản vá là `aws_securityhub_member`, cùng khuôn `aws_guardduty_member` — 
 Nó mang theo `ignore_changes = [email, invite]` **theo phỏng đoán**: chưa đo cho resource này, mà suy từ lỗi 42 ở resource anh em. Phép đánh đổi lệch hẳn một phía — thừa thì vô hại, thiếu thì mỗi lần plan đòi gỡ 5 account thật ra khỏi Security Hub rồi kết nạp lại. `plan` lần thứ hai sau apply ra **`No changes`**, nên phỏng đoán đúng, và giờ nó là phép đo.
 
 > Hai lỗi trong một lần chạy, và cả hai đều **báo sai theo hướng hoảng loạn**. Với một script kiểm tra bảo mật, đó không phải phía an toàn để sai — nó tiêu đúng thứ mà công cụ loại này sống nhờ vào.
+
+---
+
+### 7q. Lỗi 46 — `pipefail` biến "tìm thấy" thành "không thấy"
+
+`plan-check.sh` của `demo/network-lz-full` báo **19 lỗi**. Sau hai vòng vá, chín tổ hợp plan đều xanh với con số thật — 65, 91, 136, 139, 130, 175, 178 resource, gồm cả nhánh Palo Alto và F5 chưa từng được kiểm. Nhưng mục 3 vẫn trượt cả chín khẳng định:
+
+```
+✓ Plan day du: 175 resource - chay 10 kiem tra hanh vi
+✗ Network Firewall  (khong thay 'aws_networkfirewall_firewall.main' trong plan)
+✗ Gateway Load Balancer  (khong thay 'aws_lb.gwlb' trong plan)
+...
+```
+
+Dòng đầu nói plan có **175 resource**. Chín dòng dưới nói không tìm thấy thứ gì trong đó. Cả tám tên resource được kiểm đều **tồn tại trong code**.
+
+#### Nguyên nhân
+
+```bash
+set -uo pipefail          # dong 11 cua script
+echo "$FULL" | grep -q "$pattern"
+```
+
+`grep -q` thoát **ngay khi khớp dòng đầu tiên**. `echo` còn đang ghi thì mất đầu đọc → chết vì `SIGPIPE`, mã thoát 141. `pipefail` lấy mã thoát **cao nhất** của cả pipeline, nên pipeline trả về 141 dù `grep` đã trả về 0.
+
+**Khớp càng sớm thì càng chắc chắn báo sai.**
+
+Kiểm bằng năm dòng:
+
+```bash
+set -uo pipefail
+BIG=$(python3 -c "print('\n'.join('x' for _ in range(5000)))")
+echo "$BIG" | grep -q x && echo "TIM THAY" || echo "BAO KHONG THAY"
+# -> BAO KHONG THAY
+grep -q x <<<"$BIG" && echo "TIM THAY"
+# -> TIM THAY
+```
+
+#### Vì sao nó ẩn kỹ đến vậy
+
+Nó **chỉ sai khi đầu vào đủ lớn** để `echo` chưa kịp ghi hết. Thử trên chuỗi ngắn thì luôn đúng — và đó chính là cách tôi "kiểm chứng" logic đếm ở vòng trước: chạy trên một file giả bốn dòng, thấy ra `91`, kết luận là logic đúng. File giả không đủ lớn để gây SIGPIPE, còn plan thật thì 2285 dòng.
+
+> **Một phép thử không tái hiện được điều kiện thật thì không phải phép thử.** Tôi đã tự thuyết phục mình bằng một bài test nhỏ hơn hiện tượng cần bắt.
+
+Cùng nguyên nhân giải thích nốt bí ẩn còn treo từ vòng trước: `n=$(... | grep -oE ... | head -1)` — `head -1` cũng đóng pipe sớm, nên dòng `Plan: 91 to add` *có thật trong output* mà script không đọc được.
+
+#### Bản vá
+
+Thay pipeline bằng **herestring** — `grep -q "$pattern" <<<"$FULL"` không tạo pipeline nên không có SIGPIPE. `head -1` đổi thành `sed -n '1p'`, đọc hết đầu vào.
+
+Và một khẳng định phủ nhận vẫn "đạt" suốt cả thời gian đó: `grep -q app_direct` không khớp thật, `echo` chạy trọn, pipeline trả 1, nhánh `||` chạy → ✓. Bảng kết quả có đúng một dấu tích, đủ để mục đó trông như đã chạy.
+
+> **Bài học:** đây là lỗi thứ **năm** trong một phiên cùng hình dạng — 27, 28, 41, 43, và giờ 46: một kết quả rỗng hoặc một mã thoát sai bị đọc thành sự thật. Bốn lần trước nguyên nhân là `|| true` hoặc quên kiểm exit code. Lần này thì ngược đời: `pipefail` — một cờ **dựng ra để tăng độ nghiêm ngặt** — chính là thứ tạo ra câu trả lời sai.
 
 ---
 
