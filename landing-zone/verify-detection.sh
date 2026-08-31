@@ -246,10 +246,19 @@ while IFS=$'\t' read -r acct name; do
     elif [ -n "$gd" ];        then gd_txt=$(amber "$gd");     note
     else                           gd_txt=$(red 'THIEU');     note
     fi
-    if   [ "$sh_ok" = 0 ];    then sh_txt=$(grey 'khong doc duoc')
-    elif [ "$sh" = "Enabled" ]; then sh_txt=$(green Enabled)
-    elif [ -n "$sh" ];        then sh_txt=$(amber "$sh");     note
-    else                           sh_txt=$(red 'THIEU');     note
+    # Security Hub dung BO GIA TRI KHAC GuardDuty. MemberStatus cua
+    # account duoc ket nap qua Organizations la "Associated" hoac
+    # "Enabled" - CA HAI deu binh thuong. Cac gia tri con lai
+    # (Created, Invited, Removed, Resigned, AccountSuspended) moi la
+    # van de.
+    #
+    # Ban dau chi coi "Enabled" la dat, nen mot to chuc hoan toan lanh
+    # manh voi trang thai "Associated" se bi bao mau vang nhu co loi.
+    if   [ "$sh_ok" = 0 ]; then sh_txt=$(grey 'khong doc duoc')
+    elif [ "$sh" = "Enabled" ] || [ "$sh" = "Associated" ]; then
+      sh_txt=$(green "$sh")
+    elif [ -n "$sh" ];     then sh_txt=$(amber "$sh");     note
+    else                        sh_txt=$(red 'THIEU');     note
     fi
   fi
 
