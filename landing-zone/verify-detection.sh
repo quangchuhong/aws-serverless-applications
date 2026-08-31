@@ -179,18 +179,50 @@ if [ -z "$DETECTOR" ] || [ "$DETECTOR" = "None" ]; then
   exit 1
 fi
 
-aws_sec guardduty list-members --detector-id "$DETECTOR" --only-associated false \
-  --query 'Members[].[AccountId,RelationshipStatus]' --output text > "$TMP/gd" || true
+# LOI TUNG MAC O DAY - dung viet lai thanh `... > file || true`.
+#
+# Lenh AWS THAT BAI va "khong co member nao" cho ra ket qua GIONG HET
+# NHAU: file rong, ca cot bao THIEU. Do la kieu hong da sinh ra loi
+# 27, 28 va 41 - va mot script kiem tra bao sai thi nguy hon khong co
+# script nao.
+#
+# Nen: giu ma thoat, va phan biet "khong co du lieu" voi "khong hoi duoc".
+gd_ok=1; sh_ok=1; cf_ok=1
 
-aws_sec securityhub list-members --only-associated false \
-  --query 'Members[].[AccountId,MemberStatus]' --output text > "$TMP/sh" || true
+if ! aws_sec guardduty list-members --detector-id "$DETECTOR" --only-associated false \
+     --query 'Members[].[AccountId,RelationshipStatus]' --output text > "$TMP/gd"; then
+  gd_ok=0
+  red "   guardduty list-members THAT BAI - cot GUARDDUTY khong doc duoc"; echo
+  echo "     $(fail_hint)"
+  note
+fi
+
+if ! aws_sec securityhub list-members --only-associated false \
+     --query 'Members[].[AccountId,MemberStatus]' --output text > "$TMP/sh"; then
+  sh_ok=0
+  red "   securityhub list-members THAT BAI - cot SEC HUB khong doc duoc"; echo
+  echo "     $(fail_hint)"
+  note
+fi
 
 # Config: dung stack instance cua StackSet, vi DO LA CO CHE that su
 # tao recorder. Dem resource cung noi len dieu tuong tu nhung lan lon
 # giua "chua co recorder" va "account thuc su rong".
-aws_mgmt cloudformation list-stack-instances \
-  --stack-set-name "${PROJECT}-config-recorder" \
-  --query 'Summaries[].[Account,Status]' --output text > "$TMP/cfg" || true
+if ! aws_mgmt cloudformation list-stack-instances \
+     --stack-set-name "${PROJECT}-config-recorder" \
+     --query 'Summaries[].[Account,Status]' --output text > "$TMP/cfg"; then
+  cf_ok=0
+  red "   list-stack-instances THAT BAI - cot CONFIG khong doc duoc"; echo
+  echo "     $(fail_hint)"
+  note
+fi
+
+# Lenh chay duoc nhung khong tra ve gi la mot ket qua KHAC - va no
+# thuong co nghia: khong account nao duoc ghi danh. Noi ro ra.
+[ "$sh_ok" = 1 ] && [ ! -s "$TMP/sh" ] && \
+  amber "   securityhub list-members chay duoc nhung KHONG co member nao." && echo
+[ "$gd_ok" = 1 ] && [ ! -s "$TMP/gd" ] && \
+  amber "   guardduty list-members chay duoc nhung KHONG co member nao." && echo
 
 lookup() { grep "^$1	" "$2" 2>/dev/null | head -n1 | cut -f2; }
 
@@ -209,11 +241,13 @@ while IFS=$'\t' read -r acct name; do
   if [ "$acct" = "$GD_ADMIN" ]; then
     gd_txt=$(grey 'admin'); sh_txt=$(grey 'admin')
   else
-    if [ "$gd" = "Enabled" ]; then gd_txt=$(green Enabled)
+    if   [ "$gd_ok" = 0 ];    then gd_txt=$(grey 'khong doc duoc')
+    elif [ "$gd" = "Enabled" ]; then gd_txt=$(green Enabled)
     elif [ -n "$gd" ];        then gd_txt=$(amber "$gd");     note
     else                           gd_txt=$(red 'THIEU');     note
     fi
-    if [ "$sh" = "Enabled" ]; then sh_txt=$(green Enabled)
+    if   [ "$sh_ok" = 0 ];    then sh_txt=$(grey 'khong doc duoc')
+    elif [ "$sh" = "Enabled" ]; then sh_txt=$(green Enabled)
     elif [ -n "$sh" ];        then sh_txt=$(amber "$sh");     note
     else                           sh_txt=$(red 'THIEU');     note
     fi
@@ -224,6 +258,8 @@ while IFS=$'\t' read -r acct name; do
   # gioi han cua AWS, khong phai loi cau hinh.
   if [ "$acct" = "$MASTER_ID" ]; then
     cf_txt=$(grey 'ngoai StackSet')
+  elif [ "$cf_ok" = 0 ]; then
+    cf_txt=$(grey 'khong doc duoc')
   elif [ "$cf" = "CURRENT" ]; then
     cf_txt=$(green CURRENT)
   elif [ -n "$cf" ]; then
@@ -251,22 +287,29 @@ SH_AUTO=$(aws_sec securityhub describe-organization-configuration \
   --query 'AutoEnable' --output text)
 CF_AUTO=$(aws_mgmt cloudformation describe-stack-set --stack-set-name "${PROJECT}-config-recorder" \
   --query 'StackSet.AutoDeployment.Enabled' --output text)
-CF_OUS=$(aws_mgmt cloudformation list-stack-instances --stack-set-name "${PROJECT}-config-recorder" \
-  --query 'Summaries[0].OrganizationalUnitId' --output text)
+aws_mgmt cloudformation list-stack-instances --stack-set-name "${PROJECT}-config-recorder" \
+  --query 'Summaries[].OrganizationalUnitId' --output text 2>/dev/null \
+  | tr '\t' '\n' | sed '/^$/d' | sort -u > "$TMP/ous"
+n_ous=$(wc -l < "$TMP/ous" | tr -d ' ')
 
 state() {
   # $1 nhan, $2 gia tri, $3 gia tri mong doi, $4 ghi chu
+  #
+  # DEM PADDING TRUOC KHI TO MAU. printf '%-10s' dem CA byte cua ma
+  # thoat ANSI, nen to mau truoc roi mới pad se lam lech cot - dung
+  # loi da thay o lan chay dau tien.
+  pad=$(printf '%-10s' "${2:-<rong>}")
   if [ "$2" = "$3" ]; then
-    printf '   %-16s %-10s %s\n' "$1" "$(green "$2")" "$(grey "$4")"
+    printf '   %-16s %s %s\n' "$1" "$(green "$pad")" "$(grey "$4")"
   else
-    printf '   %-16s %-10s %s\n' "$1" "$(red "${2:-<rong>}")" "$(amber "mong doi $3")"
+    printf '   %-16s %s %s\n' "$1" "$(red "$pad")" "$(amber "mong doi $3")"
     note
   fi
 }
 
 state "GuardDuty"    "$GD_AUTO" "ALL"  "auto_enable_organization_members"
 state "Security Hub" "$SH_AUTO" "True" "auto_enable"
-state "Config"       "$CF_AUTO" "True" "StackSet auto_deployment${CF_OUS:+ -> $CF_OUS}"
+state "Config"       "$CF_AUTO" "True" "StackSet auto_deployment - $n_ous OU"
 echo
 
 cat <<'EOT'
@@ -293,11 +336,9 @@ echo
 
 # OU nao nam ngoai pham vi StackSet thi account trong do KHONG co
 # recorder - im lang, va rat de nham la "moi thu deu on".
-if [ -n "$CF_OUS" ] && [ "$CF_OUS" != "None" ]; then
-  grey "   OU dang duoc StackSet phu (doc tu stack instance dau tien):"; echo
-  aws_mgmt cloudformation list-stack-instances --stack-set-name "${PROJECT}-config-recorder" \
-    --query 'Summaries[].OrganizationalUnitId' --output text 2>/dev/null \
-    | tr '\t' '\n' | sort -u | sed 's/^/     /'
+if [ "$n_ous" -gt 0 ]; then
+  grey "   $n_ous OU dang co stack instance:"; echo
+  sed 's/^/     /' "$TMP/ous"
   echo
   grey "   Account tao trong OU KHAC se khong co recorder. Doi chieu voi"; echo
   grey "   recorder_target_ous trong config-detective/terraform.tfvars."; echo
