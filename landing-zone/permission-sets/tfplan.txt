@@ -1,0 +1,3609 @@
+data.aws_organizations_organization.this: Reading...
+data.aws_ssoadmin_instances.this: Reading...
+data.aws_ssoadmin_instances.this: Read complete after 0s [id=ap-southeast-1]
+data.aws_organizations_organization.this: Read complete after 2s [id=o-tvkzhcq3yh]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # aws_identitystore_group.this["lz-analytics-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Doi du lieu - chi trong cac account Data Analytics"
+      + display_name      = "lz-analytics-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-analytics-operators"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Chi doc nen tang du lieu"
+      + display_name      = "lz-analytics-operators"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-app-teams"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Doi ung dung - ghi o non-prod, chi doc o prod"
+      + display_name      = "lz-app-teams"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-auditors"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Kiem toan noi bo / bo phan tuan thu - chi doc cau hinh"
+      + display_name      = "lz-auditors"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-billing-team"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Finance / FinOps - chi o management account"
+      + display_name      = "lz-billing-team"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-datalake-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Quan tri Lake Formation - cap quyen DU LIEU. Rat it nguoi."
+      + display_name      = "lz-datalake-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-db-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "DBA - LUU Y: co quyen ghi len database production"
+      + display_name      = "lz-db-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-db-operators"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Chi doc database"
+      + display_name      = "lz-db-operators"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-network-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Doi mang - quan TGW, Network Firewall, Route 53, RAM"
+      + display_name      = "lz-network-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-network-operators"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Truc mang - chi doc"
+      + display_name      = "lz-network-operators"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-platform-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Platform / Cloud engineering - full admin"
+      + display_name      = "lz-platform-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-security-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Doi bao mat - IAM, KMS, GuardDuty, Config, CloudTrail"
+      + display_name      = "lz-security-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-security-operators"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Truc bao mat / SOC - chi doc"
+      + display_name      = "lz-security-operators"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-server-admins"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Doi ha tang compute"
+      + display_name      = "lz-server-admins"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group.this["lz-server-operators"] will be created
+  + resource "aws_identitystore_group" "this" {
+      + description       = "Truc van hanh compute - chi doc"
+      + display_name      = "lz-server-operators"
+      + external_ids      = (known after apply)
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+    }
+
+  # aws_identitystore_group_membership.this["an.nguyen|lz-app-teams"] will be created
+  + resource "aws_identitystore_group_membership" "this" {
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+      + member_id         = (known after apply)
+      + membership_id     = (known after apply)
+    }
+
+  # aws_identitystore_group_membership.this["an.nguyen|lz-server-operators"] will be created
+  + resource "aws_identitystore_group_membership" "this" {
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+      + member_id         = (known after apply)
+      + membership_id     = (known after apply)
+    }
+
+  # aws_identitystore_group_membership.this["quang|lz-platform-admins"] will be created
+  + resource "aws_identitystore_group_membership" "this" {
+      + group_id          = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+      + member_id         = (known after apply)
+      + membership_id     = (known after apply)
+    }
+
+  # aws_identitystore_user.this["an.nguyen"] will be created
+  + resource "aws_identitystore_user" "this" {
+      + display_name      = "An Nguyen"
+      + external_ids      = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+      + user_id           = (known after apply)
+      + user_name         = "an.nguyen"
+
+      + emails {
+          + primary = true
+          + value   = "quang.hong.0991+an@gmail.com"
+        }
+
+      + name {
+          + family_name = "Nguyen"
+          + given_name  = "An"
+        }
+    }
+
+  # aws_identitystore_user.this["quang"] will be created
+  + resource "aws_identitystore_user" "this" {
+      + display_name      = "Quang Chu Hong"
+      + external_ids      = (known after apply)
+      + id                = (known after apply)
+      + identity_store_id = "d-9667ae9e62"
+      + user_id           = (known after apply)
+      + user_name         = "quang"
+
+      + emails {
+          + primary = true
+          + value   = "quang.hong.0991@gmail.com"
+        }
+
+      + name {
+          + family_name = "Chu Hong"
+          + given_name  = "Quang"
+        }
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-app-teams|lz-app-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-app-teams|lz-app-operator|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-auditors|lz-auditor|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-auditors|lz-auditor|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-auditors|lz-auditor|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-auditors|lz-auditor|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-auditors|lz-auditor|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-billing-team|lz-billing|609320954321"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "609320954321"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-admins|lz-db-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-admins|lz-db-admin|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-admins|lz-db-admin|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-admins|lz-db-admin|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-admins|lz-db-admin|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-operators|lz-db-operator|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-operators|lz-db-operator|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-operators|lz-db-operator|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-operators|lz-db-operator|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-db-operators|lz-db-operator|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-admins|lz-network-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-admins|lz-network-admin|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-admins|lz-network-admin|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-admins|lz-network-admin|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-admins|lz-network-admin|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-operators|lz-network-operator|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-operators|lz-network-operator|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-operators|lz-network-operator|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-operators|lz-network-operator|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-network-operators|lz-network-operator|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-platform-admins|lz-account-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-platform-admins|lz-account-admin|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-platform-admins|lz-account-admin|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-platform-admins|lz-account-admin|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-platform-admins|lz-account-admin|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-admins|lz-security-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-admins|lz-security-admin|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-admins|lz-security-admin|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-admins|lz-security-admin|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-admins|lz-security-admin|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-operators|lz-security-operator|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-operators|lz-security-operator|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-operators|lz-security-operator|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-operators|lz-security-operator|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-security-operators|lz-security-operator|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-admins|lz-server-admin|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-admins|lz-server-admin|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-admins|lz-server-admin|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-admins|lz-server-admin|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-admins|lz-server-admin|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-operators|lz-server-operator|169873795883"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "169873795883"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-operators|lz-server-operator|436908791055"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "436908791055"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-operators|lz-server-operator|458195083898"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "458195083898"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-operators|lz-server-operator|654560867047"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "654560867047"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_account_assignment.this["lz-server-operators|lz-server-operator|761558631239"] will be created
+  + resource "aws_ssoadmin_account_assignment" "this" {
+      + id                 = (known after apply)
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+      + principal_id       = (known after apply)
+      + principal_type     = "GROUP"
+      + target_id          = "761558631239"
+      + target_type        = "AWS_ACCOUNT"
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-account-admin|AdministratorAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/AdministratorAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-analytics-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-app-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-auditor|SecurityAudit"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/SecurityAudit"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-auditor|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-billing|Billing"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/Billing"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-db-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-network-admin|NetworkAdministrator"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/NetworkAdministrator"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-network-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-security-operator|SecurityAudit"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/SecurityAudit"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-security-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_managed_policy_attachment.this["lz-server-operator|ViewOnlyAccess"] will be created
+  + resource "aws_ssoadmin_managed_policy_attachment" "this" {
+      + id                  = (known after apply)
+      + instance_arn        = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + managed_policy_arn  = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+      + managed_policy_name = (known after apply)
+      + permission_set_arn  = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-account-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Full administrative access to the AWS account"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-account-admin"
+      + session_duration = "PT1H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-analytics-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Administrative access to the data platform and analytics services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-analytics-admin"
+      + session_duration = "PT4H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-analytics-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to the data platform and analytics services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-analytics-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-app-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Application set up, deployment and maintenance - non-production only"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-app-admin"
+      + session_duration = "PT4H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "nonprod"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "nonprod"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-app-breakglass"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "EMERGENCY write access to production applications - assign on demand only"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-app-breakglass"
+      + session_duration = "PT1H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "none"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "none"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-app-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to application resources - production"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-app-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "prod"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "prod"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-auditor"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only view of configuration across the account (no data plane access)"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-auditor"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-billing"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Billing information and cost reports (Billing, Cost Explorer)"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-billing"
+      + session_duration = "PT4H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "management"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "management"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-datalake-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Lake Formation data lake administration (can grant data access - restricted)"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-datalake-admin"
+      + session_duration = "PT1H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "analytics"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-db-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Administrative access to the database services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-db-admin"
+      + session_duration = "PT1H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-db-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to the database services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-db-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-network-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Administrative access to AWS networking services and APIs"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-network-admin"
+      + session_duration = "PT4H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-network-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to AWS networking services and APIs"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-network-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-security-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Administrative access to AWS security services and APIs"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-security-admin"
+      + session_duration = "PT1H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-security-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to AWS security services and APIs"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-security-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-server-admin"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Administrative access to compute, storage and related services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-server-admin"
+      + session_duration = "PT4H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set.this["lz-server-operator"] will be created
+  + resource "aws_ssoadmin_permission_set" "this" {
+      + arn              = (known after apply)
+      + created_date     = (known after apply)
+      + description      = "Read-only access to compute, storage and related services"
+      + id               = (known after apply)
+      + instance_arn     = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + name             = "lz-server-operator"
+      + session_duration = "PT8H"
+      + tags             = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+      + tags_all         = {
+          + "CostCenter"         = "CC-0000"
+          + "Environment"        = "shared"
+          + "ManagedBy"          = "terraform"
+          + "Owner"              = "quang.hong.0991@gmail.com"
+          + "PermissionSetScope" = "all"
+          + "Project"            = "qh11-lz"
+          + "Repo"               = "aws-serverless-applications/landing-zone/permission-sets"
+        }
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-analytics-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "athena:*",
+                          + "cloudwatch:*",
+                          + "datazone:*",
+                          + "elasticmapreduce:*",
+                          + "emr-containers:*",
+                          + "emr-serverless:*",
+                          + "firehose:*",
+                          + "glue:*",
+                          + "kinesis:*",
+                          + "lakeformation:*",
+                          + "lambda:*",
+                          + "logs:*",
+                          + "quicksight:*",
+                          + "redshift-data:*",
+                          + "redshift-serverless:*",
+                          + "redshift:*",
+                          + "s3:*",
+                          + "sagemaker:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "AnalyticsAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "lakeformation:PutDataLakeSettings",
+                          + "lakeformation:GrantPermissions",
+                          + "lakeformation:BatchGrantPermissions",
+                          + "lakeformation:RegisterResource",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyLakeFormationSelfGrant"
+                    },
+                  + {
+                      + Action    = "iam:PassRole"
+                      + Condition = {
+                          + StringEquals = {
+                              + "iam:PassedToService" = [
+                                  + "sagemaker.amazonaws.com",
+                                  + "glue.amazonaws.com",
+                                  + "elasticmapreduce.amazonaws.com",
+                                  + "lakeformation.amazonaws.com",
+                                  + "athena.amazonaws.com",
+                                  + "redshift.amazonaws.com",
+                                  + "lambda.amazonaws.com",
+                                  + "firehose.amazonaws.com",
+                                ]
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = "arn:aws:iam::*:role/lz-analytics-*"
+                      + Sid       = "PassRoleOnlyAnalyticsRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-analytics-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "athena:Describe*",
+                          + "athena:Get*",
+                          + "athena:List*",
+                          + "cloudwatch:Describe*",
+                          + "cloudwatch:Get*",
+                          + "cloudwatch:List*",
+                          + "datazone:Describe*",
+                          + "datazone:Get*",
+                          + "datazone:List*",
+                          + "elasticmapreduce:Describe*",
+                          + "elasticmapreduce:Get*",
+                          + "elasticmapreduce:List*",
+                          + "emr-containers:Describe*",
+                          + "emr-containers:Get*",
+                          + "emr-containers:List*",
+                          + "emr-serverless:Describe*",
+                          + "emr-serverless:Get*",
+                          + "emr-serverless:List*",
+                          + "firehose:Describe*",
+                          + "firehose:Get*",
+                          + "firehose:List*",
+                          + "glue:Describe*",
+                          + "glue:Get*",
+                          + "glue:List*",
+                          + "kinesis:Describe*",
+                          + "kinesis:Get*",
+                          + "kinesis:List*",
+                          + "lakeformation:Describe*",
+                          + "lakeformation:Get*",
+                          + "lakeformation:List*",
+                          + "lambda:Describe*",
+                          + "lambda:Get*",
+                          + "lambda:List*",
+                          + "logs:Describe*",
+                          + "logs:Get*",
+                          + "logs:List*",
+                          + "quicksight:Describe*",
+                          + "quicksight:Get*",
+                          + "quicksight:List*",
+                          + "redshift-data:Describe*",
+                          + "redshift-data:Get*",
+                          + "redshift-data:List*",
+                          + "redshift-serverless:Describe*",
+                          + "redshift-serverless:Get*",
+                          + "redshift-serverless:List*",
+                          + "redshift:Describe*",
+                          + "redshift:Get*",
+                          + "redshift:List*",
+                          + "s3:Describe*",
+                          + "s3:Get*",
+                          + "s3:List*",
+                          + "sagemaker:Describe*",
+                          + "sagemaker:Get*",
+                          + "sagemaker:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "AnalyticsReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-app-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "apigateway:*",
+                          + "application-autoscaling:*",
+                          + "autoscaling:*",
+                          + "cloudformation:*",
+                          + "cloudwatch:*",
+                          + "dax:*",
+                          + "dynamodb:*",
+                          + "ec2:*",
+                          + "ec2messages:*",
+                          + "ecr:*",
+                          + "ecs:*",
+                          + "eks:*",
+                          + "elasticache:*",
+                          + "elasticfilesystem:*",
+                          + "elasticloadbalancing:*",
+                          + "events:*",
+                          + "firehose:*",
+                          + "kinesis:*",
+                          + "lambda:*",
+                          + "logs:*",
+                          + "memorydb:*",
+                          + "rds:*",
+                          + "redshift-data:*",
+                          + "redshift-serverless:*",
+                          + "redshift:*",
+                          + "s3:*",
+                          + "scheduler:*",
+                          + "secretsmanager:*",
+                          + "sns:*",
+                          + "sqs:*",
+                          + "ssm:*",
+                          + "ssmmessages:*",
+                          + "states:*",
+                          + "xray:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "AppAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "ec2:*Vpc*",
+                          + "ec2:*Subnet*",
+                          + "ec2:*Route*",
+                          + "ec2:*Gateway*",
+                          + "ec2:*TransitGateway*",
+                          + "ec2:*Vpn*",
+                          + "ec2:*Peering*",
+                          + "ec2:*NetworkAcl*",
+                          + "ec2:*DhcpOptions*",
+                          + "ec2:*Address*",
+                          + "ec2:*ClientVpn*",
+                          + "ec2:*CarrierGateway*",
+                          + "ec2:*PrefixList*",
+                          + "ec2:*TrafficMirror*",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyEc2NetworkApis"
+                    },
+                  + {
+                      + Action   = [
+                          + "ec2:AuthorizeSecurityGroupIngress",
+                          + "ec2:AuthorizeSecurityGroupEgress",
+                          + "ec2:RevokeSecurityGroupIngress",
+                          + "ec2:RevokeSecurityGroupEgress",
+                          + "ec2:ModifySecurityGroupRules",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyEc2SecurityGroupRuleChanges"
+                    },
+                  + {
+                      + Action    = "iam:PassRole"
+                      + Condition = {
+                          + StringEquals = {
+                              + "iam:PassedToService" = [
+                                  + "lambda.amazonaws.com",
+                                  + "ec2.amazonaws.com",
+                                  + "ecs-tasks.amazonaws.com",
+                                  + "ecs.amazonaws.com",
+                                  + "eks.amazonaws.com",
+                                  + "states.amazonaws.com",
+                                  + "events.amazonaws.com",
+                                  + "apigateway.amazonaws.com",
+                                  + "cloudformation.amazonaws.com",
+                                  + "ssm.amazonaws.com",
+                                  + "application-autoscaling.amazonaws.com",
+                                ]
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = "arn:aws:iam::*:role/lz-workload-*"
+                      + Sid       = "PassRoleOnlyWorkloadRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-app-breakglass"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "apigateway:*",
+                          + "application-autoscaling:*",
+                          + "autoscaling:*",
+                          + "cloudformation:*",
+                          + "cloudwatch:*",
+                          + "dax:*",
+                          + "dynamodb:*",
+                          + "ec2:*",
+                          + "ec2messages:*",
+                          + "ecr:*",
+                          + "ecs:*",
+                          + "eks:*",
+                          + "elasticache:*",
+                          + "elasticfilesystem:*",
+                          + "elasticloadbalancing:*",
+                          + "events:*",
+                          + "firehose:*",
+                          + "kinesis:*",
+                          + "lambda:*",
+                          + "logs:*",
+                          + "memorydb:*",
+                          + "rds:*",
+                          + "redshift-data:*",
+                          + "redshift-serverless:*",
+                          + "redshift:*",
+                          + "s3:*",
+                          + "scheduler:*",
+                          + "secretsmanager:*",
+                          + "sns:*",
+                          + "sqs:*",
+                          + "ssm:*",
+                          + "ssmmessages:*",
+                          + "states:*",
+                          + "xray:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "AppAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "ec2:*Vpc*",
+                          + "ec2:*Subnet*",
+                          + "ec2:*Route*",
+                          + "ec2:*Gateway*",
+                          + "ec2:*TransitGateway*",
+                          + "ec2:*Vpn*",
+                          + "ec2:*Peering*",
+                          + "ec2:*NetworkAcl*",
+                          + "ec2:*DhcpOptions*",
+                          + "ec2:*Address*",
+                          + "ec2:*ClientVpn*",
+                          + "ec2:*CarrierGateway*",
+                          + "ec2:*PrefixList*",
+                          + "ec2:*TrafficMirror*",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyEc2NetworkApis"
+                    },
+                  + {
+                      + Action    = "iam:PassRole"
+                      + Condition = {
+                          + StringEquals = {
+                              + "iam:PassedToService" = [
+                                  + "lambda.amazonaws.com",
+                                  + "ec2.amazonaws.com",
+                                  + "ecs-tasks.amazonaws.com",
+                                  + "ecs.amazonaws.com",
+                                  + "eks.amazonaws.com",
+                                  + "states.amazonaws.com",
+                                  + "events.amazonaws.com",
+                                  + "apigateway.amazonaws.com",
+                                  + "cloudformation.amazonaws.com",
+                                  + "ssm.amazonaws.com",
+                                  + "application-autoscaling.amazonaws.com",
+                                ]
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = "arn:aws:iam::*:role/lz-workload-*"
+                      + Sid       = "PassRoleOnlyWorkloadRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-app-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "apigateway:Describe*",
+                          + "apigateway:Get*",
+                          + "apigateway:List*",
+                          + "application-autoscaling:Describe*",
+                          + "application-autoscaling:Get*",
+                          + "application-autoscaling:List*",
+                          + "autoscaling:Describe*",
+                          + "autoscaling:Get*",
+                          + "autoscaling:List*",
+                          + "cloudformation:Describe*",
+                          + "cloudformation:Get*",
+                          + "cloudformation:List*",
+                          + "cloudwatch:Describe*",
+                          + "cloudwatch:Get*",
+                          + "cloudwatch:List*",
+                          + "dax:Describe*",
+                          + "dax:Get*",
+                          + "dax:List*",
+                          + "dynamodb:Describe*",
+                          + "dynamodb:Get*",
+                          + "dynamodb:List*",
+                          + "ec2:Describe*",
+                          + "ec2:Get*",
+                          + "ec2:List*",
+                          + "ec2messages:Describe*",
+                          + "ec2messages:Get*",
+                          + "ec2messages:List*",
+                          + "ecr:Describe*",
+                          + "ecr:Get*",
+                          + "ecr:List*",
+                          + "ecs:Describe*",
+                          + "ecs:Get*",
+                          + "ecs:List*",
+                          + "eks:Describe*",
+                          + "eks:Get*",
+                          + "eks:List*",
+                          + "elasticache:Describe*",
+                          + "elasticache:Get*",
+                          + "elasticache:List*",
+                          + "elasticfilesystem:Describe*",
+                          + "elasticfilesystem:Get*",
+                          + "elasticfilesystem:List*",
+                          + "elasticloadbalancing:Describe*",
+                          + "elasticloadbalancing:Get*",
+                          + "elasticloadbalancing:List*",
+                          + "events:Describe*",
+                          + "events:Get*",
+                          + "events:List*",
+                          + "firehose:Describe*",
+                          + "firehose:Get*",
+                          + "firehose:List*",
+                          + "kinesis:Describe*",
+                          + "kinesis:Get*",
+                          + "kinesis:List*",
+                          + "lambda:Describe*",
+                          + "lambda:Get*",
+                          + "lambda:List*",
+                          + "logs:Describe*",
+                          + "logs:Get*",
+                          + "logs:List*",
+                          + "memorydb:Describe*",
+                          + "memorydb:Get*",
+                          + "memorydb:List*",
+                          + "rds:Describe*",
+                          + "rds:Get*",
+                          + "rds:List*",
+                          + "redshift-data:Describe*",
+                          + "redshift-data:Get*",
+                          + "redshift-data:List*",
+                          + "redshift-serverless:Describe*",
+                          + "redshift-serverless:Get*",
+                          + "redshift-serverless:List*",
+                          + "redshift:Describe*",
+                          + "redshift:Get*",
+                          + "redshift:List*",
+                          + "s3:Describe*",
+                          + "s3:Get*",
+                          + "s3:List*",
+                          + "scheduler:Describe*",
+                          + "scheduler:Get*",
+                          + "scheduler:List*",
+                          + "secretsmanager:Describe*",
+                          + "secretsmanager:Get*",
+                          + "secretsmanager:List*",
+                          + "sns:Describe*",
+                          + "sns:Get*",
+                          + "sns:List*",
+                          + "sqs:Describe*",
+                          + "sqs:Get*",
+                          + "sqs:List*",
+                          + "ssm:Describe*",
+                          + "ssm:Get*",
+                          + "ssm:List*",
+                          + "ssmmessages:Describe*",
+                          + "ssmmessages:Get*",
+                          + "ssmmessages:List*",
+                          + "states:Describe*",
+                          + "states:Get*",
+                          + "states:List*",
+                          + "xray:Describe*",
+                          + "xray:Get*",
+                          + "xray:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "AppReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "logs:FilterLogEvents",
+                          + "logs:GetLogEvents",
+                          + "logs:StartQuery",
+                          + "logs:StopQuery",
+                          + "logs:GetQueryResults",
+                          + "logs:Describe*",
+                          + "logs:List*",
+                          + "cloudwatch:GetMetric*",
+                          + "cloudwatch:Describe*",
+                          + "cloudwatch:List*",
+                          + "xray:Get*",
+                          + "xray:BatchGet*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "ReadApplicationLogs"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-auditor"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "billing:Describe*",
+                          + "billing:Get*",
+                          + "billing:List*",
+                          + "budgets:Describe*",
+                          + "budgets:Get*",
+                          + "budgets:List*",
+                          + "ce:Describe*",
+                          + "ce:Get*",
+                          + "ce:List*",
+                          + "compute-optimizer:Describe*",
+                          + "compute-optimizer:Get*",
+                          + "compute-optimizer:List*",
+                          + "consolidatedbilling:Describe*",
+                          + "consolidatedbilling:Get*",
+                          + "consolidatedbilling:List*",
+                          + "cost-optimization-hub:Describe*",
+                          + "cost-optimization-hub:Get*",
+                          + "cost-optimization-hub:List*",
+                          + "cur:Describe*",
+                          + "cur:Get*",
+                          + "cur:List*",
+                          + "freetier:Describe*",
+                          + "freetier:Get*",
+                          + "freetier:List*",
+                          + "invoicing:Describe*",
+                          + "invoicing:Get*",
+                          + "invoicing:List*",
+                          + "payments:Describe*",
+                          + "payments:Get*",
+                          + "payments:List*",
+                          + "purchase-orders:Describe*",
+                          + "purchase-orders:Get*",
+                          + "purchase-orders:List*",
+                          + "tax:Describe*",
+                          + "tax:Get*",
+                          + "tax:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "BillingReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-billing"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "billing:*",
+                          + "budgets:*",
+                          + "ce:*",
+                          + "compute-optimizer:*",
+                          + "consolidatedbilling:*",
+                          + "cost-optimization-hub:*",
+                          + "cur:*",
+                          + "freetier:*",
+                          + "invoicing:*",
+                          + "payments:*",
+                          + "purchase-orders:*",
+                          + "tax:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "BillingAndCostManagement"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-datalake-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "lakeformation:*",
+                          + "glue:*",
+                          + "s3:GetBucket*",
+                          + "s3:ListBucket*",
+                          + "ram:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "DataLakeAdministration"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-db-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "dax:*",
+                          + "dynamodb:*",
+                          + "elasticache:*",
+                          + "memorydb:*",
+                          + "rds:*",
+                          + "redshift-data:*",
+                          + "redshift-serverless:*",
+                          + "redshift:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "DatabaseAdmin"
+                    },
+                  + {
+                      + Action    = "iam:PassRole"
+                      + Condition = {
+                          + StringEquals = {
+                              + "iam:PassedToService" = [
+                                  + "lambda.amazonaws.com",
+                                  + "ec2.amazonaws.com",
+                                  + "ecs-tasks.amazonaws.com",
+                                  + "ecs.amazonaws.com",
+                                  + "eks.amazonaws.com",
+                                  + "states.amazonaws.com",
+                                  + "events.amazonaws.com",
+                                  + "apigateway.amazonaws.com",
+                                  + "cloudformation.amazonaws.com",
+                                  + "ssm.amazonaws.com",
+                                  + "application-autoscaling.amazonaws.com",
+                                ]
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = "arn:aws:iam::*:role/lz-workload-*"
+                      + Sid       = "PassRoleOnlyWorkloadRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-db-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "dax:Describe*",
+                          + "dax:Get*",
+                          + "dax:List*",
+                          + "dynamodb:Describe*",
+                          + "dynamodb:Get*",
+                          + "dynamodb:List*",
+                          + "elasticache:Describe*",
+                          + "elasticache:Get*",
+                          + "elasticache:List*",
+                          + "memorydb:Describe*",
+                          + "memorydb:Get*",
+                          + "memorydb:List*",
+                          + "rds:Describe*",
+                          + "rds:Get*",
+                          + "rds:List*",
+                          + "redshift-data:Describe*",
+                          + "redshift-data:Get*",
+                          + "redshift-data:List*",
+                          + "redshift-serverless:Describe*",
+                          + "redshift-serverless:Get*",
+                          + "redshift-serverless:List*",
+                          + "redshift:Describe*",
+                          + "redshift:Get*",
+                          + "redshift:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "DatabaseReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-network-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "ec2:*",
+                          + "cloudfront:*",
+                          + "directconnect:*",
+                          + "elasticloadbalancing:*",
+                          + "globalaccelerator:*",
+                          + "network-firewall:*",
+                          + "networkmanager:*",
+                          + "ram:*",
+                          + "route53:*",
+                          + "route53domains:*",
+                          + "route53resolver:*",
+                          + "shield:*",
+                          + "wafv2:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "NetworkAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-network-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "ec2:Describe*",
+                          + "ec2:List*",
+                          + "ec2:Get*",
+                          + "cloudfront:Describe*",
+                          + "cloudfront:Get*",
+                          + "cloudfront:List*",
+                          + "directconnect:Describe*",
+                          + "directconnect:Get*",
+                          + "directconnect:List*",
+                          + "elasticloadbalancing:Describe*",
+                          + "elasticloadbalancing:Get*",
+                          + "elasticloadbalancing:List*",
+                          + "globalaccelerator:Describe*",
+                          + "globalaccelerator:Get*",
+                          + "globalaccelerator:List*",
+                          + "network-firewall:Describe*",
+                          + "network-firewall:Get*",
+                          + "network-firewall:List*",
+                          + "networkmanager:Describe*",
+                          + "networkmanager:Get*",
+                          + "networkmanager:List*",
+                          + "ram:Describe*",
+                          + "ram:Get*",
+                          + "ram:List*",
+                          + "route53:Describe*",
+                          + "route53:Get*",
+                          + "route53:List*",
+                          + "route53domains:Describe*",
+                          + "route53domains:Get*",
+                          + "route53domains:List*",
+                          + "route53resolver:Describe*",
+                          + "route53resolver:Get*",
+                          + "route53resolver:List*",
+                          + "shield:Describe*",
+                          + "shield:Get*",
+                          + "shield:List*",
+                          + "wafv2:Describe*",
+                          + "wafv2:Get*",
+                          + "wafv2:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "NetworkReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-security-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "access-analyzer:*",
+                          + "acm-pca:*",
+                          + "acm:*",
+                          + "cloudtrail:*",
+                          + "cloudwatch:*",
+                          + "config:*",
+                          + "detective:*",
+                          + "guardduty:*",
+                          + "iam:*",
+                          + "inspector2:*",
+                          + "kms:*",
+                          + "logs:*",
+                          + "macie2:*",
+                          + "securityhub:*",
+                          + "organizations:Describe*",
+                          + "organizations:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "SecurityAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-security-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-server-admin"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "ec2:*",
+                          + "apigateway:*",
+                          + "application-autoscaling:*",
+                          + "autoscaling:*",
+                          + "cloudformation:*",
+                          + "cloudwatch:*",
+                          + "ec2messages:*",
+                          + "ecr:*",
+                          + "ecs:*",
+                          + "eks:*",
+                          + "elasticfilesystem:*",
+                          + "elasticloadbalancing:*",
+                          + "events:*",
+                          + "firehose:*",
+                          + "kinesis:*",
+                          + "lambda:*",
+                          + "logs:*",
+                          + "s3:*",
+                          + "scheduler:*",
+                          + "secretsmanager:*",
+                          + "sns:*",
+                          + "sqs:*",
+                          + "ssm:*",
+                          + "ssmmessages:*",
+                          + "states:*",
+                          + "xray:*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "ServerAdmin"
+                    },
+                  + {
+                      + Action   = [
+                          + "ec2:*Vpc*",
+                          + "ec2:*Subnet*",
+                          + "ec2:*Route*",
+                          + "ec2:*Gateway*",
+                          + "ec2:*TransitGateway*",
+                          + "ec2:*Vpn*",
+                          + "ec2:*Peering*",
+                          + "ec2:*NetworkAcl*",
+                          + "ec2:*DhcpOptions*",
+                          + "ec2:*Address*",
+                          + "ec2:*ClientVpn*",
+                          + "ec2:*CarrierGateway*",
+                          + "ec2:*PrefixList*",
+                          + "ec2:*TrafficMirror*",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyEc2NetworkApis"
+                    },
+                  + {
+                      + Action   = [
+                          + "ec2:AuthorizeSecurityGroupIngress",
+                          + "ec2:AuthorizeSecurityGroupEgress",
+                          + "ec2:RevokeSecurityGroupIngress",
+                          + "ec2:RevokeSecurityGroupEgress",
+                          + "ec2:ModifySecurityGroupRules",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyEc2SecurityGroupRuleChanges"
+                    },
+                  + {
+                      + Action    = "iam:PassRole"
+                      + Condition = {
+                          + StringEquals = {
+                              + "iam:PassedToService" = [
+                                  + "lambda.amazonaws.com",
+                                  + "ec2.amazonaws.com",
+                                  + "ecs-tasks.amazonaws.com",
+                                  + "ecs.amazonaws.com",
+                                  + "eks.amazonaws.com",
+                                  + "states.amazonaws.com",
+                                  + "events.amazonaws.com",
+                                  + "apigateway.amazonaws.com",
+                                  + "cloudformation.amazonaws.com",
+                                  + "ssm.amazonaws.com",
+                                  + "application-autoscaling.amazonaws.com",
+                                ]
+                            }
+                        }
+                      + Effect    = "Allow"
+                      + Resource  = "arn:aws:iam::*:role/lz-workload-*"
+                      + Sid       = "PassRoleOnlyWorkloadRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:Get*",
+                          + "iam:List*",
+                          + "iam:CreateServiceLinkedRole",
+                          + "iam:CreateInstanceProfile",
+                          + "iam:AddRoleToInstanceProfile",
+                          + "iam:RemoveRoleFromInstanceProfile",
+                          + "iam:DeleteInstanceProfile",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "IamReadAndServiceLinkedRoles"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "organizations:LeaveOrganization",
+                          + "organizations:DeleteOrganization",
+                          + "organizations:RemoveAccountFromOrganization",
+                          + "cloudtrail:StopLogging",
+                          + "cloudtrail:DeleteTrail",
+                          + "cloudtrail:UpdateTrail",
+                          + "guardduty:DeleteDetector",
+                          + "guardduty:DisassociateFromMasterAccount",
+                          + "config:DeleteConfigurationRecorder",
+                          + "config:StopConfigurationRecorder",
+                          + "config:DeleteDeliveryChannel",
+                          + "sso:Delete*",
+                          + "sso:Detach*",
+                          + "sso:Put*",
+                          + "sso:Update*",
+                          + "account:CloseAccount",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyTamperingWithGuardrails"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+  # aws_ssoadmin_permission_set_inline_policy.this["lz-server-operator"] will be created
+  + resource "aws_ssoadmin_permission_set_inline_policy" "this" {
+      + id                 = (known after apply)
+      + inline_policy      = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action   = [
+                          + "ec2:Describe*",
+                          + "ec2:List*",
+                          + "ec2:Get*",
+                          + "apigateway:Describe*",
+                          + "apigateway:Get*",
+                          + "apigateway:List*",
+                          + "application-autoscaling:Describe*",
+                          + "application-autoscaling:Get*",
+                          + "application-autoscaling:List*",
+                          + "autoscaling:Describe*",
+                          + "autoscaling:Get*",
+                          + "autoscaling:List*",
+                          + "cloudformation:Describe*",
+                          + "cloudformation:Get*",
+                          + "cloudformation:List*",
+                          + "cloudwatch:Describe*",
+                          + "cloudwatch:Get*",
+                          + "cloudwatch:List*",
+                          + "ec2messages:Describe*",
+                          + "ec2messages:Get*",
+                          + "ec2messages:List*",
+                          + "ecr:Describe*",
+                          + "ecr:Get*",
+                          + "ecr:List*",
+                          + "ecs:Describe*",
+                          + "ecs:Get*",
+                          + "ecs:List*",
+                          + "eks:Describe*",
+                          + "eks:Get*",
+                          + "eks:List*",
+                          + "elasticfilesystem:Describe*",
+                          + "elasticfilesystem:Get*",
+                          + "elasticfilesystem:List*",
+                          + "elasticloadbalancing:Describe*",
+                          + "elasticloadbalancing:Get*",
+                          + "elasticloadbalancing:List*",
+                          + "events:Describe*",
+                          + "events:Get*",
+                          + "events:List*",
+                          + "firehose:Describe*",
+                          + "firehose:Get*",
+                          + "firehose:List*",
+                          + "kinesis:Describe*",
+                          + "kinesis:Get*",
+                          + "kinesis:List*",
+                          + "lambda:Describe*",
+                          + "lambda:Get*",
+                          + "lambda:List*",
+                          + "logs:Describe*",
+                          + "logs:Get*",
+                          + "logs:List*",
+                          + "s3:Describe*",
+                          + "s3:Get*",
+                          + "s3:List*",
+                          + "scheduler:Describe*",
+                          + "scheduler:Get*",
+                          + "scheduler:List*",
+                          + "secretsmanager:Describe*",
+                          + "secretsmanager:Get*",
+                          + "secretsmanager:List*",
+                          + "sns:Describe*",
+                          + "sns:Get*",
+                          + "sns:List*",
+                          + "sqs:Describe*",
+                          + "sqs:Get*",
+                          + "sqs:List*",
+                          + "ssm:Describe*",
+                          + "ssm:Get*",
+                          + "ssm:List*",
+                          + "ssmmessages:Describe*",
+                          + "ssmmessages:Get*",
+                          + "ssmmessages:List*",
+                          + "states:Describe*",
+                          + "states:Get*",
+                          + "states:List*",
+                          + "xray:Describe*",
+                          + "xray:Get*",
+                          + "xray:List*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "ServerReadOnly"
+                    },
+                  + {
+                      + Action   = [
+                          + "logs:FilterLogEvents",
+                          + "logs:GetLogEvents",
+                          + "logs:StartQuery",
+                          + "logs:StopQuery",
+                          + "logs:GetQueryResults",
+                          + "logs:Describe*",
+                          + "logs:List*",
+                          + "cloudwatch:GetMetric*",
+                          + "cloudwatch:Describe*",
+                          + "cloudwatch:List*",
+                          + "xray:Get*",
+                          + "xray:BatchGet*",
+                        ]
+                      + Effect   = "Allow"
+                      + Resource = "*"
+                      + Sid      = "ReadApplicationLogs"
+                    },
+                  + {
+                      + Action   = [
+                          + "iam:CreateUser",
+                          + "iam:CreateRole",
+                          + "iam:CreateAccessKey",
+                          + "iam:CreateLoginProfile",
+                          + "iam:UpdateLoginProfile",
+                          + "iam:AttachUserPolicy",
+                          + "iam:AttachRolePolicy",
+                          + "iam:AttachGroupPolicy",
+                          + "iam:PutUserPolicy",
+                          + "iam:PutRolePolicy",
+                          + "iam:PutGroupPolicy",
+                          + "iam:UpdateAssumeRolePolicy",
+                          + "iam:DeleteRolePermissionsBoundary",
+                          + "iam:DeleteUserPermissionsBoundary",
+                          + "iam:CreatePolicyVersion",
+                          + "iam:SetDefaultPolicyVersion",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyIamWritesOutsideSecurityDomain"
+                    },
+                  + {
+                      + Action   = [
+                          + "ssm:StartSession",
+                          + "ssm:SendCommand",
+                          + "ssm:CreateAssociation",
+                          + "ssm:StartAutomationExecution",
+                          + "ec2-instance-connect:*",
+                          + "ec2:GetPasswordData",
+                          + "sagemaker:CreatePresignedNotebookInstanceUrl",
+                          + "sagemaker:CreatePresignedDomainUrl",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyInteractiveShellForOperators"
+                    },
+                  + {
+                      + Action   = [
+                          + "s3:GetObject",
+                          + "s3:GetObjectVersion",
+                          + "s3:GetObjectTorrent",
+                          + "dynamodb:GetItem",
+                          + "dynamodb:BatchGetItem",
+                          + "dynamodb:Query",
+                          + "dynamodb:Scan",
+                          + "dynamodb:PartiQLSelect",
+                          + "secretsmanager:GetSecretValue",
+                          + "ssm:GetParameter",
+                          + "ssm:GetParameters",
+                          + "ssm:GetParametersByPath",
+                          + "kms:Decrypt",
+                          + "kms:GenerateDataKey*",
+                          + "lambda:GetFunction",
+                          + "athena:GetQueryResults",
+                          + "redshift-data:GetStatementResult",
+                          + "sqs:ReceiveMessage",
+                        ]
+                      + Effect   = "Deny"
+                      + Resource = "*"
+                      + Sid      = "DenyDataPlaneReads"
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + instance_arn       = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+      + permission_set_arn = (known after apply)
+    }
+
+Plan: 118 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + accounts_in_scope = {
+      + all        = 5
+      + analytics  = 0
+      + management = 1
+      + none       = 0
+      + nonprod    = 1
+      + prod       = 1
+    }
+  + assignment_count  = 53
+  + assignment_matrix = {
+      + lz-analytics-admins    = {
+          + lz-analytics-admin = 0
+        }
+      + lz-analytics-operators = {
+          + lz-analytics-operator = 0
+        }
+      + lz-app-teams           = {
+          + lz-app-admin    = 1
+          + lz-app-operator = 1
+        }
+      + lz-auditors            = {
+          + lz-auditor = 5
+        }
+      + lz-billing-team        = {
+          + lz-billing = 1
+        }
+      + lz-datalake-admins     = {
+          + lz-datalake-admin = 0
+        }
+      + lz-db-admins           = {
+          + lz-db-admin = 5
+        }
+      + lz-db-operators        = {
+          + lz-db-operator = 5
+        }
+      + lz-network-admins      = {
+          + lz-network-admin = 5
+        }
+      + lz-network-operators   = {
+          + lz-network-operator = 5
+        }
+      + lz-platform-admins     = {
+          + lz-account-admin = 5
+        }
+      + lz-security-admins     = {
+          + lz-security-admin = 5
+        }
+      + lz-security-operators  = {
+          + lz-security-operator = 5
+        }
+      + lz-server-admins       = {
+          + lz-server-admin = 5
+        }
+      + lz-server-operators    = {
+          + lz-server-operator = 5
+        }
+    }
+  + identity_store_id = "d-9667ae9e62"
+  + next_steps        = <<-EOT
+        1. GUI THU DAT PASSWORD - THU CONG, Terraform KHONG lam duoc.
+        
+           API CreateUser ma Terraform dung KHONG gui thu moi. User da ton
+           tai nhung chua co password, va khong co gi bao cho ai biet.
+        
+           Identity Center console -> Users -> chon user
+           -> Reset password
+           -> "Send an email to the user with instructions for resetting
+              the password"
+        
+           Lam cho TUNG user moi. Bo qua buoc nay thi user khong bao gio
+           dang nhap duoc, va trieu chung la "khong nhan duoc email" chu
+           khong phai mot loi nao.
+        
+        2. BAT MFA BAT BUOC - khong lam duoc bang Terraform:
+           Identity Center console -> Settings -> Authentication
+           -> Multi-factor authentication -> Require MFA every time
+        
+           KHONG dat dieu kien aws:MultiFactorAuthPresent trong policy cua
+           permission set: phien Identity Center khong mang claim nay mot
+           cach dang tin, them vao se sinh Access Denied kho hieu.
+        
+        3. lz-billing can mot cong tac THU CONG o management account:
+           Billing console -> Account -> IAM user and role access to
+           Billing information -> Activate
+           Khong bat thi permission set van bi Access Denied.
+        
+        4. Dang nhap CLI:
+           aws configure sso
+           aws sso login --profile <ten>
+           aws sts get-caller-identity --profile <ten>
+           -> ARN phai co dang assumed-role/AWSReservedSSO_<set>_<hash>/<user>
+        
+        5. Doi chieu output assignment_matrix voi bang thiet ke.
+        
+        6. Kiem tra output unscoped_accounts - account workload nam trong
+           do la da quen khai pham vi.
+    EOT
+  + permission_sets   = {
+      + lz-account-admin      = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT1H"
+        }
+      + lz-analytics-admin    = {
+          + accounts         = 0
+          + arn              = (known after apply)
+          + scope            = "analytics"
+          + session_duration = "PT4H"
+        }
+      + lz-analytics-operator = {
+          + accounts         = 0
+          + arn              = (known after apply)
+          + scope            = "analytics"
+          + session_duration = "PT8H"
+        }
+      + lz-app-admin          = {
+          + accounts         = 1
+          + arn              = (known after apply)
+          + scope            = "nonprod"
+          + session_duration = "PT4H"
+        }
+      + lz-app-breakglass     = {
+          + accounts         = 0
+          + arn              = (known after apply)
+          + scope            = "none"
+          + session_duration = "PT1H"
+        }
+      + lz-app-operator       = {
+          + accounts         = 1
+          + arn              = (known after apply)
+          + scope            = "prod"
+          + session_duration = "PT8H"
+        }
+      + lz-auditor            = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT8H"
+        }
+      + lz-billing            = {
+          + accounts         = 1
+          + arn              = (known after apply)
+          + scope            = "management"
+          + session_duration = "PT4H"
+        }
+      + lz-datalake-admin     = {
+          + accounts         = 0
+          + arn              = (known after apply)
+          + scope            = "analytics"
+          + session_duration = "PT1H"
+        }
+      + lz-db-admin           = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT1H"
+        }
+      + lz-db-operator        = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT8H"
+        }
+      + lz-network-admin      = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT4H"
+        }
+      + lz-network-operator   = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT8H"
+        }
+      + lz-security-admin     = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT1H"
+        }
+      + lz-security-operator  = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT8H"
+        }
+      + lz-server-admin       = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT4H"
+        }
+      + lz-server-operator    = {
+          + accounts         = 5
+          + arn              = (known after apply)
+          + scope            = "all"
+          + session_duration = "PT8H"
+        }
+    }
+  + portal_url        = "https://d-9667ae9e62.awsapps.com/start"
+  + sso_instance_arn  = "arn:aws:sso:::instance/ssoins-8210168ac3d88c11"
+  + unscoped_accounts = [
+      + "436908791055",
+      + "458195083898",
+      + "654560867047",
+    ]
+
+Warning: Check block assertion failed
+
+  on assignments.tf line 89, in check "declared_scopes_not_empty":
+  89:     condition = alltrue([
+  90:       for s in ["analytics", "nonprod", "prod"] :
+  91:       length(local.scope_accounts[s]) > 0
+  92:     ])
+    ├────────────────
+    │ local.scope_accounts is object with 6 attributes
+
+Cac pham vi sau dang RONG nen khong sinh assignment nao: analytics - khai account ID trong var.accounts_by_scope. Neu chua co OU do thi bo qua canh bao nay.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Note: You didn't use the -out option to save this plan, so Terraform can't
+guarantee to take exactly these actions if you run "terraform apply" now.
