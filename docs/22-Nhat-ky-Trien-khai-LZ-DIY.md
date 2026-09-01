@@ -116,7 +116,9 @@ Xếp theo thứ tự gặp phải.
 
 | 53 | RAM share vẫn hỏng dù đã bật `enable-sharing-with-aws-organization` từ hai tuần trước | **Member account không share được với cả tổ chức** — chỉ management hoặc RAM delegated admin mới làm được. Câu `Organization could not be found` nghĩa là *không được phép nhìn*, không phải sai ARN | **Lỗi thiết kế** | *(mục 7x)* |
 
-**47/53 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 54 | `Description` của template CloudFormation gây **diff vĩnh viễn** | Chuỗi có dấu tiếng Việt; CloudFormation lưu lại với `?` thay cho dấu, nên Terraform đòi sửa ở mọi lần plan và CloudFormation lại bóp méo tiếp. Cùng họ với lỗi 39 và 42 | **Lỗi code** | *(mục 7x)* |
+
+**48/54 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
