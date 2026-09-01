@@ -104,7 +104,9 @@ Xếp theo thứ tự gặp phải.
 
 | 47 | `InvalidRequestException: ResourceArn has invalid rule order` — apply chết giữa chừng ở phút thứ 10 | Policy đặt `rule_order = STRICT_ORDER`, nhưng rule group `egress_domains` không khai — mặc định là `DEFAULT_ACTION_ORDER`. **`terraform plan` không bắt được**: hai resource riêng biệt, plan không đối chiếu thuộc tính giữa chúng | **Lỗi code** | *(mục 7r)* |
 
-**41/47 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 48 | `verify.sh` báo **3 lỗi hạ tầng** trên một mạng đang chạy đúng | `PROJECT` gán cứng `lz-net`, còn `var.project` thật là `quh11-net`. Mọi lookup theo `tag:Name` trả về `None`, và `None` được in ra thành *"THIẾU đường về"*, *"rtb-spokes không tồn tại"* | **Lỗi code** | *(mục 7s)* |
+
+**42/48 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1867,6 +1869,62 @@ Ràng buộc này sống **hoàn toàn ở phía API**. Không công cụ tĩnh 
 Apply chết giữa chừng để lại TGW, ba route table, hai VPC, các attachment — đã tạo, đang tính tiền, và state **không đầy đủ**. Không hỏng: `terraform apply` lại sau khi vá sẽ tạo tiếp phần còn thiếu. Nhưng nếu bỏ dở lúc này thì đó là hạ tầng mồ côi mà `plan` vẫn thấy, còn người thì quên.
 
 Sửa: thêm `stateful_rule_options { rule_order = "STRICT_ORDER" }` vào `egress_domains`.
+
+---
+
+### 7s. Lỗi 48 — mạng chạy đúng, script báo hỏng
+
+Sau khi vá lỗi 47, `apply` chạy trọn. `verify.sh` báo **7 đạt, 3 lỗi, 4 bỏ qua**:
+
+```
+3. Duong VE trong egress VPC (loi hay gap nhat)
+   An error occurred (InvalidRouteTableID.NotFound) ... routeTable ID 'None'
+   ✗ THIEU duong ve! Spoke ra duoc Internet nhung khong nhan duoc goi tra loi
+
+4. ✗ Firewall status =
+5. - rtb-spokes khong ton tai      - rtb-egress khong ton tai
+   ✗ rtb-security THIEU route ve ingress → goi tra loi se lac sang egress VPC
+```
+
+Ba lỗi đó mô tả một mạng hỏng nặng: không có đường về, firewall không tồn tại, route table TGW trống.
+
+**Nhưng mục 7 và 8 của cùng lần chạy đó lại xanh** — và chúng là các mục duy nhất đo **lưu lượng thật**, chạy lệnh trên EC2 qua SSM:
+
+```
+7. ✓ Egress ra Internet bang NAT cua egress VPC (52.77.72.122)
+   ✓ East-west port 80 THONG (co rule firewall + SG cho phep)
+8. ✓ NLB → TGW → (firewall) → app: HTTP 200
+```
+
+Gói tin đi được qua **đúng những resource** mà mục 3–5 nói là không tồn tại. Hai nhóm kết quả không thể cùng đúng.
+
+#### Nguyên nhân
+
+```bash
+PROJECT="${PROJECT:-lz-net}"          # verify.sh dong 9
+```
+
+`var.project` thật là `quh11-net` — nhìn thấy được ngay trong lỗi apply ở mục 7r: `quh11-net-policy`, `quh11-net-egress-domains`. Mọi lookup dạng
+
+```bash
+--filters "Name=tag:Name,Values=${PROJECT}-egress-public-rt"
+```
+
+lọc theo `lz-net-*`, không khớp gì, và `--query ...` trả về chuỗi `None`. Script đem `None` đi gọi API tiếp, AWS từ chối, và nhánh lỗi in ra một câu về hạ tầng.
+
+`outputs.tf` không có `output "project"`, nên script **không có cách nào** biết tên thật.
+
+#### Vì sao vài mục vẫn xanh
+
+Đúng những mục không dùng tên: `appliance_mode_support` đọc từ attachment tìm theo TGW ID, gateway endpoint đếm theo VPC, tag `CostCenter` quét theo tag chứ không theo `Name`, và mục 7–8 chạy lệnh trên EC2 lấy từ `terraform output`. Bảy dấu tích đó làm bảng kết quả trông như một mạng **hỏng một phần** — dạng khó nghi ngờ hơn hẳn hỏng toàn bộ.
+
+#### Bản vá
+
+Thêm `output "project"`, và `verify.sh` đọc từ đó thay vì đoán; không đọc được thì **dừng hẳn** với thông báo rõ, chứ không chạy tiếp với chuỗi rỗng.
+
+> **Bài học:** lần thứ **sáu** trong phiên này — 27, 28, 41, 43, 46, 48 — một kết quả rỗng bị đọc thành một sự thật. Nhưng lần này nguy hiểm theo chiều ngược: năm lần trước báo *"ổn"* khi có vấn đề. Lần này báo *"hỏng"* khi mọi thứ đúng.
+>
+> Chiều nào cũng tiêu cùng một thứ: nếu tôi tin bảng kết quả, tôi đã đi sửa route table của một mạng không hỏng — và rất có thể làm hỏng nó thật.
 
 ---
 

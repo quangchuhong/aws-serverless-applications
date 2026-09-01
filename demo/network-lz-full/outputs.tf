@@ -252,3 +252,13 @@ output "dns_check" {
     ],
   ))
 }
+
+# Ten project - de verify.sh va teardown.sh tim resource theo tag Name
+# ma KHONG phai doan. Truoc khi co output nay, verify.sh gan cung
+# "lz-net"; ai doi var.project thi moi lookup theo tag deu tra ve None
+# va script bao "THIEU duong ve", "rtb-spokes khong ton tai" - nghe
+# nhu ha tang hong, thuc ra la tim sai ten. Xem loi 48 doc 22.
+output "project" {
+  description = "Tien to ten dung cho moi resource"
+  value       = var.project
+}

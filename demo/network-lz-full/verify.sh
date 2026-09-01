@@ -6,7 +6,20 @@
 set -uo pipefail
 
 REGION="${AWS_REGION:-$(terraform output -raw region 2>/dev/null || echo ap-southeast-1)}"
-PROJECT="${PROJECT:-lz-net}"
+# Lay tu terraform output, KHONG gan cung.
+#
+# LOI 48: ban dau dong nay la PROJECT="${PROJECT:-lz-net}". Ai dat
+# var.project khac "lz-net" thi moi lenh loc theo tag Name deu tra ve
+# None, va script bao ba loi ha tang khong co that:
+#   "THIEU duong ve", "Firewall status = ", "rtb-spokes khong ton tai"
+# trong khi muc 7 va 8 chung minh luu luong di duoc qua chinh nhung
+# resource do.
+PROJECT="${PROJECT:-$(terraform output -raw project 2>/dev/null)}"
+if [[ -z "$PROJECT" ]]; then
+  echo "Khong doc duoc 'terraform output project'."
+  echo "Chay trong thu muc da apply, hoac dat PROJECT=<ten> truoc khi chay."
+  exit 1
+fi
 
 PASS=0; FAIL=0; SKIP=0
 
