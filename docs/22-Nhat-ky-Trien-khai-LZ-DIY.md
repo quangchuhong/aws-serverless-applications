@@ -118,7 +118,9 @@ Xếp theo thứ tự gặp phải.
 
 | 54 | `Description` của template CloudFormation gây **diff vĩnh viễn** | Chuỗi có dấu tiếng Việt; CloudFormation lưu lại với `?` thay cho dấu, nên Terraform đòi sửa ở mọi lần plan và CloudFormation lại bóp méo tiếp. Cùng họ với lỗi 39 và 42 | **Lỗi code** | *(mục 7x)* |
 
-**48/54 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 55 | RAM từ chối `AssociateResourceShare` — và đó là **trình tự duy nhất Terraform tạo ra được** | `create-resource-share --resource-arns` chạy; `create` rỗng rồi `associate` hỏng, cho cả resource lẫn principal. Provider AWS không có `resource_arns` trên `aws_ram_resource_share` | **Giới hạn không biểu diễn được** | *(mục 7y)* |
+
+**48/55 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2155,6 +2157,67 @@ Không cần acceptance: `enable-sharing-with-aws-organization` đã bật, nên
 > **Bài học:** tôi đoán hai lần từ **cùng một thông báo lỗi**, và cả hai lần thông báo đó đều gợi ý sai. Vế `"or that onboarding process is still in progress"` là một danh sách khả năng do AWS liệt kê, không phải chẩn đoán — nhưng nó đọc như một chẩn đoán, nên tôi dùng nó thay cho việc đi đo.
 >
 > Lệnh bác bỏ nó tốn ba giây, và tôi chỉ chạy nó sau khi đã đoán sai hai lần.
+
+---
+
+### 7y. Lỗi 55 — năm giả thuyết, và cái đúng là "không làm được"
+
+Chuỗi này bắt đầu từ một thông báo lỗi duy nhất, lặp lại không đổi qua sáu lần apply:
+
+```
+OperationNotPermittedException: The resource you are attempting to share
+can only be shared within your AWS Organization. This error may also occur
+if you have not enabled sharing with your AWS organization, or that
+onboarding process is still in progress.
+```
+
+Tôi đưa ra **năm** giả thuyết. Bốn cái đầu đều sai, và mỗi cái tốn một vòng apply:
+
+| # | Giả thuyết | Bác bỏ bằng |
+|---|---|---|
+| 1 | Chưa chạy `enable-sharing-with-aws-organization` | Chạy rồi, `returnValue: true`, lỗi y nguyên |
+| 2 | Đang lan, đợi vài phút | Trusted access bật từ **2026-08-20**, gần hai tuần |
+| 3 | Member account không share được org-wide | Đổi sang share từng account — vẫn hỏng |
+| 4 | Share cũ hỏng trạng thái | Share **mới tinh** cũng hỏng |
+| 5 | Share chưa có principal nào | Associate principal **cũng** hỏng |
+
+Ba giả thuyết đầu tôi lấy thẳng từ vế cuối của thông báo — `"or that onboarding process is still in progress"`. Đó là một **danh sách khả năng AWS liệt kê sẵn**, không phải chẩn đoán. Nhưng nó đọc như chẩn đoán, nên tôi dùng nó thay cho việc đo.
+
+#### Phép đo cuối, hoàn toàn ngoài Terraform
+
+```bash
+# A. create kem resource
+aws ram create-resource-share --name probe \
+  --no-allow-external-principals --resource-arns "$TGW"
+-> ACTIVE
+
+# B. create rong roi associate
+A=$(aws ram create-resource-share --name probe-empty \
+      --no-allow-external-principals --query '...' --output text)
+aws ram associate-resource-share --resource-share-arn "$A" --resource-arns "$TGW"
+-> OperationNotPermittedException
+
+aws ram associate-resource-share --resource-share-arn "$A" --principals <account>
+-> OperationNotPermittedException
+```
+
+Cùng account, cùng TGW, cùng phút. **`AssociateResourceShare` bị từ chối như một thao tác** — cả cho resource lẫn principal — trong khi `CreateResourceShare` kèm `--resource-arns` chạy.
+
+#### Vì sao không vá được bằng Terraform
+
+`aws_ram_resource_share` của provider AWS **không có** thuộc tính `resource_arns`. Resource bắt buộc đi qua `aws_ram_resource_association`. Nghĩa là:
+
+> Trình tự duy nhất RAM chấp nhận là trình tự Terraform **không tạo ra được**.
+
+Không phải lỗi code, không phải cấu hình sai. Là một chỗ mô hình resource của provider không biểu diễn được hành vi của dịch vụ.
+
+#### Bản vá: nói ra thay vì giấu
+
+Ba resource RAM bị gỡ khỏi `vpc-spokes-remote.tf`. Việc share làm bằng **một lệnh CLI, một lần**, và `check "tgw_shared_with_spoke_accounts"` nhắc ở mỗi lần plan cho tới khi có người xác nhận đã làm.
+
+> **Bài học:** tôi đã đoán năm lần từ cùng một thông báo, và mỗi lần đoán đều tốn một vòng apply mười phút của người dùng. Phép đo tách bạch được hai trình tự — thứ cuối cùng cho câu trả lời — tốn **ba mươi giây**, và lẽ ra phải là việc đầu tiên chứ không phải việc cuối cùng.
+>
+> Khi một thông báo lỗi liệt kê nhiều nguyên nhân có thể, đó là dấu hiệu nó **không biết** nguyên nhân nào. Đọc nó như một gợi ý là tự nhận lấy sự mơ hồ của nó.
 
 ---
 

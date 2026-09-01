@@ -147,6 +147,25 @@ variable "spokes" {
   }
 }
 
+variable "tgw_shared_manually" {
+  description = <<-EOT
+    Xac nhan da share Transit Gateway cho cac spoke account BANG CLI.
+
+    Terraform khong lam duoc viec nay - loi 55. RAM tu choi
+    AssociateResourceShare (ca resource lan principal), va chi chap
+    nhan CreateResourceShare kem --resource-arns trong MOT lenh; ma
+    aws_ram_resource_share cua provider khong co thuoc tinh do.
+
+    Lam mot lan, tu account network:
+
+      aws ram create-resource-share --region <region> \
+        --name <project>-tgw --no-allow-external-principals \
+        --resource-arns <tgw-arn> --principals <spoke-account-id>
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "ram_sharing_with_organization_enabled" {
   description = <<-EOT
     Xac nhan da bat RAM sharing voi Organizations o cap to chuc.

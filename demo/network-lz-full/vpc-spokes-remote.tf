@@ -83,55 +83,46 @@ locals {
 }
 
 ########################################
-# 1. Share TGW ra to chuc
+# 1. Share TGW - LAM BANG CLI, KHONG BANG TERRAFORM. Loi 55.
 #
-# Account khac KHONG THAY TGW neu khong share - va "khong thay" o day
-# nghia la CreateTransitGatewayVpcAttachment bao khong tim thay
-# resource, khong phai bao thieu quyen.
-########################################
-
-resource "aws_ram_resource_share" "tgw" {
-  count = local.has_remote ? 1 : 0
-
-  name                      = "${var.project}-tgw"
-  allow_external_principals = false
-
-  tags = { Name = "${var.project}-tgw-share" }
-}
-
-resource "aws_ram_resource_association" "tgw" {
-  count = local.has_remote ? 1 : 0
-
-  resource_arn       = aws_ec2_transit_gateway.hub.arn
-  resource_share_arn = aws_ram_resource_share.tgw[0].arn
-}
-
-# SHARE CHO TUNG ACCOUNT, KHONG SHARE CHO CA TO CHUC - loi 53.
+# Ba resource RAM (aws_ram_resource_share, aws_ram_resource_association,
+# aws_ram_principal_association) da bi go khoi day. Ly do khong phai
+# so thich ma la mot hanh vi cua RAM khong bieu dien duoc bang provider.
 #
-# Ban dau dong nay dung var.organization_arn lam principal. Apply tu
-# account network bao hai loi:
+# DO DUOC, HOAN TOAN NGOAI TERRAFORM, cung account cung phut:
+#
+#   create-resource-share --resource-arns <tgw>          -> CHAY
+#   create-resource-share (rong) + associate-resource-share -> HONG
 #
 #   OperationNotPermittedException: The resource you are attempting to
 #   share can only be shared within your AWS Organization...
-#   UnknownResourceException: Organization o-xxxx could not be found
 #
-# Ca hai cung mot goc: CHI management account hoac RAM delegated
-# administrator moi share duoc voi CA TO CHUC hoac mot OU. Account
-# network la member thuong nen khong duoc phep - va cau "could not be
-# found" nghia la khong duoc phep NHIN, khong phai sai ARN.
+# AssociateResourceShare bi tu choi cho CA resource lan principal, tren
+# ca share moi tinh lan share da nguoi. Chi CreateResourceShare kem
+# --resource-arns la chay.
 #
-# Trusted access cho ram.amazonaws.com da bat tu 2 tuan truoc va khong
-# lien quan: no cho phep share TRONG to chuc, chu khong cho member
-# account nham CA to chuc lam principal.
+# Ma aws_ram_resource_share cua provider AWS KHONG co thuoc tinh
+# resource_arns - no bat buoc di qua aws_ram_resource_association. Nen
+# trinh tu duy nhat chay duoc lai la trinh tu Terraform khong tao ra
+# duoc.
 #
-# Share cho tung account ID thi member account lam duoc, va dung hon
-# ve nguyen tac: chi account THAT SU co spoke moi nhin thay TGW.
-resource "aws_ram_principal_association" "spoke_accounts" {
-  for_each = { for k, v in local.remote_spokes : k => v.account_id }
-
-  principal          = each.value
-  resource_share_arn = aws_ram_resource_share.tgw[0].arn
-}
+# ---------------------------------------------------------------
+# LAM MOT LAN, TU ACCOUNT NETWORK:
+#
+#   aws ram create-resource-share --region <region> \
+#     --name <project>-tgw --no-allow-external-principals \
+#     --resource-arns "$(terraform output -raw transit_gateway_id \
+#        | xargs -I{} echo arn:aws:ec2:<region>:<network-acct>:transit-gateway/{})" \
+#     --principals <spoke-account-id>
+#
+# Kiem:
+#   aws ram get-resource-shares --resource-owner SELF \
+#     --query 'resourceShares[?status==`ACTIVE`].[name,resourceShareArn]'
+#
+# Chua share thi StackSet o muc 2 bao:
+#   "Transit Gateway tgw-xxx was deleted or does not exist"
+# - mot cau khong nhac gi toi RAM.
+########################################
 
 ########################################
 # 2. StackSet: VPC + subnet + route table + attachment
@@ -444,6 +435,23 @@ check "ram_sharing_with_organization_enabled" {
       "Kiem: aws ram get-resource-shares --resource-owner SELF",
       "(khong bat thi moi lenh share deu bao 'Organization could not be",
       "found' - nghe nhu sai ARN, thuc ra la thieu buoc nay).",
+    ])
+  }
+}
+
+check "tgw_shared_with_spoke_accounts" {
+  assert {
+    condition = !local.has_remote || var.tgw_shared_manually
+    error_message = join(" ", [
+      "Co spoke o account khac nhung chua xac nhan da share TGW bang CLI.",
+      "Terraform KHONG lam duoc viec nay - xem loi 55 doc 22 va khoi",
+      "comment o muc 1.",
+      "Chua share thi StackSet bao 'Transit Gateway ... was deleted or",
+      "does not exist', mot cau khong nhac gi toi RAM.",
+      "Lam mot lan tu account network:",
+      "aws ram create-resource-share --name <project>-tgw",
+      "--no-allow-external-principals --resource-arns <tgw-arn>",
+      "--principals <spoke-account-id>",
     ])
   }
 }
