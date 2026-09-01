@@ -36,7 +36,7 @@ resource "aws_route53_zone" "internal" {
   # Dung ca hai duong cho cung mot VPC la thua: Profile da mang zone
   # nay toi VPC do roi. Xem chu thich o phan Profile ben duoi.
   dynamic "vpc" {
-    for_each = var.enable_dns_profile ? {} : var.spokes
+    for_each = var.enable_dns_profile ? {} : local.local_spokes
     content {
       vpc_id = aws_vpc.spoke[vpc.key].id
     }
@@ -48,7 +48,7 @@ resource "aws_route53_zone" "internal" {
 # Day cung la thu de verify.sh kiem duoc DNS that su hoat dong:
 # curl http://app-dev.<domain> tu trong app-prod.
 resource "aws_route53_record" "spoke_app" {
-  for_each = var.enable_internal_dns && var.enable_test_instances ? var.spokes : {}
+  for_each = var.enable_internal_dns && var.enable_test_instances ? local.local_spokes : {}
 
   zone_id = aws_route53_zone.internal[0].zone_id
   name    = "${each.key}.${var.internal_dns_domain}"
@@ -109,7 +109,7 @@ resource "aws_route53profiles_resource_association" "endpoints" {
 # O multi-account, DONG NAY la thu account workload tu chay - mot dong
 # duy nhat, thay cho N cap lenh CLI.
 resource "aws_route53profiles_association" "spoke" {
-  for_each = var.enable_dns_profile ? var.spokes : {}
+  for_each = var.enable_dns_profile ? local.local_spokes : {}
 
   name        = "${var.project}-${each.key}"
   profile_id  = aws_route53profiles_profile.shared[0].id

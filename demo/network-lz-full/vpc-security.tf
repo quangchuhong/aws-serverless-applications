@@ -243,7 +243,7 @@ resource "aws_route53_zone" "endpoint" {
   # Gan thang vao spoke - CHI khi khong dung Route 53 Profile.
   # Dung ca hai duong cho cung mot VPC la thua. Xem dns.tf.
   dynamic "vpc" {
-    for_each = var.enable_dns_profile ? {} : var.spokes
+    for_each = var.enable_dns_profile ? {} : local.local_spokes
     content {
       vpc_id = aws_vpc.spoke[vpc.key].id
     }

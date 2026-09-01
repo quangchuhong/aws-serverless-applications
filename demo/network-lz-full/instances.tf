@@ -48,7 +48,7 @@ resource "aws_iam_instance_profile" "ec2" {
 ########################################
 
 resource "aws_security_group" "test" {
-  for_each = var.enable_test_instances ? var.spokes : {}
+  for_each = var.enable_test_instances ? local.local_spokes : {}
 
   name        = "${var.project}-${each.key}-ec2"
   description = "EC2 test trong ${each.key}"
@@ -91,7 +91,7 @@ resource "aws_security_group" "test" {
 }
 
 resource "aws_instance" "test" {
-  for_each = var.enable_test_instances ? var.spokes : {}
+  for_each = var.enable_test_instances ? local.local_spokes : {}
 
   ami           = data.aws_ssm_parameter.al2023[0].value
   instance_type = var.instance_type

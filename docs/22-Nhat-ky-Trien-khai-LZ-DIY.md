@@ -106,7 +106,9 @@ Xếp theo thứ tự gặp phải.
 
 | 48 | `verify.sh` báo **3 lỗi hạ tầng** trên một mạng đang chạy đúng | `PROJECT` gán cứng `lz-net`, còn `var.project` thật là `quh11-net`. Mọi lookup theo `tag:Name` trả về `None`, và `None` được in ra thành *"THIẾU đường về"*, *"rtb-spokes không tồn tại"* | **Lỗi code** | *(mục 7s)* |
 
-**42/48 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 49 | Spoke khai `account_id` sẽ được tạo **hai lần** — một VPC local và một VPC remote, trùng CIDR | Thêm nhánh remote nhưng để nguyên 22 chỗ `for_each = var.spokes` ở tám file khác. `var.spokes` giờ mang **hai loại** spoke, mà mọi resource cũ vẫn coi nó là một | **Lỗi thiết kế** | *(mục 7t)* |
+
+**43/49 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1925,6 +1927,31 @@ Thêm `output "project"`, và `verify.sh` đọc từ đó thay vì đoán; khô
 > **Bài học:** lần thứ **sáu** trong phiên này — 27, 28, 41, 43, 46, 48 — một kết quả rỗng bị đọc thành một sự thật. Nhưng lần này nguy hiểm theo chiều ngược: năm lần trước báo *"ổn"* khi có vấn đề. Lần này báo *"hỏng"* khi mọi thứ đúng.
 >
 > Chiều nào cũng tiêu cùng một thứ: nếu tôi tin bảng kết quả, tôi đã đi sửa route table của một mạng không hỏng — và rất có thể làm hỏng nó thật.
+
+---
+
+### 7t. Lỗi 49 — mở rộng một biến mà không rà nơi nó đã được dùng
+
+Thêm `account_id` vào `spokes` để spoke nằm được ở account khác. Code mới đúng, `terraform validate` xanh. Nhưng `var.spokes` từ đó mang **hai loại** spoke, còn 22 chỗ dùng nó ở tám file khác vẫn coi nó là một:
+
+```
+versions.tf 2   vpc-spokes.tf 5   tgw.tf 5   instances.tf 2
+dns.tf 3        outputs.tf 3      vpc-ingress.tf 1   vpc-security.tf 1
+```
+
+Hệ quả: một spoke khai `account_id` sẽ được tạo **hai lần** — VPC local qua `vpc-spokes.tf` và VPC remote qua StackSet, **cùng CIDR**, hai attachment vào cùng TGW. Không lỗi lúc plan; TGW nhận cả hai và route table không phân biệt được chúng.
+
+Bản vá thêm `local.local_spokes` (spoke không khai `account_id`) và đổi 21 trong 22 chỗ sang nó.
+
+**Chỗ thứ 22 giữ nguyên `var.spokes`, có chủ đích:**
+
+```hcl
+n_attach = length(var.spokes) + 1 + local.fw + local.ing
+```
+
+Đây là dòng ước tính chi phí. Attachment remote tính tiền y hệt attachment local, nên nó phải đếm **cả hai**. Đổi nốt cho "nhất quán" sẽ làm hoá đơn ước tính thấp hơn thực tế đúng bằng số spoke ở account khác.
+
+> **Bài học:** mở rộng một biến là thay đổi **hợp đồng** của nó với mọi nơi đã dùng. `grep -c` cho con số 22 trong ba giây; tôi viết 385 dòng code mới trước khi chạy nó. Và điều đáng chú ý: cả `terraform validate` lẫn `terraform plan` đều **không thể** bắt lỗi này — cấu hình hoàn toàn hợp lệ, chỉ là nó tạo gấp đôi thứ cần tạo.
 
 ---
 

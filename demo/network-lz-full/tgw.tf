@@ -28,7 +28,7 @@ resource "aws_ec2_transit_gateway" "hub" {
 ########################################
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "spoke" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   transit_gateway_id = aws_ec2_transit_gateway.hub.id
   vpc_id             = aws_vpc.spoke[each.key].id
@@ -76,7 +76,7 @@ resource "aws_ec2_transit_gateway_route_table" "ingress" {
 ########################################
 
 resource "aws_ec2_transit_gateway_route_table_association" "spokes" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.spoke[each.key].id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.spokes.id
@@ -133,7 +133,7 @@ resource "aws_ec2_transit_gateway_route" "spokes_default" {
 ########################################
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "spokes_to_security" {
-  for_each = var.enable_firewall ? var.spokes : {}
+  for_each = var.enable_firewall ? local.local_spokes : {}
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.spoke[each.key].id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.security[0].id
@@ -180,7 +180,7 @@ resource "aws_ec2_transit_gateway_route" "egress_return_to_security" {
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "spokes_to_egress" {
-  for_each = var.enable_firewall ? {} : var.spokes
+  for_each = var.enable_firewall ? {} : local.local_spokes
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.spoke[each.key].id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.egress.id
@@ -199,7 +199,7 @@ resource "aws_ec2_transit_gateway_route" "ingress_to_security" {
 }
 
 resource "aws_ec2_transit_gateway_route_table_propagation" "spokes_to_ingress" {
-  for_each = !var.enable_firewall && var.enable_ingress ? var.spokes : {}
+  for_each = !var.enable_firewall && var.enable_ingress ? local.local_spokes : {}
 
   transit_gateway_attachment_id  = aws_ec2_transit_gateway_vpc_attachment.spoke[each.key].id
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.ingress[0].id

@@ -4,7 +4,7 @@
 ########################################
 
 resource "aws_vpc" "spoke" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   cidr_block           = each.value.cidr
   enable_dns_support   = true
@@ -52,14 +52,14 @@ resource "aws_subnet" "spoke_tgw" {
 ########################################
 
 resource "aws_route_table" "spoke_private" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   vpc_id = aws_vpc.spoke[each.key].id
   tags   = { Name = "${var.project}-${each.key}-private-rt" }
 }
 
 resource "aws_route" "spoke_default_to_tgw" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   route_table_id         = aws_route_table.spoke_private[each.key].id
   destination_cidr_block = "0.0.0.0/0"
@@ -86,7 +86,7 @@ resource "aws_route_table_association" "spoke_private" {
 ########################################
 
 resource "aws_vpc_endpoint" "spoke_s3" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   vpc_id            = aws_vpc.spoke[each.key].id
   service_name      = "com.amazonaws.${var.region}.s3"
@@ -97,7 +97,7 @@ resource "aws_vpc_endpoint" "spoke_s3" {
 }
 
 resource "aws_vpc_endpoint" "spoke_dynamodb" {
-  for_each = var.spokes
+  for_each = local.local_spokes
 
   vpc_id            = aws_vpc.spoke[each.key].id
   service_name      = "com.amazonaws.${var.region}.dynamodb"

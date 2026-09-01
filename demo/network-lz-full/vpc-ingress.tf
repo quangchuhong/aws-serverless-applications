@@ -231,7 +231,7 @@ resource "aws_lb" "ingress" {
 }
 
 locals {
-  first_spoke = sort(keys(var.spokes))[0]
+  first_spoke = sort(keys(local.local_spokes))[0]
 }
 
 # Khong co appliance: target la IP cua app trong spoke (qua TGW)

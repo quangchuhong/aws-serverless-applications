@@ -66,7 +66,7 @@ output "instances" {
     for k, v in aws_instance.test : k => {
       id         = v.id
       private_ip = v.private_ip
-      vpc_cidr   = var.spokes[k].cidr
+      vpc_cidr   = local.local_spokes[k].cidr
     }
   }
 }
@@ -98,6 +98,7 @@ locals {
 
   # MOT attachment moi VPC, khong phu thuoc so AZ - them AZ chi them
   # subnet vao attachment da co.
+  # Dem CA spoke noi bo lan remote: moi attachment deu tinh tien nhu nhau.
   n_attach = length(var.spokes) + 1 + local.fw + local.ing
 
   # Nhung thu NHAN LEN theo so AZ. Bo qua he so nay la bao gia bang
@@ -122,7 +123,7 @@ locals {
     : 0)
 
     # EC2 test: mot con moi spoke, KHONG theo AZ
-    + (var.enable_test_instances ? length(var.spokes) * local.c_ec2 : 0)
+    + (var.enable_test_instances ? length(local.local_spokes) * local.c_ec2 : 0)
 
     + (local.cdn > 0 ? local.c_waf_acl + (length(var.waf_managed_rule_groups) + 1) * local.c_waf_rule : 0)
 

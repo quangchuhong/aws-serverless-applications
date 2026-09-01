@@ -49,6 +49,18 @@ locals {
   }
 
   has_remote = length(local.remote_spokes) > 0
+
+  # Spoke KHONG khai account_id => tao ngay trong account nay.
+  #
+  # MOI resource cua spoke noi bo phai for_each tren local NAY, khong
+  # phai var.spokes. Ban dau chung deu dung var.spokes, nen mot spoke
+  # khai account_id se duoc tao HAI LAN: mot VPC local o day va mot
+  # VPC remote qua StackSet - trung CIDR, trung attachment, gap doi
+  # tien. Xem loi 49 doc 22.
+  local_spokes = {
+    for k, v in var.spokes : k => v
+    if try(v.account_id, null) == null || v.account_id == data.aws_caller_identity.current.account_id
+  }
 }
 
 ########################################

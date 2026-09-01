@@ -63,12 +63,12 @@ locals {
 
   # spoke x AZ. Khoa "app-dev-ap-southeast-1a" de doc duoc trong plan.
   spoke_azs = {
-    for pair in setproduct(keys(var.spokes), var.availability_zones) :
+    for pair in setproduct(keys(local.local_spokes), var.availability_zones) :
     "${pair[0]}-${pair[1]}" => {
       spoke = pair[0]
       az    = pair[1]
       idx   = index(var.availability_zones, pair[1])
-      cidr  = var.spokes[pair[0]].cidr
+      cidr  = local.local_spokes[pair[0]].cidr
     }
   }
 }
