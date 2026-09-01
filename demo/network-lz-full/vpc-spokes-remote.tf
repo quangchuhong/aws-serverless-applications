@@ -106,15 +106,30 @@ resource "aws_ram_resource_association" "tgw" {
   resource_share_arn = aws_ram_resource_share.tgw[0].arn
 }
 
-resource "aws_ram_principal_association" "org" {
-  count = local.has_remote ? 1 : 0
+# SHARE CHO TUNG ACCOUNT, KHONG SHARE CHO CA TO CHUC - loi 53.
+#
+# Ban dau dong nay dung var.organization_arn lam principal. Apply tu
+# account network bao hai loi:
+#
+#   OperationNotPermittedException: The resource you are attempting to
+#   share can only be shared within your AWS Organization...
+#   UnknownResourceException: Organization o-xxxx could not be found
+#
+# Ca hai cung mot goc: CHI management account hoac RAM delegated
+# administrator moi share duoc voi CA TO CHUC hoac mot OU. Account
+# network la member thuong nen khong duoc phep - va cau "could not be
+# found" nghia la khong duoc phep NHIN, khong phai sai ARN.
+#
+# Trusted access cho ram.amazonaws.com da bat tu 2 tuan truoc va khong
+# lien quan: no cho phep share TRONG to chuc, chu khong cho member
+# account nham CA to chuc lam principal.
+#
+# Share cho tung account ID thi member account lam duoc, va dung hon
+# ve nguyen tac: chi account THAT SU co spoke moi nhin thay TGW.
+resource "aws_ram_principal_association" "spoke_accounts" {
+  for_each = { for k, v in local.remote_spokes : k => v.account_id }
 
-  # Dung var.organization_arn - CUNG CACH ma dns.tf dang share DNS
-  # profile. Ban dau doan la co data "aws_organizations_organization"
-  # nhu ben landing-zone/network; demo KHONG khai data source do, va
-  # them mot cai nua thi hai cho share cung mot to chuc lai lay ARN
-  # theo hai duong khac nhau.
-  principal          = var.organization_arn
+  principal          = each.value
   resource_share_arn = aws_ram_resource_share.tgw[0].arn
 }
 
@@ -405,26 +420,12 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "remote_to_egress" {
 # KIEM TRA CHEO
 ########################################
 
-check "remote_spokes_need_organization_arn" {
-  assert {
-    condition = !local.has_remote || var.organization_arn != ""
-    error_message = join(" ", [
-      "Co spoke o account khac nhung organization_arn de rong.",
-      "Khong share TGW ra to chuc thi account dich KHONG THAY TGW, va",
-      "CloudFormation bao khong tim thay resource - mot cau khong nhac",
-      "gi toi RAM.",
-      "Lay bang: aws organizations describe-organization",
-      "--query Organization.Arn --output text",
-    ])
-  }
-}
-
 # RAM chia se voi Organizations phai duoc BAT o cap to chuc truoc.
 # Chua bat thi AssociateResourceShare bao hai cau khac nhau ma cung
 # mot goc:
 #   "can only be shared within your AWS Organization"
 #   "Organization o-xxxx could not be found"
-# Cau thu hai de doc nham thanh sai organization_arn.
+# Cau thu hai de doc nham thanh sai ARN.
 check "ram_sharing_with_organization_enabled" {
   assert {
     condition = !local.has_remote || var.ram_sharing_with_organization_enabled

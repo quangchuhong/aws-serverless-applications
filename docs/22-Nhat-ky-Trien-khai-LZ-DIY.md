@@ -114,7 +114,9 @@ Xếp theo thứ tự gặp phải.
 
 | 52 | Ba lỗi cùng lúc lúc apply: RAM share bị từ chối ×2, `OrganizationalUnitIds are required` | StackSet `SERVICE_MANAGED` triển khai theo **cây tổ chức** — `accounts` chỉ là bộ lọc trong OU, không thay được OU. Và RAM sharing với Organizations là một bước bật **một lần ở cấp tổ chức** mà tôi không biết tới | **Lỗi code** *(+ thiếu điều kiện tiên quyết)* | *(mục 7w)* |
 
-**46/52 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 53 | RAM share vẫn hỏng dù đã bật `enable-sharing-with-aws-organization` từ hai tuần trước | **Member account không share được với cả tổ chức** — chỉ management hoặc RAM delegated admin mới làm được. Câu `Organization could not be found` nghĩa là *không được phép nhìn*, không phải sai ARN | **Lỗi thiết kế** | *(mục 7x)* |
+
+**47/53 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2094,6 +2096,63 @@ deployment_targets {
 `INTERSECTION` là phần quan trọng nhất. Thiếu nó thì `accounts` **bị bỏ qua** và StackSet triển khai ra **cả OU** — mọi account trong đó nhận một VPC với **cùng một CIDR**. Một lỗi cú pháp thiếu sót biến thành trùng CIDR hàng loạt.
 
 > **Bài học:** cả ba lỗi này đều chỉ tồn tại phía API — `validate` xanh, `plan` sạch, `plan-check` không chạm tới. Đây là lần thứ hai trong phiên (sau lỗi 47) mà apply là thứ duy nhất tìm ra được, và cũng là lần thứ hai một thông báo lỗi của AWS trỏ vào chỗ không phải nguyên nhân.
+
+---
+
+### 7x. Lỗi 53 — "could not be found" nghĩa là không được phép nhìn
+
+Sau khi sửa lỗi 51 và chạy đúng từ account network, apply vẫn chết với **hai lỗi RAM y hệt lần trước**:
+
+```
+OperationNotPermittedException: The resource you are attempting to share
+can only be shared within your AWS Organization. This error may also occur
+if you have not enabled sharing with your AWS organization...
+
+UnknownResourceException: Organization o-tvkzhcq3yh could not be found
+```
+
+Ở lỗi 52 tôi kết luận nguyên nhân là chưa chạy `aws ram enable-sharing-with-aws-organization`. Người dùng chạy, nhận `returnValue: true`, và lỗi vẫn nguyên. Tôi đoán tiếp: *"đang lan, đợi vài phút"* — dựa vào đúng vế cuối của thông báo, `or that onboarding process is still in progress`.
+
+Một lệnh bác bỏ cả hai:
+
+```bash
+aws organizations list-aws-service-access-for-organization \
+  --query "EnabledServicePrincipals[?ServicePrincipal=='ram.amazonaws.com']"
+-> 2026-08-20T00:40:56  ram.amazonaws.com
+```
+
+**Bật từ gần hai tuần trước.** Không phải chưa bật, không phải đang lan.
+
+#### Nguyên nhân thật
+
+**Member account không được share với cả tổ chức hoặc một OU.** Chỉ management account, hoặc một RAM delegated administrator, mới làm được. `lz-network` là member thường.
+
+Và đây là chỗ thông báo dẫn đi lạc: `Organization o-tvkzhcq3yh could not be found` nghe như sai ARN — nhưng ARN hoàn toàn đúng. Tổ chức tồn tại. Thứ không tồn tại là **quyền của account này để nhìn thấy nó**. AWS nói *"không tìm thấy"* cho cả trường hợp *"không được phép"*, và tôi đã đọc nó theo nghĩa đen hai lần liên tiếp.
+
+#### Bản vá, và vì sao nó tốt hơn cách đúng-nhưng-nặng
+
+Có hai đường:
+
+| Cách | Đánh đổi |
+|---|---|
+| Đăng ký `lz-network` làm **RAM delegated administrator** | Thêm một uỷ quyền cấp tổ chức nữa, và share TGW cho **mọi** account |
+| **Share cho từng account ID** | Member account làm được, không cần uỷ quyền, và chỉ account thật sự có spoke mới thấy TGW |
+
+Cách thứ hai đúng hơn về nguyên tắc, nên chọn nó:
+
+```hcl
+resource "aws_ram_principal_association" "spoke_accounts" {
+  for_each = { for k, v in local.remote_spokes : k => v.account_id }
+  principal          = each.value
+  resource_share_arn = aws_ram_resource_share.tgw[0].arn
+}
+```
+
+Không cần acceptance: `enable-sharing-with-aws-organization` đã bật, nên share nội bộ tổ chức tự động được chấp nhận.
+
+> **Bài học:** tôi đoán hai lần từ **cùng một thông báo lỗi**, và cả hai lần thông báo đó đều gợi ý sai. Vế `"or that onboarding process is still in progress"` là một danh sách khả năng do AWS liệt kê, không phải chẩn đoán — nhưng nó đọc như một chẩn đoán, nên tôi dùng nó thay cho việc đi đo.
+>
+> Lệnh bác bỏ nó tốn ba giây, và tôi chỉ chạy nó sau khi đã đoán sai hai lần.
 
 ---
 
