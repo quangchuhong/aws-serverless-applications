@@ -108,7 +108,9 @@ Xếp theo thứ tự gặp phải.
 
 | 49 | Spoke khai `account_id` sẽ được tạo **hai lần** — một VPC local và một VPC remote, trùng CIDR | Thêm nhánh remote nhưng để nguyên 22 chỗ `for_each = var.spokes` ở tám file khác. `var.spokes` giờ mang **hai loại** spoke, mà mọi resource cũ vẫn coi nó là một | **Lỗi thiết kế** | *(mục 7t)* |
 
-**43/49 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 50 | `Invalid for_each argument` — plan chết, không dựng được bộ khoá | Data source tìm attachment lọc theo `aws_ec2_transit_gateway.hub.id`, mà TGW được **tạo trong chính config đó**. Lần apply đầu ID chưa biết → danh sách chưa biết. Đúng điều `landing-zone/network` đã cảnh báo và tôi cho là *"sai một nửa"* | **Lỗi thiết kế** | *(mục 7u)* |
+
+**44/50 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -1952,6 +1954,56 @@ n_attach = length(var.spokes) + 1 + local.fw + local.ing
 Đây là dòng ước tính chi phí. Attachment remote tính tiền y hệt attachment local, nên nó phải đếm **cả hai**. Đổi nốt cho "nhất quán" sẽ làm hoá đơn ước tính thấp hơn thực tế đúng bằng số spoke ở account khác.
 
 > **Bài học:** mở rộng một biến là thay đổi **hợp đồng** của nó với mọi nơi đã dùng. `grep -c` cho con số 22 trong ba giây; tôi viết 385 dòng code mới trước khi chạy nó. Và điều đáng chú ý: cả `terraform validate` lẫn `terraform plan` đều **không thể** bắt lỗi này — cấu hình hoàn toàn hợp lệ, chỉ là nó tạo gấp đôi thứ cần tạo.
+
+---
+
+### 7u. Lỗi 50 — cảnh báo tôi đã đọc, hiểu, rồi bác bỏ
+
+`landing-zone/network/variables.tf`, trong mô tả biến `spoke_attachments`, viết từ trước:
+
+> *"Vì sao phải khai tay: attachment nằm ở account khác nên layer này không tạo ra chúng, và **discovery động bằng data source sẽ làm `count`/`for_each` thành "known after apply" — plan không đọc được**."*
+
+Đầu phiên tôi đọc đúng dòng đó và kết luận nó **sai một nửa**: một data source đọc attachment *đã tồn tại* thì phân giải được lúc refresh, nên `for_each` chạy được. Rồi tôi xây `vpc-spokes-remote.tf` trên kết luận ấy.
+
+Plan chết:
+
+```
+Error: Invalid for_each argument
+The "for_each" set includes values derived from resource attributes
+that cannot be determined until apply
+```
+
+#### Chỗ tôi bỏ sót
+
+Lập luận của tôi đúng cho một data source **độc lập**. Nhưng data source này lọc theo:
+
+```hcl
+filter {
+  name   = "transit-gateway-id"
+  values = [aws_ec2_transit_gateway.hub.id]
+}
+```
+
+TGW được **tạo trong chính config này**. Lần apply đầu tiên `hub.id` chưa biết → data source không đọc được lúc plan → danh sách ID chưa biết → Terraform không dựng được bộ khoá `for_each`.
+
+Không lách được bằng `try()` hay `coalesce()`. Chưa biết là chưa biết.
+
+Tôi còn tự làm nặng thêm bằng `depends_on = [aws_cloudformation_stack_set_instance.spoke]` — nó đẩy data source sang thì apply ngay cả khi mọi thứ khác đã biết.
+
+#### Bản vá
+
+Hai pha tường minh qua `wire_remote_attachments`:
+
+| Pha | Giá trị | Làm gì |
+|---|---|---|
+| 1 | `false` *(mặc định)* | TGW, RAM share, StackSet, VPC + attachment ở account đích |
+| 2 | `true` | TGW đã nằm trong state nên `hub.id` biết lúc plan → data source đọc được ID thật → nối route |
+
+Giữa hai pha, attachment tồn tại mà không thuộc route table nào: `State` là `available`, không lỗi, và không một gói tin nào đi qua. `check "remote_attachments_wired"` canh đúng chỗ đó.
+
+> **Bài học:** đây không phải chuyện thiếu thông tin. Cảnh báo nằm sẵn trong repo, tôi đã đọc, và tôi bác bỏ nó bằng một lập luận **đúng trong trường hợp tổng quát nhưng sai trong chính cấu hình mình đang viết**. Nguy hơn hẳn việc không biết: tôi có một lý do nghe hợp lý để bỏ qua nó.
+>
+> Người viết dòng đó đã trả giá để biết. Bác bỏ một cảnh báo cụ thể thì cái giá phải trả là chứng minh nó sai **trong ngữ cảnh của mình** — không phải tìm ra một ngữ cảnh khác nơi nó sai.
 
 ---
 

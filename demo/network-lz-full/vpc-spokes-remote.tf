@@ -50,6 +50,9 @@ locals {
 
   has_remote = length(local.remote_spokes) > 0
 
+  # PHA HAI - xem khoi "HAI PHA" o cuoi file.
+  wire = local.has_remote && var.wire_remote_attachments
+
   # Spoke KHONG khai account_id => tao ngay trong account nay.
   #
   # MOI resource cua spoke noi bo phai for_each tren local NAY, khong
@@ -289,7 +292,7 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
 ########################################
 
 data "aws_ec2_transit_gateway_attachments" "remote_spokes" {
-  count = local.has_remote ? 1 : 0
+  count = local.wire ? 1 : 0
 
   filter {
     name   = "transit-gateway-id"
@@ -303,12 +306,10 @@ data "aws_ec2_transit_gateway_attachments" "remote_spokes" {
     name   = "resource-type"
     values = ["vpc"]
   }
-
-  depends_on = [aws_cloudformation_stack_set_instance.spoke]
 }
 
 data "aws_ec2_transit_gateway_attachment" "remote_spoke" {
-  for_each = local.has_remote ? toset(one(data.aws_ec2_transit_gateway_attachments.remote_spokes[*].ids)) : []
+  for_each = local.wire ? toset(one(data.aws_ec2_transit_gateway_attachments.remote_spokes[*].ids)) : []
 
   transit_gateway_attachment_id = each.value
 }
@@ -319,7 +320,7 @@ locals {
   #
   # Doi chieu theo TAG chu khong theo thu tu: danh sach tra ve khong
   # co thu tu bao dam, va lay theo chi so la kieu loi da gap o loi 39.
-  remote_attachment_ids = {
+  remote_attachment_ids = local.wire == false ? {} : {
     for k, v in local.remote_spokes : k => one([
       for a in data.aws_ec2_transit_gateway_attachment.remote_spoke :
       a.id if try(a.tags["Name"], "") == "${var.project}-tgwa-${k}"
@@ -397,7 +398,7 @@ check "remote_spokes_need_management_account" {
 
 check "remote_attachments_wired" {
   assert {
-    condition = length(local.remote_attachments_ready) == length(local.remote_spokes)
+    condition = !local.wire || length(local.remote_attachments_ready) == length(local.remote_spokes)
     error_message = join(" ", [
       "Da khai", tostring(length(local.remote_spokes)), "spoke o account khac",
       "nhung chi noi duoc", tostring(length(local.remote_attachments_ready)),
@@ -414,3 +415,40 @@ check "remote_attachments_wired" {
     ])
   }
 }
+
+########################################
+# HAI PHA - VI SAO KHONG GOP LAM MOT
+#
+# LOI 50. Ban dau file nay tim attachment bang data source ngay trong
+# cung mot lan apply. Plan chet:
+#
+#   Error: Invalid for_each argument
+#   The "for_each" set includes values derived from resource attributes
+#   that cannot be determined until apply
+#
+# Data source loc theo aws_ec2_transit_gateway.hub.id, ma TGW duoc TAO
+# TRONG CHINH CONFIG NAY. Lan apply dau, hub.id chua biet -> danh sach
+# attachment chua biet -> Terraform khong dung duoc bo khoa for_each.
+#
+# Khong lach duoc bang try() hay coalesce(): chua biet la chua biet.
+#
+# Va day dung la dieu ma landing-zone/network/variables.tf da canh bao
+# tu truoc, o mo ta bien spoke_attachments. Toi cho rang no chi dung
+# mot phan - no dung han trong dung cau hinh nay.
+#
+# ---------------------------------------------------------------
+# CACH DUNG
+#
+#   Pha 1   wire_remote_attachments = false   (mac dinh)
+#           -> tao TGW, share RAM, StackSet, VPC + attachment o
+#              account dich. Route CHUA noi.
+#
+#   Pha 2   wire_remote_attachments = true
+#           -> TGW da nam trong state nen hub.id biet o thi diem plan,
+#              data source doc duoc ID that, for_each dung duoc.
+#              Route duoc noi.
+#
+# Giua hai pha, attachment TON TAI ma khong thuoc route table nao:
+# State la 'available', khong loi, va khong mot goi tin nao di qua.
+# Dung dung o day.
+########################################

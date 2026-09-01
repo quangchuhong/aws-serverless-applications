@@ -134,6 +134,26 @@ variable "spokes" {
   }
 }
 
+variable "wire_remote_attachments" {
+  description = <<-EOT
+    Pha 2: noi attachment cua spoke remote vao route table cua TGW.
+
+    Vi sao phai tach lam hai pha - loi 50:
+    data source tim attachment loc theo ID cua TGW, ma TGW duoc tao
+    trong chinh config nay. Lan apply dau, ID do chua biet nen
+    for_each khong dung duoc bo khoa, va plan chet voi
+    "Invalid for_each argument".
+
+      false (mac dinh)  pha 1 - tao VPC + attachment o account dich
+      true              pha 2 - noi route, chay SAU khi pha 1 xong
+
+    Giua hai pha, attachment ton tai ma khong thuoc route table nao:
+    State la 'available', khong loi, khong mot goi tin nao di qua.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "i_am_running_from_management_account" {
   description = <<-EOT
     Xac nhan Terraform dang chay bang credential cua MANAGEMENT ACCOUNT.
