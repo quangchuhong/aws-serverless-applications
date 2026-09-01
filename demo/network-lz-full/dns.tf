@@ -121,6 +121,28 @@ resource "aws_route53profiles_association" "spoke" {
 #
 # Chi co y nghia khi se co VPC o account khac. De organization_arn
 # rong thi profile van chay, chi khong share di dau.
+#
+# CANH BAO - RAT CO THE HONG GIONG LOI 55.
+#
+# Ba resource duoi day la DUNG bo ba da that bai khi share Transit
+# Gateway tu account lz-network: RAM tu choi AssociateResourceShare
+# nhu MOT THAO TAC - ca cho resource lan cho principal - trong khi
+# CreateResourceShare kem --resource-arns lai chay.
+# aws_ram_resource_association goi dung API bi tu choi do.
+#
+# Chua do tren Route 53 Profile, nen day la du doan, khong phai su
+# that da kiem chung: phep do o loi 55 chi lam tren TGW. Nhung neu
+# gioi han nam o account chu khong o loai resource thi apply se dung
+# o aws_ram_resource_association.dns_profile voi cung thong bao.
+#
+# Neu gap: lam bang mot lenh CLI nhu voi TGW, roi
+# `terraform import` share vao state - hoac bo han viec share profile.
+#
+#   aws ram create-resource-share --name <project>-dns-profile \
+#     --no-allow-external-principals \
+#     --resource-arns <profile-arn> --principals <organization-arn>
+#
+# Ca hai bien deu mac dinh TAT nen duong nay chua ai di qua.
 ########################################
 
 resource "aws_ram_resource_share" "dns" {

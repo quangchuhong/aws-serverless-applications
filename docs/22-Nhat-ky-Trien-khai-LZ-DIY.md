@@ -2215,6 +2215,12 @@ Không phải lỗi code, không phải cấu hình sai. Là một chỗ mô hì
 
 Ba resource RAM bị gỡ khỏi `vpc-spokes-remote.tf`. Việc share làm bằng **một lệnh CLI, một lần**, và `check "tgw_shared_with_spoke_accounts"` nhắc ở mỗi lần plan cho tới khi có người xác nhận đã làm.
 
+#### Chỗ thứ hai cùng kiểu, chưa ai đi qua
+
+`dns.tf` share Route 53 Profile bằng **đúng bộ ba resource đó** — `aws_ram_resource_share` + `aws_ram_resource_association` + `aws_ram_principal_association`. Nếu giới hạn nằm ở **account** chứ không ở loại resource thì `enable_dns_profile = true` sẽ dừng ở `aws_ram_resource_association.dns_profile` với cùng thông báo.
+
+Chưa đo trên Route 53 Profile, nên đây là **dự đoán chứ không phải sự thật đã kiểm chứng** — phép đo ở trên chỉ làm trên TGW. Cả `enable_dns_profile` lẫn `organization_arn` đều mặc định tắt nên đường này chưa ai đi qua; đã ghi cảnh báo ngay tại `dns.tf` thay vì để người sau gặp lại từ đầu.
+
 > **Bài học:** tôi đã đoán năm lần từ cùng một thông báo, và mỗi lần đoán đều tốn một vòng apply mười phút của người dùng. Phép đo tách bạch được hai trình tự — thứ cuối cùng cho câu trả lời — tốn **ba mươi giây**, và lẽ ra phải là việc đầu tiên chứ không phải việc cuối cùng.
 >
 > Khi một thông báo lỗi liệt kê nhiều nguyên nhân có thể, đó là dấu hiệu nó **không biết** nguyên nhân nào. Đọc nó như một gợi ý là tự nhận lấy sự mơ hồ của nó.

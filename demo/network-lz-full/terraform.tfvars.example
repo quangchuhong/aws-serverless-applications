@@ -183,6 +183,23 @@ enable_test_instances = true
 # aws ram enable-sharing-with-aws-organization   (chay MOT LAN tu management)
 # ram_sharing_with_organization_enabled = true
 
+# Share TGW cho spoke account - LAM BANG CLI, khong bang Terraform.
+#
+# RAM tu choi AssociateResourceShare (ca resource lan principal) va chi
+# nhan CreateResourceShare kem --resource-arns trong MOT lenh; ma
+# aws_ram_resource_share cua provider khong co thuoc tinh do. Loi 55.
+#
+#   aws ram create-resource-share --region ap-southeast-1 \
+#     --name <project>-tgw --no-allow-external-principals \
+#     --resource-arns $(aws ec2 describe-transit-gateways \
+#       --transit-gateway-ids $(terraform output -raw transit_gateway_id) \
+#       --query 'TransitGateways[0].TransitGatewayArn' --output text) \
+#     --principals <spoke-account-id>
+#
+# Dat = true SAU khi lenh tren chay xong. Bien nay khong tao gi ca; no
+# chi tat check "tgw_shared_with_spoke_accounts".
+# tgw_shared_manually = true
+
 # aws organizations describe-organization --query Organization.Arn --output text
 # organization_arn = "arn:aws:organizations::<management-id>:organization/o-xxxxxxxxxx"
 
