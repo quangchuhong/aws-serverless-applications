@@ -13,6 +13,13 @@ resource "aws_ec2_transit_gateway" "hub" {
   default_route_table_association = "disable"
   default_route_table_propagation = "disable"
 
+  # Attachment tao TU ACCOUNT KHAC duoc chap nhan ngay.
+  #
+  # Thieu dong nay thi attachment cua spoke o account khac nam mai o
+  # trang thai pendingAcceptance: khong loi, khong canh bao, va khong
+  # mot goi tin nao di qua. Xem vpc-spokes-remote.tf.
+  auto_accept_shared_attachments = "enable"
+
   tags = { Name = "${var.project}-tgw" }
 }
 

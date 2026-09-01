@@ -94,15 +94,62 @@ variable "egress_vpc_cidr" {
 }
 
 variable "spokes" {
-  description = "VPC workload. Moi spoke ton them ~$0.05/gio phi TGW attachment."
+  description = <<-EOT
+    VPC workload. Moi spoke ton them ~$0.05/gio phi TGW attachment.
+
+    account_id = null (mac dinh)  -> VPC tao NGAY TRONG account nay,
+                                     xem vpc-spokes.tf
+    account_id = "1234..."        -> VPC tao o ACCOUNT KHAC qua
+                                     StackSet, xem vpc-spokes-remote.tf
+
+    Dat account_id doi hoi Terraform chay tu MANAGEMENT ACCOUNT - day
+    la rang buoc IAM, khong phai so thich. Xem khoi comment dau file
+    vpc-spokes-remote.tf.
+
+    CIDR khai TUONG MINH va di qua review: trung CIDR trong mot luoi
+    TGW thi route table khong phan biet duoc hai spoke, va sua thi
+    phai xoa VPC. Bang cap phat o doc 17 muc 3:
+
+      NonProd  10.10.0.0/14   (10.10 - 10.13)
+      Prod     10.20.0.0/14   (10.20 - 10.23)
+      Sandbox  10.60.0.0/14   (khong attach TGW)
+  EOT
+
   type = map(object({
-    cidr = string
+    cidr       = string
+    account_id = optional(string)
   }))
 
   default = {
     "app-dev"  = { cidr = "10.10.0.0/16" }
     "app-prod" = { cidr = "10.20.0.0/16" }
   }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.spokes :
+      try(v.account_id, null) == null || can(regex("^[0-9]{12}$", v.account_id))
+    ])
+    error_message = "account_id phai dung 12 chu so, hoac bo trong de tao tai chinh account nay."
+  }
+}
+
+variable "i_am_running_from_management_account" {
+  description = <<-EOT
+    Xac nhan Terraform dang chay bang credential cua MANAGEMENT ACCOUNT.
+
+    Chi can khi co spoke khai account_id. Bien nay khong doi hanh vi
+    cua resource nao - no chi de check block noi ro nguyen nhan TRUOC
+    khi apply, thay vi de AccessDenied cua CreateStackSet noi mot cau
+    khong lien quan gi toi goc van de.
+
+    Kiem truoc khi dat true:
+      aws sts get-caller-identity --query Account --output text
+      aws organizations describe-organization --query Organization.MasterAccountId --output text
+    Hai so phai bang nhau.
+  EOT
+  type        = bool
+  default     = false
 }
 
 variable "internal_supernet" {
