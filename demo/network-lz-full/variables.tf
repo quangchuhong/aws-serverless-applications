@@ -153,7 +153,7 @@ variable "tgw_shared_manually" {
 
     Terraform khong lam duoc viec nay - loi 55. RAM tu choi
     AssociateResourceShare (ca resource lan principal), va chi chap
-    nhan CreateResourceShare kem --resource-arns trong MOT lenh; ma
+    nhan CreateResourceShare kem --resource-arns; ma
     aws_ram_resource_share cua provider khong co thuoc tinh do.
 
     Lam mot lan, tu account network:
@@ -161,6 +161,15 @@ variable "tgw_shared_manually" {
       aws ram create-resource-share --region <region> \
         --name <project>-tgw --no-allow-external-principals \
         --resource-arns <tgw-arn> --principals <spoke-account-id>
+
+    LENH TREN CHUA KIEM CHUNG. Phep do o loi 55 chi chay dang khong
+    kem --principals; dang mot-lenh-ca-hai la suy ra. Truoc khi dat
+    bien nay = true, kiem bang:
+
+      aws ram list-principals --resource-owner SELF \
+        --resource-arns <tgw-arn> --region <region>
+
+    Rong = chua share duoc, du lenh tren khong bao loi.
   EOT
   type        = bool
   default     = false

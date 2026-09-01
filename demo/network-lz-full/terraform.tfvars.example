@@ -186,7 +186,7 @@ enable_test_instances = true
 # Share TGW cho spoke account - LAM BANG CLI, khong bang Terraform.
 #
 # RAM tu choi AssociateResourceShare (ca resource lan principal) va chi
-# nhan CreateResourceShare kem --resource-arns trong MOT lenh; ma
+# nhan CreateResourceShare kem --resource-arns; ma
 # aws_ram_resource_share cua provider khong co thuoc tinh do. Loi 55.
 #
 #   aws ram create-resource-share --region ap-southeast-1 \
@@ -196,8 +196,17 @@ enable_test_instances = true
 #       --query 'TransitGateways[0].TransitGatewayArn' --output text) \
 #     --principals <spoke-account-id>
 #
-# Dat = true SAU khi lenh tren chay xong. Bien nay khong tao gi ca; no
-# chi tat check "tgw_shared_with_spoke_accounts".
+# LENH TREN CHUA DUOC KIEM CHUNG. Phep do o loi 55 chi chay dang
+# KHONG kem --principals; dang mot-lenh-ca-hai o day la suy ra, khong
+# phai da thay chay. Neu no cung bao OperationNotPermittedException thi
+# hien chua co duong nao share duoc TGW tu account nay - dang cho AWS
+# Support tra loi.
+#
+# Dat = true SAU khi lenh tren chay xong VA da kiem:
+#   aws ram list-principals --resource-owner SELF \
+#     --resource-arns <tgw-arn> --region ap-southeast-1
+# Bien nay khong tao gi ca; no chi tat check
+# "tgw_shared_with_spoke_accounts".
 # tgw_shared_manually = true
 
 # aws organizations describe-organization --query Organization.Arn --output text
