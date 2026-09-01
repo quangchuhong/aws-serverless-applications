@@ -110,7 +110,9 @@ Xếp theo thứ tự gặp phải.
 
 | 50 | `Invalid for_each argument` — plan chết, không dựng được bộ khoá | Data source tìm attachment lọc theo `aws_ec2_transit_gateway.hub.id`, mà TGW được **tạo trong chính config đó**. Lần apply đầu ID chưa biết → danh sách chưa biết. Đúng điều `landing-zone/network` đã cảnh báo và tôi cho là *"sai một nửa"* | **Lỗi thiết kế** | *(mục 7u)* |
 
-**44/50 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 51 | Hướng dẫn chạy từ **management account** — đẩy toàn bộ hub mạng vào đúng account không được phép chứa nó | StackSet `SERVICE_MANAGED` cần management *hoặc* delegated admin. Tôi lấy vế đầu, quên vế sau — mà demo chỉ có **một provider**, nên TGW, security VPC, egress, firewall, NLB đều theo sang | **Lỗi thiết kế** | *(mục 7v)* |
+
+**45/51 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2004,6 +2006,38 @@ Giữa hai pha, attachment tồn tại mà không thuộc route table nào: `Sta
 > **Bài học:** đây không phải chuyện thiếu thông tin. Cảnh báo nằm sẵn trong repo, tôi đã đọc, và tôi bác bỏ nó bằng một lập luận **đúng trong trường hợp tổng quát nhưng sai trong chính cấu hình mình đang viết**. Nguy hơn hẳn việc không biết: tôi có một lý do nghe hợp lý để bỏ qua nó.
 >
 > Người viết dòng đó đã trả giá để biết. Bác bỏ một cảnh báo cụ thể thì cái giá phải trả là chứng minh nó sai **trong ngữ cảnh của mình** — không phải tìm ra một ngữ cảnh khác nơi nó sai.
+
+---
+
+### 7v. Lỗi 51 — một nửa sự thật, và nửa còn lại phá cả thiết kế
+
+Người dùng nhìn plan và hỏi một câu: *"sao code lại tạo network ở bên account management vậy — nhầm rồi"*.
+
+Đúng. Và tôi là người bảo họ làm thế.
+
+Khi viết `vpc-spokes-remote.tf`, tôi cần StackSet `SERVICE_MANAGED`, thứ chỉ tạo được từ **management account hoặc delegated administrator**. Tôi lấy vế đầu, viết hẳn một khối comment giải thích rằng đó là ràng buộc IAM chứ không phải sở thích, thêm biến `i_am_running_from_management_account`, và dựng cả một `check` để nhắc.
+
+Nửa còn lại tôi bỏ qua: **demo chỉ có MỘT provider.** Chạy từ management nghĩa là TGW, security VPC, egress VPC, Network Firewall, NAT, NLB — 124 resource — đều được tạo trong management account.
+
+Management account giữ Organizations, SCP và hoá đơn, và là account duy nhất **SCP không bao giờ áp được**. Đặt hạ tầng mạng ở đó là đặt nó ngoài mọi guardrail của chính tổ chức. Cả doc 22 lẫn doc 23 đã nhắc điều này nhiều lần — ở lỗi 36, 38, 41 — và tôi vẫn viết ra một hướng dẫn dẫn thẳng vào đó.
+
+#### Cách đúng
+
+Đăng ký account network làm delegated administrator của StackSets, chạy **một lần** từ management:
+
+```bash
+aws organizations register-delegated-administrator \
+  --service-principal member.org.stacksets.cloudformation.amazonaws.com \
+  --account-id <network-account-id>
+```
+
+Rồi StackSet tạo được từ chính account network với `call_as = "DELEGATED_ADMIN"` — và hub nằm đúng chỗ.
+
+Đây cũng là **nhóm 1** trong bảng ở lỗi 35: StackSets không có lệnh chỉ định riêng, nên đăng ký ở Organizations là cách duy nhất, và nó thuộc về `delegated_administrators` của layer `organization`.
+
+> **Bài học:** ràng buộc tôi tìm được là *"cần management **hoặc** delegated admin"*. Tôi dừng ở vế thoả mãn được ngay và không hỏi vế kia tốn gì. Nó tốn đúng thứ mà toàn bộ Landing Zone dựng lên để bảo vệ.
+>
+> Và điều đáng chú ý nhất: `plan` chạy sạch, `validate` xanh, `plan-check` không liên quan. Thứ bắt được lỗi này là **một người đọc plan và thấy tên account sai**.
 
 ---
 

@@ -154,19 +154,28 @@ variable "wire_remote_attachments" {
   default     = false
 }
 
-variable "i_am_running_from_management_account" {
+variable "network_account_is_stackset_delegated_admin" {
   description = <<-EOT
-    Xac nhan Terraform dang chay bang credential cua MANAGEMENT ACCOUNT.
+    Xac nhan account dang chay DA duoc dang ky lam delegated
+    administrator cua CloudFormation StackSets.
 
-    Chi can khi co spoke khai account_id. Bien nay khong doi hanh vi
-    cua resource nao - no chi de check block noi ro nguyen nhan TRUOC
-    khi apply, thay vi de AccessDenied cua CreateStackSet noi mot cau
-    khong lien quan gi toi goc van de.
+    Chay MOT LAN tu MANAGEMENT account:
 
-    Kiem truoc khi dat true:
-      aws sts get-caller-identity --query Account --output text
-      aws organizations describe-organization --query Organization.MasterAccountId --output text
-    Hai so phai bang nhau.
+      aws organizations register-delegated-administrator \
+        --service-principal member.org.stacksets.cloudformation.amazonaws.com \
+        --account-id <network-account-id>
+
+    Kiem:
+      aws organizations list-delegated-administrators \
+        --service-principal member.org.stacksets.cloudformation.amazonaws.com
+
+    DUNG chay ca bo code nay tu management account de khoi phai dang ky.
+    Demo chi co MOT provider, nen lam vay se tao TOAN BO hub - TGW,
+    security VPC, egress, firewall, NAT, NLB - trong management account,
+    noi SCP khong bao gio ap duoc. Xem loi 51 doc 22.
+
+    Bien nay khong doi hanh vi resource nao; no chi de check block noi
+    ro nguyen nhan TRUOC khi apply.
   EOT
   type        = bool
   default     = false

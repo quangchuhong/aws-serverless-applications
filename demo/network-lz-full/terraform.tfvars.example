@@ -148,13 +148,18 @@ enable_test_instances = true
 # vao route table cua hub - buoc do CHI CHU SO HUU TGW lam duoc.
 #
 # ---------------------------------------------------------------
-# PHAI CHAY TU MANAGEMENT ACCOUNT. Rang buoc IAM, khong phai so thich:
-# OrganizationAccountAccessRole chi tin management account, va StackSet
-# SERVICE_MANAGED cung chi tao duoc tu do.
+# CHAY TU ACCOUNT NETWORK - KHONG PHAI MANAGEMENT.
 #
-#   aws sts get-caller-identity --query Account --output text
-#   aws organizations describe-organization --query Organization.MasterAccountId --output text
-#   # hai so phai bang nhau
+# Demo chi co MOT provider, nen chay tu management se tao TOAN BO hub
+# (TGW, security VPC, egress, firewall, NAT, NLB) trong management
+# account - noi SCP khong bao gio ap duoc.
+#
+# Thay vao do, dang ky account network lam delegated administrator cua
+# StackSets. Chay MOT LAN tu management:
+#
+#   aws organizations register-delegated-administrator \
+#     --service-principal member.org.stacksets.cloudformation.amazonaws.com \
+#     --account-id <network-account-id>
 #
 # ---------------------------------------------------------------
 # GIU IT NHAT MOT SPOKE LOCAL neu con muon chay verify.sh.
@@ -173,7 +178,7 @@ enable_test_instances = true
 # 'available', khong loi, va khong mot goi tin nao di qua.
 ########################################
 
-# i_am_running_from_management_account = true
+# network_account_is_stackset_delegated_admin = true
 
 # aws organizations describe-organization --query Organization.Arn --output text
 # organization_arn = "arn:aws:organizations::<management-id>:organization/o-xxxxxxxxxx"

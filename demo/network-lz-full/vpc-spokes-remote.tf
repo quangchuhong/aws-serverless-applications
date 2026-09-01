@@ -6,17 +6,33 @@
 # that cua Landing Zone.
 #
 # ---------------------------------------------------------------
-# PHAI CHAY TU MANAGEMENT ACCOUNT
+# CHAY TU ACCOUNT NETWORK - KHONG PHAI MANAGEMENT. Loi 51.
 #
-# Day khong phai so thich ma la rang buoc IAM:
+# Ban dau file nay yeu cau chay tu MANAGEMENT ACCOUNT, vi StackSet
+# SERVICE_MANAGED chi tao duoc tu do. Do la mot nua su that, va nua
+# con lai lam hong ca thiet ke:
 #
-#   - OrganizationAccountAccessRole trong account workload chi tin
-#     MANAGEMENT account. lz-network khong assume duoc vao do.
-#   - StackSet SERVICE_MANAGED chi tao duoc tu management account
-#     hoac delegated administrator cua CloudFormation.
+#   Demo chi co MOT provider. Chay tu management nghia la TOAN BO hub -
+#   TGW, security VPC, egress VPC, firewall, NAT, NLB - deu duoc tao
+#   trong MANAGEMENT ACCOUNT.
 #
-# Chay bang credential cua lz-network thi remote_spokes phai de RONG,
-# va check "remote_spokes_need_management_account" se nhac.
+# Management account giu Organizations, SCP va hoa don, va la account
+# duy nhat SCP KHONG BAO GIO ap duoc. Dat ha tang mang o do la dat no
+# ngoai moi guardrail cua chinh to chuc.
+#
+# CACH DUNG: dang ky account network lam DELEGATED ADMINISTRATOR cua
+# CloudFormation StackSets. Chay MOT LAN tu management account:
+#
+#   aws organizations register-delegated-administrator \
+#     --service-principal member.org.stacksets.cloudformation.amazonaws.com \
+#     --account-id <network-account-id>
+#
+# Sau do StackSet tao duoc tu chinh account network voi
+# call_as = "DELEGATED_ADMIN", va hub o dung cho.
+#
+# Kiem:
+#   aws organizations list-delegated-administrators \
+#     --service-principal member.org.stacksets.cloudformation.amazonaws.com
 #
 # ---------------------------------------------------------------
 # VI SAO STACKSET CHU KHONG PHAI PROVIDER ALIAS
@@ -121,6 +137,10 @@ resource "aws_cloudformation_stack_set" "spoke" {
   description      = "VPC + TGW attachment cho spoke o account khac"
   permission_model = "SERVICE_MANAGED"
   capabilities     = []
+
+  # DELEGATED_ADMIN: goi tu account network da duoc uy quyen, KHONG
+  # phai tu management. Xem khoi comment dau file - loi 51.
+  call_as = "DELEGATED_ADMIN"
 
   # Khong bat auto_deployment: account moi vao OU se KHONG tu co VPC.
   # Co y - xem khoi comment dau file ve CIDR.
@@ -263,6 +283,10 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
   stack_set_name = aws_cloudformation_stack_set.spoke[0].name
   region         = var.region
 
+  # Phai khop call_as cua stack set. Lech nhau thi CloudFormation bao
+  # khong tim thay stack set - mot cau khong nhac gi toi uy quyen.
+  call_as = "DELEGATED_ADMIN"
+
   deployment_targets {
     accounts = [each.value.account_id]
   }
@@ -380,18 +404,21 @@ check "remote_spokes_need_organization_arn" {
   }
 }
 
-check "remote_spokes_need_management_account" {
+check "network_account_is_stackset_delegated_admin" {
   assert {
-    condition = !local.has_remote || var.i_am_running_from_management_account
+    condition = !local.has_remote || var.network_account_is_stackset_delegated_admin
     error_message = join(" ", [
-      "remote_spokes da khai nhung i_am_running_from_management_account = false.",
-      "StackSet SERVICE_MANAGED chi tao duoc tu management account hoac",
-      "delegated administrator cua CloudFormation, va",
-      "OrganizationAccountAccessRole trong account workload chi tin",
-      "management account.",
-      "Chay bang credential cua lz-network se bao AccessDenied o buoc",
-      "CreateStackSet - va loi do KHONG noi gi ve nguyen nhan that.",
-      "Kiem: aws sts get-caller-identity --query Account",
+      "Co spoke o account khac nhung account nay chua duoc dang ky lam",
+      "delegated administrator cua CloudFormation StackSets.",
+      "CreateStackSet se bao AccessDenied - va loi do KHONG nhac gi toi",
+      "uy quyen.",
+      "Chay MOT LAN tu MANAGEMENT account:",
+      "aws organizations register-delegated-administrator",
+      "--service-principal member.org.stacksets.cloudformation.amazonaws.com",
+      "--account-id <network-account-id>",
+      "DUNG chay ca bo code nay tu management account de vuot qua:",
+      "demo chi co mot provider, nen toan bo hub se duoc tao trong",
+      "management account - noi SCP khong bao gio ap duoc. Xem loi 51.",
     ])
   }
 }
