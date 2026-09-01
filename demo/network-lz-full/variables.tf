@@ -118,6 +118,11 @@ variable "spokes" {
   type = map(object({
     cidr       = string
     account_id = optional(string)
+
+    # BAT BUOC khi co account_id. StackSet service-managed trien khai
+    # theo cay to chuc, nen phai biet account nam o OU nao.
+    #   aws organizations list-parents --child-id <account-id>
+    ou_id = optional(string)
   }))
 
   default = {
@@ -132,6 +137,29 @@ variable "spokes" {
     ])
     error_message = "account_id phai dung 12 chu so, hoac bo trong de tao tai chinh account nay."
   }
+
+  validation {
+    condition = alltrue([
+      for k, v in var.spokes :
+      try(v.account_id, null) == null || try(v.ou_id, null) != null
+    ])
+    error_message = "Spoke khai account_id thi phai khai ca ou_id - StackSet service-managed trien khai theo cay to chuc. Lay bang: aws organizations list-parents --child-id <account-id>"
+  }
+}
+
+variable "ram_sharing_with_organization_enabled" {
+  description = <<-EOT
+    Xac nhan da bat RAM sharing voi Organizations o cap to chuc.
+
+    Chay MOT LAN tu MANAGEMENT account:
+      aws ram enable-sharing-with-aws-organization
+
+    Chua bat thi AssociateResourceShare bao "Organization o-xxxx could
+    not be found" - nghe nhu sai organization_arn, thuc ra la thieu
+    buoc nay. Xem loi 52 doc 22.
+  EOT
+  type        = bool
+  default     = false
 }
 
 variable "wire_remote_attachments" {

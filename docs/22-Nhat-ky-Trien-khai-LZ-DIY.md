@@ -112,7 +112,9 @@ Xếp theo thứ tự gặp phải.
 
 | 51 | Hướng dẫn chạy từ **management account** — đẩy toàn bộ hub mạng vào đúng account không được phép chứa nó | StackSet `SERVICE_MANAGED` cần management *hoặc* delegated admin. Tôi lấy vế đầu, quên vế sau — mà demo chỉ có **một provider**, nên TGW, security VPC, egress, firewall, NLB đều theo sang | **Lỗi thiết kế** | *(mục 7v)* |
 
-**45/51 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 52 | Ba lỗi cùng lúc lúc apply: RAM share bị từ chối ×2, `OrganizationalUnitIds are required` | StackSet `SERVICE_MANAGED` triển khai theo **cây tổ chức** — `accounts` chỉ là bộ lọc trong OU, không thay được OU. Và RAM sharing với Organizations là một bước bật **một lần ở cấp tổ chức** mà tôi không biết tới | **Lỗi code** *(+ thiếu điều kiện tiên quyết)* | *(mục 7w)* |
+
+**46/52 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2038,6 +2040,60 @@ Rồi StackSet tạo được từ chính account network với `call_as = "DELE
 > **Bài học:** ràng buộc tôi tìm được là *"cần management **hoặc** delegated admin"*. Tôi dừng ở vế thoả mãn được ngay và không hỏi vế kia tốn gì. Nó tốn đúng thứ mà toàn bộ Landing Zone dựng lên để bảo vệ.
 >
 > Và điều đáng chú ý nhất: `plan` chạy sạch, `validate` xanh, `plan-check` không liên quan. Thứ bắt được lỗi này là **một người đọc plan và thấy tên account sai**.
+
+---
+
+### 7w. Lỗi 52 — ba lỗi, hai nguyên nhân, một trong đó nói sai chỗ
+
+Apply lần đầu của `vpc-spokes-remote.tf` chết với ba lỗi:
+
+```
+OperationNotPermittedException: The resource you are attempting to share
+can only be shared within your AWS Organization... or that you have not
+enabled sharing with your AWS organization
+
+UnknownResourceException: Organization o-tvkzhcq3yh could not be found
+
+ValidationError: OrganizationalUnitIds are required
+```
+
+#### Hai lỗi đầu: thiếu một bước bật ở cấp tổ chức
+
+RAM chia sẻ với Organizations phải được **bật một lần**, và tôi không biết bước đó tồn tại:
+
+```bash
+aws ram enable-sharing-with-aws-organization      # tu management account
+```
+
+Chưa bật thì mọi lệnh share đều hỏng — nhưng **hai lỗi nói hai chuyện khác nhau**, và cái thứ hai nói sai chỗ:
+
+> `Organization o-tvkzhcq3yh could not be found`
+
+Đọc câu đó, phản xạ đầu tiên là đi kiểm `organization_arn` — mà ARN hoàn toàn đúng. Tổ chức tồn tại; thứ không tồn tại là **quyền của RAM để nhìn thấy nó**.
+
+#### Lỗi thứ ba: `accounts` không thay được OU
+
+```hcl
+deployment_targets {
+  accounts = [each.value.account_id]     # SAI voi SERVICE_MANAGED
+}
+```
+
+StackSet service-managed triển khai theo **cây tổ chức**, không theo danh sách account rời. `accounts` chỉ là **bộ lọc bên trong** các OU đã khai, và phải đi kèm `account_filter_type`.
+
+Bản vá thêm `ou_id` vào mỗi spoke remote:
+
+```hcl
+deployment_targets {
+  organizational_unit_ids = [each.value.ou_id]
+  accounts                = [each.value.account_id]
+  account_filter_type     = "INTERSECTION"
+}
+```
+
+`INTERSECTION` là phần quan trọng nhất. Thiếu nó thì `accounts` **bị bỏ qua** và StackSet triển khai ra **cả OU** — mọi account trong đó nhận một VPC với **cùng một CIDR**. Một lỗi cú pháp thiếu sót biến thành trùng CIDR hàng loạt.
+
+> **Bài học:** cả ba lỗi này đều chỉ tồn tại phía API — `validate` xanh, `plan` sạch, `plan-check` không chạm tới. Đây là lần thứ hai trong phiên (sau lỗi 47) mà apply là thứ duy nhất tìm ra được, và cũng là lần thứ hai một thông báo lỗi của AWS trỏ vào chỗ không phải nguyên nhân.
 
 ---
 

@@ -180,12 +180,19 @@ enable_test_instances = true
 
 # network_account_is_stackset_delegated_admin = true
 
+# aws ram enable-sharing-with-aws-organization   (chay MOT LAN tu management)
+# ram_sharing_with_organization_enabled = true
+
 # aws organizations describe-organization --query Organization.Arn --output text
 # organization_arn = "arn:aws:organizations::<management-id>:organization/o-xxxxxxxxxx"
 
 # spokes = {
 #   "app-dev"  = { cidr = "10.10.0.0/16" }                                # local
-#   "app-prod" = { cidr = "10.20.0.0/16", account_id = "761558631239" }   # account khac
+#   "app-prod" = {
+#     cidr       = "10.20.0.0/16"
+#     account_id = "761558631239"
+#     ou_id      = "ou-xxxx-xxxxxxxx"   # aws organizations list-parents --child-id <account-id>
+#   }
 # }
 
 # CIDR khai tuong minh va di qua review - trung CIDR trong luoi TGW thi

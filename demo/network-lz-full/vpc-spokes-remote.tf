@@ -287,8 +287,23 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
   # khong tim thay stack set - mot cau khong nhac gi toi uy quyen.
   call_as = "DELEGATED_ADMIN"
 
+  # SERVICE_MANAGED BAT BUOC CO organizational_unit_ids - loi 52.
+  #
+  # Chi khai accounts thi CreateStackInstances bao:
+  #   ValidationError: OrganizationalUnitIds are required
+  #
+  # Ly do: StackSet service-managed trien khai theo CAY TO CHUC, khong
+  # theo danh sach account roi. accounts chi la BO LOC ben trong OU do,
+  # va phai di kem account_filter_type.
+  #
+  # INTERSECTION = dung nhung account duoc liet ke, VA phai nam trong
+  # OU da khai. Thieu account_filter_type thi accounts bi bo qua va
+  # StackSet trien khai ra CA OU - moi account trong do deu nhan mot
+  # VPC voi CUNG mot CIDR.
   deployment_targets {
-    accounts = [each.value.account_id]
+    organizational_unit_ids = [each.value.ou_id]
+    accounts                = [each.value.account_id]
+    account_filter_type     = "INTERSECTION"
   }
 
   parameter_overrides = {
@@ -400,6 +415,26 @@ check "remote_spokes_need_organization_arn" {
       "gi toi RAM.",
       "Lay bang: aws organizations describe-organization",
       "--query Organization.Arn --output text",
+    ])
+  }
+}
+
+# RAM chia se voi Organizations phai duoc BAT o cap to chuc truoc.
+# Chua bat thi AssociateResourceShare bao hai cau khac nhau ma cung
+# mot goc:
+#   "can only be shared within your AWS Organization"
+#   "Organization o-xxxx could not be found"
+# Cau thu hai de doc nham thanh sai organization_arn.
+check "ram_sharing_with_organization_enabled" {
+  assert {
+    condition = !local.has_remote || var.ram_sharing_with_organization_enabled
+    error_message = join(" ", [
+      "Co spoke o account khac nhung chua xac nhan da bat RAM sharing",
+      "voi Organizations. Chay MOT LAN tu MANAGEMENT account:",
+      "aws ram enable-sharing-with-aws-organization",
+      "Kiem: aws ram get-resource-shares --resource-owner SELF",
+      "(khong bat thi moi lenh share deu bao 'Organization could not be",
+      "found' - nghe nhu sai ARN, thuc ra la thieu buoc nay).",
     ])
   }
 }
