@@ -174,7 +174,15 @@ resource "aws_cloudformation_stack_set" "spoke" {
 
   template_body = jsonencode({
     AWSTemplateFormatVersion = "2010-09-09"
-    Description              = "Spoke VPC nối vào Transit Gateway trung tâm"
+    # CHI ASCII - loi 54.
+    #
+    # CloudFormation luu lai chuoi nay voi "?" thay cho dau tieng Viet,
+    # nen Terraform thay khac va doi sua o MOI lan plan; CloudFormation
+    # lai bop meo tiep. Mot diff khong bao gio hoi tu, cung ho voi
+    # loi 39 va 42.
+    #
+    # Cung khop quy uoc cua repo: comment trong code khong dau.
+    Description = "Spoke VPC noi vao Transit Gateway trung tam"
 
     Parameters = {
       VpcCidr          = { Type = "String" }
