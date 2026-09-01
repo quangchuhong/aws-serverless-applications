@@ -78,7 +78,12 @@ resource "aws_ram_resource_association" "tgw" {
 resource "aws_ram_principal_association" "org" {
   count = local.has_remote ? 1 : 0
 
-  principal          = data.aws_organizations_organization.this.arn
+  # Dung var.organization_arn - CUNG CACH ma dns.tf dang share DNS
+  # profile. Ban dau doan la co data "aws_organizations_organization"
+  # nhu ben landing-zone/network; demo KHONG khai data source do, va
+  # them mot cai nua thi hai cho share cung mot to chuc lai lay ARN
+  # theo hai duong khac nhau.
+  principal          = var.organization_arn
   resource_share_arn = aws_ram_resource_share.tgw[0].arn
 }
 
@@ -347,6 +352,20 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "remote_to_egress" {
 ########################################
 # KIEM TRA CHEO
 ########################################
+
+check "remote_spokes_need_organization_arn" {
+  assert {
+    condition = !local.has_remote || var.organization_arn != ""
+    error_message = join(" ", [
+      "Co spoke o account khac nhung organization_arn de rong.",
+      "Khong share TGW ra to chuc thi account dich KHONG THAY TGW, va",
+      "CloudFormation bao khong tim thay resource - mot cau khong nhac",
+      "gi toi RAM.",
+      "Lay bang: aws organizations describe-organization",
+      "--query Organization.Arn --output text",
+    ])
+  }
+}
 
 check "remote_spokes_need_management_account" {
   assert {
