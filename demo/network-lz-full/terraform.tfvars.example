@@ -138,3 +138,52 @@ enable_test_instances = true
 # spokes = {
 #   "app-dev" = { cidr = "10.10.0.0/16" }
 # }
+
+########################################
+# SPOKE O ACCOUNT KHAC - VPC + attachment + route tu dong
+#
+# Spoke khai account_id se duoc tao o ACCOUNT DO qua CloudFormation
+# StackSet: VPC, subnet, route table, route 0.0.0.0/0 -> TGW, va TGW
+# attachment. Terraform o day tim lai attachment theo tag Name roi noi
+# vao route table cua hub - buoc do CHI CHU SO HUU TGW lam duoc.
+#
+# ---------------------------------------------------------------
+# PHAI CHAY TU MANAGEMENT ACCOUNT. Rang buoc IAM, khong phai so thich:
+# OrganizationAccountAccessRole chi tin management account, va StackSet
+# SERVICE_MANAGED cung chi tao duoc tu do.
+#
+#   aws sts get-caller-identity --query Account --output text
+#   aws organizations describe-organization --query Organization.MasterAccountId --output text
+#   # hai so phai bang nhau
+#
+# ---------------------------------------------------------------
+# GIU IT NHAT MOT SPOKE LOCAL neu con muon chay verify.sh.
+#
+# Template StackSet tao VPC + attachment, KHONG tao EC2. Ma verify.sh
+# muc 7 va 8 - hai muc duy nhat do LUU LUONG THAT - chay lenh tren EC2
+# qua SSM. Chuyen het spoke sang remote thi mat luon EC2 thu, ban ghi
+# PHZ, va target cua NLB.
+#
+# ---------------------------------------------------------------
+# ACCOUNT MOI CAN HAI LAN APPLY. Lan dau StackSet tao attachment; data
+# source doc truoc do nen chua thay, va check "remote_attachments_wired"
+# se bao 0/N. Chay apply lan hai la noi xong.
+#
+# Attachment ton tai ma khong thuoc route table nao thi State van la
+# 'available', khong loi, va khong mot goi tin nao di qua.
+########################################
+
+# i_am_running_from_management_account = true
+
+# aws organizations describe-organization --query Organization.Arn --output text
+# organization_arn = "arn:aws:organizations::<management-id>:organization/o-xxxxxxxxxx"
+
+# spokes = {
+#   "app-dev"  = { cidr = "10.10.0.0/16" }                                # local
+#   "app-prod" = { cidr = "10.20.0.0/16", account_id = "761558631239" }   # account khac
+# }
+
+# CIDR khai tuong minh va di qua review - trung CIDR trong luoi TGW thi
+# route table khong phan biet duoc hai spoke, va sua thi phai xoa VPC.
+# Bang cap phat o doc 17 muc 3:
+#   NonProd  10.10.0.0/14   Prod  10.20.0.0/14   Sandbox  10.60.0.0/14
