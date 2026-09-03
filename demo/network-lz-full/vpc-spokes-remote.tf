@@ -409,6 +409,23 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
   # OU da khai. Thieu account_filter_type thi accounts bi bo qua va
   # StackSet trien khai ra CA OU - moi account trong do deu nhan mot
   # VPC voi CUNG mot CIDR.
+  # MANAGEMENT ACCOUNT CO THE KHONG NHAN DUOC STACK NAO.
+  #
+  # SERVICE_MANAGED trien khai theo CAY TO CHUC, va AWS loai management
+  # account ra khoi cac dot trien khai do. Management lai nam truc tiep
+  # duoi root, khong thuoc OU nao - nen ou_id cua no la chinh root id.
+  #
+  # Ket qua co the la: stack instance bao thanh cong ma khong tao gi,
+  # hoac loi ngay. Ca hai deu KHONG hien ra o day - thu bat duoc no la
+  # check "remote_attachments_wired" o cuoi file: khai N spoke, noi
+  # duoc M, va M < N.
+  #
+  # Muon co VPC trong management that su thi dung stack THUONG, chay
+  # tai cho bang credential cua account do:
+  #   aws cloudformation create-stack --stack-name <project>-spoke-vpc \
+  #     --template-body file://template.json --parameters ...
+  #
+  # Va can nho vi sao viec nay dang le khong nen lam: doc 22 loi 51.
   deployment_targets {
     organizational_unit_ids = [each.value.ou_id]
     accounts                = [each.value.account_id]

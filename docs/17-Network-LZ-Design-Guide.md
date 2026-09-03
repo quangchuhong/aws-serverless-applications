@@ -263,11 +263,20 @@ Ghi lại quyết định này thành ADR, kèm ngày dự kiến có license. K
 | `security-vpc` | `10.1.0.0/16` | |
 | `egress-vpc` | `10.2.0.0/16` | |
 | Dự phòng hub | `10.3.0.0/16` – `10.7.0.0/16` | DR, region thứ hai |
+| `security-account-vpc` | `10.8.0.0/16` | Account `lz-security` — công cụ chạy *trong* VPC: scanner, SIEM collector, bastion |
 | `3rd-party-vpc` | `10.9.0.0/16` | |
 | **NonProd spokes** | `10.10.0.0/14` | `10.10` – `10.13` |
 | **Prod spokes** | `10.20.0.0/14` | `10.20` – `10.23` |
 | **Sandbox** | `10.60.0.0/14` | Không attach TGW |
-| Dự phòng mở rộng | `10.100.0.0/12` | |
+| `logarchive-account-vpc` | `10.100.0.0/16` | Account `lz-logarchive` |
+| `management-account-vpc` | `10.101.0.0/16` | Account management — **xem cảnh báo bên dưới** |
+| Dự phòng mở rộng | `10.102.0.0/15` trở đi | Phần còn lại của `10.100.0.0/12` |
+
+**Ba dải cuối là account nền tảng, không phải workload.** Chúng không nằm trong bảng gốc vì thiết kế ban đầu không hình dung security/logarchive/management là spoke — GuardDuty, Security Hub, Config đều là dịch vụ quản lý, và logarchive chỉ chứa S3, thứ không sống trong VPC. Cấp phát ở đây để tránh ai đó sáu tháng sau cấp trùng `10.8`.
+
+> **VPC trong management account đi ngược một nguyên tắc của chính tài liệu này.** Management là account SCP không áp được, và [doc 22 lỗi 51](./22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại đúng một lần hạ tầng mạng lọt vào đó rồi phải gỡ ra. Dải `10.101.0.0/16` tồn tại vì đã có người **chủ động chọn** dựng nó, không phải vì thiết kế khuyến nghị.
+>
+> Thêm một giới hạn kỹ thuật: StackSet `SERVICE_MANAGED` triển khai theo cây tổ chức và **AWS loại management account** khỏi các đợt triển khai đó. Management nằm trực tiếp dưới root, không thuộc OU nào. Nên VPC ở đó nhiều khả năng phải dựng bằng stack thường (`aws cloudformation create-stack`) chạy tại chỗ, không qua StackSet.
 
 Subnet trong từng VPC hub:
 
