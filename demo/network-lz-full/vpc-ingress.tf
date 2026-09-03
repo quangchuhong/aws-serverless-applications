@@ -240,18 +240,30 @@ locals {
   # phai suy giam dan.
   first_spoke = try(sort(keys(local.local_spokes))[0], null)
 
-  # IP ma NLB tro vao.
+  # TACH DIEU KIEN KHOI GIA TRI - loi 61.
   #
-  # Uu tien EC2 local (doc duoc IP that tu AWS); khong co thi lay EC2
-  # o spoke remote (IP tinh truoc, xem local.remote_test_ips).
+  # use_local_target chi dua tren BIEN: biet duoc o thi diem plan.
+  # nlb_target_ip doc private_ip cua EC2: chi biet SAU khi apply.
   #
-  # Cho nay chay duoc voi target remote la nho availability_zone =
-  # "all" o duoi - thuoc tinh do da BAT BUOC san cho IP target nam
-  # ngoai VPC cua load balancer, va spoke remote cung chi la "ngoai
-  # VPC" mot cach xa hon.
+  # Ban dau ca hai gop lam mot va dat thang vao count, nen plan chet:
+  #
+  #   Invalid count argument: The "count" value depends on resource
+  #   attributes that cannot be determined until apply
+  #
+  # count phai tinh duoc o plan. Doc mot thuoc tinh resource trong do
+  # la du de hong, ke ca khi boc trong try(). Cung ho voi loi 50.
+  use_local_target = var.enable_test_instances && local.first_spoke != null
+
+  # Uu tien EC2 local (IP that, doc tu AWS); khong co thi lay EC2 o
+  # spoke remote (IP tinh truoc, xem local.remote_test_ips).
+  #
+  # Target remote chay duoc la nho availability_zone = "all" o duoi -
+  # thuoc tinh do da BAT BUOC san cho IP target nam ngoai VPC cua load
+  # balancer, va spoke o account khac cung chi la "ngoai VPC" mot cach
+  # xa hon.
   nlb_target_ip = (
-    local.first_spoke != null
-    ? try(aws_instance.test[local.first_spoke].private_ip, null)
+    local.use_local_target
+    ? aws_instance.test[local.first_spoke].private_ip
     : try(values(local.remote_test_ips)[0], null)
   )
 }
@@ -300,10 +312,12 @@ resource "aws_lb_listener" "http" {
 # KHONG co appliance: NLB tro thang vao app trong spoke.
 # availability_zone = "all" BAT BUOC khi IP target nam ngoai VPC cua LB.
 resource "aws_lb_target_group_attachment" "app_direct" {
+  # Chi dung BIEN va cau truc cua var.spokes - khong doc thuoc tinh
+  # resource nao. Loi 61.
   count = (
     var.enable_ingress
     && !var.enable_appliances
-    && local.nlb_target_ip != null
+    && (local.use_local_target || length(local.remote_test_ips) > 0)
   ) ? 1 : 0
 
   target_group_arn  = aws_lb_target_group.app[0].arn

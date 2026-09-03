@@ -130,7 +130,9 @@ Xếp theo thứ tự gặp phải.
 
 | 60 | `terraform destroy` xoá 143 resource, script báo **`CON 1 muc chua xoa`** | `resourcegroupstaggingapi` trả về cả resource **đã xoá**; TGW ở `deleted`, EC2 ở `terminated` vẫn còn tag. Mười phép kiểm lọc theo trạng thái sống nên đều xanh — hai kết quả mâu thuẫn, và cái sai là lệnh quét | **Lỗi code** | *(mục 7ae)* |
 
-**52/60 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 61 | `Invalid count argument` — `count` đọc `private_ip` của EC2 | Tôi kéo một thuộc tính **chỉ biết sau apply** vào `count`, thứ phải tính được ở **plan**. Code cũ tránh được vì dùng biến trong `count` và chỉ chạm thuộc tính ở `target_id`. Vá bằng cách tách `use_local_target` (biến, biết ở plan) khỏi `nlb_target_ip` (thuộc tính, biết sau apply). Cùng họ với lỗi 50 | **Lỗi code** | *(mục 7af)* |
+
+**53/61 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
