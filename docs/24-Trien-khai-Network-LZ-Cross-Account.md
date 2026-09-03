@@ -84,6 +84,32 @@ done
 
 **Không đăng ký delegated administrator** thì `CreateStackSet` báo `AccessDenied` — và lỗi đó không nhắc gì tới uỷ quyền. Đừng vượt qua bằng cách chạy code từ management account: bộ này một provider, làm vậy sẽ tạo **toàn bộ hub** trong management, nơi SCP không bao giờ áp được.
 
+### Uỷ quyền không thu hồi quyền của management
+
+Câu hỏi hay gặp: *đăng ký `lz-network` làm delegated admin rồi thì management còn dùng StackSet được không?*
+
+**Còn, đầy đủ.** Uỷ quyền là **thêm** một account được phép, không phải chuyển quyền đi. Bằng chứng trong chính repo này: [`landing-zone/account-baseline`](../landing-zone/account-baseline/) có StackSet `SERVICE_MANAGED` **không khai `call_as`** — mặc định `SELF`, chạy từ management — và nó hoạt động bình thường suốt lúc StackSet của demo chạy bằng `DELEGATED_ADMIN` từ `lz-network`.
+
+Nhưng hai bên là **hai không gian tên riêng biệt**:
+
+| | |
+|---|---|
+| `--call-as SELF` | StackSet do management sở hữu |
+| `--call-as DELEGATED_ADMIN` | StackSet do delegated admin sở hữu |
+
+StackSet tạo ở bên này **không nhìn thấy được** từ bên kia:
+
+```bash
+aws cloudformation list-stack-sets --call-as SELF            # tu management
+aws cloudformation list-stack-sets --call-as DELEGATED_ADMIN # tu delegated admin
+```
+
+Cùng một **tên** có thể tồn tại độc lập ở hai bên. Nghe tiện, nhưng là cái bẫy: hai StackSet trùng tên, deploy hai template khác nhau, và không lệnh nào cho thấy cả hai cùng lúc.
+
+`call_as` cũng phải **khớp giữa stack set và stack instance**. Lệch nhau thì CloudFormation báo không tìm thấy stack set — một câu không nhắc gì tới `call_as`.
+
+> **Thứ tự khi gỡ uỷ quyền:** xoá StackSet ở phía delegated admin **trước**, rồi mới `deregister-delegated-administrator`. Gỡ uỷ quyền trước thì StackSet do account đó tạo vẫn tồn tại mà không còn ai quản được — management không thấy chúng, và account kia mất quyền. Chưa đo trong tổ chức này, nên đây là thứ tự an toàn chứ không phải sự thật đã kiểm chứng.
+
 ---
 
 ## 3. Cấu hình
