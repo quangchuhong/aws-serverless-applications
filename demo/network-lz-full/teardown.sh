@@ -223,12 +223,42 @@ fi
 
 echo
 echo "── Quet theo tag Ephemeral=true ──"
+
+# LUOI VOT, KHONG PHAI PHEP DO CHINH XAC.
+#
+# resourcegroupstaggingapi TRA VE CA RESOURCE DA XOA, trong mot khoang
+# thoi gian sau do. TGW da xoa van o trang thai 'deleted', EC2 o
+# 'terminated', NAT o 'deleted' - khong con tinh tien, nhung van con tag
+# nen van hien ra day.
+#
+# Muoi phep kiem o tren loc theo TRANG THAI DANG HOAT DONG nen khong
+# thay chung. Khi muoi cai deu xanh ma lenh nay van liet ke, thi cai
+# sai la lenh nay.
+#
+# Da xay ra that: 143 resource destroyed, muoi muc xanh, va lenh nay
+# liet ke 19 ARN - trong do co dung nhung thu vua duoc bao la da sach.
+# Bao do la "CON 1 muc chua xoa" khien mot lan don dep sach bi doc
+# thanh mot lan that bai.
+#
+# Nen: khi muoi phep kiem deu xanh, day chi la thong tin can XAC NHAN,
+# khong phai loi. Khi da co phep kiem hong, no la manh moi tim tiep.
 remaining=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
   --tag-filters "Key=Ephemeral,Values=true" \
   --query 'ResourceTagMappingList[].ResourceARN' --output text 2>/dev/null)
 
 if [[ -z "$remaining" ]]; then
   printf '  \033[32m✓\033[0m Khong con resource nao gan tag Ephemeral\n'
+elif [[ $leftover -eq 0 ]]; then
+  n=$(echo "$remaining" | tr '\t' '\n' | grep -c .)
+  printf '  \033[33m-\033[0m %d ARN con tag, nhung muoi phep kiem o tren deu sach\n' "$n"
+  echo "      API tag tra ve ca resource DA XOA trong mot luc. Nhieu kha"
+  echo "      nang day la do tre, khong phai con song. Xac nhan:"
+  echo
+  echo "$remaining" | tr '\t' '\n' | sed 's/^/      /'
+  echo
+  echo "      aws ec2 describe-transit-gateways --region $REGION \\"
+  echo "        --transit-gateway-ids <tgw-id> --query 'TransitGateways[].State'"
+  echo "      -> 'deleted' la da xoa that. Con 'available' thi moi la van de."
 else
   printf '  \033[31m✗\033[0m Con lai:\n'
   echo "$remaining" | tr '\t' '\n' | sed 's/^/      /'
