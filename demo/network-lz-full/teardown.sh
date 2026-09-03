@@ -67,6 +67,45 @@ if [[ -n "$EXPECT_ACCOUNT" && -n "$ACTUAL_ACCOUNT" && "$EXPECT_ACCOUNT" != "$ACT
   exit 1
 fi
 
+########################################
+# ATTACHMENT MA TERRAFORM KHONG QUAN LY
+#
+# KHONG XOA DUOC TRANSIT GATEWAY khi con attachment. Attachment do
+# StackSet tao thi terraform destroy go duoc - no xoa stack instance.
+# Nhung attachment cua spoke khai manual_vpc = true thi KHONG: VPC do
+# duoc dung bang stack thuong chay o account kia, ngoai tam voi cua
+# state nay.
+#
+# Gap phai thi destroy chay ~15 phut roi chet o aws_ec2_transit_gateway
+# voi mot cau ve dependency - dung luc ban tuong sap xong.
+########################################
+TGW_ID=$(terraform output -raw transit_gateway_id 2>/dev/null || echo "")
+PROJECT=$(terraform output -raw project 2>/dev/null || echo "<project>")
+
+if [[ -n "$TGW_ID" ]]; then
+  foreign=$(aws ec2 describe-transit-gateway-attachments --region "$REGION" \
+    --filters "Name=transit-gateway-id,Values=$TGW_ID" \
+              "Name=resource-type,Values=vpc" \
+              "Name=state,Values=available" \
+    --query "TransitGatewayAttachments[?ResourceOwnerId!='$ACTUAL_ACCOUNT'].[TransitGatewayAttachmentId,ResourceOwnerId]" \
+    --output text 2>/dev/null)
+
+  # Attachment cua StackSet cung hien o day, va chung KHONG phai van de
+  # - destroy go duoc. Nen day la CANH BAO de doc, khong phai cong chan.
+  if [[ -n "$foreign" ]]; then
+    echo
+    echo "  Attachment thuoc account khac dang gan vao $TGW_ID:"
+    echo "$foreign" | sed 's/^/      /'
+    echo
+    echo "  Cai nao do StackSet tao thi destroy tu go. Cai nao do stack"
+    echo "  THUONG tao (spoke khai manual_vpc = true) thi PHAI xoa truoc,"
+    echo "  tu chinh account do:"
+    echo "      aws cloudformation delete-stack --stack-name ${PROJECT}-spoke-vpc"
+    echo
+    echo "  Con sot lai thi destroy se chet o buoc xoa Transit Gateway."
+  fi
+fi
+
 echo "════════════════════════════════════════════"
 echo " Teardown demo network LZ"
 echo "════════════════════════════════════════════"
