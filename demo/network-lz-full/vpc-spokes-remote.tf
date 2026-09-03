@@ -236,6 +236,35 @@ resource "aws_ram_principal_association" "spoke_accounts" {
 # loi, khong canh bao, va khong mot goi tin nao di qua.
 ########################################
 
+# SUA TEMPLATE O DAY KHONG TU DONG TOI INSTANCE - loi 65.
+#
+# `terraform apply` sau khi sua template_body se bao "1 changed" va
+# ba chi so deu xanh:
+#
+#   terraform            1 changed
+#   list-stack-set-operations   UPDATE SUCCEEDED
+#   list-stack-instances        CURRENT
+#
+# Va bon account VAN chay template cu. Khong chi so nao noi doi -
+# chung deu do LOP DIEU PHOI, con cau hoi "instance dang chay template
+# nao" thi o lop duoi.
+#
+# Ly do: UpdateStackSet cap nhat DINH NGHIA stack set, chi trien khai
+# xuong instance khi kem DeploymentTargets + Regions, ma provider
+# khong gui. `update-stack-instances` cung khong duoc: no cap nhat
+# GIA TRI THAM SO, dung lai template instance dang co.
+#
+# Duong duy nhat chac chan:
+#
+#   terraform apply -replace='aws_cloudformation_stack_set_instance.spoke["<ten>"]'
+#
+# Roi PHAI apply them mot lan: stack bi tao lai nen ATTACHMENT ID DOI,
+# va cac association o muc 4 dang tro vao ID da bien mat.
+#
+# Cach kiem NHANH NHAT xem instance da nhan template moi chua - hoi
+# chinh no, dung hoi trang thai:
+#
+#   curl http://<ip-spoke>/     # noi dung trang doi khi template doi
 resource "aws_cloudformation_stack_set" "spoke" {
   count = local.has_remote ? 1 : 0
 

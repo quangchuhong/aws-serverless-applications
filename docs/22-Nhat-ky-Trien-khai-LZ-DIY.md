@@ -138,7 +138,9 @@ Xếp theo thứ tự gặp phải.
 
 | 64 | Bản vá cho lỗi 63 **làm hỏng chính phép đo đó** — cả bốn spoke trả về chuỗi rỗng | Lệnh chẩn đoán mới chứa dấu nháy kép (`echo " rc=$?"`), mà `run_remote` nhúng lệnh vào JSON của SSM. Nháy kép phá vỡ JSON, SSM từ chối, output rỗng — và chuỗi rỗng đọc y hệt "không thông". Cái đang chạy được (`logarchive`) cũng đỏ theo | **Lỗi code** | *(mục 7ai)* |
 
-**56/64 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 65 | Sửa template StackSet rồi `terraform apply` → **code cũ vẫn chạy ở bốn account** | `terraform apply` báo `1 changed`, `list-stack-set-operations` có `UPDATE SUCCEEDED`, `list-stack-instances` báo `CURRENT` — ba chỉ số đều xanh, và cả ba đều **không** nói instance đang chạy template nào. Thứ cho câu trả lời là nội dung trang HTTP: vẫn là trang nginx cũ | **Giới hạn công cụ** | *(mục 7aj)* |
+
+**56/65 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2730,6 +2732,47 @@ Sửa: bỏ nháy kép, `echo rc=$?` không cần nháy nào cả.
 > Dấu hiệu lẽ ra phải thấy ngay: `logarchive` chuyển từ xanh sang đỏ mà **không ai đụng vào nó**. Một phép đo đổi kết quả trong khi đối tượng đo không đổi thì thứ hỏng là phép đo, không phải đối tượng. Đó cũng chính là cách lỗi 63 được tìm ra — và tôi vẫn mất một vòng để áp dụng lại nó.
 >
 > Quy tắc rút ra: lệnh gửi qua `ssm send-command` **không được chứa dấu nháy kép**. Nháy đơn an toàn; tốt nhất là không cần nháy nào.
+
+---
+
+### 7aj. Lỗi 65 — ba chỉ số xanh, và không chỉ số nào trả lời câu hỏi
+
+Sửa `UserData` trong template của StackSet, `terraform apply`. Bốn EC2 ở bốn account vẫn chạy code cũ.
+
+Ba lần tôi đoán, ba lần đo, ba lần sai:
+
+| Đoán | Đo được | Kết luận rút ra |
+|---|---|---|
+| Instance còn `OUTDATED` | `CURRENT` cả bốn | Rút lại — tưởng đã lan |
+| `CURRENT` = đã nhận template mới | Trang HTTP vẫn là nginx cũ | `CURRENT` không nói template nào |
+| Không có `UPDATE` nào chạy | Hai `UPDATE SUCCEEDED` | Operation chạy, instance không đổi |
+
+Ba chỉ số của lớp điều phối — `terraform apply` báo `1 changed`, operation `SUCCEEDED`, instance `CURRENT` — đều **đúng theo nghĩa của chúng**, và không cái nào trả lời *"instance đang chạy template nào"*.
+
+Thứ cho câu trả lời là **một byte dữ liệu thật từ bên trong instance**:
+
+```
+curl http://10.100.0.10/
+<h1>logarchive</h1>...      <- trang nginx CU
+```
+
+#### Vì sao
+
+`UpdateStackSet` cập nhật **định nghĩa** stack set. Nó chỉ triển khai xuống instance khi lệnh gọi kèm `DeploymentTargets` và `Regions` — mà provider Terraform không gửi. Nên operation thành công thật, chỉ là nó không chạm tới stack nào.
+
+`UpdateStackInstances` cũng không giải quyết: nó cập nhật **giá trị tham số**, dùng lại template mà instance đang có. Chạy bốn lần, mỗi lần 19 giây, `SUCCEEDED` cả bốn, không gì thay đổi — thời gian chạy đã là dấu hiệu: thay một EC2 không thể mất 19 giây.
+
+Đường duy nhất chắc chắn:
+
+```bash
+terraform apply -replace='aws_cloudformation_stack_set_instance.spoke["<ten>"]'
+```
+
+Xoá stack ở account đích rồi tạo lại từ template hiện tại. Đổi lại: VPC và attachment bị dựng lại, **attachment ID đổi**, nên phải `terraform apply` thêm một lần để pha 4 nối route cho ID mới.
+
+> **Bài học:** khi ba chỉ số cùng báo xanh mà hành vi vẫn sai, đừng tìm chỉ số thứ tư. Chúng đều đo lớp điều phối; câu hỏi thì ở lớp bên dưới. Một `curl` vào chính thứ mình nghi ngờ đã kết thúc chuyện trong mười giây, sau khi bốn vòng đọc trạng thái không kết thúc được gì.
+>
+> Dấu hiệu để nhận ra sớm: **thời gian**. Bốn operation "thay EC2" hoàn tất trong 19 giây mỗi cái. Một thao tác vật lý mà xong nhanh hơn thời gian nó cần để xảy ra thì nó đã không xảy ra.
 
 ---
 
