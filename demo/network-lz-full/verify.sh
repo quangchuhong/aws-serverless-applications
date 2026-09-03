@@ -560,6 +560,64 @@ else
 fi
 
 ########################################
+hdr "7d. DNS + endpoint tap trung O ACCOUNT KHAC"
+#
+# Muc 7b hoi EC2 local. Muc nay hoi EC2 o ACCOUNT KHAC - va do la cau
+# hoi khong tra loi truc tiep duoc: script chay bang credential cua
+# account hub, SSM khong di xuyen account.
+#
+# Nen instance o do TU do roi dang ket qua len trang HTTP cua no. probe
+# curl sang doc, di qua dung duong east-west da chung minh o muc 7c.
+#
+# Trang co dang:
+#   spoke=app-dev account=169873795883 vpc=10.10.0.0/16
+#   ssm=10.1.30.x     <- PHAI trong security VPC
+#   s3=52.x.x.x       <- PHAI cong khai (gateway endpoint)
+#   phz=10.11.0.24    <- PHAI phan giai duoc = Route 53 Profile da toi
+########################################
+
+if [[ -z "$DEV_ID" || -z "$REMOTE_KEYS" ]]; then
+  skip "Can EC2 local + EC2 o spoke remote"
+else
+  SEC_CIDR=$(aws ec2 describe-vpcs --region "$REGION" \
+    --vpc-ids "$(tfout security_vpc_id)" \
+    --query 'Vpcs[0].CidrBlock' --output text 2>/dev/null)
+  SEC_PREFIX=$(echo "$SEC_CIDR" | cut -d. -f1,2).
+
+  for k in $REMOTE_KEYS; do
+    ip=$(echo "$TARGETS" | jq -r --arg k "$k" '.[$k].ip')
+    page=$(run_remote "$DEV_ID" "curl -s --max-time 8 http://$ip/ | tr '\n' ' '")
+
+    if [[ -z "$page" || "$page" != *"spoke="* ]]; then
+      skip "$k: chua doc duoc trang (EC2 chua cap nhat template moi?)"
+      continue
+    fi
+
+    r_ssm=$(echo "$page" | grep -oE 'ssm=[^ ]+' | cut -d= -f2)
+    r_s3=$(echo "$page" | grep -oE 's3=[^ ]+' | cut -d= -f2)
+    r_phz=$(echo "$page" | grep -oE 'phz=[^ ]+' | cut -d= -f2)
+
+    if [[ "$r_ssm" == "$SEC_PREFIX"* ]]; then
+      ok "$k: ssm -> $r_ssm (interface endpoint o security VPC)"
+    else
+      bad "$k: ssm -> $r_ssm - KHONG trong $SEC_CIDR. Endpoint tinh tien ma account nay di vong ra Internet"
+    fi
+
+    if [[ -n "$r_s3" && "$r_s3" != "none" && "$r_s3" != "$SEC_PREFIX"* ]]; then
+      ok "$k: s3 -> $r_s3 (gateway endpoint: IP cong khai la DUNG)"
+    else
+      bad "$k: s3 -> $r_s3 - gateway endpoint khong dung DNS, ket qua nay bat thuong"
+    fi
+
+    if [[ -n "$r_phz" && "$r_phz" != "none" ]]; then
+      ok "$k: PHZ noi bo phan giai duoc -> $r_phz (Route 53 Profile da toi account nay)"
+    else
+      bad "$k: PHZ noi bo KHONG phan giai duoc - Route 53 Profile chua toi VPC nay"
+    fi
+  done
+fi
+
+########################################
 hdr "8. Ingress"
 ########################################
 

@@ -270,6 +270,18 @@ resource "aws_cloudformation_stack_set" "spoke" {
     ProjectName      = var.project
     SpokeName        = "spoke"
     DnsProfileId     = var.enable_dns_profile ? aws_route53profiles_profile.shared[0].id : ""
+
+    # Mot ten CO THAT trong PHZ noi bo, de EC2 o account khac tu kiem
+    # xem Route 53 Profile da mang PHZ toi VPC cua no chua.
+    #
+    # Ban ghi chi sinh cho spoke LOCAL, nen dung ten cua spoke local dau
+    # tien. Phan giai duoc tu mot account khac = profile da toi noi.
+    # Khong co spoke local thi bo trong, va phep do do se bo qua.
+    InternalDnsProbe = (
+      var.enable_internal_dns && var.enable_test_instances && local.first_spoke != null
+      ? "${local.first_spoke}.${var.internal_dns_domain}"
+      : ""
+    )
     TestPrivateIp    = ""
     TestInstanceType = var.instance_type
     InternalSupernet = var.internal_supernet
@@ -300,6 +312,10 @@ resource "aws_cloudformation_stack_set" "spoke" {
       TestPrivateIp    = { Type = "String", Default = "" }
       TestInstanceType = { Type = "String", Default = "t3.micro" }
       InternalSupernet = { Type = "String", Default = "10.0.0.0/8" }
+
+      # Mot ten trong PHZ noi bo, de EC2 tu kiem xem Route 53 Profile
+      # da toi VPC nay chua. Rong = bo qua phep do do.
+      InternalDnsProbe = { Type = "String", Default = "" }
     }
 
     Conditions = {
@@ -546,7 +562,57 @@ resource "aws_cloudformation_stack_set" "spoke" {
             "Fn::Base64" = { "Fn::Sub" = join("\n", [
               "#!/bin/bash",
               "mkdir -p /var/www",
-              "echo \"<h1>$${SpokeName}</h1><p>account $${AWS::AccountId} / vpc $${VpcCidr}</p>\" > /var/www/index.html",
+              # EC2 TU TRA LOI VE DNS CUA CHINH NO.
+              #
+              # Muon biet account nay phan giai ten AWS ra IP noi bo hay
+              # IP cong khai thi phai hoi TU BEN TRONG no. Script kiem
+              # chung chay o account hub, khong co credential o day, va
+              # SSM khong di xuyen account.
+              #
+              # Nen instance tu do roi dang ket qua len trang HTTP. probe
+              # curl sang doc - di qua dung duong east-west da chung minh
+              # o muc 7c. Mot cau hoi cross-account thanh mot curl noi bo.
+              #
+              # getent thay cho dig: co san trong AL2023, khong can cai goi.
+              "cat > /usr/local/bin/refresh-index <<'GEN'",
+              "#!/bin/bash",
+              "R=$(getent ahostsv4 ssm.__REGION__.amazonaws.com 2>/dev/null | awk '{print $1; exit}')",
+              "S=$(getent ahostsv4 s3.__REGION__.amazonaws.com 2>/dev/null | awk '{print $1; exit}')",
+              "P=$(getent ahostsv4 __ZONE__ 2>/dev/null | awk '{print $1; exit}')",
+              "{",
+              "  echo spoke=__SPOKE__",
+              "  echo account=__ACCT__",
+              "  echo vpc=__CIDR__",
+              "  echo ssm=$${!R:-none}",
+              "  echo s3=$${!S:-none}",
+              "  echo phz=$${!P:-none}",
+              "} > /var/www/index.html",
+              "GEN",
+              "sed -i s/__REGION__/$${AWS::Region}/g /usr/local/bin/refresh-index",
+              "sed -i s/__SPOKE__/$${SpokeName}/g /usr/local/bin/refresh-index",
+              "sed -i s/__ACCT__/$${AWS::AccountId}/g /usr/local/bin/refresh-index",
+              "sed -i s@__CIDR__@$${VpcCidr}@g /usr/local/bin/refresh-index",
+              "sed -i s/__ZONE__/$${InternalDnsProbe}/g /usr/local/bin/refresh-index",
+              "chmod +x /usr/local/bin/refresh-index",
+              "/usr/local/bin/refresh-index",
+              # Chay lai moi phut: profile DNS co the duoc gan SAU khi
+              # instance boot, va mot ket qua do luc boot se sai mai mai.
+              "cat > /etc/systemd/system/refresh-index.timer <<'TMR'",
+              "[Unit]",
+              "Description=Cap nhat ket qua phan giai DNS moi phut",
+              "[Timer]",
+              "OnBootSec=60",
+              "OnUnitActiveSec=60",
+              "[Install]",
+              "WantedBy=timers.target",
+              "TMR",
+              "cat > /etc/systemd/system/refresh-index.service <<'SVC'",
+              "[Unit]",
+              "Description=Cap nhat ket qua phan giai DNS",
+              "[Service]",
+              "Type=oneshot",
+              "ExecStart=/usr/local/bin/refresh-index",
+              "SVC",
               "cat > /etc/systemd/system/testweb.service <<'UNIT'",
               "[Unit]",
               "Description=EC2 kiem chung - web server khong can cai goi",
@@ -560,6 +626,7 @@ resource "aws_cloudformation_stack_set" "spoke" {
               "UNIT",
               "systemctl daemon-reload",
               "systemctl enable --now testweb",
+              "systemctl enable --now refresh-index.timer",
               # Tien ich de troubleshoot - CO CUNG TOT, KHONG CO CUNG KHONG SAO.
               # `|| true` de mot lan dnf that bai khong lam hong ca UserData.
               "dnf install -y nmap-ncat bind-utils || true",
