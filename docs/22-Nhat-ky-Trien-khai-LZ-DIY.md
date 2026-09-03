@@ -136,7 +136,9 @@ Xếp theo thứ tự gặp phải.
 
 | 63 | 3/4 spoke báo `khong thong` cổng 80 — mà **mạng hoàn toàn bình thường** | `UserData` chạy `dnf install nginx`, cần Internet. Nhưng pha 3 tạo EC2 xong là nó boot ngay, còn pha 4 mới nối attachment vào route table — giữa hai pha spoke **không có đường ra**. Một cuộc đua giữa cloud-init và `terraform apply`; cái duy nhất chạy được là stack instance cuối cùng. Dấu hiệu phân biệt nằm ở cổng 22: `ncat` **kết nối được** cả bốn | **Lỗi code** | *(mục 7ah)* |
 
-**55/63 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 64 | Bản vá cho lỗi 63 **làm hỏng chính phép đo đó** — cả bốn spoke trả về chuỗi rỗng | Lệnh chẩn đoán mới chứa dấu nháy kép (`echo " rc=$?"`), mà `run_remote` nhúng lệnh vào JSON của SSM. Nháy kép phá vỡ JSON, SSM từ chối, output rỗng — và chuỗi rỗng đọc y hệt "không thông". Cái đang chạy được (`logarchive`) cũng đỏ theo | **Lỗi code** | *(mục 7ai)* |
+
+**56/64 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2691,6 +2693,43 @@ Thắng thua đổi mỗi lần dựng.
 > **Bài học:** thông báo cũ gộp hai nguyên nhân trái ngược vào một chữ, và chữ đó — `TIMEOUT` — trỏ vào cái sai. Nếu tôi tin nó, tôi đã đi sửa firewall và route table cho một hệ thống định tuyến hoàn toàn đúng.
 >
 > Thứ cứu được là một dòng tôi **không** thiết kế để chẩn đoán: phép thử cổng 22, vốn chỉ để chứng minh firewall chặn được thứ security group cho phép. Nó vô tình trở thành đối chứng — cùng đường đi, cùng đích, khác cổng. **Một phép đo chỉ có ý nghĩa khi có cái gì đó để so sánh.**
+
+---
+
+### 7ai. Lỗi 64 — bản vá cho lỗi 63 làm hỏng phép đo của lỗi 63
+
+Lỗi 63 kết thúc bằng hai bản vá: bỏ phụ thuộc Internet lúc boot, và **làm thông báo nói đúng** bằng cách lấy mã thoát của `curl`. Chạy lại:
+
+```
+✗ app-dev    10.10.0.10:80 khong thong (ket qua: )
+✗ app-prod   10.20.0.10:80 khong thong (ket qua: )
+✗ logarchive 10.100.0.10:80 khong thong (ket qua: )
+✗ security   10.8.0.10:80  khong thong (ket qua: )
+```
+
+Bốn trên bốn, và `logarchive` — cái **đang chạy được** ở lần trước — giờ cũng đỏ. Chuỗi kết quả **rỗng**.
+
+Lệnh chẩn đoán mới là:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/; echo " rc=$?"
+```
+
+`run_remote` nhúng lệnh đó vào JSON của SSM:
+
+```bash
+--parameters "commands=[\"$cmd\"]"
+```
+
+Dấu nháy kép trong `echo " rc=$?"` phá vỡ JSON. SSM từ chối cả lệnh, `StandardOutputContent` về rỗng — và chuỗi rỗng đi qua mọi nhánh `if` để rơi vào `else`, in ra "không thông".
+
+Sửa: bỏ nháy kép, `echo rc=$?` không cần nháy nào cả.
+
+> **Bài học, và nó khó chịu hơn bản thân lỗi:** tôi sửa một thông báo chẩn đoán *vì nó gộp hai nguyên nhân thành một*, và bản sửa đó tạo ra **nguyên nhân thứ ba** — cũng in ra đúng dòng đỏ ấy.
+>
+> Dấu hiệu lẽ ra phải thấy ngay: `logarchive` chuyển từ xanh sang đỏ mà **không ai đụng vào nó**. Một phép đo đổi kết quả trong khi đối tượng đo không đổi thì thứ hỏng là phép đo, không phải đối tượng. Đó cũng chính là cách lỗi 63 được tìm ra — và tôi vẫn mất một vòng để áp dụng lại nó.
+>
+> Quy tắc rút ra: lệnh gửi qua `ssm send-command` **không được chứa dấu nháy kép**. Nháy đơn an toàn; tốt nhất là không cần nháy nào.
 
 ---
 

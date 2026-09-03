@@ -522,7 +522,15 @@ else
     #
     #   rc=7   khong ket noi duoc  -> cong dong, DICH VU chua chay
     #   rc=28  het thoi gian       -> goi tin khong toi noi, loi MANG
-    out=$(run_remote "$DEV_ID" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/; echo \" rc=\$?\"")
+    # KHONG DUOC co dau nhay kep trong lenh - loi 64.
+    #
+    # run_remote nhung lenh vao JSON: --parameters "commands=[\"$cmd\"]".
+    # Mot dau " ben trong pha vo JSON, SSM tu choi, va output ve RONG.
+    # Chuoi rong doc y het "khong thong" - nen ban va cho chan doan lai
+    # lam hong chinh phep do, ke ca cai truoc do dang chay duoc.
+    #
+    # Dau nhay don thi an toan; `echo rc=$?` khong can nhay nao ca.
+    out=$(run_remote "$DEV_ID" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/; echo rc=\$?")
     code=$(echo "$out" | grep -oE 'rc=[0-9]+' | cut -d= -f2)
 
     if [[ "$out" == *"200"* ]]; then
