@@ -523,12 +523,46 @@ resource "aws_cloudformation_stack_set" "spoke" {
 
           MetadataOptions = { HttpTokens = "required" }
 
+          # KHONG CAI GOI GI LUC BOOT - loi 63.
+          #
+          # Ban dau day la `dnf install -y nginx`, va no thua mot cuoc
+          # dua ma khong ai thiet ke:
+          #
+          #   pha 3  StackSet tao VPC + attachment + EC2 -> EC2 boot NGAY
+          #   pha 4  moi noi attachment vao route table
+          #
+          # Giua hai pha, spoke KHONG co duong ra Internet. cloud-init
+          # chay `dnf install` vao dung khoang do va that bai im lang.
+          # Instance van `running`, SSH van bat, chi port 80 khong ai
+          # nghe - va trieu chung doc y het "mang khong thong".
+          #
+          # Do duoc: 3/4 spoke hong, cai duy nhat chay la stack instance
+          # CUOI CUNG - no boot vua luc pha 4 xong. Mot cuoc dua thi thang
+          # thua doi moi lan dung.
+          #
+          # python3 co san trong AL2023, khong can mang. Dung no lam web
+          # server thi phep do khong con phu thuoc vao thu tu cac pha.
           UserData = {
             "Fn::Base64" = { "Fn::Sub" = join("\n", [
               "#!/bin/bash",
-              "dnf install -y nginx nmap-ncat bind-utils",
-              "echo \"<h1>$${SpokeName}</h1><p>account $${AWS::AccountId} / vpc $${VpcCidr}</p>\" > /usr/share/nginx/html/index.html",
-              "systemctl enable --now nginx",
+              "mkdir -p /var/www",
+              "echo \"<h1>$${SpokeName}</h1><p>account $${AWS::AccountId} / vpc $${VpcCidr}</p>\" > /var/www/index.html",
+              "cat > /etc/systemd/system/testweb.service <<'UNIT'",
+              "[Unit]",
+              "Description=EC2 kiem chung - web server khong can cai goi",
+              "After=network-online.target",
+              "[Service]",
+              "WorkingDirectory=/var/www",
+              "ExecStart=/usr/bin/python3 -m http.server 80 --bind 0.0.0.0",
+              "Restart=always",
+              "[Install]",
+              "WantedBy=multi-user.target",
+              "UNIT",
+              "systemctl daemon-reload",
+              "systemctl enable --now testweb",
+              # Tien ich de troubleshoot - CO CUNG TOT, KHONG CO CUNG KHONG SAO.
+              # `|| true` de mot lan dnf that bai khong lam hong ca UserData.
+              "dnf install -y nmap-ncat bind-utils || true",
             ]) }
           }
 

@@ -514,11 +514,25 @@ else
     ip=$(echo "$TARGETS" | jq -r --arg k "$k" '.[$k].ip')
     acct=$(echo "$TARGETS" | jq -r --arg k "$k" '.[$k].account')
 
-    out=$(run_remote "$DEV_ID" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/ || echo TIMEOUT")
+    # LAY MA THOAT CUA CURL, khong gop tat ca thanh "TIMEOUT" - loi 63.
+    #
+    # Ban dau dong nay la `curl ... || echo TIMEOUT`, nen "cong bi tu
+    # choi" va "goi tin khong toi noi" in ra Y HET NHAU. Hai nguyen
+    # nhan hoan toan khac: mot la dich vu chua chay, mot la loi mang.
+    #
+    #   rc=7   khong ket noi duoc  -> cong dong, DICH VU chua chay
+    #   rc=28  het thoi gian       -> goi tin khong toi noi, loi MANG
+    out=$(run_remote "$DEV_ID" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/; echo \" rc=\$?\"")
+    code=$(echo "$out" | grep -oE 'rc=[0-9]+' | cut -d= -f2)
+
     if [[ "$out" == *"200"* ]]; then
       ok "$k ($acct) $ip:80 THONG"
+    elif [[ "$code" == "7" ]]; then
+      bad "$k ($acct) $ip:80 BI TU CHOI - goi tin toi noi nhung khong ai nghe cong 80. Loi DICH VU, khong phai mang (xem UserData)"
+    elif [[ "$code" == "28" ]]; then
+      bad "$k ($acct) $ip:80 TIMEOUT - goi tin khong toi noi. Kiem east_west_mesh_ports, SG, rule firewall"
     else
-      bad "$k ($acct) $ip:80 khong thong (ket qua: $out) - kiem east_west_mesh_ports, SG, va rule firewall"
+      bad "$k ($acct) $ip:80 khong thong (ket qua: $out)"
     fi
 
     # Port 22: SG MO nhung khong co rule firewall nao cho no.

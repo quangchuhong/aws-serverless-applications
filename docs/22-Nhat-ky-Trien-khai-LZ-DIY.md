@@ -134,7 +134,9 @@ Xếp theo thứ tự gặp phải.
 
 | 62 | Đổi tên spoke từ `app-dev` sang `probe` → **mục 1 và 2 của `verify.sh` không in một dòng nào** | Script lọc VPC theo `${PROJECT}-app-*-vpc` và tìm EC2 theo `.["app-dev"]` — một **quy ước đặt tên**, không phải sự thật. Không khớp thì vòng lặp không chạy, bảng ngắn đi hai dòng và không báo gì. Mục 7 thì bỏ qua với lý do **sai**: `enable_test_instances = false` trong khi nó đang `true`. Vá bằng `output "spoke_names"` | **Lỗi code** | *(mục 7ag)* |
 
-**54/62 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 63 | 3/4 spoke báo `khong thong` cổng 80 — mà **mạng hoàn toàn bình thường** | `UserData` chạy `dnf install nginx`, cần Internet. Nhưng pha 3 tạo EC2 xong là nó boot ngay, còn pha 4 mới nối attachment vào route table — giữa hai pha spoke **không có đường ra**. Một cuộc đua giữa cloud-init và `terraform apply`; cái duy nhất chạy được là stack instance cuối cùng. Dấu hiệu phân biệt nằm ở cổng 22: `ncat` **kết nối được** cả bốn | **Lỗi code** | *(mục 7ah)* |
+
+**55/63 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2636,6 +2638,59 @@ for sp in $SPOKES; do
 EC2 điều khiển phép đo lấy **cái đầu tiên có thật**, không gọi tên cứng. Và lý do bỏ qua giờ phân biệt được "không có spoke nội bộ" với "`enable_test_instances = false`" — một lý do sai trong thông báo còn đắt hơn không có thông báo, vì nó làm người đọc đi sửa đúng thứ không hỏng.
 
 > **Bài học:** mỗi khi script lọc theo một chuỗi có dạng tên, hỏi *"chuỗi này do ai quyết định"*. Nếu câu trả lời là "quy ước của chúng tôi" thì nó sẽ sai vào ngày ai đó đổi quy ước — và cách nó sai sẽ là **im lặng**, không phải báo lỗi.
+
+---
+
+### 7ah. Lỗi 63 — "mạng không thông" mà mạng không hỏng
+
+`verify.sh` mục 7c chạy lần đầu:
+
+```
+✗ app-dev    (169873795883) 10.10.0.10:80  khong thong (000TIMEOUT)
+✗ app-prod   (761558631239) 10.20.0.10:80  khong thong (000TIMEOUT)
+✓ logarchive (654560867047) 10.100.0.10:80 THONG
+✗ security   (458195083898) 10.8.0.10:80   khong thong (000TIMEOUT)
+```
+
+Ba trên bốn hỏng. Phản xạ đầu tiên là đi tìm lỗi định tuyến — mà mục 6c ngay phía trên đã xanh cả tám dòng.
+
+**Câu trả lời nằm ở cổng 22**, dòng ngay dưới mỗi dòng đỏ:
+
+```
+Ncat: 0 bytes sent, 0 bytes received in 0.02 seconds.
+```
+
+Đó là thông báo `ncat` in khi **kết nối thành công** rồi đóng — timeout thì in `Connection timed out`, bị chặn thì `Connection refused`. Cổng 22 thông trên **cả bốn** spoke. Gói tin từ `probe` tới được cả bốn EC2 ở bốn account khác nhau.
+
+Mạng không hỏng. **Nginx không chạy.**
+
+#### Một cuộc đua không ai thiết kế
+
+```
+pha 3   StackSet tao VPC + attachment + EC2   -> EC2 boot NGAY
+pha 4   moi noi attachment vao route table
+```
+
+Giữa hai pha, spoke **không có đường ra Internet**: attachment tồn tại nhưng chưa thuộc route table nào. `UserData` chạy `dnf install -y nginx` đúng vào khoảng đó và thất bại — im lặng, vì cloud-init không báo về đâu cả.
+
+Instance vẫn `running`, SSH vẫn bật, chỉ không ai nghe cổng 80. `logarchive` chạy được vì `max_concurrent_count = 1` khiến các stack instance dựng tuần tự, và nó là cái **cuối cùng** — boot vừa lúc pha 4 xong.
+
+Thắng thua đổi mỗi lần dựng.
+
+#### Hai bản vá, hai loại
+
+**Bỏ hẳn cuộc đua.** `python3` có sẵn trong AL2023, không cần mạng. Dùng `python3 -m http.server` qua systemd thay cho nginx, và phép đo không còn phụ thuộc thứ tự các pha. `dnf install` cho `nmap-ncat`/`bind-utils` giữ lại nhưng kèm `|| true` — tiện ích, không phải điều kiện.
+
+**Làm thông báo nói đúng.** Dòng cũ là `curl ... || echo TIMEOUT`, nên "cổng bị từ chối" và "gói tin không tới nơi" in ra **y hệt nhau**. Giờ lấy mã thoát:
+
+| | |
+|---|---|
+| `rc=7` | Không kết nối được → cổng đóng, **dịch vụ** chưa chạy |
+| `rc=28` | Hết thời gian → gói tin không tới nơi, lỗi **mạng** |
+
+> **Bài học:** thông báo cũ gộp hai nguyên nhân trái ngược vào một chữ, và chữ đó — `TIMEOUT` — trỏ vào cái sai. Nếu tôi tin nó, tôi đã đi sửa firewall và route table cho một hệ thống định tuyến hoàn toàn đúng.
+>
+> Thứ cứu được là một dòng tôi **không** thiết kế để chẩn đoán: phép thử cổng 22, vốn chỉ để chứng minh firewall chặn được thứ security group cho phép. Nó vô tình trở thành đối chứng — cùng đường đi, cùng đích, khác cổng. **Một phép đo chỉ có ý nghĩa khi có cái gì đó để so sánh.**
 
 ---
 
