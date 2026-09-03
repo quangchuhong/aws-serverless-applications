@@ -70,10 +70,10 @@ resource "aws_route53_record" "spoke_app" {
 #   Co Profile    : gan N zone vao profile MOT LAN, share qua RAM mot
 #                   lan, roi moi VPC mot dong.
 #
-# TRONG BO NAY (mot account) no khong giai gi ca - PHZ gan thang vao
-# ca ba VPC da xong. Bat len chi de:
-#   - thu truoc mo hinh se dung khi len multi-account
-#   - hoac chuan bi share cho account khac (can organization_arn)
+# CHI CO SPOKE LOCAL thi no khong giai gi ca - PHZ gan thang vao ca ba
+# VPC da xong, va van tinh phi association. Bat len khi co spoke o
+# ACCOUNT KHAC: luc do profile la duong duy nhat mang PHZ sang do ma
+# khong ai phai dang nhap vao account kia.
 #
 # GIOI HAN: mot VPC chi gan duoc MOT Profile. Nen gom het vao mot,
 # dung tach theo chu de.
@@ -117,55 +117,35 @@ resource "aws_route53profiles_association" "spoke" {
 }
 
 ########################################
-# Share profile cho ca to chuc
+# Share profile cho cac account co spoke
 #
-# Chi co y nghia khi se co VPC o account khac. De organization_arn
-# rong thi profile van chay, chi khong share di dau.
-#
-# CANH BAO - RAT CO THE HONG GIONG LOI 55.
-#
-# Ba resource duoi day la DUNG bo ba da that bai khi share Transit
-# Gateway tu account lz-network: RAM tu choi AssociateResourceShare
-# nhu MOT THAO TAC - ca cho resource lan cho principal - trong khi
-# CreateResourceShare kem --resource-arns lai chay.
-# aws_ram_resource_association goi dung API bi tu choi do.
-#
-# Chua do tren Route 53 Profile, nen day la du doan, khong phai su
-# that da kiem chung: phep do o loi 55 chi lam tren TGW. Nhung neu
-# gioi han nam o account chu khong o loai resource thi apply se dung
-# o aws_ram_resource_association.dns_profile voi cung thong bao.
-#
-# Neu gap: lam bang mot lenh CLI nhu voi TGW, roi
-# `terraform import` share vao state - hoac bo han viec share profile.
-#
-#   aws ram create-resource-share --name <project>-dns-profile \
-#     --no-allow-external-principals \
-#     --resource-arns <profile-arn> --principals <organization-arn>
-#
-# Ca hai bien deu mac dinh TAT nen duong nay chua ai di qua.
+# Chi co y nghia khi co VPC o account khac.
 ########################################
 
-resource "aws_ram_resource_share" "dns" {
-  count = var.enable_dns_profile && var.organization_arn != "" ? 1 : 0
-
-  name                      = "${var.project}-dns-profile"
-  allow_external_principals = false
-
-  tags = { Name = "${var.project}-dns-profile" }
-}
-
+# DUNG CHUNG SHARE VOI TRANSIT GATEWAY - co chu y.
+#
+# Truoc day cho nay tu tao mot share rieng
+# (${var.project}-dns-profile) voi principal la organization_arn.
+# Duong do KHONG chay: RAM khong phan giai duoc to chuc, nen moi
+# principal trong pham vi to chuc deu bi tu choi. Loi 56.
+#
+# Gan profile vao CHINH share da dung cho TGW co hai cai loi, va cai
+# thu hai moi la ly do that:
+#
+#   1. Mot share = mot loi moi. Account spoke bam nhan MOT lan, nhan
+#      duoc ca TGW lan DNS profile.
+#   2. Khong the lech nhau. Hai share rieng thi mot account co the da
+#      nhan cai nay ma chua nhan cai kia - VPC dung duoc mang nhung
+#      phan giai ten sai, mot trang thai nua voi rat kho doc.
+#
+# Doi lai: ten share ("${var.project}-tgw") gio khong con ta het thu
+# no mang. Doi ten se ep tao lai share va moi account phai nhan lai
+# loi moi, nen giu nguyen va ghi ro o day.
 resource "aws_ram_resource_association" "dns_profile" {
-  count = var.enable_dns_profile && var.organization_arn != "" ? 1 : 0
+  count = var.enable_dns_profile && local.ram_share == 1 ? 1 : 0
 
   resource_arn       = aws_route53profiles_profile.shared[0].arn
-  resource_share_arn = aws_ram_resource_share.dns[0].arn
-}
-
-resource "aws_ram_principal_association" "dns_org" {
-  count = var.enable_dns_profile && var.organization_arn != "" ? 1 : 0
-
-  principal          = var.organization_arn
-  resource_share_arn = aws_ram_resource_share.dns[0].arn
+  resource_share_arn = aws_ram_resource_share.tgw[0].arn
 }
 
 ########################################
@@ -174,8 +154,18 @@ resource "aws_ram_principal_association" "dns_org" {
 
 check "dns_profile_earns_its_keep" {
   assert {
-    condition     = !var.enable_dns_profile || var.organization_arn != ""
-    error_message = "enable_dns_profile = true nhung organization_arn rong: profile chi gan vao cac VPC trong CHINH account nay, ma chung da co PHZ gan thang roi. Dang tra phi association cho mot thu khong lam gi. Dien organization_arn de share ra ngoai, hoac tat profile di."
+    condition     = !var.enable_dns_profile || local.has_remote
+    error_message = "enable_dns_profile = true nhung khong co spoke nao o account khac: profile chi gan vao cac VPC trong CHINH account nay, ma chung da co PHZ gan thang roi. Dang tra phi association cho mot thu khong lam gi. Khai spoke co account_id, hoac tat profile di."
+  }
+}
+
+# Profile co ma KHONG share thi account spoke khong thay no, va
+# ProfileAssociation trong template CloudFormation se hong voi mot cau
+# khong nhac gi toi RAM.
+check "dns_profile_reaches_remote_spokes" {
+  assert {
+    condition     = !var.enable_dns_profile || !local.has_remote || local.ram_share == 1
+    error_message = "enable_dns_profile = true va co spoke o account khac, nhung ram_use_external_principals = false nen profile khong duoc share di dau. Stack o account spoke se bao khong tim thay profile."
   }
 }
 

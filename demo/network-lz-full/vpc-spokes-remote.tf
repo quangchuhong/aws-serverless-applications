@@ -205,6 +205,7 @@ resource "aws_cloudformation_stack_set" "spoke" {
     AzB              = length(var.availability_zones) > 1 ? var.availability_zones[1] : var.availability_zones[0]
     ProjectName      = var.project
     SpokeName        = "spoke"
+    DnsProfileId     = var.enable_dns_profile ? aws_route53profiles_profile.shared[0].id : ""
   }
 
   template_body = jsonencode({
@@ -226,6 +227,11 @@ resource "aws_cloudformation_stack_set" "spoke" {
       AzB              = { Type = "String" }
       ProjectName      = { Type = "String" }
       SpokeName        = { Type = "String" }
+      DnsProfileId     = { Type = "String", Default = "" }
+    }
+
+    Conditions = {
+      HasDnsProfile = { "Fn::Not" = [{ "Fn::Equals" = [{ Ref = "DnsProfileId" }, ""] }] }
     }
 
     Resources = {
@@ -321,6 +327,32 @@ resource "aws_cloudformation_stack_set" "spoke" {
         Type       = "AWS::EC2::SubnetRouteTableAssociation"
         Properties = { SubnetId = { Ref = "PrivateB" }, RouteTableId = { Ref = "PrivateRt" } }
       }
+
+      # DNS TAP TRUNG - mat xich chay o PHIA ACCOUNT SPOKE.
+      #
+      # Gan Route 53 Profile vao VPC la viec CHU SO HUU VPC lam, giong
+      # het chuyen chap nhan loi moi RAM. Terraform o day chi co mot
+      # provider tro vao lz-network nen khong lam ho duoc - nhung
+      # CloudFormation thi DANG CHAY trong account spoke, nen no lam
+      # duoc.
+      #
+      # Nho vay account spoke nhan duoc CA HAI thu cua DNS tap trung
+      # ma khong ai phai dang nhap vao do:
+      #   - PHZ noi bo   -> goi app khac bang ten
+      #   - PHZ endpoint -> ten AWS tro vao interface endpoint dat o
+      #                     security VPC, thay vi di vong ra Internet
+      #
+      # Bo qua khi DnsProfileId rong: profile chi ton tai khi
+      # enable_dns_profile = true.
+      DnsProfile = {
+        Type      = "AWS::Route53Profiles::ProfileAssociation"
+        Condition = "HasDnsProfile"
+        Properties = {
+          Name       = { "Fn::Sub" = "$${ProjectName}-$${SpokeName}" }
+          ProfileId  = { Ref = "DnsProfileId" }
+          ResourceId = { Ref = "Vpc" }
+        }
+      }
     }
 
     Outputs = {
@@ -373,6 +405,24 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
     failure_tolerance_count = 0
     max_concurrent_count    = 1
   }
+
+  # PHAI KHAI TUONG MINH.
+  #
+  # Stack chay o account spoke va tham chieu hai thu duoc share qua
+  # RAM: Transit Gateway va Route 53 Profile. Terraform chi thay phu
+  # thuoc vao ID cua chung - no KHONG thay phu thuoc vao viec chung da
+  # duoc share hay chua, vi share la resource khac.
+  #
+  # Thieu dong nay thi thu tu tao la ngau nhien, va khi CloudFormation
+  # chay truoc RAM thi loi bao ra o account spoke:
+  #   "Transit Gateway tgw-xxx was deleted or does not exist"
+  #   hoac profile khong tim thay
+  # - hai cau khong nhac gi toi RAM, va se dan nguoi doc di sai huong.
+  depends_on = [
+    aws_ram_resource_association.tgw,
+    aws_ram_principal_association.spoke_accounts,
+    aws_ram_resource_association.dns_profile,
+  ]
 }
 
 ########################################

@@ -205,7 +205,7 @@ output "dns" {
 
     profile_enabled = var.enable_dns_profile
     profile_id      = try(aws_route53profiles_profile.shared[0].id, null)
-    profile_shared  = var.enable_dns_profile && var.organization_arn != ""
+    profile_shared  = var.enable_dns_profile && local.ram_share == 1
   }
 }
 
