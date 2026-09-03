@@ -114,13 +114,15 @@ Xếp theo thứ tự gặp phải.
 
 | 52 | Ba lỗi cùng lúc lúc apply: RAM share bị từ chối ×2, `OrganizationalUnitIds are required` | StackSet `SERVICE_MANAGED` triển khai theo **cây tổ chức** — `accounts` chỉ là bộ lọc trong OU, không thay được OU. Và RAM sharing với Organizations là một bước bật **một lần ở cấp tổ chức** mà tôi không biết tới | **Lỗi code** *(+ thiếu điều kiện tiên quyết)* | *(mục 7w)* |
 
-| 53 | RAM share vẫn hỏng dù đã bật `enable-sharing-with-aws-organization` từ hai tuần trước | **Member account không share được với cả tổ chức** — chỉ management hoặc RAM delegated admin mới làm được. Câu `Organization could not be found` nghĩa là *không được phép nhìn*, không phải sai ARN | **Lỗi thiết kế** | *(mục 7x)* |
+| 53 | RAM share vẫn hỏng dù đã bật `enable-sharing-with-aws-organization` từ hai tuần trước | ~~Member account không share được với cả tổ chức~~ — **kết luận này đã bị bác bỏ ở mục 7z**: management account cũng hỏng. Nguyên nhân thật vẫn chưa biết | **Chưa kết luận** | *(mục 7x, 7z)* |
 
 | 54 | `Description` của template CloudFormation gây **diff vĩnh viễn** | Chuỗi có dấu tiếng Việt; CloudFormation lưu lại với `?` thay cho dấu, nên Terraform đòi sửa ở mọi lần plan và CloudFormation lại bóp méo tiếp. Cùng họ với lỗi 39 và 42 | **Lỗi code** | *(mục 7x)* |
 
 | 55 | RAM từ chối `AssociateResourceShare` — và đó là **trình tự duy nhất Terraform tạo ra được** | `create-resource-share --resource-arns` chạy; `create` rỗng rồi `associate` hỏng, cho cả resource lẫn principal. Provider AWS không có `resource_arns` trên `aws_ram_resource_share` | **Giới hạn không biểu diễn được** | *(mục 7y)* |
 
-**48/55 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 56 | **Management account cũng không share được** — `OrganizationalUnit ... in unknown organization could not be found` | Chưa biết. Dòng này bác bỏ kết luận của cả lỗi 52, 53 và 55. Đang chờ ba phép đo + AWS Support | **Chưa kết luận** | *(mục 7z)* |
+
+**48/56 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2127,9 +2129,13 @@ aws organizations list-aws-service-access-for-organization \
 
 **Bật từ gần hai tuần trước.** Không phải chưa bật, không phải đang lan.
 
-#### Nguyên nhân thật
+#### Nguyên nhân tôi kết luận lúc đó — và nó SAI
 
 **Member account không được share với cả tổ chức hoặc một OU.** Chỉ management account, hoặc một RAM delegated administrator, mới làm được. `lz-network` là member thường.
+
+> **Đính chính (xem mục 7z).** Kết luận này bị bác bỏ sau đó: người dùng tạo Transit Gateway **từ chính management account** và share cho một OU vẫn hỏng, với thông báo khác hẳn — `OrganizationalUnit ou-o5ci-fz0yuca3 in unknown organization could not be found`. Management account thì theo định nghĩa là được phép. Nên "quyền của member account" không phải nguyên nhân, và đoạn dưới đây đọc với hiểu biết đó.
+>
+> Đây là lần thứ **ba** liên tiếp trong cùng một vấn đề tôi biến một thông báo lỗi thành một nguyên nhân. Cả ba lần đều nghe hợp lý, và cả ba lần đều được ghi vào tài liệu như sự thật trước khi có phép đo nào tách bạch được nó.
 
 Và đây là chỗ thông báo dẫn đi lạc: `Organization o-tvkzhcq3yh could not be found` nghe như sai ARN — nhưng ARN hoàn toàn đúng. Tổ chức tồn tại. Thứ không tồn tại là **quyền của account này để nhìn thấy nó**. AWS nói *"không tìm thấy"* cho cả trường hợp *"không được phép"*, và tôi đã đọc nó theo nghĩa đen hai lần liên tiếp.
 
@@ -2224,6 +2230,60 @@ Chưa đo trên Route 53 Profile, nên đây là **dự đoán chứ không ph�
 > **Bài học:** tôi đã đoán năm lần từ cùng một thông báo, và mỗi lần đoán đều tốn một vòng apply mười phút của người dùng. Phép đo tách bạch được hai trình tự — thứ cuối cùng cho câu trả lời — tốn **ba mươi giây**, và lẽ ra phải là việc đầu tiên chứ không phải việc cuối cùng.
 >
 > Khi một thông báo lỗi liệt kê nhiều nguyên nhân có thể, đó là dấu hiệu nó **không biết** nguyên nhân nào. Đọc nó như một gợi ý là tự nhận lấy sự mơ hồ của nó.
+
+---
+
+### 7z. Lỗi 56 — management account cũng không share được, và ba kết luận trước đó đổ
+
+Sau khi kết thúc mục 7y, người dùng thử một đường hoàn toàn khác: tạo Transit Gateway **từ management account** và share cho một OU qua console. Kết quả:
+
+```
+OrganizationalUnit ou-o5ci-fz0yuca3 in unknown organization could not be found.
+```
+
+Một dòng này làm đổ **cả ba** kết luận trước:
+
+| Đã ghi ở | Kết luận | Vì sao đổ |
+|---|---|---|
+| Lỗi 52 | Chưa chạy `enable-sharing-with-aws-organization` | Chạy rồi, `returnValue: true` |
+| Lỗi 53 | Member account không được share | Management account **cũng** hỏng |
+| Lỗi 55 | `AssociateResourceShare` bị chặn như một thao tác | Lần này hỏng ở `create`, không phải `associate` |
+
+Và thông báo lần này khác về **chất**: `in unknown organization`. RAM đọc được ID của OU, đi tìm tổ chức chứa nó, và không thấy. Không có chữ nào về quyền.
+
+#### Không đưa nguyên nhân ở đây
+
+Bốn lần trước tôi đọc một thông báo lỗi rồi viết ra một nguyên nhân, và cả bốn lần đều sai — ba trong số đó đã kịp nằm trong tài liệu này dưới dạng sự thật. Nên mục này ghi **phép đo cần chạy**, không ghi chẩn đoán.
+
+Ba phép đo, từ management account, xếp theo lượng thông tin trên mỗi giây:
+
+```bash
+# 1. RAM da onboard THAT chua
+aws iam get-role --role-name AWSServiceRoleForResourceAccessManager
+```
+
+`enable-sharing-with-aws-organization` tạo service-linked role này. Trusted access bật **không** đảm bảo role còn tồn tại — nó có thể bị xoá sau. Không có role thì `unknown organization` là mô tả đúng theo nghĩa đen.
+
+```bash
+# 2. Principal la ACCOUNT ID thay vi OU
+aws ram create-resource-share --region ap-southeast-1 \
+  --name probe-acct --no-allow-external-principals \
+  --resource-arns <tgw-arn> --principals <spoke-account-id>
+
+# 3. OU bang ARN DAY DU
+aws ram create-resource-share --region ap-southeast-1 \
+  --name probe-ou --no-allow-external-principals \
+  --resource-arns <tgw-arn> \
+  --principals arn:aws:organizations::<MGMT_ID>:ou/o-tvkzhcq3yh/ou-o5ci-fz0yuca3
+```
+
+Phép đo 3 có một giả thuyết đứng sau, và nó **chỉ là giả thuyết**: principal kiểu OU cần ARN đầy đủ, mà ARN đó nhúng `o-tvkzhcq3yh` bên trong; `ou-o5ci-fz0yuca3` trần không mang thông tin tổ chức nào. Nếu console gửi ID trần thì câu chữ khớp chính xác. Chưa đo.
+
+Loại được mà không cần chạy: `FeatureSet` của tổ chức. RAM org sharing đòi `ALL`, và tổ chức này đang chạy 4 SCP — SCP chỉ tồn tại khi FeatureSet là `ALL`.
+
+> **Bài học, lần thứ ba trong cùng một vấn đề:** một thông báo lỗi mô tả **triệu chứng**, và tôi liên tục đọc nó như **nguyên nhân**. Mỗi lần như vậy đều sinh ra một bản vá nhắm vào chỗ không sai, một mục tài liệu khẳng định điều không đúng, và một vòng apply mười phút.
+>
+> Dấu hiệu nhận ra sớm: nếu tôi viết được nguyên nhân **mà không chạy lệnh nào**, thì cái tôi vừa viết là diễn giải câu chữ, không phải kết quả đo.
 
 ---
 

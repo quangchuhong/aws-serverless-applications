@@ -22,7 +22,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | [06](./docs/06-Aws-Landing-Zone.md) | **Landing Zone** – Organizations, OU, SCP, logging, Identity Center |
 | **[20](./docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md)** | **Vận hành LZ** – remote state, khoá state, quy trình thay đổi hằng ngày |
 | **[21](./docs/21-Control-Tower-vs-DIY.md)** | **Control Tower vs DIY** – hai cách dựng nền tảng, code cả hai để đối chiếu |
-| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – dựng thật, xoá thật, dựng lại: 55 lỗi và cách sửa |
+| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – dựng thật, xoá thật, dựng lại: 56 lỗi và cách sửa |
 | **[23](./docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md)** | **Lớp phát hiện** – GuardDuty, Security Hub, log archive: cơ chế, tính năng, chi phí |
 | [09](./docs/09-Account-Vending-Tu-Dong.md) | Account vending tự động – request as code, StackSet baseline |
 | [10](./docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | CI/CD cho LZ – GitHub Actions + OIDC, không dùng access key |
