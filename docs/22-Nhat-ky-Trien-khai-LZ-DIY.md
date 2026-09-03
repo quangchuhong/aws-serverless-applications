@@ -118,9 +118,9 @@ Xếp theo thứ tự gặp phải.
 
 | 54 | `Description` của template CloudFormation gây **diff vĩnh viễn** | Chuỗi có dấu tiếng Việt; CloudFormation lưu lại với `?` thay cho dấu, nên Terraform đòi sửa ở mọi lần plan và CloudFormation lại bóp méo tiếp. Cùng họ với lỗi 39 và 42 | **Lỗi code** | *(mục 7x)* |
 
-| 55 | RAM từ chối `AssociateResourceShare` — và đó là **trình tự duy nhất Terraform tạo ra được** | ~~Giới hạn ở `AssociateResourceShare`~~ — **thu hẹp sai**, xem mục 7z: `create-resource-share` chỉ có principal, không resource, cũng hỏng. Provider AWS không có `resource_arns` trên `aws_ram_resource_share` vẫn đúng | **Chưa kết luận** | *(mục 7y, 7z)* |
+| 55 | ~~RAM từ chối `AssociateResourceShare`~~ — **kết luận sai**, xem mục 7z | Thao tác đó chạy bình thường trên share có `allowExternalPrincipals = true`. Điều kiện thật không nằm ở lệnh nào, mà ở việc share có cần tra tổ chức hay không. Terraform cũng không bị chặn | **Chẩn đoán sai** | *(mục 7y, 7z)* |
 
-| 56 | **RAM không phân giải được tổ chức**, kể cả từ management account | Đo tối giản, không cần resource: share cho account ID → `OperationNotPermittedException`; share cho OU ARN → `unknown organization`. Service-linked role có, trusted access bật, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess`. Nguyên nhân chưa biết — đã gửi AWS Support | **Chưa kết luận** | *(mục 7z)* |
+| 56 | **RAM không phân giải được tổ chức**, kể cả từ management account | Thí nghiệm đối chứng, đổi đúng một biến: cùng account ID, `--no-allow-external-principals` hỏng / `--allow-external-principals` chạy. Account trong org bị RAM đánh dấu `"external": true`. Service-linked role có, trusted access bật, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess` | **Lỗi phía AWS** *(chờ Support)* | *(mục 7z)* |
 
 **48/56 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
@@ -2300,6 +2300,30 @@ Không có resource nào trong hai lệnh sau. Nên **lỗi 55 không phải chu
 Hai thông báo khác nhau là **một điều kiện nhìn từ hai phía**: với `--no-allow-external-principals`, RAM phải tra tổ chức để xác nhận principal nằm bên trong. Không tra được thì với account ID nó nói *"chỉ share được trong tổ chức của bạn"*, với OU nó nói *"unknown organization"*.
 
 Đã xác nhận đủ: service-linked role có, trusted access bật từ `2026-08-20`, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess` trên root và OU, caller là management với quyền admin. **Nguyên nhân vẫn chưa biết** — đây là chỗ ticket AWS Support bắt đầu, và bản ticket đã được viết lại quanh phép đo tối giản này thay vì quanh Transit Gateway.
+
+#### Thí nghiệm có đối chứng: đổi đúng một biến
+
+| Share | Principal | Kết quả |
+|---|---|---|
+| `--no-allow-external-principals` | account ID trong org | `OperationNotPermittedException` |
+| `--no-allow-external-principals` | OU ARN đầy đủ | `UnknownResourceException: unknown organization` |
+| `--allow-external-principals` | **cùng account ID đó** | `ACTIVE` |
+| `--allow-external-principals` | `associate-resource-share --principals` account thứ hai | `ASSOCIATING`, `"external": true` |
+
+Cùng management account, cùng region, cùng phút. Biến duy nhất khác nhau là `allowExternalPrincipals`.
+
+**Hai kết luận trước đó đổ tiếp:**
+
+1. `AssociateResourceShare` **không** bị chặn như một thao tác — nó chạy ngay khi share không cần tra tổ chức. Lỗi 55 khoanh vùng quanh đúng cái lệnh đang thử lúc đó, chứ không quanh điều kiện thật.
+2. Terraform **không** bị chặn. `aws_ram_resource_share` có `allow_external_principals`, nên cả ba resource RAM đều biểu diễn được. Câu *"trình tự duy nhất RAM chấp nhận là trình tự Terraform không tạo ra được"* ở mục 7y sai.
+
+Và `"external": true` cho `169873795883` — một account **đang ở trong** `o-tvkzhcq3yh` — là bằng chứng trực tiếp nhất: RAM không nhận ra thành viên tổ chức của chính nó.
+
+> **Bài học cuối của chuỗi này:** năm giả thuyết đầu đều sinh ra từ việc đọc thông báo lỗi. Cái trả lời được câu hỏi sinh ra từ việc **đổi một biến và giữ nguyên mọi thứ khác** — một thí nghiệm, không phải một cách đọc.
+>
+> Điều kiện để làm được thí nghiệm đó: phép thử phải **rẻ**. Khi mỗi lần thử là mười phút `terraform apply`, tôi đoán. Khi phát hiện `create-resource-share` chạy được mà không cần resource nào, mỗi phép thử còn ba giây — và bốn phép thử sau đó làm xong việc mà sáu vòng apply không làm nổi.
+>
+> Câu hỏi đáng hỏi sớm không phải *"nguyên nhân là gì"* mà *"phép thử rẻ nhất tách được hai khả năng này là gì"*.
 
 > **Bài học, lần thứ ba trong cùng một vấn đề:** một thông báo lỗi mô tả **triệu chứng**, và tôi liên tục đọc nó như **nguyên nhân**. Mỗi lần như vậy đều sinh ra một bản vá nhắm vào chỗ không sai, một mục tài liệu khẳng định điều không đúng, và một vòng apply mười phút.
 >
