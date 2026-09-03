@@ -5,7 +5,7 @@ Ghi lại **lần triển khai thật**: dựng hub mạng ở một account, sp
 | Tài liệu | Vai trò |
 |---|---|
 | [17 – Design Guide](./17-Network-LZ-Design-Guide.md) | **Vì sao** — kiến trúc, CIDR, bảng chân lý TGW |
-| [22 – Nhật ký lỗi](./22-Nhat-ky-Trien-khai-LZ-DIY.md) | **Vấp ở đâu** — 60 lỗi, mục 7y–7ae là phần network |
+| [22 – Nhật ký lỗi](./22-Nhat-ky-Trien-khai-LZ-DIY.md) | **Vấp ở đâu** — 65 lỗi, mục 7y–7aj là phần network |
 | **24 (tài liệu này)** | **Làm gì, theo thứ tự nào** — lệnh thật, kiểm chứng thật, chi phí thật |
 | [`demo/network-lz-full`](../demo/network-lz-full/) | Code |
 
@@ -17,25 +17,24 @@ Toàn bộ số liệu dưới đây lấy từ lần chạy thật, không ư�
 
 | | |
 |---|---|
-| Account | 5 account thấy TGW, 4 có VPC nối vào |
-| Transit Gateway | `tgw-082f15acfc5988a70`, 4 route table |
-| Spoke ở account khác | 3 — `app-prod`, `security`, `logarchive` |
-| Kiểm chứng | `verify.sh` **28 đạt, 0 lỗi, 0 bỏ qua** |
+| Account | 5 account thấy TGW, **4 có VPC** nối vào + 1 spoke local |
+| Transit Gateway | 4 route table, `appliance_mode_support = enable` |
 | Chi phí | `~$1.397/giờ` = **~$33.52/ngày** ở 2 AZ, đủ firewall + ingress + endpoint |
-| Xoá | `143 destroyed`, mười phép kiểm sạch |
-| Thời gian | ~45 phút dựng, ~20 phút xoá |
+| Thời gian | ~45 phút dựng 4 pha, ~20 phút xoá |
 
 Bản đồ account:
 
 ```
-609320954321  management     thay TGW, KHONG co spoke (xem muc 6)
 436908791055  lz-network     HUB: TGW, security VPC, egress VPC, firewall, NLB
-                             + spoke local app-dev  10.10.0.0/16
+                             + spoke local "probe" 10.11.0.0/16  <- tram quan sat
+169873795883  lz-app-dev     spoke  10.10.0.0/16     <- StackSet
 761558631239  lz-app-prod    spoke  10.20.0.0/16     <- StackSet
 458195083898  lz-security    spoke  10.8.0.0/16      <- StackSet
 654560867047  lz-logarchive  spoke  10.100.0.0/16    <- StackSet
-169873795883  lz-app-dev     thay TGW, chua dung VPC
+609320954321  management     thay TGW, KHONG co spoke (xem muc 6)
 ```
+
+**Spoke local `probe` là bắt buộc, không phải thừa.** `verify.sh` mục 7, 7c và 7d đều **điều khiển** phép đo từ một EC2 trong account hub qua SSM — mà SSM không đi xuyên account. Chuyển hết spoke sang remote là mất toàn bộ phần đo bằng gói tin thật, chỉ còn đọc route table.
 
 ---
 

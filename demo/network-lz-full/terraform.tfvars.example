@@ -223,6 +223,59 @@ enable_test_instances = true
 #     --resource-arns <tgw-arn> --region ap-southeast-1
 # tgw_shared_manually = true
 
+########################################
+# CAU HINH DAY DU CHO LAN CHAY CROSS-ACCOUNT
+#
+# Bo nay da chay that: 4 spoke o 4 account + 1 spoke local, firewall
+# che do alert, DNS va VPC endpoint tap trung. Chi tiet trinh tu va
+# thoi gian: docs/24-Trien-khai-Network-LZ-Cross-Account.md
+#
+# Bo comment ca khoi duoi day roi doi account_id / ou_id cho dung.
+########################################
+
+# project   = "quh11-net"
+# ephemeral = true
+#
+# enable_firewall = true
+# firewall_mode   = "alert"          # KHONG bao gio dat "drop" o lan dau
+#
+# enable_interface_endpoints = true
+# enable_internal_dns        = true
+# enable_dns_profile         = true
+# enable_test_instances      = true
+# enable_ingress             = true
+#
+# # EC2 o MOI spoke + rule mesh de do east-west giua cac account.
+# # Khong co hai dong nay thi khong co gi de goi, va moi khang dinh
+# # ve duong di deu dua tren doc route table thay vi gui goi tin.
+# remote_test_instances = true
+# east_west_mesh_ports  = [80]       # cong 22 CO Y khong co rule
+#
+# # --- RAM: bat theo thu tu, xem muc 4 cua doc 24 ---
+# ram_use_external_principals                 = true
+# ram_sharing_with_organization_enabled       = true
+# network_account_is_stackset_delegated_admin = true
+# ram_invitations_accepted                    = false   # bat sau pha 2
+# wire_remote_attachments                     = false   # bat o pha 4
+#
+# # Account chi CAN THAY TGW, chua dung VPC
+# share_tgw_with_accounts = ["609320954321"]
+#
+# spokes = {
+#   "probe" = { cidr = "10.11.0.0/16" }   # LOCAL - tram quan sat, GIU LAI
+#
+#   "app-dev"    = { cidr = "10.10.0.0/16",  account_id = "169873795883", ou_id = "ou-o5ci-syf8rqi7" }
+#   "app-prod"   = { cidr = "10.20.0.0/16",  account_id = "761558631239", ou_id = "ou-o5ci-75f3uqe6" }
+#   "security"   = { cidr = "10.8.0.0/16",   account_id = "458195083898", ou_id = "ou-o5ci-g5rv7do1" }
+#   "logarchive" = { cidr = "10.100.0.0/16", account_id = "654560867047", ou_id = "ou-o5ci-g5rv7do1" }
+# }
+
+# GIU IT NHAT MOT SPOKE LOCAL.
+#
+# verify.sh muc 7, 7c va 7d deu DIEU KHIEN phep do tu mot EC2 local
+# qua SSM - va SSM khong di xuyen account. Chuyen het spoke sang
+# remote la mat ba muc do, tuc mat toan bo phan do bang goi tin that.
+
 # aws organizations describe-organization --query Organization.Arn --output text
 # organization_arn = "arn:aws:organizations::<management-id>:organization/o-xxxxxxxxxx"
 
