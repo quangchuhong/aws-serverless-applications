@@ -333,6 +333,51 @@ else
       skip "Port 22: firewall dang o che do alert, chua chan (ket qua: $out)"
     fi
   fi
+
+  ########################################
+  # 7b. VPC ENDPOINT TAP TRUNG CO THUC SU DUOC DUNG KHONG
+  #
+  # Day la khoan lang phi KHONG CO TRIEU CHUNG. Neu PHZ cua endpoint
+  # chua toi duoc spoke, ten dich vu AWS van phan giai binh thuong -
+  # ra IP CONG KHAI - va moi thu van chay, chi la chay vong ra Internet
+  # qua NAT. Interface endpoint van tinh tien du khong ai di qua.
+  #
+  # Khong resource nao o trang thai sai, khong log nao bao gi. Chi mot
+  # cau dig tu BEN TRONG spoke moi phan biet duoc.
+  ########################################
+
+  # Lay dai THAT cua security VPC, khong gan cung "10.1." - ai doi
+  # security_vpc_cidr se lam moi khang dinh duoi day sai am tham.
+  # Cung ho voi loi 48.
+  SEC_CIDR=$(aws ec2 describe-vpcs --region "$REGION" \
+    --vpc-ids "$(tfout security_vpc_id)" \
+    --query 'Vpcs[0].CidrBlock' --output text 2>/dev/null)
+  SEC_CIDR_PREFIX=$(echo "$SEC_CIDR" | cut -d. -f1,2).
+
+  ep_zones=$(terraform output -json dns 2>/dev/null | jq -r '.endpoint_zones | keys[]' 2>/dev/null)
+
+  if [[ -z "$ep_zones" ]]; then
+    skip "Khong co PHZ endpoint (enable_interface_endpoints = false)"
+  else
+    svc=$(echo "$ep_zones" | head -1)
+    out=$(run_remote "$DEV_ID" "dig +short ${svc}.${REGION}.amazonaws.com | head -2 | tr '\\n' ' '")
+
+    if [[ "$out" == *"$SEC_CIDR_PREFIX"* ]]; then
+      ok "${svc}.${REGION}.amazonaws.com -> $out (interface endpoint noi bo)"
+    else
+      bad "${svc}.${REGION}.amazonaws.com -> '$out' - PHAI la IP trong security VPC. Endpoint dang tinh tien ma luu luong di vong ra Internet"
+    fi
+
+    # S3 la gateway endpoint: lam viec o tang route table, KHONG o tang
+    # DNS. Ra IP cong khai o day la DUNG - va la thu de nham nhat trong
+    # ca muc nay.
+    out=$(run_remote "$DEV_ID" "dig +short s3.${REGION}.amazonaws.com | head -1")
+    if [[ -n "$out" && "$out" != "$SEC_CIDR_PREFIX"* ]]; then
+      ok "s3.${REGION}.amazonaws.com -> $out (gateway endpoint: IP cong khai la DUNG)"
+    else
+      bad "s3 phan giai ra '$out' - gateway endpoint khong dung DNS, ket qua nay bat thuong"
+    fi
+  fi
 fi
 
 ########################################
