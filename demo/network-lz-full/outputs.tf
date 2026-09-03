@@ -138,7 +138,11 @@ output "tgw_shared_with" {
     MOT LAN de nhan loi moi. Share ngoai to chuc khong tu dong duoc
     chap nhan.
   EOT
-  value = local.ram_share == 0 ? {} : {
+  # KHONG dung `dieu_kien ? {} : {...}`: hai nhanh cua toan tu ba ngoi
+  # phai CUNG KIEU, va mot object rong khong cung kieu voi object ba
+  # thuoc tinh. Luon tra ve du ba thuoc tinh; accounts tu rong khi
+  # khong share cho ai.
+  value = {
     accounts = sort(local.ram_principals)
     accept = join(" ", [
       "aws ram get-resource-share-invitations --region", var.region,
