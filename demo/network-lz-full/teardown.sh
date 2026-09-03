@@ -126,6 +126,34 @@ check "EC2 dang chay" "$(aws ec2 describe-instances --region "$REGION" \
   --filters "Name=tag:Ephemeral,Values=true" "Name=instance-state-name,Values=running,pending,stopped" \
   --query 'Reservations[].Instances[].InstanceId' --output text)"
 
+########################################
+# SPOKE O ACCOUNT KHAC
+#
+# Muoi cau kiem o tren deu hoi ACCOUNT NAY. VPC cua spoke remote nam o
+# account khac, do StackSet tao, va mang tag Name chu khong mang tag
+# Ephemeral - nen ca cau kiem lan lenh quet theo tag deu khong thay no.
+#
+# terraform destroy CO xoa chung (xoa stack instance -> CloudFormation
+# xoa stack o account dich). Van de la khi viec do hong giua chung:
+# script se in "DA SACH" cho mot thu no chua bao gio nhin thay.
+#
+# list-stack-instances thi hoi duoc tu day, vi account nay la delegated
+# administrator cua StackSets.
+########################################
+PROJECT=$(terraform output -raw project 2>/dev/null || echo "")
+
+if [[ -n "$PROJECT" ]]; then
+  instances=$(aws cloudformation list-stack-instances \
+    --region "$REGION" \
+    --stack-set-name "${PROJECT}-spoke-vpc" \
+    --call-as DELEGATED_ADMIN \
+    --query 'Summaries[].[Account,Status]' --output text 2>/dev/null)
+
+  # Loi o day KHONG phai that bai: stack set da xoa xong thi
+  # ValidationError la ket qua dung. Chi CON instance moi la van de.
+  check "Stack instance o account spoke" "$instances"
+fi
+
 echo
 echo "── Quet theo tag Ephemeral=true ──"
 remaining=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
