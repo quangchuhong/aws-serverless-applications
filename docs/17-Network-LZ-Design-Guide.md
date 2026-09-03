@@ -39,32 +39,45 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | CloudFront + AWS WAF + khoá origin | [14 mục 5](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | `cdn.tf` | ✅ |
 | **Palo Alto qua GWLB** | [14 mục 6](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | `appliances.tf` | **⏸ chờ license** |
 | **F5 BIG-IP Advanced WAF** | [14 mục 7](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md), [18](./18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) | `appliances.tf`, `templates/` | **⏸ chờ license** |
+| Route 53 PHZ nội bộ | [12 mục 4](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | `dns.tf` | ✅ |
+| **Spoke VPC ở account khác** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ✅ |
+| **Route 53 Profile share cross-account** | [12 mục 4](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | `dns.tf` + template StackSet | ✅ |
+| **RAM share Transit Gateway** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ⚠️ chạy được, nhưng **phải đi đường vòng**² |
 | 3rd-party VPC + Site-to-Site VPN | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | — | ⬜ |
 | SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
-| Route 53 PHZ + Profile | [12 mục 4](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | — | ⬜ |
 
 ¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
 
+² Share trong phạm vi tổ chức (`allow_external_principals = false`, principal là account ID hoặc OU) **không chạy** trên tổ chức này: RAM không phân giải được organization, kể cả khi gọi từ management account. Đang chờ AWS Support. Đường vòng hiện dùng là `allow_external_principals = true` — nới rào chắn và mỗi account phải bấm nhận lời mời một lần. Chi tiết và phép đo đối chứng: [doc 22 lỗi 56](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
 ### Tầng nền tảng LZ
+
+Bảng này từng nói *"chưa thành code"* cho gần như mọi dòng. Nó đã lạc hậu: [doc 22](./22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại lần dựng thật, và bảy trong tám layer đã apply lẫn destroy được.
 
 | Thành phần | Thiết kế | Trạng thái |
 |---|---|---|
-| Organizations, OU, SCP, account | [06](./06-Aws-Landing-Zone.md) | ⬜ |
-| Org CloudTrail → log-archive | [06 mục 8](./06-Aws-Landing-Zone.md) | ⬜ |
-| GuardDuty, Security Hub, Config | [06 mục 9](./06-Aws-Landing-Zone.md) | ⬜ |
-| IAM Identity Center + đồng bộ AD | [06 mục 10](./06-Aws-Landing-Zone.md), [08](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | ⬜ |
-| Account vending | [09](./09-Account-Vending-Tu-Dong.md) | ⬜ |
-| CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⬜ |
+| Organizations, OU, SCP, account | [06](./06-Aws-Landing-Zone.md) | ✅ [`landing-zone/organization/`](../landing-zone/organization/) — 8 OU, 4 SCP, 6 account |
+| Org CloudTrail → log-archive | [06 mục 8](./06-Aws-Landing-Zone.md) | ✅ [`landing-zone/org-trail/`](../landing-zone/org-trail/) |
+| GuardDuty, Security Hub, Config | [06 mục 9](./06-Aws-Landing-Zone.md), [23](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | ✅ [`landing-zone/config-detective/`](../landing-zone/config-detective/) — 5/5 member, đường cảnh báo đã nhận được email thật |
+| IAM Identity Center + permission set | [06 mục 10](./06-Aws-Landing-Zone.md), [19](./19-Permission-Set-cho-Landing-Zone.md) | ✅ [`landing-zone/permission-sets/`](../landing-zone/permission-sets/) — 17 set, 15 group, 53 assignment |
+| Đồng bộ AD | [08](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | ⬜ |
+| Account baseline (thay AFT) | [09](./09-Account-Vending-Tu-Dong.md) | ✅ [`landing-zone/account-baseline/`](../landing-zone/account-baseline/) — StackSet + Lambda xoá default VPC³ |
+| CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⬜ `.github/workflows/` còn rỗng |
 | **Billing guard** (cost allocation tag, budget, anomaly) | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ✅ [`landing-zone/billing-guard/`](../landing-zone/billing-guard/) |
 | Tag policy + SCP + Cost Categories + CUR | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ⬜ |
+| Remote state (S3 + Object Lock + khoá) | [20](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | ✅ [`landing-zone/tf-backend/`](../landing-zone/tf-backend/) |
+
+³ **Không với tới management account.** StackSet `SERVICE_MANAGED` triển khai theo cây tổ chức và AWS loại management account ra khỏi mọi đợt triển khai đó — khai thêm root id cũng không tới. Default VPC ở management phải xoá bằng tay. Xem [doc 22 lỗi 59](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 ### Script kiểm chứng
 
 | Script | Làm gì | Trạng thái |
 |---|---|---|
-| `plan-check.sh` | `terraform plan` cho 9 tổ hợp biến (gồm cả appliance), kiểm tra plan đúng hành vi. **Không tạo gì** | ✅ |
-| `verify.sh` | 8 nhóm kiểm chứng sau khi apply, gồm chạy lệnh thật trên EC2 qua SSM | ✅ |
+| `plan-check.sh` | `terraform plan` cho 9 tổ hợp biến (gồm cả appliance), kiểm tra plan đúng hành vi. **Không tạo gì** | ✅ 24 đạt |
+| `verify.sh` | 12 nhóm kiểm chứng sau khi apply, gồm chạy lệnh thật trên EC2 qua SSM và ba nhóm nhìn **qua ranh giới account** | ✅ 28 đạt trên lần dựng 4 account |
 | `teardown.sh` | Destroy + xác nhận không còn resource nào tính tiền | ✅ |
+
+Cả ba script đều **dừng ngay** nếu credential trong shell không thuộc account đã tạo hạ tầng. Không có cổng đó thì `verify.sh` báo 8 lỗi hạ tầng cho một hệ thống chạy hoàn hảo, và `teardown.sh` in "đã sạch" cho một hạ tầng vẫn đang tính tiền — cả hai đã xảy ra thật, [doc 22 lỗi 58](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 Toàn bộ code ở [`demo/network-lz-full/`](../demo/network-lz-full/).
 
@@ -350,6 +363,51 @@ Bốn quy tắc bất biến, vi phạm là hỏng:
 | 3rd-party | `services` | `0.0.0.0/0` → **TGW** | |
 
 Ô in đậm ở `egress/public` là lỗi hay gặp nhất trong toàn bộ thiết kế: thiếu route `10.0.0.0/8 → TGW` thì gói ra được Internet nhưng gói về không biết đường quay lại spoke.
+
+---
+
+## 4b. Spoke VPC ở account khác
+
+Hub nằm ở `lz-network`. Spoke nằm ở account workload. Ranh giới account chia công việc thành **bốn mắt xích**, và điều đáng nhớ là chúng không cùng một phía:
+
+| Mắt xích | Ai làm được | Cách giải |
+|---|---|---|
+| Chấp nhận lời mời RAM | Chỉ account nhận | CLI, một lần mỗi account |
+| Tạo VPC + subnet + attachment | Chỉ chủ sở hữu VPC | StackSet `SERVICE_MANAGED` chạy CloudFormation **bên trong** account đó |
+| Gắn Route 53 Profile vào VPC | Chỉ chủ sở hữu VPC | `AWS::Route53Profiles::ProfileAssociation` trong chính template đó |
+| Nối attachment vào route table | Chỉ chủ sở hữu **TGW** | Ngược lại — bắt buộc ở `lz-network` |
+
+Ba dòng đầu cùng một bài toán, và **CloudFormation giải được hai trong ba** chỉ vì nó vốn đã chạy bên trong account đích. Đó là lý do thật để dùng StackSet ở đây — không phải "triển khai hàng loạt".
+
+Dòng thứ tư đi ngược chiều nên không thể gộp vào template: chỉ chủ sở hữu TGW mới `associate` và `propagate` được.
+
+### Ba lần apply, và vì sao không gộp được
+
+```
+apply 1   TGW + RAM share + principal association
+          -> moi account bam nhan loi moi (ngoai Terraform)
+apply 2   StackSet dung VPC + attachment o account dich
+apply 3   noi attachment vao rtb-spokes, propagate vao rtb-security
+```
+
+Lần 2 cần lời mời **đã** được nhận. Lần 3 cần attachment **đã** tồn tại — data source lọc theo ID của TGW, mà TGW được tạo trong chính config này, nên lần đầu `for_each` không dựng được bộ khoá.
+
+`check` block chỉ **cảnh báo**, không chặn apply. Nên nếu chạy thẳng `terraform apply` đầy đủ ngay từ đầu, StackSet sẽ chạy trước khi account kịp nhận lời mời và hỏng với một câu không nhắc gì tới RAM: `Transit Gateway tgw-xxx was deleted or does not exist`. Dùng `-target` cho lần đầu để tránh hẳn.
+
+### Hai giới hạn đã đo được
+
+**RAM không phân giải được tổ chức.** Share với principal trong phạm vi tổ chức — account ID hoặc OU ARN, `allow_external_principals = false` — bị từ chối, kể cả khi gọi từ management account. Thí nghiệm đối chứng đổi đúng một biến:
+
+| Share | Principal | Kết quả |
+|---|---|---|
+| `--no-allow-external-principals` | account ID trong org | `OperationNotPermittedException` |
+| `--allow-external-principals` | **cùng account ID đó** | `ACTIVE` |
+
+RAM còn đánh dấu một account **đang ở trong** tổ chức là `"external": true`. Đường vòng hiện dùng là `allow_external_principals = true`: nới rào chắn tổ chức, và mỗi account phải bấm nhận lời mời. Đó là **khoản nợ chờ AWS Support**, không phải một lựa chọn thiết kế.
+
+**StackSet không với tới management account.** `SERVICE_MANAGED` triển khai theo cây tổ chức và AWS loại management ra. Không thông báo nào nói vậy: `list-stack-instances` chỉ đơn giản thiếu một dòng. Muốn có VPC ở đó thì dùng stack thường chạy tại chỗ — và nên cân nhắc kỹ, vì đó là account SCP không áp được.
+
+Chi tiết từng lỗi: [doc 22 mục 7y–7ad](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 ---
 

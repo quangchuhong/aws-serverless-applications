@@ -40,9 +40,12 @@ Cộng lưu lượng: NAT ~$0.045/GB, firewall ~$0.065/GB, TGW ~$0.02/GB mỗi c
 
 ## Phạm vi — giai đoạn 1 theo [doc 17 mục 2.1](../../docs/17-Network-LZ-Design-Guide.md)
 
+> **RAM share hiện KHÔNG chạy trên tổ chức này.** `tgw.tf` share bằng `organization.arn` với `allow_external_principals = false` — đường đó bị RAM từ chối, kể cả khi gọi từ management account, và bảy điều kiện tiên quyết đều đã kiểm. Đang chờ AWS Support. Đường vòng và bằng chứng: [RUNBOOK giai đoạn 10](../RUNBOOK.md#giai-đoạn-10--network) và [doc 22 lỗi 56](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
 | | Có | Chưa |
 |---|---|---|
-| TGW + 3 route table + RAM share | ✅ | |
+| TGW + 3 route table | ✅ | |
+| RAM share | ⚠️ code có, **API từ chối** — xem cảnh báo trên | |
 | security VPC + Network Firewall | ✅ | |
 | egress VPC + IGW + NAT | ✅ | |
 | Interface endpoint + PHZ | ✅ | |
@@ -68,6 +71,10 @@ layer nay          noi attachment do vao rtb-spokes + rtb-security
 ```
 
 Bước cuối **bắt buộc** ở đây: chỉ chủ sở hữu TGW mới `associate` và `propagate` được.
+
+> **Có một cách khác, đã chạy thật.** [`demo/network-lz-full`](../../demo/network-lz-full/) dùng **CloudFormation StackSet** để tạo VPC + attachment *bên trong* account workload, thay vì đưa cho họ một khối HCL chép tay. Cách đó giải được hai việc mà layer này để lại cho người khác làm: dựng VPC, và gắn Route 53 Profile — cả hai đều thuộc về chủ sở hữu VPC, và CloudFormation làm được vì nó vốn đã chạy ở account đó. Xem [doc 17 mục 4b](../../docs/17-Network-LZ-Design-Guide.md#4b-spoke-vpc-ở-account-khác).
+>
+> Đổi lại: cần đăng ký `lz-network` làm **delegated administrator của CloudFormation StackSets**, và CIDR phải khai tường minh trong config của layer network chứ không do account workload tự chọn.
 
 ```bash
 terraform output -raw paste_spoke_vpc   # khoi HCL cho account workload

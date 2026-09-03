@@ -25,11 +25,16 @@ Chênh lệch gần như toàn bộ là **Network Firewall endpoint** (~$285/th�
 | Interface endpoint trong security VPC | ✅ (tuỳ chọn) | [15 mục 6.3](../../docs/15-Security-VPC-Network-Firewall.md) |
 | ingress-vpc + NLB | ✅ | [14](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **CloudFront + AWS WAF + khoá origin** | ✅ (tuỳ chọn) | [14 mục 5](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
+| Route 53 PHZ nội bộ | ✅ | [12 mục 4](../../docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) |
+| **Spoke VPC ở ACCOUNT KHÁC** | ✅ **đã chạy thật, 3 account** | [17 mục 4b](../../docs/17-Network-LZ-Design-Guide.md#4b-spoke-vpc-ở-account-khác) |
+| **DNS profile share cross-account** | ✅ | [12 mục 4](../../docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) |
 | **Palo Alto (GWLB)** | ⏸ **code sẵn, mặc định tắt** | [14 mục 6](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **F5 BIG-IP WAF** | ⏸ **code sẵn, mặc định tắt** | [18](../../docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) |
 | 3rd-party VPC + VPN | ❌ chưa | [16](../../docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) |
 
 Demo cũng **không tạo AWS account** và **không attach SCP** — cả hai đều làm `terraform destroy` không chạy được.
+
+> **Bộ này không còn là "một account" nữa.** Ban đầu nó dựng mọi thứ trong account đang chạy code. Giờ khai `account_id` cho một spoke là VPC của spoke đó được dựng ở **account khác** qua CloudFormation StackSet, tự attach vào TGW, tự nhận DNS profile. Xem [bước 7](#bước-7--spoke-ở-account-khác).
 
 ### Palo Alto và F5: code viết sẵn, chưa bật
 
@@ -73,7 +78,7 @@ Cần `jq` cho `verify.sh`.
 
 ---
 
-## Kịch bản 5 bước
+## Kịch bản 7 bước
 
 Mỗi bước sửa `terraform.tfvars` rồi `terraform apply` lại.
 
@@ -195,6 +200,80 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://$CDN/?id=1%27%20OR%20%271%27=%
 ```
 
 **Luôn chạy `count` trước.** Managed rule group hay chặn nhầm request hợp lệ; xem CloudWatch metric vài ngày rồi mới chuyển sang `block`. Nguyên tắc y hệt Network Firewall ở bước 2–3.
+
+---
+
+### Bước 7 — Spoke ở account khác
+
+Đây là bước đổi bản chất của bộ demo: VPC không còn nằm trong account chạy code.
+
+**Điều kiện tiên quyết**, cả ba làm một lần:
+
+```bash
+# 1. Account nay lam delegated administrator cua StackSets (tu MANAGEMENT)
+aws organizations register-delegated-administrator \
+  --service-principal member.org.stacksets.cloudformation.amazonaws.com \
+  --account-id <network-account-id>
+
+# 2. RAM sharing voi Organizations (tu MANAGEMENT)
+aws ram enable-sharing-with-aws-organization
+
+# 3. OU cua tung account spoke
+aws organizations list-parents --child-id <account-id>
+```
+
+```hcl
+ram_use_external_principals                 = true
+ram_sharing_with_organization_enabled       = true
+network_account_is_stackset_delegated_admin = true
+
+spokes = {
+  "app-dev"  = { cidr = "10.10.0.0/16" }        # local - GIU LAI IT NHAT MOT CAI
+  "app-prod" = {
+    cidr       = "10.20.0.0/16"
+    account_id = "761558631239"
+    ou_id      = "ou-xxxx-xxxxxxxx"
+  }
+}
+```
+
+> **Giữ ít nhất một spoke local.** Template StackSet tạo VPC + attachment, **không tạo EC2**. Mà `verify.sh` mục 7 — mục duy nhất đo luồng thật — chạy lệnh trên EC2 qua SSM. Chuyển hết sang remote là mất luôn phép đo đó.
+>
+> Và **bước 3–4 ở trên cần cả hai spoke là local**: chúng `curl` từ `app-dev` sang IP riêng của `app-prod`, mà spoke remote không có EC2 nào để lấy IP. Chuyển `app-prod` sang account khác thì làm bước 3–4 trước, hoặc thêm một spoke local thứ ba để thử east-west.
+
+**Ba lần apply, và không gộp được:**
+
+```bash
+# 1. Chi TGW + RAM share. Chua VPC, chua NAT - gan nhu $0.
+terraform apply -target=aws_ram_resource_association.tgw \
+                -target=aws_ram_principal_association.spoke_accounts
+
+# 2. O TUNG account spoke: nhan loi moi
+terraform output tgw_shared_with        # in ra lenh accept
+
+# 3. Quay lai account network
+#    ram_invitations_accepted = true
+terraform apply                          # StackSet dung VPC + attachment
+
+# 4. wire_remote_attachments = true
+terraform apply                          # noi route
+./verify.sh
+```
+
+`check` block chỉ **cảnh báo**, không chặn. Chạy thẳng `terraform apply` đầy đủ ngay từ đầu thì StackSet chạy trước khi account kịp nhận lời mời, và hỏng với một câu không nhắc gì tới RAM: `Transit Gateway tgw-xxx was deleted or does not exist`. `-target` ở lần đầu tránh hẳn chuyện đó.
+
+**Chia sẻ ≠ có VPC.** `share_tgw_with_accounts` cho account *thấy* TGW để tự cắm sau; `spokes` mới dựng VPC. Account nào chỉ cần cửa mở thì đưa vào danh sách đầu.
+
+**Hai giới hạn đã đo được:**
+
+`allow_external_principals = true` là **đường vòng, không phải thiết kế**. Share trong phạm vi tổ chức bị RAM từ chối trên tổ chức này — chi tiết [doc 22 lỗi 56](../../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md). Nó nới rào chắn tổ chức và bắt mỗi account bấm nhận thủ công. Khi AWS sửa, đổi về `false`.
+
+**Management account không dùng StackSet được.** `SERVICE_MANAGED` triển khai theo cây tổ chức và AWS loại management ra — `list-stack-instances` chỉ đơn giản thiếu một dòng, không lỗi nào nói vì sao. Đặt `manual_vpc = true` cho spoke đó rồi dựng bằng stack thường:
+
+```bash
+terraform output -raw spoke_template > spoke-vpc.json
+# roi tu chinh account do: aws cloudformation create-stack ...
+```
 
 ---
 

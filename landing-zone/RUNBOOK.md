@@ -900,6 +900,38 @@ Chi tiết ở [README của layer](./account-baseline/README.md).
 >
 > **Layer này chưa ai apply.** `plan` sạch, code đã soát, nhưng chưa chạm AWS lần nào — khác hẳn chín giai đoạn trên. Đi chậm, và kiểm từng bước.
 
+### ⚠️ Bước RAM sẽ hỏng — đã đo, chưa sửa được
+
+`tgw.tf` share Transit Gateway bằng `organization.arn` với `allow_external_principals = false`. **Trên tổ chức này đường đó không chạy.** RAM không phân giải được `o-tvkzhcq3yh`, kể cả khi gọi từ management account:
+
+```
+OperationNotPermittedException: The resource you are attempting to share
+can only be shared within your AWS Organization...
+```
+
+Không phải chưa bật `enable-sharing-with-aws-organization` — đã bật, service-linked role có, trusted access bật từ `2026-08-20`, FeatureSet `ALL`, chỉ `FullAWSAccess` trên OU. Bảy điều kiện tiên quyết đều đã kiểm. Thí nghiệm đối chứng đổi đúng một biến:
+
+| Share | Principal | Kết quả |
+|---|---|---|
+| `--no-allow-external-principals` | account ID trong org | `OperationNotPermittedException` |
+| `--allow-external-principals` | **cùng account ID đó** | `ACTIVE` |
+
+Đang chờ AWS Support. Chi tiết + nội dung ticket: [doc 22 lỗi 56](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md).
+
+**Trong lúc chờ, hai đường:**
+
+Đặt `share_tgw_with_org = false` rồi share bằng CLI một lần, kiểu external:
+
+```bash
+aws ram create-resource-share --region ap-southeast-1 \
+  --name <project>-tgw --allow-external-principals \
+  --resource-arns <tgw-arn> --principals <account-id>
+```
+
+Mỗi account nhận lời mời một lần (`aws ram accept-resource-share-invitation`), và nhớ rằng `allow_external_principals = true` **nới rào chắn**: share về nguyên tắc nhận được principal ngoài tổ chức, nên danh sách account trở thành thứ duy nhất chặn.
+
+Hoặc dùng [`demo/network-lz-full`](../demo/network-lz-full/) — bộ đó đã chạy trọn đường cross-account với `ram_use_external_principals`, và có `verify.sh` kiểm được cả trạng thái lời mời lẫn route ở account khác.
+
 ```bash
 cd ../network
 cp terraform.tfvars.example terraform.tfvars
@@ -952,7 +984,18 @@ terraform output -raw paste_spoke_vpc    # chay khoi nay o ACCOUNT WORKLOAD
 
 Rồi lấy attachment ID điền vào `spoke_attachments` của layer này và `apply` lại. Bỏ bước này thì attachment ở `State: available` mà **không thuộc route table nào** — không lỗi, không cảnh báo, không gói tin nào đi qua.
 
-☑ Xong giai đoạn 10 khi: EC2 trong spoke `curl` ra Internet được, và IP trả về nằm trong `terraform output nat_public_ips`.
+> **Association không phải propagation.** Association cho spoke biết đường **ra**. Propagation cho đường **về** biết CIDR của spoke. Có cái đầu mà thiếu cái sau thì gói đi được, gói trả lời lạc — luồng bất đối xứng, firewall stateful drop luôn, và **không trạng thái resource nào hiện ra điều đó**. Phải hỏi chính bảng định tuyến:
+>
+> ```bash
+> aws ec2 search-transit-gateway-routes --region <region> \
+>   --transit-gateway-route-table-id <rtb-security> \
+>   --filters "Name=type,Values=propagated" \
+>   --query 'Routes[].[DestinationCidrBlock,State]' --output text
+> ```
+>
+> CIDR của mọi spoke phải có mặt, `active`.
+
+☑ Xong giai đoạn 10 khi: EC2 trong spoke `curl` ra Internet được, IP trả về nằm trong `terraform output nat_public_ips`, **và** CIDR của spoke xuất hiện trong route propagated ở trên.
 
 Chi tiết ở [README của layer](./network/README.md).
 

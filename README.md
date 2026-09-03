@@ -63,7 +63,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 Cơ chế của lớp phát hiện — GuardDuty đọc log ở đâu, Security Hub gom bằng cách nào, và vì sao bucket log archive vẫn cần dù không dịch vụ nào đọc nó — nằm ở [doc 23](./docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md).
 
 > **Layer nào đã qua lửa:** `tf-backend`, `organization`, `permission-sets`, `billing-guard`, `config-detective`, `org-trail`, `account-baseline` — apply thật, kiểm chứng thật.
-> **Chưa:** `control-tower` (mặc định tắt, thay thế cho `organization` chứ không chạy cùng) và `network` (mới viết, chưa ai apply). Đáng lưu ý vì phần lớn lỗi trong doc 22 thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
+> **Chưa:** `control-tower` (mặc định tắt, thay thế cho `organization` chứ không chạy cùng) và `network` (mới viết, chưa ai apply — và bước RAM share của nó **đã đo là hỏng**, xem [RUNBOOK giai đoạn 10](./landing-zone/RUNBOOK.md)). Đáng lưu ý vì phần lớn lỗi trong doc 22 thuộc loại `terraform validate` không bắt được — cú pháp đúng, kiểu đúng, chỉ AWS mới biết là sai.
 
 | Layer | Nội dung | Chi phí |
 |---|---|---|
@@ -84,7 +84,7 @@ Terraform dựng lên xem rồi xoá. **Không tạo AWS account** — account k
 
 | Demo | Nội dung | Chi phí |
 |---|---|---|
-| **[`demo/network-lz-full`](./demo/network-lz-full/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, spoke. Kịch bản 5 bước. Chưa có Palo Alto/F5 | ~$0.34–0.77/giờ |
+| **[`demo/network-lz-full`](./demo/network-lz-full/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, DNS + endpoint tập trung, và **spoke VPC ở account khác** (StackSet + RAM). Kịch bản 7 bước. Chưa có Palo Alto/F5 | ~$0.34–1.40/giờ |
 | [`demo/centralized-network`](./demo/centralized-network/) | Bản tối giản: TGW, egress tập trung, cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](./demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, PHZ cross-account | ~$0.22/giờ |
 
