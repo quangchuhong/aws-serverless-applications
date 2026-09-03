@@ -151,13 +151,22 @@ output "tgw_shared_with" {
   # khong share cho ai.
   value = {
     accounts = sort(local.ram_principals)
+    # LOC THEO TEN SHARE.
+    #
+    # Ban dau lenh nay nhan MOI loi moi dang cho trong account. Tien,
+    # nhung no bien mot buoc co chu dich thanh mot cai bam mu: account
+    # do co the dang cho loi moi tu noi khac, va lenh se nhan luon.
     accept = join(" ", [
-      "aws ram get-resource-share-invitations --region", var.region,
-      "--query 'resourceShareInvitations[?status==`PENDING`].resourceShareInvitationArn'",
-      "--output text | xargs -n1 aws ram accept-resource-share-invitation",
-      "--region", var.region, "--resource-share-invitation-arn",
+      "ARN=$(aws ram get-resource-share-invitations --region", var.region,
+      "--query \"resourceShareInvitations[?status=='PENDING' && resourceShareName=='${var.project}-tgw'].resourceShareInvitationArn\"",
+      "--output text); [ -n \"$ARN\" ] && aws ram accept-resource-share-invitation",
+      "--region", var.region, "--resource-share-invitation-arn \"$ARN\"",
     ])
-    verify = "aws ec2 describe-transit-gateways --region ${var.region} --query 'TransitGateways[].TransitGatewayId'"
+
+    # Bang chung THAT, chay tu chinh account vua nhan. Trang thai
+    # ACCEPTED phia RAM chi noi loi moi da duoc nhan, khong noi TGW da
+    # hien ra ben do.
+    verify = "aws ec2 describe-transit-gateways --region ${var.region} --query 'TransitGateways[].[TransitGatewayId,OwnerId]' --output text"
   }
 }
 
