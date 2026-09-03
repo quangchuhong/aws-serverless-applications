@@ -332,6 +332,26 @@ aws route53profiles list-profile-associations --region ap-southeast-1 \
 # quh11-net-app-prod   vpc-09f0b15348602d8d0   COMPLETE
 ```
 
+### DNS tập trung ở account khác — đo thế nào
+
+`dig` từ EC2 local chỉ chứng minh cho spoke local. Câu hỏi *"account kia có phân giải đúng không"* không hỏi trực tiếp được: script chạy bằng credential của hub, và SSM không đi xuyên account.
+
+Cách giải: **để EC2 ở đó tự trả lời.** Nó phân giải ba tên rồi đăng kết quả lên trang HTTP của chính nó; `probe` đọc trang đó qua đường east-west. Một câu hỏi cross-account thành một `curl` nội bộ.
+
+Đo được, từ account `654560867047`:
+
+```
+ssm -> 10.1.30.141      trong security VPC cua account KHAC
+s3  -> 52.219.36.50     cong khai - DUNG, gateway endpoint o tang route table
+phz -> 10.11.0.24       probe.lz.internal, mot ten chi ton tai trong PHZ cua hub
+```
+
+Dòng thứ ba là dòng `list-profile-associations` **không** chứng minh được: `COMPLETE` chỉ nói profile đã gắn vào VPC, không nói một cái tên trong đó phân giải được.
+
+> **Sửa template rồi `terraform apply` KHÔNG đủ.** Xem lỗi 65: `UpdateStackSet` đổi định nghĩa, không triển khai xuống instance. Đường duy nhất chắc chắn là `terraform apply -replace='aws_cloudformation_stack_set_instance.spoke["<ten>"]'`, và nó tốn **~30 phút mỗi account** (25 phút xoá, chủ yếu là TGW attachment) cộng **hai** lần apply sau đó: một để hoà giải, một để nối attachment mới — ID đã đổi.
+>
+> Thao tác này vượt quá thời hạn phiên SSO mặc định. Đăng nhập lại ngay trước khi chạy.
+
 Kết quả thật của lần chạy này:
 
 ```
