@@ -118,9 +118,9 @@ Xếp theo thứ tự gặp phải.
 
 | 54 | `Description` của template CloudFormation gây **diff vĩnh viễn** | Chuỗi có dấu tiếng Việt; CloudFormation lưu lại với `?` thay cho dấu, nên Terraform đòi sửa ở mọi lần plan và CloudFormation lại bóp méo tiếp. Cùng họ với lỗi 39 và 42 | **Lỗi code** | *(mục 7x)* |
 
-| 55 | RAM từ chối `AssociateResourceShare` — và đó là **trình tự duy nhất Terraform tạo ra được** | `create-resource-share --resource-arns` chạy; `create` rỗng rồi `associate` hỏng, cho cả resource lẫn principal. Provider AWS không có `resource_arns` trên `aws_ram_resource_share` | **Giới hạn không biểu diễn được** | *(mục 7y)* |
+| 55 | RAM từ chối `AssociateResourceShare` — và đó là **trình tự duy nhất Terraform tạo ra được** | ~~Giới hạn ở `AssociateResourceShare`~~ — **thu hẹp sai**, xem mục 7z: `create-resource-share` chỉ có principal, không resource, cũng hỏng. Provider AWS không có `resource_arns` trên `aws_ram_resource_share` vẫn đúng | **Chưa kết luận** | *(mục 7y, 7z)* |
 
-| 56 | **Management account cũng không share được** — `OrganizationalUnit ... in unknown organization could not be found` | Chưa biết. Dòng này bác bỏ kết luận của cả lỗi 52, 53 và 55. Đang chờ ba phép đo + AWS Support | **Chưa kết luận** | *(mục 7z)* |
+| 56 | **RAM không phân giải được tổ chức**, kể cả từ management account | Đo tối giản, không cần resource: share cho account ID → `OperationNotPermittedException`; share cho OU ARN → `unknown organization`. Service-linked role có, trusted access bật, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess`. Nguyên nhân chưa biết — đã gửi AWS Support | **Chưa kết luận** | *(mục 7z)* |
 
 **48/56 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
@@ -2280,6 +2280,26 @@ aws ram create-resource-share --region ap-southeast-1 \
 Phép đo 3 có một giả thuyết đứng sau, và nó **chỉ là giả thuyết**: principal kiểu OU cần ARN đầy đủ, mà ARN đó nhúng `o-tvkzhcq3yh` bên trong; `ou-o5ci-fz0yuca3` trần không mang thông tin tổ chức nào. Nếu console gửi ID trần thì câu chữ khớp chính xác. Chưa đo.
 
 Loại được mà không cần chạy: `FeatureSet` của tổ chức. RAM org sharing đòi `ALL`, và tổ chức này đang chạy 4 SCP — SCP chỉ tồn tại khi FeatureSet là `ALL`.
+
+#### Kết quả đo, và một phép đo suýt bị đọc nhầm
+
+Phép đo 1 chạy trước, ở `lz-network`, và trả về `NoSuchEntity`. Đọc vội thì đó là *"thiếu service-linked role — đây là nguyên nhân"*. Nhưng `AWSServiceRoleForResourceAccessManager` nằm ở **management account**; hỏi nó từ một member account thì `NoSuchEntity` là câu trả lời đúng cho một câu hỏi khác. Chạy lại từ management: role **có**, tạo `2026-09-01T08:29:15Z`.
+
+> Một phép đo chỉ có nghĩa cùng với **danh tính của người chạy nó**. `aws sts get-caller-identity` phải đi kèm, không phải chạy sau khi đã kết luận. Đây là lần thứ hai trong cùng phiên một kết quả suýt được đọc như bằng chứng cho điều nó không nói (lần trước: lỗi 48, `PROJECT` gán cứng).
+
+Bộ đo cuối, tất cả từ **management account**, và điểm mấu chốt là **không cần Transit Gateway** — `create-resource-share` nhận share chỉ có principal, nên nó tách hẳn việc kiểm principal khỏi việc gắn resource:
+
+| Phép đo | Kết quả |
+|---|---|
+| `describe-organizational-unit ou-o5ci-fz0yuca3` | `Workloads` — OU có thật |
+| `create-resource-share --principals 761558631239` | `OperationNotPermittedException` |
+| `create-resource-share --principals <ou-arn day du>` | `UnknownResourceException: ... in unknown organization` |
+
+Không có resource nào trong hai lệnh sau. Nên **lỗi 55 không phải chuyện của `AssociateResourceShare`** như đã ghi — nó là chuyện RAM không phân giải được tổ chức, và `associate` chỉ tình cờ là chỗ nó lộ ra trước.
+
+Hai thông báo khác nhau là **một điều kiện nhìn từ hai phía**: với `--no-allow-external-principals`, RAM phải tra tổ chức để xác nhận principal nằm bên trong. Không tra được thì với account ID nó nói *"chỉ share được trong tổ chức của bạn"*, với OU nó nói *"unknown organization"*.
+
+Đã xác nhận đủ: service-linked role có, trusted access bật từ `2026-08-20`, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess` trên root và OU, caller là management với quyền admin. **Nguyên nhân vẫn chưa biết** — đây là chỗ ticket AWS Support bắt đầu, và bản ticket đã được viết lại quanh phép đo tối giản này thay vì quanh Transit Gateway.
 
 > **Bài học, lần thứ ba trong cùng một vấn đề:** một thông báo lỗi mô tả **triệu chứng**, và tôi liên tục đọc nó như **nguyên nhân**. Mỗi lần như vậy đều sinh ra một bản vá nhắm vào chỗ không sai, một mục tài liệu khẳng định điều không đúng, và một vòng apply mười phút.
 >
