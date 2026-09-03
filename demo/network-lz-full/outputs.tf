@@ -132,6 +132,24 @@ locals {
   )
 }
 
+output "tgw_shared_with" {
+  description = <<-EOT
+    Account duoc thay Transit Gateway, va lenh moi account phai chay
+    MOT LAN de nhan loi moi. Share ngoai to chuc khong tu dong duoc
+    chap nhan.
+  EOT
+  value = local.ram_share == 0 ? {} : {
+    accounts = sort(local.ram_principals)
+    accept = join(" ", [
+      "aws ram get-resource-share-invitations --region", var.region,
+      "--query 'resourceShareInvitations[?status==`PENDING`].resourceShareInvitationArn'",
+      "--output text | xargs -n1 aws ram accept-resource-share-invitation",
+      "--region", var.region, "--resource-share-invitation-arn",
+    ])
+    verify = "aws ec2 describe-transit-gateways --region ${var.region} --query 'TransitGateways[].TransitGatewayId'"
+  }
+}
+
 output "estimated_cost" {
   description = <<-EOT
     Uoc tinh THO phi co dinh. Chua tinh data transfer.

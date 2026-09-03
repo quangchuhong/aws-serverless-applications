@@ -176,6 +176,38 @@ variable "ram_use_external_principals" {
   default     = false
 }
 
+variable "share_tgw_with_accounts" {
+  description = <<-EOT
+    Account duoc THAY Transit Gateway, ngoai cac account co spoke.
+
+    Chia se va co VPC la hai viec khac nhau. var.spokes noi "account
+    nay se duoc dung mot VPC theo khuon"; bien nay noi "account nay
+    duoc phep tu cam vao TGW khi nao ho muon".
+
+    Dung cho account trong LZ chua co spoke nhung se can: security,
+    logarchive, hoac mot account sap co workload.
+
+    Lay danh sach:
+      aws organizations list-accounts \
+        --query 'Accounts[?Status==`ACTIVE`].[Id,Name]' --output text
+
+    KHONG can khai account dang chay code nay - RAM tu choi share cho
+    chinh chu so huu, va code da loc no ra.
+
+    Moi account them vao day phai CHAP NHAN LOI MOI mot lan, giong
+    het spoke - xem ram_invitations_accepted.
+
+    Chi co tac dung khi ram_use_external_principals = true.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for a in var.share_tgw_with_accounts : can(regex("^[0-9]{12}$", a))])
+    error_message = "Moi phan tu phai la account ID 12 chu so."
+  }
+}
+
 variable "ram_invitations_accepted" {
   description = <<-EOT
     Xac nhan MOI spoke account da chap nhan loi moi RAM.

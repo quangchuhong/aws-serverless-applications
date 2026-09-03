@@ -133,7 +133,12 @@ locals {
 ########################################
 
 locals {
-  ram_share = local.has_remote && var.ram_use_external_principals ? 1 : 0
+  # Share can ton tai khi co spoke remote HOAC khi chi muon cho account
+  # khac thay TGW ma chua dung VPC nao. Rang buoc vao has_remote thoi
+  # thi share_tgw_with_accounts se im lang khong lam gi - dung cai bay
+  # "khai bien ma khong co tac dung".
+  ram_needed = local.has_remote || length(var.share_tgw_with_accounts) > 0
+  ram_share  = local.ram_needed && var.ram_use_external_principals ? 1 : 0
 }
 
 resource "aws_ram_resource_share" "tgw" {
@@ -154,15 +159,29 @@ resource "aws_ram_resource_association" "tgw" {
   resource_share_arn = aws_ram_resource_share.tgw[0].arn
 }
 
-# Mot principal moi spoke account - KHONG share cho ca to chuc.
+# Mot principal moi account - KHONG share cho ca to chuc.
 #
-# Dung distinct(): hai spoke cung nam trong mot account la chuyen binh
+# Hai nguon gop lai:
+#   var.spokes                  account se duoc dung VPC theo khuon
+#   var.share_tgw_with_accounts account chi duoc THAY TGW, tu cam sau
+#
+# distinct() vi hai spoke cung nam trong mot account la chuyen binh
 # thuong (vi du app-prod va app-uat), va associate cung mot principal
 # hai lan thi RAM tra ve loi trung.
+#
+# Loai account dang chay code nay: RAM tu choi share cho chinh chu so
+# huu, va de lot vao day thi apply chet o mot loi khong noi ro vi sao.
+locals {
+  ram_principals = local.ram_share == 0 ? [] : [
+    for a in distinct(concat(
+      [for v in local.remote_spokes : v.account_id],
+      var.share_tgw_with_accounts,
+    )) : a if a != data.aws_caller_identity.current.account_id
+  ]
+}
+
 resource "aws_ram_principal_association" "spoke_accounts" {
-  for_each = toset(
-    local.ram_share == 0 ? [] : distinct([for v in local.remote_spokes : v.account_id])
-  )
+  for_each = toset(local.ram_principals)
 
   principal          = each.value
   resource_share_arn = aws_ram_resource_share.tgw[0].arn
@@ -589,6 +608,16 @@ check "remote_accounts_accepted_invitation" {
       "Kiem tu spoke account: aws ec2 describe-transit-gateways",
       "(rong = chua nhan).",
     ])
+  }
+}
+
+# Khai account vao share_tgw_with_accounts ma quen bat co thi khong
+# resource nao duoc tao va cung khong loi gi - dung kieu im lang da
+# gay ra loi 49 va 57.
+check "share_list_has_effect" {
+  assert {
+    condition     = length(var.share_tgw_with_accounts) == 0 || var.ram_use_external_principals
+    error_message = "share_tgw_with_accounts co account nhung ram_use_external_principals = false, nen khong share nao duoc tao. Bat bien do, hoac bo danh sach di cho khoi hieu nham la da share."
   }
 }
 
