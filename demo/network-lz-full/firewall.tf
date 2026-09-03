@@ -63,6 +63,18 @@ locals {
   # alert = chi ghi log, KHONG chan. Luon dung che do nay dau tien.
   # drop  = chan that.
   stateful_default = var.firewall_mode == "drop" ? ["aws:drop_established", "aws:alert_established"] : ["aws:alert_established"]
+
+  # CIDR cua MOI spoke - local lan remote - de sinh rule mesh.
+  #
+  # Dung var.spokes chu khong phai local_spokes: mesh la de do duong
+  # di GIUA CAC ACCOUNT, nen spoke remote la phan quan trong nhat. Bo
+  # chung ra thi mesh chi con noi cac VPC trong cung mot account -
+  # dung thu khong can kiem chung.
+  #
+  # sort() de thu tu on dinh: rule string doi thu tu la rule group bi
+  # thay the moi lan plan, va o STRICT_ORDER thi thu tu con doi ca y
+  # nghia. Cung ho voi loi 39.
+  mesh_cidrs = sort([for k, v in var.spokes : v.cidr])
 }
 
 resource "aws_networkfirewall_firewall_policy" "main" {
@@ -130,6 +142,45 @@ resource "aws_networkfirewall_rule_group" "east_west" {
         var.enable_ingress ? [
           "pass tcp ${var.ingress_vpc_cidr} any -> ${var.internal_supernet} 80 (msg:\"INFRA nlb to app\"; sid:1800; rev:1;)",
         ] : [],
+
+        # LUONG HA TANG THU HAI - SSM qua interface endpoint.
+        #
+        # Khi enable_interface_endpoints = true, PHZ tro ten dich vu AWS
+        # vao IP NOI BO trong security VPC. Nghia la SSM agent cua moi
+        # EC2 goi 443 tu spoke sang security VPC - va luong do di qua
+        # chinh firewall nay.
+        #
+        # Thieu rule nay thi che do drop lam MAT SSM O MOI SPOKE. Va
+        # trieu chung khong he chi vao firewall:
+        #   - Session Manager bao "not connected"
+        #   - instance van chay, van healthy trong console
+        #   - verify.sh muc 7 tra ve chuoi rong, doc nhu EC2 chua boot
+        #
+        # Voi spoke o account khac thi con te hon: khong co duong nao
+        # khac vao instance do, nen mat SSM la mat luon kha nang vao xem.
+        var.enable_firewall && var.enable_interface_endpoints ? [
+          "pass tcp ${var.internal_supernet} any -> ${var.security_vpc_cidr} 443 (msg:\"INFRA ssm to interface endpoint\"; sid:1810; rev:1;)",
+        ] : [],
+
+        # MESH THU NGHIEM - sinh tu east_west_mesh_ports.
+        #
+        # Mo mot port giua MOI cap spoke de do duong di. Khac
+        # east_west_rules o cho: rules la luat that, khai tay tung
+        # chieu; mesh la phep thu, sinh tu dong va nen tat sau khi do.
+        #
+        # sid bat dau tu 1700 de khong dam vao dai cua east_west_rules
+        # (1000+) hay ha tang (1800+).
+        flatten([
+          for pi, port in var.east_west_mesh_ports : [
+            for i, a in local.mesh_cidrs : [
+              for j, b in local.mesh_cidrs :
+              format(
+                "pass tcp %s any -> %s %d (msg:\"MESH %s to %s\"; sid:%d; rev:1;)",
+                a, b, port, a, b, 1700 + pi * 100 + i * 10 + j
+              ) if i != j
+            ]
+          ]
+        ]),
 
         [
           # ICMP noi bo de troubleshoot

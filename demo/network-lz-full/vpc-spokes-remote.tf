@@ -86,6 +86,23 @@ locals {
     if !try(v.manual_vpc, false)
   }
 
+  # IP CUA EC2 TEST TRONG SPOKE REMOTE - tinh truoc, khong hoi sau.
+  #
+  # Template CloudFormation chia VpcCidr thanh 4 subnet /24 bang
+  # Fn::Cidr(VpcCidr, 4, 8); PrivateA la khoi dau. Cong thuc duoi day
+  # phai KHOP voi cach chia do:
+  #
+  #   10.20.0.0/16 -> [10.20.0.0/24, 10.20.1.0/24, 10.20.2.0/24, 10.20.3.0/24]
+  #   -> PrivateA = 10.20.0.0/24 -> host thu 10 = 10.20.0.10
+  #
+  # Doi cach chia subnet trong template ma quen sua day thi moi phep
+  # kiem east-west se curl vao mot dia chi khong co ai o do - va bao
+  # "khong thong" cho mot mang hoan toan binh thuong.
+  remote_test_ips = !var.remote_test_instances ? {} : {
+    for k, v in local.stackset_spokes :
+    k => cidrhost(cidrsubnets(v.cidr, 8, 8, 8, 8)[0], 10)
+  }
+
   # PHA HAI - xem khoi "HAI PHA" o cuoi file.
   wire = local.has_remote && var.wire_remote_attachments
 
@@ -225,7 +242,15 @@ resource "aws_cloudformation_stack_set" "spoke" {
   name             = "${var.project}-spoke-vpc"
   description      = "VPC + TGW attachment cho spoke o account khac"
   permission_model = "SERVICE_MANAGED"
-  capabilities     = []
+
+  # CAPABILITY_IAM can khi remote_test_instances = true: template tao
+  # IAM role + instance profile cho SSM. Thieu thi
+  # CreateStackInstances bao InsufficientCapabilitiesException, va cau
+  # do khong noi ro resource nao doi quyen gi.
+  #
+  # Khai san ca hai truong hop de khong phai doi stack set khi bat/tat
+  # EC2 test - khai them capability KHONG tu tao IAM resource nao.
+  capabilities = ["CAPABILITY_IAM"]
 
   # DELEGATED_ADMIN: goi tu account network da duoc uy quyen, KHONG
   # phai tu management. Xem khoi comment dau file - loi 51.
@@ -245,6 +270,9 @@ resource "aws_cloudformation_stack_set" "spoke" {
     ProjectName      = var.project
     SpokeName        = "spoke"
     DnsProfileId     = var.enable_dns_profile ? aws_route53profiles_profile.shared[0].id : ""
+    TestPrivateIp    = ""
+    TestInstanceType = var.instance_type
+    InternalSupernet = var.internal_supernet
   }
 
   template_body = jsonencode({
@@ -267,10 +295,16 @@ resource "aws_cloudformation_stack_set" "spoke" {
       ProjectName      = { Type = "String" }
       SpokeName        = { Type = "String" }
       DnsProfileId     = { Type = "String", Default = "" }
+
+      # EC2 kiem chung - de rong la khong tao
+      TestPrivateIp    = { Type = "String", Default = "" }
+      TestInstanceType = { Type = "String", Default = "t3.micro" }
+      InternalSupernet = { Type = "String", Default = "10.0.0.0/8" }
     }
 
     Conditions = {
-      HasDnsProfile = { "Fn::Not" = [{ "Fn::Equals" = [{ Ref = "DnsProfileId" }, ""] }] }
+      HasDnsProfile   = { "Fn::Not" = [{ "Fn::Equals" = [{ Ref = "DnsProfileId" }, ""] }] }
+      HasTestInstance = { "Fn::Not" = [{ "Fn::Equals" = [{ Ref = "TestPrivateIp" }, ""] }] }
     }
 
     Resources = {
@@ -392,6 +426,115 @@ resource "aws_cloudformation_stack_set" "spoke" {
           ResourceId = { Ref = "Vpc" }
         }
       }
+
+      ########################################
+      # EC2 KIEM CHUNG - tuy chon
+      #
+      # Khong co no thi khong co gi trong VPC nay de goi toi, va moi
+      # phep do east-west cross-account phai tin vao route table thay
+      # vi tin vao goi tin.
+      #
+      # Vao bang SSM Session Manager: khong IP public, khong key pair.
+      # Duong SSM di qua interface endpoint dat o security VPC (nho
+      # DnsProfile o tren phan giai ten AWS ve IP noi bo), tuc no cung
+      # di qua firewall - xem canh bao ve che do drop o firewall.tf.
+      ########################################
+
+      TestRole = {
+        Type      = "AWS::IAM::Role"
+        Condition = "HasTestInstance"
+        Properties = {
+          AssumeRolePolicyDocument = {
+            Version = "2012-10-17"
+            Statement = [{
+              Effect    = "Allow"
+              Principal = { Service = "ec2.amazonaws.com" }
+              Action    = "sts:AssumeRole"
+            }]
+          }
+          ManagedPolicyArns = ["arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"]
+        }
+      }
+
+      TestProfile = {
+        Type      = "AWS::IAM::InstanceProfile"
+        Condition = "HasTestInstance"
+        Properties = {
+          Roles = [{ Ref = "TestRole" }]
+        }
+      }
+
+      # LOP THU BA cua kiem soat, ngoai route va firewall rule.
+      #
+      # Port 22 mo o day MA KHONG co rule firewall - do la phep thu:
+      # SG cho phep, firewall van chan. Neu port 22 thong thi hoac
+      # firewall dang o che do alert, hoac co rule nao khong nen co.
+      TestSg = {
+        Type      = "AWS::EC2::SecurityGroup"
+        Condition = "HasTestInstance"
+        Properties = {
+          GroupDescription = { "Fn::Sub" = "EC2 test trong $${SpokeName}" }
+          VpcId            = { Ref = "Vpc" }
+          SecurityGroupIngress = [
+            { IpProtocol = "tcp", FromPort = 80, ToPort = 80, CidrIp = { Ref = "InternalSupernet" }, Description = "HTTP tu spoke khac va tu NLB" },
+            { IpProtocol = "tcp", FromPort = 22, ToPort = 22, CidrIp = { Ref = "InternalSupernet" }, Description = "SSH - mo o SG, firewall se chan" },
+            { IpProtocol = "icmp", FromPort = -1, ToPort = -1, CidrIp = { Ref = "InternalSupernet" }, Description = "ICMP de troubleshoot" },
+          ]
+          SecurityGroupEgress = [
+            { IpProtocol = "-1", CidrIp = "0.0.0.0/0", Description = "ra ngoai qua TGW" },
+          ]
+          Tags = [{ Key = "Name", Value = { "Fn::Sub" = "$${ProjectName}-$${SpokeName}-ec2" } }]
+        }
+      }
+
+      TestInstance = {
+        Type      = "AWS::EC2::Instance"
+        Condition = "HasTestInstance"
+        DependsOn = "DefaultToTgw"
+        Properties = {
+          # AMI phan giai TRONG ACCOUNT DICH luc tao stack, khong truyen
+          # AMI id tu account hub sang - AMI id khac nhau theo region va
+          # doi moi lan Amazon phat hanh ban moi.
+          ImageId            = "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+          InstanceType       = { Ref = "TestInstanceType" }
+          SubnetId           = { Ref = "PrivateA" }
+          SecurityGroupIds   = [{ "Fn::GetAtt" = ["TestSg", "GroupId"] }]
+          IamInstanceProfile = { Ref = "TestProfile" }
+
+          # IP CO DINH, KHONG de AWS cap ngau nhien.
+          #
+          # Terraform khong doc duoc output cua stack instance, va
+          # verify.sh khong co credential o account nay. IP tinh truoc
+          # duoc la cach duy nhat kiem chung cross-account ma khong
+          # phai dang nhap vao tung account.
+          #
+          # TINH O PHIA TERRAFORM, truyen vao day.
+          #
+          # Ban dau cho nay tu tinh bang Fn::Cidr long nhau. Sai:
+          # Fn::Cidr tra ve KHOI CIDR ("10.20.0.0/28"), khong phai mot
+          # dia chi - PrivateIpAddress can mot IP. Va CloudFormation
+          # khong co phep tinh nao tren IP.
+          #
+          # Truyen tu Terraform con dung hon o mot diem nua: cong thuc
+          # chi ton tai o MOT cho. Hai ben tu tinh roi lech nhau la
+          # kieu loi khong ai phat hien cho toi khi mot phep kiem
+          # curl vao dia chi khong co ai o do.
+          PrivateIpAddress = { Ref = "TestPrivateIp" }
+
+          MetadataOptions = { HttpTokens = "required" }
+
+          UserData = {
+            "Fn::Base64" = { "Fn::Sub" = join("\n", [
+              "#!/bin/bash",
+              "dnf install -y nginx nmap-ncat bind-utils",
+              "echo \"<h1>$${SpokeName}</h1><p>account $${AWS::AccountId} / vpc $${VpcCidr}</p>\" > /usr/share/nginx/html/index.html",
+              "systemctl enable --now nginx",
+            ]) }
+          }
+
+          Tags = [{ Key = "Name", Value = { "Fn::Sub" = "$${ProjectName}-$${SpokeName}" } }]
+        }
+      }
     }
 
     Outputs = {
@@ -461,6 +604,9 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
   parameter_overrides = {
     VpcCidr   = each.value.cidr
     SpokeName = each.key
+
+    # Rong = khong tao EC2 (Condition HasTestInstance sai).
+    TestPrivateIp = try(local.remote_test_ips[each.key], "")
   }
 
   operation_preferences {

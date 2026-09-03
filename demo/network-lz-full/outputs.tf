@@ -170,6 +170,29 @@ output "tgw_shared_with" {
   }
 }
 
+output "test_targets" {
+  description = <<-EOT
+    Moi spoke -> IP cua EC2 kiem chung trong do, ke ca spoke o account
+    khac. verify.sh dung bang nay de goi tu spoke nay sang spoke kia.
+
+    IP cua spoke REMOTE la tinh truoc, khong phai doc tu AWS: Terraform
+    khong doc duoc output cua stack instance, va script khong co
+    credential o account do. Xem local.remote_test_ips.
+
+    Nghia la neu template doi cach chia subnet ma cong thuc khong doi
+    theo, bang nay se tro vao dia chi khong co ai o do - va phep kiem
+    se bao "khong thong" cho mot mang hoan toan binh thuong.
+  EOT
+  value = merge(
+    { for k, v in aws_instance.test : k => { ip = v.private_ip, account = "local", how = "doc tu AWS" } },
+    { for k, ip in local.remote_test_ips : k => {
+      ip      = ip
+      account = local.stackset_spokes[k].account_id
+      how     = "tinh truoc"
+    } },
+  )
+}
+
 output "spoke_template" {
   description = <<-EOT
     Template CloudFormation cua spoke VPC, de dung BANG TAY o account

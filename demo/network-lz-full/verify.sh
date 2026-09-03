@@ -454,6 +454,53 @@ else
 fi
 
 ########################################
+hdr "7c. East-west GIUA CAC ACCOUNT (goi tu EC2 local sang spoke remote)"
+#
+# Muc 7 do luong ra Internet. Muc nay do luong GIUA CAC SPOKE, va la
+# muc duy nhat chung minh duong cross-account cho goi tin di qua that.
+#
+# Cho tro: muc 6c da bao attachment nam trong route table va duong ve
+# da hoc CIDR. Ca hai dung ma van co the KHONG THONG - vi con security
+# group va rule firewall, hai lop khong xuat hien trong bat ky bang
+# dinh tuyen nao. Ba lop deu phai cho phep thi luong moi thong.
+########################################
+
+TARGETS=$(terraform output -json test_targets 2>/dev/null || echo '{}')
+REMOTE_KEYS=$(echo "$TARGETS" | jq -r 'to_entries[] | select(.value.account != "local") | .key' 2>/dev/null)
+
+if [[ -z "$DEV_ID" ]]; then
+  skip "Khong co EC2 local de goi di (enable_test_instances = false)"
+elif [[ -z "$REMOTE_KEYS" ]]; then
+  skip "Khong co EC2 o spoke remote (remote_test_instances = false)"
+else
+  for k in $REMOTE_KEYS; do
+    ip=$(echo "$TARGETS" | jq -r --arg k "$k" '.[$k].ip')
+    acct=$(echo "$TARGETS" | jq -r --arg k "$k" '.[$k].account')
+
+    out=$(run_remote "$DEV_ID" "curl -s -o /dev/null -w '%{http_code}' --max-time 8 http://$ip/ || echo TIMEOUT")
+    if [[ "$out" == *"200"* ]]; then
+      ok "$k ($acct) $ip:80 THONG"
+    else
+      bad "$k ($acct) $ip:80 khong thong (ket qua: $out) - kiem east_west_mesh_ports, SG, va rule firewall"
+    fi
+
+    # Port 22: SG MO nhung khong co rule firewall nao cho no.
+    # Che do drop  -> phai timeout. Do la bang chung firewall chan that.
+    # Che do alert -> van thong, dung nhu thiet ke.
+    out=$(run_remote "$DEV_ID" "timeout 8 nc -zv $ip 22 2>&1 | tail -1 || echo TIMEOUT")
+    if [[ "$(terraform output -raw mode 2>/dev/null)" == *drop* ]]; then
+      if [[ "$out" == *"TIMEOUT"* || "$out" == *"timed out"* ]]; then
+        ok "$k ($acct) $ip:22 BI CHAN boi firewall (SG van mo)"
+      else
+        bad "$k ($acct) $ip:22 van thong du khong co rule firewall: $out"
+      fi
+    else
+      skip "$k ($acct) $ip:22 - firewall dang alert, chua chan (ket qua: $out)"
+    fi
+  done
+fi
+
+########################################
 hdr "8. Ingress"
 ########################################
 

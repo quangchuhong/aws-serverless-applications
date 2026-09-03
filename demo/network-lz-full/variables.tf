@@ -193,6 +193,51 @@ variable "ram_use_external_principals" {
   default     = false
 }
 
+variable "remote_test_instances" {
+  description = <<-EOT
+    Tao EC2 kiem chung trong CA spoke o account khac, khong chi spoke
+    local.
+
+    De TAT thi khong co gi trong VPC remote de goi tới, va moi phep do
+    east-west cross-account deu phai tin vao route table thay vi tin
+    vao goi tin.
+
+    IP DUOC GAN CO DINH, khong de AWS cap ngau nhien: .10 cua subnet
+    dau tien. Ly do khong phai tham my - Terraform KHONG doc duoc
+    output cua stack instance, va verify.sh khong co credential o
+    account kia. IP tinh truoc duoc la cach duy nhat de kiem chung
+    ma khong phai dang nhap vao tung account.
+
+      VPC 10.20.0.0/16 -> subnet dau 10.20.0.0/24 -> EC2 10.20.0.10
+
+    Moi con ~$0.0116/gio (t3.micro). Ba spoke remote la ~$0.84/ngay.
+
+    CAN CAPABILITY_IAM: template tao IAM role cho SSM, nen stack set
+    phai khai capabilities = ["CAPABILITY_IAM"]. Thieu thi
+    CreateStackInstances bao InsufficientCapabilities.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "east_west_mesh_ports" {
+  description = <<-EOT
+    Port duoc mo giua MOI cap spoke, sinh rule tu dong.
+
+    east_west_rules la khai bao tay tung chieu - dung cho luat that.
+    Bien nay dung de THU: mo mot port giua moi cap spoke de do duong
+    di, roi doc log xem ai thuc su goi ai.
+
+    De [80] la du cho phep thu: curl duoc = duong thong ca hai chieu.
+    Port 22 CO Y khong nam trong day, de chung minh firewall chan duoc
+    thu ma security group da mo.
+
+    Rong = khong sinh rule nao, chi dung east_west_rules.
+  EOT
+  type        = list(number)
+  default     = []
+}
+
 variable "share_tgw_with_accounts" {
   description = <<-EOT
     Account duoc THAY Transit Gateway, ngoai cac account co spoke.
