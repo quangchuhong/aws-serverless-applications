@@ -23,6 +23,13 @@ output "transit_gateway_id" {
   value = aws_ec2_transit_gateway.hub.id
 }
 
+# verify.sh va teardown.sh DOI CHIEU OUTPUT NAY voi credential dang
+# dung. Xoa no = hai script mat cai chan chong chay nham account.
+output "account_id" {
+  description = "Account da tao ha tang nay. Chay script bang credential cua account KHAC se do nham thu khac."
+  value       = data.aws_caller_identity.current.account_id
+}
+
 output "security_vpc_id" {
   value = one(aws_vpc.security[*].id)
 }

@@ -124,7 +124,9 @@ Xếp theo thứ tự gặp phải.
 
 | 57 | Pha 2 báo `0 added` — attachment của spoke remote **không bao giờ** được tìm thấy | Code đối chiếu tag `Name` mà template đặt ở account đích. Tag trên resource chia sẻ thuộc về account tạo ra chúng: chủ TGW thấy attachment, `"tags": []`. Tệ hơn: thông báo của `check` khuyên "apply lại lần nữa" — một vòng lặp vô hạn. `verify.sh` cùng lúc báo 7 đạt 0 lỗi vì không mục nào nhìn qua ranh giới account | **Lỗi code** | *(mục 7aa)* |
 
-**49/57 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 58 | Cùng script, cùng hạ tầng: `17 đạt 0 lỗi` rồi `6 đạt 8 lỗi` | Shell còn credential của account spoke. Script đọc **state** từ thư mục (đúng) nhưng gọi **AWS** bằng credential trong shell (nhầm account), nên mọi câu trả lời rỗng bị đọc thành "thiếu". `teardown.sh` còn nguy hơn: destroy không xoá được gì rồi báo `DA SACH`. Vá bằng `output "account_id"` + `exit 1` ở đầu cả hai script | **Lỗi code** | *(mục 7ac)* |
+
+**50/58 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2355,42 +2357,6 @@ Bốn resource, không NAT, không attachment, **$0/ngày**. Kết quả: `aws_r
 
 ---
 
-### 7ab. Kết quả: bốn mắt xích phải chạy ở phía account kia
-
-Chốt lại phần cross-account, vì nó có một hình dạng lặp lại đáng nhớ hơn từng lỗi riêng lẻ.
-
-`demo/network-lz-full` chỉ có **một** provider, trỏ vào `lz-network`. Nhưng bốn việc dưới đây bắt buộc phải thực thi **trong account spoke** — không phải vì thiếu quyền, mà vì chúng thuộc về chủ sở hữu tài nguyên bên đó:
-
-| Việc | Ai làm được | Cách giải |
-|---|---|---|
-| Chấp nhận lời mời RAM | Chỉ account nhận | CLI một lần, `ram_invitations_accepted` xác nhận |
-| Tạo VPC + subnet + attachment | Chỉ account chủ VPC | StackSet `SERVICE_MANAGED` chạy CloudFormation **trong** account đó |
-| Gắn Route 53 Profile vào VPC | Chỉ account chủ VPC | `AWS::Route53Profiles::ProfileAssociation` trong chính template đó |
-| Nối attachment vào route table | Chỉ chủ sở hữu **TGW** | Ngược lại — bắt buộc ở `lz-network`, spoke không làm được |
-
-Ba dòng đầu cùng một bài toán, và **CloudFormation giải được hai trong ba** chỉ vì nó vốn đã chạy bên trong account đích. Đó là lý do thật để dùng StackSet ở đây, không phải vì "triển khai hàng loạt".
-
-Dòng thứ tư đi ngược chiều, và chính vì thế nó không thể gộp vào template.
-
-#### Đo được, không suy luận
-
-```
-RAM share (external)         quh11-net-tgw, ACTIVE
-Spoke thay TGW               tgw-082f15acfc5988a70 / owner 436908791055
-StackSet                     CURRENT, vpc-09f0b15348602d8d0
-Attachment                   tgw-attach-0ae14ea96b14b8bcd, available
-Route                        associate rtb-spokes, propagate rtb-security
-Duong ve hoc CIDR            10.20.0.0/16 active
-DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
-Endpoint tap trung           ssm -> 10.1.31.30, 10.1.30.148 (trong security VPC)
-Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
-verify.sh                    17 dat, 0 loi, 0 bo qua
-```
-
-> **Điều còn lại là một khoản nợ, không phải một thành tựu:** `allow_external_principals = true` trên share của Transit Gateway. Nó ở đó **chỉ vì lỗi 56** — RAM không phân giải được tổ chức. Ranh giới tổ chức không còn bảo vệ share này; danh sách account trong `var.spokes` và `var.share_tgw_with_accounts` là thứ duy nhất chặn. Khi AWS Support sửa xong, đổi `ram_use_external_principals` về `false` là gỡ cả khoản nợ đó lẫn bước bấm nhận thủ công.
-
----
-
 ### 7aa. Lỗi 57 — tag của account khác là thứ bạn không nhìn thấy
 
 Pha 2 chạy xong với **`0 added, 0 changed`**, và `check "remote_attachments_wired"` báo `0/1`. Nhưng attachment thì có thật, `available`, đã kiểm bằng mắt một phút trước đó.
@@ -2436,6 +2402,72 @@ Cùng lúc đó `./verify.sh` cho `7 dat 0 loi 3 bo qua`. Mọi mục của nó 
 Đã thêm mục `6c`, đối chiếu theo `ResourceOwnerId` và kiểm `Association.TransitGatewayRouteTableId` của từng attachment thuộc account khác.
 
 > **Bài học:** hai lớp kiểm chứng — `check` block và `verify.sh` — cùng có mặt, cùng chạy, và cùng không thấy. Cái thứ nhất thấy nhưng chỉ đường sai; cái thứ hai không nhìn tới. Một bộ kiểm chứng chỉ bao được phạm vi mà người viết nó **nghĩ tới**, và ở đây phạm vi đó dừng lại đúng ở ranh giới account.
+
+---
+
+### 7ab. Kết quả: bốn mắt xích phải chạy ở phía account kia
+
+Chốt lại phần cross-account, vì nó có một hình dạng lặp lại đáng nhớ hơn từng lỗi riêng lẻ.
+
+`demo/network-lz-full` chỉ có **một** provider, trỏ vào `lz-network`. Nhưng bốn việc dưới đây bắt buộc phải thực thi **trong account spoke** — không phải vì thiếu quyền, mà vì chúng thuộc về chủ sở hữu tài nguyên bên đó:
+
+| Việc | Ai làm được | Cách giải |
+|---|---|---|
+| Chấp nhận lời mời RAM | Chỉ account nhận | CLI một lần, `ram_invitations_accepted` xác nhận |
+| Tạo VPC + subnet + attachment | Chỉ account chủ VPC | StackSet `SERVICE_MANAGED` chạy CloudFormation **trong** account đó |
+| Gắn Route 53 Profile vào VPC | Chỉ account chủ VPC | `AWS::Route53Profiles::ProfileAssociation` trong chính template đó |
+| Nối attachment vào route table | Chỉ chủ sở hữu **TGW** | Ngược lại — bắt buộc ở `lz-network`, spoke không làm được |
+
+Ba dòng đầu cùng một bài toán, và **CloudFormation giải được hai trong ba** chỉ vì nó vốn đã chạy bên trong account đích. Đó là lý do thật để dùng StackSet ở đây, không phải vì "triển khai hàng loạt".
+
+Dòng thứ tư đi ngược chiều, và chính vì thế nó không thể gộp vào template.
+
+#### Đo được, không suy luận
+
+```
+RAM share (external)         quh11-net-tgw, ACTIVE
+Spoke thay TGW               tgw-082f15acfc5988a70 / owner 436908791055
+StackSet                     CURRENT, vpc-09f0b15348602d8d0
+Attachment                   tgw-attach-0ae14ea96b14b8bcd, available
+Route                        associate rtb-spokes, propagate rtb-security
+Duong ve hoc CIDR            10.20.0.0/16 active
+DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
+Endpoint tap trung           ssm -> 10.1.31.30, 10.1.30.148 (trong security VPC)
+Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
+verify.sh                    17 dat, 0 loi, 0 bo qua
+```
+
+> **Điều còn lại là một khoản nợ, không phải một thành tựu:** `allow_external_principals = true` trên share của Transit Gateway. Nó ở đó **chỉ vì lỗi 56** — RAM không phân giải được tổ chức. Ranh giới tổ chức không còn bảo vệ share này; danh sách account trong `var.spokes` và `var.share_tgw_with_accounts` là thứ duy nhất chặn. Khi AWS Support sửa xong, đổi `ram_use_external_principals` về `false` là gỡ cả khoản nợ đó lẫn bước bấm nhận thủ công.
+
+---
+
+### 7ac. Lỗi 58 — cùng một script, cùng một hạ tầng, 8 lỗi
+
+`./verify.sh` vừa cho `17 đạt, 0 lỗi`. Chạy lại vài phút sau, không đụng gì vào hạ tầng: **`6 đạt, 8 lỗi`**.
+
+```
+✗ THIEU duong ve! Spoke ra duoc Internet nhung khong nhan duoc goi tra loi
+✗ appliance_mode_support = None (PHAI la enable)
+✗ Firewall status =
+✗ Khong tim thay gateway endpoint
+✗ IP ra Internet = ''
+```
+
+Đọc y hệt một sự cố lớn. Thực tế: shell còn credential của `761558631239` từ lệnh `route53profiles` chạy ngay trước đó.
+
+Script đọc **state** từ thư mục hiện tại — luôn đúng — nhưng gọi **AWS** bằng credential đang có trong shell. Hai nguồn đó lệch nhau thì mọi câu hỏi đều gửi sang nhầm account, và câu trả lời rỗng được đọc thành "thiếu".
+
+Dấu hiệu nằm ngay trong output nếu đọc kỹ: mục 1 kiểm `quh11-net-app-prod-vpc` chứ không phải `app-dev` — VPC do StackSet tạo *trong account kia*. Và mục 6c báo "không có spoke ở account khác", đúng theo nghĩa đen: từ chỗ đứng của `app-prod`, attachment ấy là của chính nó.
+
+#### Bản vá: chặn ngay từ dòng đầu
+
+Thêm `output "account_id"`, và cả `verify.sh` lẫn `teardown.sh` đối chiếu nó với `aws sts get-caller-identity` rồi **dừng** nếu lệch.
+
+`teardown.sh` nguy hiểm hơn nhiều: nó gọi `terraform destroy`. Chạy nhầm account thì destroy không xoá được gì, và phần xác nhận sẽ báo **`DA SACH`** — vì nó đang hỏi một account không có gì để mất. Bạn tin là đã xoá xong, trong khi ~$30/ngày vẫn chạy.
+
+> **Đây là lần thứ tư trong phiên này** một phép đo đúng trả lời nhầm câu hỏi: `get-role` ở `lz-network`, `describe-transit-gateways` sau khi destroy, tag của account spoke (lỗi 57), và giờ là cả một bộ kiểm chứng.
+>
+> Ba lần đầu tôi sửa bằng cách nhớ hỏi thêm "chạy ở account nào". Lần này mới sửa đúng chỗ: **script tự hỏi câu đó**. Một quy ước phải nhớ thì sẽ có lần quên; một `exit 1` thì không.
 
 ---
 

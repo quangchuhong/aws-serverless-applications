@@ -39,6 +39,34 @@ if [[ "$EPHEMERAL" == "false" ]]; then
   exit 1
 fi
 
+########################################
+# CHAN CHAY NHAM ACCOUNT
+#
+# O day nguy hiem hon verify.sh: script nay goi `terraform destroy`.
+# Chay bang credential cua account khac thi destroy khong xoa duoc
+# nhung gi trong state, va phan xac nhan ben duoi se bao "DA SACH"
+# - vi no dang hoi mot account khong co gi de mat.
+#
+# Ket qua: ban tin la da xoa xong, trong khi ~$30/ngay van chay.
+########################################
+EXPECT_ACCOUNT=$(terraform output -raw account_id 2>/dev/null || echo "")
+ACTUAL_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+
+if [[ -n "$EXPECT_ACCOUNT" && -n "$ACTUAL_ACCOUNT" && "$EXPECT_ACCOUNT" != "$ACTUAL_ACCOUNT" ]]; then
+  echo "════════════════════════════════════════════"
+  echo " SAI ACCOUNT - dung lai"
+  echo "════════════════════════════════════════════"
+  echo
+  echo "  Ha tang nay o account : $EXPECT_ACCOUNT"
+  echo "  Credential dang dung  : $ACTUAL_ACCOUNT"
+  echo
+  echo "destroy se khong xoa duoc gi, va phan xac nhan se bao DA SACH"
+  echo "cho mot ha tang van dang chay va van dang tinh tien."
+  echo
+  echo "Doi credential ve account $EXPECT_ACCOUNT roi chay lai."
+  exit 1
+fi
+
 echo "════════════════════════════════════════════"
 echo " Teardown demo network LZ"
 echo "════════════════════════════════════════════"

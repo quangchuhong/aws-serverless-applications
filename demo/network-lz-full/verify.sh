@@ -21,6 +21,42 @@ if [[ -z "$PROJECT" ]]; then
   exit 1
 fi
 
+########################################
+# CHAN CHAY NHAM ACCOUNT
+#
+# Script doc STATE tu thu muc nay (luon dung), nhung goi AWS bang
+# CREDENTIAL DANG CO TRONG SHELL (co the la account bat ky). Hai nguon
+# do lech nhau la chuyen rat de xay ra: chi can vua chay mot lenh o
+# account spoke roi quay lai day.
+#
+# Khi lech, moi lenh mo ta ha tang deu tra ve rong, va script bao
+# TAM loi ha tang cho mot he thong dang chay hoan hao:
+#   "THIEU duong ve", "Firewall status = ", "Khong tim thay gateway
+#   endpoint", "IP ra Internet = ''"
+#
+# Doc y het mot su co lon. Cung ho voi loi 48 va 57: mot phep do dung,
+# tra loi cho mot cau hoi khac.
+########################################
+
+EXPECT_ACCOUNT=$(terraform output -raw account_id 2>/dev/null || echo "")
+ACTUAL_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+
+if [[ -n "$EXPECT_ACCOUNT" && -n "$ACTUAL_ACCOUNT" && "$EXPECT_ACCOUNT" != "$ACTUAL_ACCOUNT" ]]; then
+  echo "════════════════════════════════════════════"
+  echo " SAI ACCOUNT - dung lai"
+  echo "════════════════════════════════════════════"
+  echo
+  echo "  Ha tang nay o account : $EXPECT_ACCOUNT"
+  echo "  Credential dang dung  : $ACTUAL_ACCOUNT"
+  echo
+  echo "Chay tiep se bao hang loat 'loi ha tang' khong co that:"
+  echo "moi lenh se hoi account $ACTUAL_ACCOUNT ve nhung resource nam"
+  echo "o account $EXPECT_ACCOUNT."
+  echo
+  echo "Doi credential ve account $EXPECT_ACCOUNT roi chay lai."
+  exit 1
+fi
+
 PASS=0; FAIL=0; SKIP=0
 
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; PASS=$((PASS+1)); }
