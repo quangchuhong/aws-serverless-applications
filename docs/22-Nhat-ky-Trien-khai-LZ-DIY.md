@@ -2355,6 +2355,42 @@ Bốn resource, không NAT, không attachment, **$0/ngày**. Kết quả: `aws_r
 
 ---
 
+### 7ab. Kết quả: bốn mắt xích phải chạy ở phía account kia
+
+Chốt lại phần cross-account, vì nó có một hình dạng lặp lại đáng nhớ hơn từng lỗi riêng lẻ.
+
+`demo/network-lz-full` chỉ có **một** provider, trỏ vào `lz-network`. Nhưng bốn việc dưới đây bắt buộc phải thực thi **trong account spoke** — không phải vì thiếu quyền, mà vì chúng thuộc về chủ sở hữu tài nguyên bên đó:
+
+| Việc | Ai làm được | Cách giải |
+|---|---|---|
+| Chấp nhận lời mời RAM | Chỉ account nhận | CLI một lần, `ram_invitations_accepted` xác nhận |
+| Tạo VPC + subnet + attachment | Chỉ account chủ VPC | StackSet `SERVICE_MANAGED` chạy CloudFormation **trong** account đó |
+| Gắn Route 53 Profile vào VPC | Chỉ account chủ VPC | `AWS::Route53Profiles::ProfileAssociation` trong chính template đó |
+| Nối attachment vào route table | Chỉ chủ sở hữu **TGW** | Ngược lại — bắt buộc ở `lz-network`, spoke không làm được |
+
+Ba dòng đầu cùng một bài toán, và **CloudFormation giải được hai trong ba** chỉ vì nó vốn đã chạy bên trong account đích. Đó là lý do thật để dùng StackSet ở đây, không phải vì "triển khai hàng loạt".
+
+Dòng thứ tư đi ngược chiều, và chính vì thế nó không thể gộp vào template.
+
+#### Đo được, không suy luận
+
+```
+RAM share (external)         quh11-net-tgw, ACTIVE
+Spoke thay TGW               tgw-082f15acfc5988a70 / owner 436908791055
+StackSet                     CURRENT, vpc-09f0b15348602d8d0
+Attachment                   tgw-attach-0ae14ea96b14b8bcd, available
+Route                        associate rtb-spokes, propagate rtb-security
+Duong ve hoc CIDR            10.20.0.0/16 active
+DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
+Endpoint tap trung           ssm -> 10.1.31.30, 10.1.30.148 (trong security VPC)
+Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
+verify.sh                    17 dat, 0 loi, 0 bo qua
+```
+
+> **Điều còn lại là một khoản nợ, không phải một thành tựu:** `allow_external_principals = true` trên share của Transit Gateway. Nó ở đó **chỉ vì lỗi 56** — RAM không phân giải được tổ chức. Ranh giới tổ chức không còn bảo vệ share này; danh sách account trong `var.spokes` và `var.share_tgw_with_accounts` là thứ duy nhất chặn. Khi AWS Support sửa xong, đổi `ram_use_external_principals` về `false` là gỡ cả khoản nợ đó lẫn bước bấm nhận thủ công.
+
+---
+
 ### 7aa. Lỗi 57 — tag của account khác là thứ bạn không nhìn thấy
 
 Pha 2 chạy xong với **`0 added, 0 changed`**, và `check "remote_attachments_wired"` báo `0/1`. Nhưng attachment thì có thật, `available`, đã kiểm bằng mắt một phút trước đó.
