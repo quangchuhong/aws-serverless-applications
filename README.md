@@ -58,7 +58,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
 **Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** · **Xoá: [`landing-zone/TEARDOWN.md`](./landing-zone/TEARDOWN.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
 
-**Đã dựng thật, xoá thật, rồi dựng lại** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 54 lỗi gặp phải và cách sửa, trong đó **48 lỗi nằm ở chính code của repo**. Mười ba lỗi cuối chỉ lộ ra khi đi ngược chiều và khi dựng lớp phát hiện. Đọc mục 6 trước khi dựng, mục 7 trước khi xoá.
+**Đã dựng thật, xoá thật, rồi dựng lại** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 57 lỗi gặp phải và cách sửa, trong đó **49 lỗi nằm ở chính code của repo**. Mười ba lỗi cuối chỉ lộ ra khi đi ngược chiều và khi dựng lớp phát hiện. Đọc mục 6 trước khi dựng, mục 7 trước khi xoá.
 
 Cơ chế của lớp phát hiện — GuardDuty đọc log ở đâu, Security Hub gom bằng cách nào, và vì sao bucket log archive vẫn cần dù không dịch vụ nào đọc nó — nằm ở [doc 23](./docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md).
 
