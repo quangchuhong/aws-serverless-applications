@@ -50,6 +50,23 @@ variable "baseline_target_ous" {
     Ly do khac nhau: Config tinh tien theo khoi luong ghi nen phai
     chon loc. Xoa default VPC thi mien phi va lam MOT LAN, nen bo sot
     mot OU chi de lai lo hong chu khong tiet kiem duoc gi.
+
+    MANAGEMENT ACCOUNT NAM NGOAI TAM VOI - khong phai lua chon.
+
+    StackSet SERVICE_MANAGED trien khai theo cay to chuc, va AWS loai
+    management account ra khoi moi dot trien khai do. Management lai
+    nam truc tiep duoi root, khong thuoc OU nao. Khai them root id vao
+    day cung KHONG toi duoc no. Do duoc o doc 22 loi 59, va cach no
+    bao loi rat te: khong co dong nao trong list-stack-instances cho
+    account do, khong StatusReason nao.
+
+    Nghia la: default VPC o management KHONG BAO GIO bi quet, o moi
+    region. Muon xoa thi lam bang tay, tu chinh account do.
+
+    Truoc khi xoa, kiem xem co ai dang dung khong - default VPC hay
+    duoc dung cho nhung thu dung len nhanh roi o lai:
+      aws ec2 describe-instances --filters Name=vpc-id,Values=<vpc-id>
+      aws eks list-clusters
   EOT
   type        = list(string)
   default     = []
