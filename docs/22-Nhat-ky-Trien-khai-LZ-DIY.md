@@ -2558,6 +2558,38 @@ Khi mười phép kiểm đều xanh, lệnh quét tag chuyển thành **thông 
 
 ---
 
+### 7af. Lỗi 61 — kéo một giá trị "biết sau apply" vào chỗ "phải biết ở plan"
+
+Khi sửa cho trường hợp không còn spoke local, tôi cho `count` của `aws_lb_target_group_attachment.app_direct` phụ thuộc vào `local.nlb_target_ip`, mà local đó đọc `aws_instance.test[...].private_ip`.
+
+```
+Error: Invalid count argument
+The "count" value depends on resource attributes that cannot be
+determined until apply
+```
+
+**Code cũ đã đúng và tôi làm nó sai:** nó dùng `var.enable_test_instances` trong `count` — một biến, biết ở plan — và chỉ chạm thuộc tính resource ở `target_id`, nơi giá trị chưa biết là hoàn toàn bình thường.
+
+Bọc trong `try()` không cứu được: Terraform từ chối vì `count` **tham chiếu tới** một thuộc tính chưa biết, không phải vì giá trị đó lỗi.
+
+#### Bản vá — tách điều kiện khỏi giá trị
+
+```hcl
+# Chi dua tren bien va cau truc var.spokes -> biet o plan
+use_local_target = var.enable_test_instances && local.first_spoke != null
+
+# Doc thuoc tinh resource -> biet sau apply, va chi dung o target_id
+nlb_target_ip = local.use_local_target
+  ? aws_instance.test[local.first_spoke].private_ip
+  : try(values(local.remote_test_ips)[0], null)
+```
+
+> **Cùng họ với lỗi 50**, và đó mới là điều đáng ghi: lỗi 50 cũng là một `for_each` phụ thuộc vào thứ chưa biết ở plan, và tôi đã viết hẳn một mục về nó. Biết luật không ngăn được việc vi phạm luật — vì lúc sửa, tôi đang nghĩ về *"làm sao chọn đúng target"*, không nghĩ về *"biểu thức này được đánh giá lúc nào"*.
+>
+> Dấu hiệu nhận ra sớm, rẻ hơn một vòng plan: mỗi khi viết `count` hoặc `for_each`, đọc lại biểu thức và hỏi **"có tên resource nào trong này không"**. Có là hỏng, bất kể bọc gì quanh nó.
+
+---
+
 ## Liên quan
 | | |
 |---|---|
