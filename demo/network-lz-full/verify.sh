@@ -300,6 +300,43 @@ else
 fi
 
 ########################################
+hdr "6d. Cac account da CHAP NHAN loi moi RAM chua"
+#
+# Share ngoai to chuc khong tu dong duoc chap nhan. Truoc khi account
+# bam nhan, principal o trang thai ASSOCIATING: share ton tai, Terraform
+# apply xanh, va account do VAN KHONG THAY Transit Gateway.
+#
+# Chay tu chinh account so huu share, nen thay het ca nam account ma
+# khong phai dang nhap vao tung cai - va do la ly do co muc nay: kiem
+# bang cach doi credential qua tung account thi rat de bo sot mot cai.
+########################################
+
+SHARE_ARN=$(aws ram get-resource-shares --resource-owner SELF --region "$REGION" \
+  --name "${PROJECT}-tgw" \
+  --query 'resourceShares[?status==`ACTIVE`].resourceShareArn' --output text 2>/dev/null)
+
+if [[ -z "$SHARE_ARN" || "$SHARE_ARN" == "None" ]]; then
+  skip "Khong co RAM share ${PROJECT}-tgw (ram_use_external_principals = false)"
+else
+  assoc=$(aws ram get-resource-share-associations --region "$REGION" \
+    --association-type PRINCIPAL --resource-share-arns "$SHARE_ARN" \
+    --query 'resourceShareAssociations[].[associatedEntity,status]' --output text 2>/dev/null)
+
+  if [[ -z "$assoc" ]]; then
+    bad "Share ton tai nhung khong co principal nao - khong account nao thay duoc TGW"
+  else
+    while read -r acct st; do
+      [[ -z "$acct" ]] && continue
+      if [[ "$st" == "ASSOCIATED" ]]; then
+        ok "$acct: $st"
+      else
+        bad "$acct: $st - account nay CHUA nhan loi moi, no khong thay TGW"
+      fi
+    done <<<"$assoc"
+  fi
+fi
+
+########################################
 hdr "7. Luong thuc te (chay lenh tren EC2 qua SSM)"
 ########################################
 
