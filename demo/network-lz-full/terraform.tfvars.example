@@ -183,30 +183,44 @@ enable_test_instances = true
 # aws ram enable-sharing-with-aws-organization   (chay MOT LAN tu management)
 # ram_sharing_with_organization_enabled = true
 
-# Share TGW cho spoke account - LAM BANG CLI, khong bang Terraform.
+# ---------------------------------------------------------------
+# SHARE TGW CHO SPOKE ACCOUNT - chon MOT trong hai duong.
 #
-# RAM tu choi AssociateResourceShare (ca resource lan principal) va chi
-# nhan CreateResourceShare kem --resource-arns; ma
-# aws_ram_resource_share cua provider khong co thuoc tinh do. Loi 55.
+# Duong dung (share trong pham vi to chuc) KHONG chay o to chuc nay:
+# RAM khong phan giai duoc o-tvkzhcq3yh, ke ca goi tu management
+# account. Loi 56 doc 22. Dang cho AWS Support.
+#
+# ---- Duong 1: Terraform tu tao share, kieu EXTERNAL ----
+#
+# Doc ba he qua o vpc-spokes-remote.tf muc 1 truoc khi bat. Tom tat:
+# no NOI RAO CHAN (share nhan duoc principal ngoai to chuc), no MAT TU
+# DONG (moi account phai bam nhan loi moi), va no LA TAM THOI.
+#
+# ram_use_external_principals = true
+#
+# Sau khi apply, chay o TUNG spoke account:
+#   aws ram get-resource-share-invitations --region ap-southeast-1 \
+#     --query 'resourceShareInvitations[?status==`PENDING`]'
+#   aws ram accept-resource-share-invitation \
+#     --resource-share-invitation-arn <arn>
+#
+# Roi xac nhan - tu chinh spoke account, day moi la bang chung that:
+#   aws ec2 describe-transit-gateways \
+#     --query 'TransitGateways[].TransitGatewayId'
+# ram_invitations_accepted = true
+#
+# ---- Duong 2: share bang CLI, Terraform khong dung toi ----
 #
 #   aws ram create-resource-share --region ap-southeast-1 \
-#     --name <project>-tgw --no-allow-external-principals \
+#     --name <project>-tgw --allow-external-principals \
 #     --resource-arns $(aws ec2 describe-transit-gateways \
 #       --transit-gateway-ids $(terraform output -raw transit_gateway_id) \
 #       --query 'TransitGateways[0].TransitGatewayArn' --output text) \
 #     --principals <spoke-account-id>
 #
-# LENH TREN CHUA DUOC KIEM CHUNG. Phep do o loi 55 chi chay dang
-# KHONG kem --principals; dang mot-lenh-ca-hai o day la suy ra, khong
-# phai da thay chay. Neu no cung bao OperationNotPermittedException thi
-# hien chua co duong nao share duoc TGW tu account nay - dang cho AWS
-# Support tra loi.
-#
-# Dat = true SAU khi lenh tren chay xong VA da kiem:
+# Kiem truoc khi dat = true:
 #   aws ram list-principals --resource-owner SELF \
 #     --resource-arns <tgw-arn> --region ap-southeast-1
-# Bien nay khong tao gi ca; no chi tat check
-# "tgw_shared_with_spoke_accounts".
 # tgw_shared_manually = true
 
 # aws organizations describe-organization --query Organization.Arn --output text

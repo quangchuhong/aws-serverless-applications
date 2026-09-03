@@ -147,6 +147,62 @@ variable "spokes" {
   }
 }
 
+variable "ram_use_external_principals" {
+  description = <<-EOT
+    Cho Terraform tu tao RAM share cho TGW, bang duong EXTERNAL.
+
+    MAC DINH TAT, va no tat vi mot ly do - khong phai vi chua lam xong.
+
+    Duong dung la share trong pham vi to chuc (allow_external_principals
+    = false). Trong to chuc nay duong do khong chay: RAM khong phan giai
+    duoc o-tvkzhcq3yh, ke ca khi goi tu management account. Loi 56.
+
+    Thi nghiem doi chung, doi DUNG MOT bien:
+      --no-allow-external-principals + account ID -> OperationNotPermitted
+      --allow-external-principals    + CUNG ID do -> ACTIVE
+
+    Bat bien nay = chon duong vong. Ba he qua:
+
+      1. NOI RAO CHAN. Share nhan duoc principal ngoai to chuc. Danh
+         sach account trong var.spokes la thu duy nhat con chan.
+      2. MAT TU DONG. Moi spoke account phai chap nhan loi moi mot lan
+         - xem ram_invitations_accepted.
+      3. LA TAM THOI. Support sua xong thi doi ve false.
+
+    Khong bat, va cung khong share bang CLI (tgw_shared_manually), thi
+    StackSet bao "Transit Gateway ... was deleted or does not exist".
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "ram_invitations_accepted" {
+  description = <<-EOT
+    Xac nhan MOI spoke account da chap nhan loi moi RAM.
+
+    Chi co y nghia khi ram_use_external_principals = true. Share ngoai
+    to chuc khong tu dong duoc chap nhan, va Terraform khong lam ho
+    duoc: demo chi co MOT provider, tro vao account network.
+
+    Chay o TUNG spoke account:
+
+      aws ram get-resource-share-invitations --region <region> \
+        --query 'resourceShareInvitations[?status==`PENDING`]'
+      aws ram accept-resource-share-invitation \
+        --resource-share-invitation-arn <arn>
+
+    Kiem tu chinh spoke account - day moi la bang chung that:
+
+      aws ec2 describe-transit-gateways \
+        --query 'TransitGateways[].TransitGatewayId'
+
+    Rong = chua nhan. Va day la cho im lang: apply van XANH, share van
+    ACTIVE, khong loi nao cho toi khi StackSet khong tim thay TGW.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "tgw_shared_manually" {
   description = <<-EOT
     Xac nhan da share Transit Gateway cho cac spoke account BANG CLI.
