@@ -2428,19 +2428,23 @@ Dòng thứ tư đi ngược chiều, và chính vì thế nó không thể gộ
 
 ```
 RAM share (external)         quh11-net-tgw, ACTIVE
-Spoke thay TGW               tgw-082f15acfc5988a70 / owner 436908791055
-StackSet                     CURRENT, vpc-09f0b15348602d8d0
-Attachment                   tgw-attach-0ae14ea96b14b8bcd, available
-Route                        associate rtb-spokes, propagate rtb-security
-Duong ve hoc CIDR            10.20.0.0/16 active
-DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
-Endpoint tap trung           ssm -> 10.1.31.30, 10.1.30.148 (trong security VPC)
-Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
 Loi moi RAM                  5/5 account ASSOCIATED
+StackSet                     3/3 CURRENT
+
+Spoke o account khac         attachment            duong ve hoc CIDR
+  761558631239 app-prod      tgw-attach-0ae14ea9   10.20.0.0/16   active
+  458195083898 security      tgw-attach-0da4b75e   10.8.0.0/16    active
+  654560867047 logarchive    tgw-attach-0dfe8596   10.100.0.0/16  active
+
+DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
+Endpoint tap trung           ec2messages -> 10.1.31.184, 10.1.30.12 (trong security VPC)
+Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
 Khong lot firewall           rtb-spokes / rtb-egress / rtb-ingress deu sach
 Ingress                      NLB -> TGW -> firewall -> app, HTTP 200
-verify.sh                    24 dat, 0 loi, 0 bo qua
+verify.sh                    28 dat, 0 loi, 0 bo qua
 ```
+
+Management account **không** có spoke: StackSet không với tới (lỗi 59), và account đó đang chạy một cụm EKS trong default VPC `172.31.0.0/16` mà chủ sở hữu muốn giữ. Nó vẫn nằm trong `share_tgw_with_accounts` — thấy TGW, tự cắm được khi cần. Dải `10.101.0.0/16` giữ trong bảng CIDR doc 17 như đã cấp phát nhưng chưa dùng, để không ai cấp lại cho việc khác.
 
 > **Điều còn lại là một khoản nợ, không phải một thành tựu:** `allow_external_principals = true` trên share của Transit Gateway. Nó ở đó **chỉ vì lỗi 56** — RAM không phân giải được tổ chức. Ranh giới tổ chức không còn bảo vệ share này; danh sách account trong `var.spokes` và `var.share_tgw_with_accounts` là thứ duy nhất chặn. Khi AWS Support sửa xong, đổi `ram_use_external_principals` về `false` là gỡ cả khoản nợ đó lẫn bước bấm nhận thủ công.
 
