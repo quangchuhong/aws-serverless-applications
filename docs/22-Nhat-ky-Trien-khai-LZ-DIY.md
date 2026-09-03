@@ -2319,6 +2319,18 @@ Cùng management account, cùng region, cùng phút. Biến duy nhất khác nha
 
 Và `"external": true` cho `169873795883` — một account **đang ở trong** `o-tvkzhcq3yh` — là bằng chứng trực tiếp nhất: RAM không nhận ra thành viên tổ chức của chính nó.
 
+#### Suýt viết code cho một phép đo ở account khác
+
+Bốn phép đo trên đều chạy từ **management account**. Tôi lấy kết quả đó và viết code cho `demo/network-lz-full` — bộ code chỉ có **một** provider và bắt buộc chạy bằng credential của `lz-network`, vì lỗi 51.
+
+Người dùng hỏi *"chạy code terraform trên quyền account network ah"*, và câu hỏi đó lộ ra rằng đường external chưa từng được thử ở chính account sẽ chạy nó. RAM share phải do **chủ sở hữu resource** tạo, mà TGW thuộc `lz-network` — nên nếu account đó không tạo được external share thì toàn bộ commit `35ba554` là code cho một đường đi chưa ai đo.
+
+Đo lại từ `436908791055`: `ACTIVE`. Code dùng được.
+
+> Đây là **lần thứ ba trong cùng một phiên** một kết quả suýt được đọc tách khỏi danh tính của người chạy nó — sau `get-role` ở lz-network và `describe-transit-gateways` sau khi destroy. Ba lần, ba cơ chế khác nhau, cùng một hình dạng: phép đo đúng, câu hỏi khác.
+
+Còn **một ô chưa chạm**: `associate-resource-share --resource-arns` trên share external, từ `lz-network`. Không đo được nếu không có TGW, nên nó sẽ lộ ra lúc apply. Vì vậy lần apply đầu nên chạy `-var enable_firewall=false -var enable_ingress=false` — đủ để kiểm chứng cả chuỗi RAM mà không trả ~$570/tháng cho một phép thử.
+
 > **Bài học cuối của chuỗi này:** năm giả thuyết đầu đều sinh ra từ việc đọc thông báo lỗi. Cái trả lời được câu hỏi sinh ra từ việc **đổi một biến và giữ nguyên mọi thứ khác** — một thí nghiệm, không phải một cách đọc.
 >
 > Điều kiện để làm được thí nghiệm đó: phép thử phải **rẻ**. Khi mỗi lần thử là mười phút `terraform apply`, tôi đoán. Khi phát hiện `create-resource-share` chạy được mà không cần resource nào, mỗi phép thử còn ba giây — và bốn phép thử sau đó làm xong việc mà sáu vòng apply không làm nổi.
