@@ -176,6 +176,25 @@ n=$(aws ec2 describe-vpc-endpoints --region "$REGION" \
 [[ "$n" -gt 0 ]] && ok "$n gateway endpoint (S3 + DynamoDB)" || bad "Khong tim thay gateway endpoint"
 
 ########################################
+hdr "6b. Tag chi phi da gan day du chua"
+########################################
+
+# Cost allocation tag chi huu dung khi resource THUC SU mang tag do.
+# Bat tag o billing-guard ma khong gan o day = khong co du lieu de group.
+missing=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
+  --tag-filters "Key=Ephemeral,Values=true" \
+  --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])].ResourceARN' \
+  --output text 2>/dev/null)
+
+if [[ -z "$missing" ]]; then
+  ok "Moi resource deu co tag CostCenter"
+else
+  cnt=$(echo "$missing" | tr '\t' '\n' | grep -c . || true)
+  bad "$cnt resource THIEU tag CostCenter - se hien la 'No CostCenter' trong Cost Explorer"
+  echo "$missing" | tr '\t' '\n' | head -5 | sed 's/^/      /'
+fi
+
+########################################
 hdr "6c. Spoke o ACCOUNT KHAC da duoc noi vao route table chua"
 #
 # Muc 1-3 va muc 7 chi kiem spoke NOI BO. Mot spoke o account khac co
@@ -213,25 +232,6 @@ else
       fi
     done <<<"$remote_atts"
   fi
-fi
-
-########################################
-hdr "6b. Tag chi phi da gan day du chua"
-########################################
-
-# Cost allocation tag chi huu dung khi resource THUC SU mang tag do.
-# Bat tag o billing-guard ma khong gan o day = khong co du lieu de group.
-missing=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
-  --tag-filters "Key=Ephemeral,Values=true" \
-  --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])].ResourceARN' \
-  --output text 2>/dev/null)
-
-if [[ -z "$missing" ]]; then
-  ok "Moi resource deu co tag CostCenter"
-else
-  cnt=$(echo "$missing" | tr '\t' '\n' | grep -c . || true)
-  bad "$cnt resource THIEU tag CostCenter - se hien la 'No CostCenter' trong Cost Explorer"
-  echo "$missing" | tr '\t' '\n' | head -5 | sed 's/^/      /'
 fi
 
 ########################################
