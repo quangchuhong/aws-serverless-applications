@@ -128,7 +128,9 @@ Xếp theo thứ tự gặp phải.
 
 | 59 | StackSet không dựng được VPC ở **management account**, và không nguồn nào nói vì sao | `SERVICE_MANAGED` triển khai theo cây tổ chức; AWS loại management account ra. Provider in `%!s(<nil>)`, CloudFormation không có `StatusReason`, và `list-stack-instances` chỉ *thiếu* một dòng. Vá bằng `manual_vpc = true` + `output "spoke_template"` | **Giới hạn dịch vụ** | *(mục 7ad)* |
 
-**51/59 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 60 | `terraform destroy` xoá 143 resource, script báo **`CON 1 muc chua xoa`** | `resourcegroupstaggingapi` trả về cả resource **đã xoá**; TGW ở `deleted`, EC2 ở `terminated` vẫn còn tag. Mười phép kiểm lọc theo trạng thái sống nên đều xanh — hai kết quả mâu thuẫn, và cái sai là lệnh quét | **Lỗi code** | *(mục 7ae)* |
+
+**52/60 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2514,6 +2516,43 @@ aws cloudformation create-stack --stack-name quh11-net-spoke-vpc \
 > **Bài học:** tôi đoán đúng giới hạn này *trước* khi apply, và vẫn phải trả một vòng apply hỏng để biết nó có thật. Đó là đánh đổi chấp nhận được — điều không chấp nhận được là nếu tôi đã ghi nó vào tài liệu như một sự thật mà chưa đo.
 >
 > Và một lần nữa: ba nguồn thông tin, không nguồn nào chỉ đúng chỗ. Thứ giải được là **so sánh cái có với cái đáng lẽ phải có** — cùng phương pháp đã dùng ở lỗi 45 (Security Hub 0 member) và lỗi 57.
+
+---
+
+### 7ae. Lỗi 60 — một lần dọn sạch bị báo là thất bại
+
+`terraform destroy` xoá 143 resource. Mười phép kiểm cụ thể của `teardown.sh` đều xanh — NAT, EIP, firewall, TGW, endpoint, load balancer, EC2. Rồi lệnh quét theo tag liệt kê **19 ARN còn lại**, trong đó có đúng những thứ vừa được báo là sạch:
+
+```
+✓ Transit Gateway
+✓ NAT Gateway
+✓ EC2 dang chay
+...
+✗ Con lai:
+    .../transit-gateway/tgw-082f15acfc5988a70
+    .../natgateway/nat-01a74fd61ee4e7fef
+    .../instance/i-0b44a8b160aa0f8e3
+```
+
+Script kết luận `CON 1 muc chua xoa`.
+
+**`resourcegroupstaggingapi` trả về cả resource đã xoá**, trong một khoảng sau đó. TGW đã xoá vẫn ở `deleted`, EC2 ở `terminated`, NAT ở `deleted` — không còn tính tiền, nhưng vẫn còn tag. Mười phép kiểm kia lọc theo **trạng thái đang hoạt động** nên không thấy chúng.
+
+Đo lại từng cái:
+
+```
+tgw-082f15acfc5988a70   -> deleted
+i-0b44a8b160aa0f8e3     -> terminated
+quh11-net-tgw           -> DELETED   (khong con ACTIVE)
+```
+
+#### Bản vá
+
+Khi mười phép kiểm đều xanh, lệnh quét tag chuyển thành **thông tin cần xác nhận** (vàng) thay vì lỗi (đỏ), kèm lệnh phân biệt `deleted` với `available`. Khi đã có phép kiểm hỏng, nó vẫn là manh mối để tìm tiếp.
+
+> **Cùng họ với lỗi 48, 57 và 58** — bốn lần trong một phiên, một phép đo đúng trả lời cho một câu hỏi khác. Lần này câu hỏi lệch là: `resourcegroupstaggingapi` trả lời *"ARN nào từng mang tag này"*, còn tôi đọc nó như *"cái gì còn sống"*.
+>
+> Điểm chung của cả bốn: nguồn dữ liệu **đúng và đầy đủ**, chỉ là phạm vi của nó không trùng với phạm vi câu hỏi. Không có cách nào phát hiện bằng cách nhìn kỹ hơn vào kết quả — phải hỏi *"lệnh này thật ra trả lời điều gì"*.
 
 ---
 
