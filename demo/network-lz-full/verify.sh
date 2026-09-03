@@ -223,12 +223,41 @@ else
   if [[ -z "$remote_atts" ]]; then
     skip "Khong co spoke o account khac"
   else
+    # Route table lo DUONG VE: rtb-security khi bat firewall, rtb-egress
+    # khi tat. Association va propagation la HAI viec khac nhau.
+    RET_NAME=$([[ "$FW_ENABLED" == "yes" ]] && echo "rtb-security" || echo "rtb-egress")
+    RET_RTB=$(aws ec2 describe-transit-gateway-route-tables --region "$REGION" \
+      --filters "Name=transit-gateway-id,Values=$TGW_ID" \
+                "Name=tag:Name,Values=${PROJECT}-${RET_NAME}" \
+      --query 'TransitGatewayRouteTables[0].TransitGatewayRouteTableId' --output text 2>/dev/null)
+
     while read -r att owner rtb; do
       [[ -z "$att" ]] && continue
+
       if [[ -z "$rtb" || "$rtb" == "None" ]]; then
         bad "$att (account $owner) KHONG thuoc route table nao - dat wire_remote_attachments = true roi apply"
+        continue
+      fi
+      ok "$att (account $owner) da noi vao $rtb"
+
+      # ASSOCIATION KHONG PHAI PROPAGATION.
+      #
+      # Association cho spoke biet duong RA. Propagation cho duong VE
+      # biet CIDR cua spoke. Co cai dau ma thieu cai sau thi goi di
+      # duoc, goi tra loi lac - luong bat doi xung, va KHONG trang thai
+      # resource nao hien ra dieu do. Phai hoi chinh bang dinh tuyen.
+      [[ "$RET_RTB" == "None" || -z "$RET_RTB" ]] && { skip "Khong tim thay ${PROJECT}-${RET_NAME}"; continue; }
+
+      prop=$(aws ec2 search-transit-gateway-routes --region "$REGION" \
+        --transit-gateway-route-table-id "$RET_RTB" \
+        --filters "Name=type,Values=propagated" "Name=state,Values=active" \
+        --query "Routes[?TransitGatewayAttachments[0].TransitGatewayAttachmentId=='$att'].DestinationCidrBlock" \
+        --output text 2>/dev/null)
+
+      if [[ -n "$prop" && "$prop" != "None" ]]; then
+        ok "  duong ve ($RET_NAME) da hoc CIDR $prop"
       else
-        ok "$att (account $owner) da noi vao $rtb"
+        bad "  duong ve ($RET_NAME) CHUA hoc CIDR cua $att - goi di duoc, goi tra loi lac"
       fi
     done <<<"$remote_atts"
   fi
