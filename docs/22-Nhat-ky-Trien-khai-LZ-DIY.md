@@ -2434,7 +2434,10 @@ Duong ve hoc CIDR            10.20.0.0/16 active
 DNS profile cross-account    quh11-net-app-prod -> vpc-09f0b15348602d8d0, COMPLETE
 Endpoint tap trung           ssm -> 10.1.31.30, 10.1.30.148 (trong security VPC)
 Gateway endpoint S3          IP cong khai - dung, no lam viec o route table
-verify.sh                    17 dat, 0 loi, 0 bo qua
+Loi moi RAM                  5/5 account ASSOCIATED
+Khong lot firewall           rtb-spokes / rtb-egress / rtb-ingress deu sach
+Ingress                      NLB -> TGW -> firewall -> app, HTTP 200
+verify.sh                    24 dat, 0 loi, 0 bo qua
 ```
 
 > **Điều còn lại là một khoản nợ, không phải một thành tựu:** `allow_external_principals = true` trên share của Transit Gateway. Nó ở đó **chỉ vì lỗi 56** — RAM không phân giải được tổ chức. Ranh giới tổ chức không còn bảo vệ share này; danh sách account trong `var.spokes` và `var.share_tgw_with_accounts` là thứ duy nhất chặn. Khi AWS Support sửa xong, đổi `ram_use_external_principals` về `false` là gỡ cả khoản nợ đó lẫn bước bấm nhận thủ công.
