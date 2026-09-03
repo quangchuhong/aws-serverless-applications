@@ -76,12 +76,29 @@ echo "════════════════════════�
 hdr "1. Spoke khong co duong ra Internet rieng"
 ########################################
 
-for vpc in $(aws ec2 describe-vpcs --region "$REGION" \
-  --filters "Name=tag:Name,Values=${PROJECT}-app-*-vpc" \
-  --query 'Vpcs[].VpcId' --output text); do
+# TEN SPOKE LAY TU OUTPUT, KHONG DOAN THEO QUY UOC - loi 62.
+#
+# Truoc day dong nay loc "${PROJECT}-app-*-vpc". Doi ten spoke thanh
+# "probe" la vong lap khong khop gi, than vong lap khong chay, va muc
+# 1 + 2 KHONG IN MOT DONG NAO - khong tich, khong cheo. Bang ket qua
+# ngan di hai dong ma khong cho biet la da bo qua cai gi.
+SPOKES=$(terraform output -json spoke_names 2>/dev/null | jq -r '.[]' 2>/dev/null)
 
-  name=$(aws ec2 describe-vpcs --region "$REGION" --vpc-ids "$vpc" \
-    --query 'Vpcs[0].Tags[?Key==`Name`]|[0].Value' --output text)
+if [[ -z "$SPOKES" ]]; then
+  skip "Khong co spoke noi bo nao (moi spoke deu o account khac)"
+fi
+
+for sp in $SPOKES; do
+  vpc=$(aws ec2 describe-vpcs --region "$REGION" \
+    --filters "Name=tag:Name,Values=${PROJECT}-${sp}-vpc" \
+    --query 'Vpcs[0].VpcId' --output text)
+
+  if [[ "$vpc" == "None" || -z "$vpc" ]]; then
+    bad "Spoke '$sp' khai trong tfvars nhung KHONG tim thay VPC ${PROJECT}-${sp}-vpc"
+    continue
+  fi
+
+  name="${PROJECT}-${sp}-vpc"
 
   igw=$(aws ec2 describe-internet-gateways --region "$REGION" \
     --filters "Name=attachment.vpc-id,Values=$vpc" \
@@ -98,9 +115,15 @@ done
 hdr "2. Route mac dinh cua spoke tro Transit Gateway"
 ########################################
 
-for rt in $(aws ec2 describe-route-tables --region "$REGION" \
-  --filters "Name=tag:Name,Values=${PROJECT}-app-*-private-rt" \
-  --query 'RouteTables[].RouteTableId' --output text); do
+for sp in $SPOKES; do
+  rt=$(aws ec2 describe-route-tables --region "$REGION" \
+    --filters "Name=tag:Name,Values=${PROJECT}-${sp}-private-rt" \
+    --query 'RouteTables[0].RouteTableId' --output text)
+
+  if [[ "$rt" == "None" || -z "$rt" ]]; then
+    bad "Spoke '$sp' khong tim thay route table ${PROJECT}-${sp}-private-rt"
+    continue
+  fi
 
   tgw=$(aws ec2 describe-route-tables --region "$REGION" --route-table-ids "$rt" \
     --query 'RouteTables[0].Routes[?DestinationCidrBlock==`0.0.0.0/0`].TransitGatewayId|[0]' --output text)
@@ -364,16 +387,30 @@ run_remote() {
 }
 
 INSTANCES=$(terraform output -json instances 2>/dev/null || echo '{}')
-DEV_ID=$(echo "$INSTANCES" | jq -r '.["app-dev"].id // empty')
-PROD_IP=$(echo "$INSTANCES" | jq -r '.["app-prod"].private_ip // empty')
+# LAY EC2 DAU TIEN CO THAT, khong goi ten cung - loi 62.
+#
+# Truoc day hai dong nay la .["app-dev"] va .["app-prod"]. Doi ten
+# spoke la ca hai thanh rong, va muc 7 bo qua voi ly do SAI:
+# "enable_test_instances = false" trong khi no dang true.
+DEV_ID=$(echo "$INSTANCES" | jq -r 'to_entries | sort_by(.key) | .[0].value.id // empty')
+DEV_NAME=$(echo "$INSTANCES" | jq -r 'to_entries | sort_by(.key) | .[0].key // empty')
+PROD_IP=$(echo "$INSTANCES" | jq -r 'to_entries | sort_by(.key) | .[1].value.private_ip // empty')
 # Moi AZ mot NAT nen day la DANH SACH. EC2 ra Internet bang NAT cua
 # AZ chua no, khong doan truoc duoc la cai nao.
 NAT_IPS=$(terraform output -json nat_public_ips 2>/dev/null | jq -r '.[]' | tr '\n' ' ')
 
 if [[ -z "$DEV_ID" ]]; then
-  skip "Khong co EC2 test (enable_test_instances = false)"
+  # LY DO PHAI DUNG. Truoc day dong nay luon noi
+  # "enable_test_instances = false", ke ca khi bien do dang true va
+  # nguyen nhan that la khong con spoke noi bo nao. Mot ly do sai
+  # trong thong bao con dat hon khong co thong bao. Loi 62.
+  if [[ -z "$SPOKES" ]]; then
+    skip "Khong co spoke noi bo -> khong co EC2 nao o day de dieu khien phep do"
+  else
+    skip "Khong co EC2 test (enable_test_instances = false)"
+  fi
 else
-  echo "  ... dang chay lenh tren $DEV_ID qua SSM (~1 phut)"
+  echo "  ... dang chay lenh tren $DEV_NAME ($DEV_ID) qua SSM (~1 phut)"
 
   out=$(run_remote "$DEV_ID" "curl -s --max-time 10 https://checkip.amazonaws.com")
   matched=""
@@ -469,7 +506,7 @@ TARGETS=$(terraform output -json test_targets 2>/dev/null || echo '{}')
 REMOTE_KEYS=$(echo "$TARGETS" | jq -r 'to_entries[] | select(.value.account != "local") | .key' 2>/dev/null)
 
 if [[ -z "$DEV_ID" ]]; then
-  skip "Khong co EC2 local de goi di (enable_test_instances = false)"
+  skip "Khong co EC2 local de goi di - can it nhat mot spoke khong khai account_id"
 elif [[ -z "$REMOTE_KEYS" ]]; then
   skip "Khong co EC2 o spoke remote (remote_test_instances = false)"
 else

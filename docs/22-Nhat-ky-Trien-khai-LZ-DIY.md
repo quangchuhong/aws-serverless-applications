@@ -132,7 +132,9 @@ Xếp theo thứ tự gặp phải.
 
 | 61 | `Invalid count argument` — `count` đọc `private_ip` của EC2 | Tôi kéo một thuộc tính **chỉ biết sau apply** vào `count`, thứ phải tính được ở **plan**. Code cũ tránh được vì dùng biến trong `count` và chỉ chạm thuộc tính ở `target_id`. Vá bằng cách tách `use_local_target` (biến, biết ở plan) khỏi `nlb_target_ip` (thuộc tính, biết sau apply). Cùng họ với lỗi 50 | **Lỗi code** | *(mục 7af)* |
 
-**53/61 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 62 | Đổi tên spoke từ `app-dev` sang `probe` → **mục 1 và 2 của `verify.sh` không in một dòng nào** | Script lọc VPC theo `${PROJECT}-app-*-vpc` và tìm EC2 theo `.["app-dev"]` — một **quy ước đặt tên**, không phải sự thật. Không khớp thì vòng lặp không chạy, bảng ngắn đi hai dòng và không báo gì. Mục 7 thì bỏ qua với lý do **sai**: `enable_test_instances = false` trong khi nó đang `true`. Vá bằng `output "spoke_names"` | **Lỗi code** | *(mục 7ag)* |
+
+**54/62 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2587,6 +2589,53 @@ nlb_target_ip = local.use_local_target
 > **Cùng họ với lỗi 50**, và đó mới là điều đáng ghi: lỗi 50 cũng là một `for_each` phụ thuộc vào thứ chưa biết ở plan, và tôi đã viết hẳn một mục về nó. Biết luật không ngăn được việc vi phạm luật — vì lúc sửa, tôi đang nghĩ về *"làm sao chọn đúng target"*, không nghĩ về *"biểu thức này được đánh giá lúc nào"*.
 >
 > Dấu hiệu nhận ra sớm, rẻ hơn một vòng plan: mỗi khi viết `count` hoặc `for_each`, đọc lại biểu thức và hỏi **"có tên resource nào trong này không"**. Có là hỏng, bất kể bọc gì quanh nó.
+
+---
+
+### 7ag. Lỗi 62 — hai phép kiểm biến mất, không để lại dấu vết
+
+Đổi tên spoke local từ `app-dev` thành `probe`. `verify.sh` chạy xong, `24 đạt 0 lỗi`. Nhưng mục 1 và 2 **trống hoàn toàn** — không dấu tích, không dấu chéo, không dòng nào:
+
+```
+1. Spoke khong co duong ra Internet rieng
+
+2. Route mac dinh cua spoke tro Transit Gateway
+
+3. Duong VE trong egress VPC (loi hay gap nhat)
+  ✓ Public subnet co duong ve: 10.0.0.0/8 → TGW
+```
+
+Script lọc VPC theo tag `${PROJECT}-app-*-vpc`. Không VPC nào khớp, `for` lặp qua tập rỗng, thân vòng lặp không chạy. Bảng kết quả **ngắn đi hai dòng** và không có gì cho biết là đã bỏ qua cái gì.
+
+Cùng lúc, mục 7 bỏ qua với lý do **sai**:
+
+```
+7. Luong thuc te
+  - Khong co EC2 test (enable_test_instances = false)
+```
+
+`enable_test_instances` đang là `true`, và EC2 `probe` tồn tại — output `instances` in ra nó ngay phía trên. Nguyên nhân thật: script tìm `.["app-dev"].id` và `.["app-prod"].private_ip`, hai tên gán cứng.
+
+#### Vì sao đây là kiểu tệ nhất
+
+Một phép kiểm **hỏng** thì báo đỏ. Một phép kiểm **biến mất** thì không báo gì, và tổng số vẫn là "0 lỗi". Người đọc phải nhớ rằng đáng lẽ phải có 26 dòng chứ không phải 24 — tức phải biết trước câu trả lời để phát hiện là mình không có câu trả lời.
+
+Cùng họ với **lỗi 48** (`PROJECT` gán cứng) và **lỗi 57** (đối chiếu theo tag của account khác): cả ba đều là **đoán theo một quy ước** thay vì hỏi nguồn biết sự thật.
+
+#### Bản vá
+
+Thêm `output "spoke_names"` — danh sách spoke nội bộ, lấy từ chính config. `verify.sh` lặp trên đó, và **báo đỏ** nếu một spoke đã khai mà không tìm thấy VPC:
+
+```bash
+SPOKES=$(terraform output -json spoke_names | jq -r '.[]')
+for sp in $SPOKES; do
+  vpc=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=${PROJECT}-${sp}-vpc" ...)
+  [[ "$vpc" == "None" ]] && { bad "Spoke '$sp' khai trong tfvars nhung khong tim thay VPC"; continue; }
+```
+
+EC2 điều khiển phép đo lấy **cái đầu tiên có thật**, không gọi tên cứng. Và lý do bỏ qua giờ phân biệt được "không có spoke nội bộ" với "`enable_test_instances = false`" — một lý do sai trong thông báo còn đắt hơn không có thông báo, vì nó làm người đọc đi sửa đúng thứ không hỏng.
+
+> **Bài học:** mỗi khi script lọc theo một chuỗi có dạng tên, hỏi *"chuỗi này do ai quyết định"*. Nếu câu trả lời là "quy ước của chúng tôi" thì nó sẽ sai vào ngày ai đó đổi quy ước — và cách nó sai sẽ là **im lặng**, không phải báo lỗi.
 
 ---
 

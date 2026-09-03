@@ -170,6 +170,20 @@ output "tgw_shared_with" {
   }
 }
 
+output "spoke_names" {
+  description = <<-EOT
+    Ten cac spoke NOI BO trong account nay. verify.sh dung de tim VPC
+    va route table cua chung.
+
+    Truoc day script loc theo tag "<project>-app-*-vpc" - mot quy uoc
+    dat ten, khong phai su that. Doi ten spoke tu "app-dev" thanh
+    "probe" la hai phep kiem dau tien KHONG IN GI CA: vong lap khong
+    khop, than vong lap khong chay, va bang ket qua ngan di hai dong
+    ma khong bao gi. Loi 62.
+  EOT
+  value       = sort(keys(local.local_spokes))
+}
+
 output "test_targets" {
   description = <<-EOT
     Moi spoke -> IP cua EC2 kiem chung trong do, ke ca spoke o account
