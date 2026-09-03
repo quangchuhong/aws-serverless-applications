@@ -242,12 +242,15 @@ output "next_steps" {
     ══════════════════ KIEM CHUNG ══════════════════
 
     1. Vao EC2 o ${coalesce(local.first_spoke, "<khong co spoke local>")} (vao duoc = duong egress OK):
-       aws ssm start-session --target ${try(aws_instance.test[local.first_spoke].id, "<khong co EC2 local - xem ghi chu duoi>")} --region ${var.region}
+       aws ssm start-session --target ${try(aws_instance.test[local.first_spoke].id, "<khong co EC2 local>")} --region ${var.region}
+    ${local.first_spoke != null ? "" : trimspace(<<-NOTE
 
-       KHONG CO SPOKE LOCAL thi khong vao duoc tu day: SSM cua account
-       nay khong voi tới instance o account khac. Phai dung credential
+       KHONG CO SPOKE LOCAL nen khong vao duoc tu day: SSM cua account
+       nay khong voi toi instance o account khac. Phai dung credential
        cua chinh account spoke. Va verify.sh muc 7 + 7c se bo qua, vi
        chung dieu khien phep do TU MOT EC2 local.
+    NOTE
+)}
 
     2. Trong session - IP ra Internet phai la NAT:
        curl -s https://checkip.amazonaws.com
@@ -259,7 +262,7 @@ output "next_steps" {
 
     4. Ingress:
     ${local.cdn > 0 ?
-  "   curl https://${aws_cloudfront_distribution.main[0].domain_name}\n       (goi thang vao NLB se bi CHAN - origin da khoa theo CloudFront)" :
+"   curl https://${aws_cloudfront_distribution.main[0].domain_name}\n       (goi thang vao NLB se bi CHAN - origin da khoa theo CloudFront)" :
 "   curl http://${try(aws_lb.ingress[0].dns_name, "<bat enable_ingress>")}"}
 
     5. XOA khi xong:
