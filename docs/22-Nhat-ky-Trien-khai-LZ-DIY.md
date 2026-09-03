@@ -2329,7 +2329,17 @@ Người dùng hỏi *"chạy code terraform trên quyền account network ah"*,
 
 > Đây là **lần thứ ba trong cùng một phiên** một kết quả suýt được đọc tách khỏi danh tính của người chạy nó — sau `get-role` ở lz-network và `describe-transit-gateways` sau khi destroy. Ba lần, ba cơ chế khác nhau, cùng một hình dạng: phép đo đúng, câu hỏi khác.
 
-Còn **một ô chưa chạm**: `associate-resource-share --resource-arns` trên share external, từ `lz-network`. Không đo được nếu không có TGW, nên nó sẽ lộ ra lúc apply. Vì vậy lần apply đầu nên chạy `-var enable_firewall=false -var enable_ingress=false` — đủ để kiểm chứng cả chuỗi RAM mà không trả ~$570/tháng cho một phép thử.
+Còn **một ô chưa chạm**: `associate-resource-share --resource-arns` trên share external, từ `lz-network`. Không đo được nếu không có TGW, nên phải để lộ ra lúc apply — và cách trả giá rẻ nhất cho phép thử đó là chạy `-target`:
+
+```bash
+terraform apply \
+  -target=aws_ram_resource_association.tgw \
+  -target=aws_ram_principal_association.spoke_accounts
+```
+
+Bốn resource, không NAT, không attachment, **$0/ngày**. Kết quả: `aws_ram_resource_association.tgw[0]` tạo xong sau 3 giây trên `tgw-082f15acfc5988a70`. Ô cuối cùng đóng lại, và đường external không còn chỗ nào là suy đoán.
+
+> `-target` bị Terraform cảnh báo là *"không dùng cho việc thường ngày"*, và cảnh báo đó đúng. Nhưng ở đây có một bước **thủ công bắt buộc nằm giữa** hai nửa của config — chấp nhận lời mời RAM, làm ở account khác — nên chia apply theo phụ thuộc thật lại là cách trung thực nhất. Không có `-target`, apply đầu tiên sẽ dựng cả hub rồi mới chết ở StackSet, vì `check` block **chỉ cảnh báo chứ không chặn**.
 
 > **Bài học cuối của chuỗi này:** năm giả thuyết đầu đều sinh ra từ việc đọc thông báo lỗi. Cái trả lời được câu hỏi sinh ra từ việc **đổi một biến và giữ nguyên mọi thứ khác** — một thí nghiệm, không phải một cách đọc.
 >
