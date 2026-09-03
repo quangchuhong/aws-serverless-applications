@@ -122,7 +122,9 @@ Xếp theo thứ tự gặp phải.
 
 | 56 | **RAM không phân giải được tổ chức**, kể cả từ management account | Thí nghiệm đối chứng, đổi đúng một biến: cùng account ID, `--no-allow-external-principals` hỏng / `--allow-external-principals` chạy. Account trong org bị RAM đánh dấu `"external": true`. Service-linked role có, trusted access bật, FeatureSet `ALL`, OU tồn tại, chỉ `FullAWSAccess` | **Lỗi phía AWS** *(chờ Support)* | *(mục 7z)* |
 
-**48/56 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 57 | Pha 2 báo `0 added` — attachment của spoke remote **không bao giờ** được tìm thấy | Code đối chiếu tag `Name` mà template đặt ở account đích. Tag trên resource chia sẻ thuộc về account tạo ra chúng: chủ TGW thấy attachment, `"tags": []`. Tệ hơn: thông báo của `check` khuyên "apply lại lần nữa" — một vòng lặp vô hạn. `verify.sh` cùng lúc báo 7 đạt 0 lỗi vì không mục nào nhìn qua ranh giới account | **Lỗi code** | *(mục 7aa)* |
+
+**49/57 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2350,6 +2352,54 @@ Bốn resource, không NAT, không attachment, **$0/ngày**. Kết quả: `aws_r
 > **Bài học, lần thứ ba trong cùng một vấn đề:** một thông báo lỗi mô tả **triệu chứng**, và tôi liên tục đọc nó như **nguyên nhân**. Mỗi lần như vậy đều sinh ra một bản vá nhắm vào chỗ không sai, một mục tài liệu khẳng định điều không đúng, và một vòng apply mười phút.
 >
 > Dấu hiệu nhận ra sớm: nếu tôi viết được nguyên nhân **mà không chạy lệnh nào**, thì cái tôi vừa viết là diễn giải câu chữ, không phải kết quả đo.
+
+---
+
+### 7aa. Lỗi 57 — tag của account khác là thứ bạn không nhìn thấy
+
+Pha 2 chạy xong với **`0 added, 0 changed`**, và `check "remote_attachments_wired"` báo `0/1`. Nhưng attachment thì có thật, `available`, đã kiểm bằng mắt một phút trước đó.
+
+Code tìm attachment bằng cách đối chiếu tag `Name = "<project>-tgwa-<spoke>"` — tag mà template CloudFormation đặt ở account đích. Đo từ `lz-network`:
+
+```
+tgw-attach-0ae14ea96b14b8bcd   761558631239   "tags": []
+tgw-attach-07b41c6971fdc86fe   436908791055   8 tag, Name = quh11-net-tgwa-app-dev
+tgw-attach-0be8c72c6d17ba6b5   436908791055   8 tag, Name = quh11-net-tgwa-egress
+```
+
+**Tag trên resource chia sẻ thuộc về account đã tạo chúng.** Chủ sở hữu TGW nhìn thấy attachment, nhưng không nhìn thấy tag do account spoke đặt. Phép đối chiếu đó không phải chậm một nhịp — nó **không bao giờ khớp**.
+
+Và đây là phần tệ hơn lỗi: thông báo của `check` nói *"thường chỉ là thứ tự, chạy lại `terraform apply` một lần nữa"*. Lời khuyên đó, cho nguyên nhân thật này, là một **vòng lặp vô hạn** — apply lại bao nhiêu lần cũng ra `0/1`. Một chẩn đoán sai trong thông báo lỗi còn đắt hơn không có thông báo nào, vì nó tiêu thụ đúng thứ người đọc dùng để tự tìm ra sự thật.
+
+#### Bản vá
+
+Đối chiếu theo `ResourceOwnerId` — thứ luôn nhìn thấy được — thay vì tag, và lọc ngay ở API bằng `resource-owner-id`. `account_id` đã có sẵn trong `var.spokes`, nên không cần nhìn sang account kia chút nào.
+
+Một data source **mỗi account**, không phải mỗi spoke, và khoá theo chính attachment id:
+
+```hcl
+data "aws_ec2_transit_gateway_attachments" "remote_by_account" {
+  for_each = local.wire ? toset(distinct([for v in local.remote_spokes : v.account_id])) : toset([])
+  filter { name = "resource-owner-id"  values = [each.value] }
+  ...
+}
+
+locals {
+  remote_attachments_ready = local.wire ? toset(flatten([
+    for d in data.aws_ec2_transit_gateway_attachments.remote_by_account : d.ids
+  ])) : toset([])
+}
+```
+
+Khoá theo attachment id giải quyết luôn một lỗi chưa kịp xảy ra: **hai spoke trong cùng một account**. Khoá theo tên spoke thì cả hai khoá cùng trỏ vào một attachment — một cái bị nối hai lần, một cái không bao giờ được nối.
+
+#### `verify.sh` báo 7 đạt 0 lỗi cho một mạng chưa thông
+
+Cùng lúc đó `./verify.sh` cho `7 dat 0 loi 3 bo qua`. Mọi mục của nó — kể cả mục 7 chạy lệnh thật qua SSM — đều nhắm vào spoke **nội bộ**. Spoke ở account khác không có mục nào, nên bảng kết quả xanh trong khi một VPC đã khai báo đang không nhận được gói tin nào.
+
+Đã thêm mục `6c`, đối chiếu theo `ResourceOwnerId` và kiểm `Association.TransitGatewayRouteTableId` của từng attachment thuộc account khác.
+
+> **Bài học:** hai lớp kiểm chứng — `check` block và `verify.sh` — cùng có mặt, cùng chạy, và cùng không thấy. Cái thứ nhất thấy nhưng chỉ đường sai; cái thứ hai không nhìn tới. Một bộ kiểm chứng chỉ bao được phạm vi mà người viết nó **nghĩ tới**, và ở đây phạm vi đó dừng lại đúng ở ranh giới account.
 
 ---
 

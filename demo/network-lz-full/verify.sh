@@ -176,6 +176,46 @@ n=$(aws ec2 describe-vpc-endpoints --region "$REGION" \
 [[ "$n" -gt 0 ]] && ok "$n gateway endpoint (S3 + DynamoDB)" || bad "Khong tim thay gateway endpoint"
 
 ########################################
+hdr "6c. Spoke o ACCOUNT KHAC da duoc noi vao route table chua"
+#
+# Muc 1-3 va muc 7 chi kiem spoke NOI BO. Mot spoke o account khac co
+# the co attachment State=available ma khong thuoc route table nao -
+# khong loi, khong canh bao, va khong mot goi tin nao di qua. Thieu
+# muc nay thi bang ket qua bao "0 loi" cho mot mang chua thong.
+#
+# Khong doi chieu tag: tag tren resource chia se thuoc ve account da
+# tao chung, nen chu so huu TGW co the khong thay tag do account spoke
+# dat. Doi chieu theo ResourceOwnerId - thu luon nhin thay.
+########################################
+
+TGW_ID=$(tfout transit_gateway_id)
+SELF=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+
+if [[ -z "$TGW_ID" || -z "$SELF" ]]; then
+  skip "Khong lay duoc transit_gateway_id hoac account id"
+else
+  remote_atts=$(aws ec2 describe-transit-gateway-attachments --region "$REGION" \
+    --filters "Name=transit-gateway-id,Values=$TGW_ID" \
+              "Name=resource-type,Values=vpc" \
+              "Name=state,Values=available" \
+    --query "TransitGatewayAttachments[?ResourceOwnerId!='$SELF'].[TransitGatewayAttachmentId,ResourceOwnerId,Association.TransitGatewayRouteTableId]" \
+    --output text 2>/dev/null)
+
+  if [[ -z "$remote_atts" ]]; then
+    skip "Khong co spoke o account khac"
+  else
+    while read -r att owner rtb; do
+      [[ -z "$att" ]] && continue
+      if [[ -z "$rtb" || "$rtb" == "None" ]]; then
+        bad "$att (account $owner) KHONG thuoc route table nao - dat wire_remote_attachments = true roi apply"
+      else
+        ok "$att (account $owner) da noi vao $rtb"
+      fi
+    done <<<"$remote_atts"
+  fi
+fi
+
+########################################
 hdr "6b. Tag chi phi da gan day du chua"
 ########################################
 

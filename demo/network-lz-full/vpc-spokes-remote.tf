@@ -388,8 +388,29 @@ resource "aws_cloudformation_stack_set_instance" "spoke" {
 # lai, mot lan apply lo hien tai.
 ########################################
 
-data "aws_ec2_transit_gateway_attachments" "remote_spokes" {
-  count = local.wire ? 1 : 0
+# KHONG DOI CHIEU THEO TAG - loi 57.
+#
+# Ban dau khoi nay lay het attachment cua TGW roi tim cai co tag
+# Name = "<project>-tgwa-<spoke>", tag ma template CloudFormation dat
+# o account dich. Do duoc:
+#
+#   attachment cua 761558631239  ->  "tags": []
+#   attachment cua 436908791055  ->  du 8 tag
+#
+# TAG TREN RESOURCE CHIA SE THUOC VE ACCOUNT DA TAO CHUNG. Chu so huu
+# TGW nhin thay attachment nhung KHONG nhin thay tag do account spoke
+# dat. Nen phep doi chieu do khong phai "cham mot nhip apply" - no
+# khong bao gio khop, va loi cua check con day nguoi doc di apply lai
+# mai mai.
+#
+# ResourceOwnerId thi LUON nhin thay, va Terraform da biet account_id
+# tu var.spokes - khong can nhin sang account kia.
+#
+# Loc MOT data source moi ACCOUNT, khong phai moi spoke: hai spoke
+# cung nam trong mot account thi ca hai attachment deu phai duoc noi,
+# va khoa theo ten spoke se ghep nham mot cai vao ca hai.
+data "aws_ec2_transit_gateway_attachments" "remote_by_account" {
+  for_each = local.wire ? toset(distinct([for v in local.remote_spokes : v.account_id])) : toset([])
 
   filter {
     name   = "transit-gateway-id"
@@ -403,32 +424,19 @@ data "aws_ec2_transit_gateway_attachments" "remote_spokes" {
     name   = "resource-type"
     values = ["vpc"]
   }
-}
-
-data "aws_ec2_transit_gateway_attachment" "remote_spoke" {
-  for_each = local.wire ? toset(one(data.aws_ec2_transit_gateway_attachments.remote_spokes[*].ids)) : []
-
-  transit_gateway_attachment_id = each.value
+  filter {
+    name   = "resource-owner-id"
+    values = [each.value]
+  }
 }
 
 locals {
-  # Loc lay attachment cua account KHAC, doi chieu theo tag Name ma
-  # template da dat: <project>-tgwa-<spoke>.
-  #
-  # Doi chieu theo TAG chu khong theo thu tu: danh sach tra ve khong
-  # co thu tu bao dam, va lay theo chi so la kieu loi da gap o loi 39.
-  remote_attachment_ids = local.wire == false ? {} : {
-    for k, v in local.remote_spokes : k => one([
-      for a in data.aws_ec2_transit_gateway_attachment.remote_spoke :
-      a.id if try(a.tags["Name"], "") == "${var.project}-tgwa-${k}"
-    ])
-  }
-
-  # Attachment chua tim thay = StackSet vua chay xong o CHINH lan apply
-  # nay, data source doc truoc do nen chua thay. Apply lan hai la co.
-  remote_attachments_ready = {
-    for k, v in local.remote_attachment_ids : k => v if v != null
-  }
+  # Khoa la CHINH attachment id, khong phai ten spoke. Nho vay so spoke
+  # trong mot account khong con quan trong: moi attachment tim thay deu
+  # duoc noi dung mot lan.
+  remote_attachments_ready = local.wire ? toset(flatten([
+    for d in data.aws_ec2_transit_gateway_attachments.remote_by_account : d.ids
+  ])) : toset([])
 }
 
 ########################################
@@ -445,7 +453,7 @@ resource "aws_ec2_transit_gateway_route_table_association" "remote_spokes" {
 # Firewall BAT: spoke propagate vao rtb-security de goi tra ve tim
 # duoc duong sau khi qua thanh tra.
 resource "aws_ec2_transit_gateway_route_table_propagation" "remote_to_security" {
-  for_each = var.enable_firewall ? local.remote_attachments_ready : {}
+  for_each = var.enable_firewall ? local.remote_attachments_ready : toset([])
 
   transit_gateway_attachment_id  = each.value
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.security[0].id
@@ -453,7 +461,7 @@ resource "aws_ec2_transit_gateway_route_table_propagation" "remote_to_security" 
 
 # Firewall TAT: propagate thang vao rtb-egress.
 resource "aws_ec2_transit_gateway_route_table_propagation" "remote_to_egress" {
-  for_each = var.enable_firewall ? {} : local.remote_attachments_ready
+  for_each = var.enable_firewall ? toset([]) : local.remote_attachments_ready
 
   transit_gateway_attachment_id  = each.value
   transit_gateway_route_table_id = aws_ec2_transit_gateway_route_table.egress.id
@@ -565,10 +573,14 @@ check "remote_attachments_wired" {
       "di qua.",
       "Thuong chi la thu tu: StackSet vua tao attachment o chinh lan apply",
       "nay nen data source chua thay. CHAY LAI terraform apply mot lan nua.",
-      "Van thieu sau lan hai thi doi chieu tag Name:",
+      "Van thieu sau lan hai thi doi chieu ResourceOwnerId - KHONG phai tag,",
+      "tag cua account spoke khong nhin thay duoc tu day (loi 57):",
       "aws ec2 describe-transit-gateway-attachments",
       "--filters Name=transit-gateway-id,Values=<tgw-id>",
-      "--query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,Tags]'",
+      "Name=resource-type,Values=vpc Name=state,Values=available",
+      "--query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceOwnerId]'",
+      "Account nao co trong var.spokes ma khong hien o day thi StackSet",
+      "chua tao xong attachment o account do.",
     ])
   }
 }
