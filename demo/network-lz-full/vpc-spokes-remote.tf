@@ -66,6 +66,26 @@ locals {
 
   has_remote = length(local.remote_spokes) > 0
 
+  # Spoke ma StackSet dung duoc.
+  #
+  # MANAGEMENT ACCOUNT KHONG NAM TRONG DAY - loi 59. StackSet
+  # SERVICE_MANAGED trien khai theo cay to chuc va AWS loai management
+  # account ra khoi cac dot trien khai do. Cach no bao loi rat te:
+  #
+  #   list-stack-instances  -> KHONG co dong nao cho account do
+  #   operation             -> FAILED
+  #   provider AWS          -> "last error: %!s(<nil>)"
+  #
+  # Khong mot cho nao noi "management account khong duoc ho tro". Ba
+  # dau hieu, khong dau hieu nao chi dung cho.
+  #
+  # Dat manual_vpc = true cho spoke do, roi dung VPC bang stack THUONG
+  # chay tai cho - xem output "spoke_template".
+  stackset_spokes = {
+    for k, v in local.remote_spokes : k => v
+    if !try(v.manual_vpc, false)
+  }
+
   # PHA HAI - xem khoi "HAI PHA" o cuoi file.
   wire = local.has_remote && var.wire_remote_attachments
 
@@ -387,7 +407,13 @@ resource "aws_cloudformation_stack_set" "spoke" {
 
 # Mot instance moi account, de CIDR khac nhau qua parameter_overrides.
 resource "aws_cloudformation_stack_set_instance" "spoke" {
-  for_each = local.remote_spokes
+  # KHONG dung local.remote_spokes truc tiep - loi 59.
+  #
+  # Spoke khai manual_vpc = true bi loai o day: VPC cua no duoc dung
+  # NGOAI StackSet. Nhung no VAN nam trong remote_spokes, nen RAM
+  # principal va phan noi route table o muc 4 van tinh no - hai viec
+  # do khong phu thuoc StackSet.
+  for_each = local.stackset_spokes
 
   stack_set_name = aws_cloudformation_stack_set.spoke[0].name
   region         = var.region

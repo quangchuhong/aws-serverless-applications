@@ -123,6 +123,23 @@ variable "spokes" {
     # theo cay to chuc, nen phai biet account nam o OU nao.
     #   aws organizations list-parents --child-id <account-id>
     ou_id = optional(string)
+
+    # VPC cua spoke nay duoc dung NGOAI StackSet - loi 59.
+    #
+    # Can cho MANAGEMENT ACCOUNT: StackSet SERVICE_MANAGED trien khai
+    # theo cay to chuc va AWS loai management account ra. Khong co
+    # thong bao nao noi vay - list-stack-instances chi don gian khong
+    # co dong cho account do, con operation thi FAILED.
+    #
+    # Dat = true thi Terraform bo qua spoke nay khi tao stack instance,
+    # nhung VAN share RAM cho no va VAN noi attachment cua no vao route
+    # table khi attachment xuat hien.
+    #
+    # Dung VPC bang tay, tu account do:
+    #   terraform output -raw spoke_template > spoke-vpc.json
+    #   aws cloudformation create-stack --stack-name <project>-spoke-vpc \
+    #     --template-body file://spoke-vpc.json --parameters ...
+    manual_vpc = optional(bool, false)
   }))
 
   default = {

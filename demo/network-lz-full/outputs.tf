@@ -170,6 +170,38 @@ output "tgw_shared_with" {
   }
 }
 
+output "spoke_template" {
+  description = <<-EOT
+    Template CloudFormation cua spoke VPC, de dung BANG TAY o account
+    ma StackSet khong voi toi - management account, loi 59.
+
+      terraform output -raw spoke_template > spoke-vpc.json
+
+    Roi tu chinh account do:
+
+      aws cloudformation create-stack --region <region> \
+        --stack-name <project>-spoke-vpc \
+        --template-body file://spoke-vpc.json \
+        --parameters \
+          ParameterKey=VpcCidr,ParameterValue=10.101.0.0/16 \
+          ParameterKey=TransitGatewayId,ParameterValue=<tgw-id> \
+          ParameterKey=AzA,ParameterValue=<region>a \
+          ParameterKey=AzB,ParameterValue=<region>b \
+          ParameterKey=ProjectName,ParameterValue=<project> \
+          ParameterKey=SpokeName,ParameterValue=management \
+          ParameterKey=DnsProfileId,ParameterValue=<profile-id>
+
+    Doc thang tu stack set dang chay, KHONG phai mot ban sao: hai ban
+    template roi nhau ra la kieu loi khong ai phat hien cho toi khi
+    mot spoke duoc dung khac moi spoke con lai.
+
+    Sau khi stack chay xong, `terraform apply` se tu noi attachment do
+    vao route table - viec do la cua chu so huu TGW, khong lien quan
+    toi cach VPC duoc tao.
+  EOT
+  value       = try(aws_cloudformation_stack_set.spoke[0].template_body, "")
+}
+
 output "estimated_cost" {
   description = <<-EOT
     Uoc tinh THO phi co dinh. Chua tinh data transfer.

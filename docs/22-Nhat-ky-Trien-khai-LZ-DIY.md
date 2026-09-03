@@ -126,7 +126,9 @@ Xếp theo thứ tự gặp phải.
 
 | 58 | Cùng script, cùng hạ tầng: `17 đạt 0 lỗi` rồi `6 đạt 8 lỗi` | Shell còn credential của account spoke. Script đọc **state** từ thư mục (đúng) nhưng gọi **AWS** bằng credential trong shell (nhầm account), nên mọi câu trả lời rỗng bị đọc thành "thiếu". `teardown.sh` còn nguy hơn: destroy không xoá được gì rồi báo `DA SACH`. Vá bằng `output "account_id"` + `exit 1` ở đầu cả hai script | **Lỗi code** | *(mục 7ac)* |
 
-**50/58 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 59 | StackSet không dựng được VPC ở **management account**, và không nguồn nào nói vì sao | `SERVICE_MANAGED` triển khai theo cây tổ chức; AWS loại management account ra. Provider in `%!s(<nil>)`, CloudFormation không có `StatusReason`, và `list-stack-instances` chỉ *thiếu* một dòng. Vá bằng `manual_vpc = true` + `output "spoke_template"` | **Giới hạn dịch vụ** | *(mục 7ad)* |
+
+**51/59 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2471,6 +2473,43 @@ Thêm `output "account_id"`, và cả `verify.sh` lẫn `teardown.sh` đối chi
 > **Đây là lần thứ tư trong phiên này** một phép đo đúng trả lời nhầm câu hỏi: `get-role` ở `lz-network`, `describe-transit-gateways` sau khi destroy, tag của account spoke (lỗi 57), và giờ là cả một bộ kiểm chứng.
 >
 > Ba lần đầu tôi sửa bằng cách nhớ hỏi thêm "chạy ở account nào". Lần này mới sửa đúng chỗ: **script tự hỏi câu đó**. Một quy ước phải nhớ thì sẽ có lần quên; một `exit 1` thì không.
+
+---
+
+### 7ad. Lỗi 59 — ba dấu hiệu, không cái nào chỉ đúng chỗ
+
+Người dùng chọn dựng VPC spoke cho cả ba account nền tảng, kể cả management. Tôi đã nêu trước rằng StackSet có thể không với tới management, và apply xác nhận — nhưng **cách** nó báo mới là điều đáng ghi:
+
+| Nguồn | Nói gì |
+|---|---|
+| `terraform apply` | `unexpected state 'FAILED', wanted target 'SUCCEEDED'. last error: %!s(<nil>)` |
+| `list-stack-instances` | Ba dòng `CURRENT`, và **không có dòng nào** cho `609320954321` |
+| CloudFormation | Không có `StatusReason` để đọc |
+
+`%!s(<nil>)` là Go in ra một con trỏ rỗng — provider hỏi lý do, CloudFormation không trả, và chuỗi định dạng lộ ra nguyên trạng. Không nguồn nào nói *"management account không được hỗ trợ"*.
+
+Nguyên nhân: **StackSet `SERVICE_MANAGED` triển khai theo cây tổ chức, và AWS loại management account ra khỏi mọi đợt triển khai đó.** Management nằm trực tiếp dưới root, không thuộc OU nào.
+
+Dấu hiệu duy nhất trỏ đúng chỗ lại là dấu hiệu **vắng mặt**: một account có trong `deployment_targets` mà không có dòng nào trong `list-stack-instances`. Phải biết trước là nó *phải* có ở đó thì mới thấy nó thiếu.
+
+#### Bản vá: tách "được StackSet dựng" khỏi "là spoke"
+
+Thêm `manual_vpc = true` vào spoke. Spoke đó bị loại khỏi `aws_cloudformation_stack_set_instance`, nhưng **vẫn** nằm trong `remote_spokes` — nên RAM vẫn share cho nó, và attachment của nó vẫn được nối vào route table khi xuất hiện. Hai việc đó thuộc về chủ sở hữu TGW, không liên quan gì tới cách VPC được tạo ra.
+
+VPC thì dựng bằng stack thường, chạy tại chỗ:
+
+```bash
+terraform output -raw spoke_template > spoke-vpc.json
+# roi tu chinh management account:
+aws cloudformation create-stack --stack-name quh11-net-spoke-vpc \
+  --template-body file://spoke-vpc.json --parameters ...
+```
+
+`output "spoke_template"` đọc thẳng `aws_cloudformation_stack_set.spoke[0].template_body` chứ không giữ bản sao. Hai bản template rời nhau ra là kiểu lỗi không ai phát hiện cho tới khi một spoke được dựng khác mọi spoke còn lại.
+
+> **Bài học:** tôi đoán đúng giới hạn này *trước* khi apply, và vẫn phải trả một vòng apply hỏng để biết nó có thật. Đó là đánh đổi chấp nhận được — điều không chấp nhận được là nếu tôi đã ghi nó vào tài liệu như một sự thật mà chưa đo.
+>
+> Và một lần nữa: ba nguồn thông tin, không nguồn nào chỉ đúng chỗ. Thứ giải được là **so sánh cái có với cái đáng lẽ phải có** — cùng phương pháp đã dùng ở lỗi 45 (Security Hub 0 member) và lỗi 57.
 
 ---
 
