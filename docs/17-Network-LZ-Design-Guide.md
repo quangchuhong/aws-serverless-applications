@@ -10,6 +10,7 @@ Tài liệu thiết kế **chuẩn** cho phần network của Landing Zone. Đâ
 | [14 – Ingress Chain](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | Chi tiết GWLB, Palo Alto, F5 |
 | [15 – Security VPC](./15-Security-VPC-Network-Firewall.md) | Chi tiết Network Firewall, rule group |
 | [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Chi tiết VPN, private NAT, 3rd-party VPC |
+| **[24 – Triển khai cross-account](./24-Trien-khai-Network-LZ-Cross-Account.md)** | **Làm gì, theo thứ tự nào** — lệnh thật, kiểm chứng thật, chi phí thật |
 
 Khi có mâu thuẫn giữa tài liệu này và docs 12–16, **tài liệu này thắng**.
 

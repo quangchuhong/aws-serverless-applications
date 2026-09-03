@@ -45,6 +45,7 @@ Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code ch�
 | # | Nội dung |
 |---|---|
 | **[17](./docs/17-Network-LZ-Design-Guide.md)** | **Design Guide** – kiến trúc, CIDR chuẩn, bảng định tuyến TGW, chi phí, lộ trình |
+| **[24](./docs/24-Trien-khai-Network-LZ-Cross-Account.md)** | **Triển khai cross-account** – trình tự thao tác thật: 4 pha, spoke VPC ở account khác, 7 cái bẫy không phát ra lỗi |
 | [12](./docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | DNS và VPC endpoint tập trung – môi trường thuần AWS |
 | [13](./docs/13-Centralized-Ingress-Egress-Network.md) | Khoá Internet ở mọi account, tách ingress/egress VPC |
 | [14](./docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | Ingress chain: CDN → Palo Alto → F5 WAF → App |
