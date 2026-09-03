@@ -231,7 +231,29 @@ resource "aws_lb" "ingress" {
 }
 
 locals {
-  first_spoke = sort(keys(local.local_spokes))[0]
+  # try(): khong con spoke LOCAL nao la chuyen binh thuong ke tu khi
+  # spoke remote thanh cong dan chinh thuc.
+  #
+  # Truoc day dong nay la sort(keys(local.local_spokes))[0]. Chuyen het
+  # spoke sang account khac thi do la sort([])[0] - loi chi so, va
+  # outputs.tf tham chieu no VO DIEU KIEN nen plan chet ngay, khong
+  # phai suy giam dan.
+  first_spoke = try(sort(keys(local.local_spokes))[0], null)
+
+  # IP ma NLB tro vao.
+  #
+  # Uu tien EC2 local (doc duoc IP that tu AWS); khong co thi lay EC2
+  # o spoke remote (IP tinh truoc, xem local.remote_test_ips).
+  #
+  # Cho nay chay duoc voi target remote la nho availability_zone =
+  # "all" o duoi - thuoc tinh do da BAT BUOC san cho IP target nam
+  # ngoai VPC cua load balancer, va spoke remote cung chi la "ngoai
+  # VPC" mot cach xa hon.
+  nlb_target_ip = (
+    local.first_spoke != null
+    ? try(aws_instance.test[local.first_spoke].private_ip, null)
+    : try(values(local.remote_test_ips)[0], null)
+  )
 }
 
 # Khong co appliance: target la IP cua app trong spoke (qua TGW)
@@ -278,10 +300,14 @@ resource "aws_lb_listener" "http" {
 # KHONG co appliance: NLB tro thang vao app trong spoke.
 # availability_zone = "all" BAT BUOC khi IP target nam ngoai VPC cua LB.
 resource "aws_lb_target_group_attachment" "app_direct" {
-  count = var.enable_ingress && var.enable_test_instances && !var.enable_appliances ? 1 : 0
+  count = (
+    var.enable_ingress
+    && !var.enable_appliances
+    && local.nlb_target_ip != null
+  ) ? 1 : 0
 
   target_group_arn  = aws_lb_target_group.app[0].arn
-  target_id         = aws_instance.test[local.first_spoke].private_ip
+  target_id         = local.nlb_target_ip
   port              = var.nlb_listener_port
   availability_zone = "all"
 }

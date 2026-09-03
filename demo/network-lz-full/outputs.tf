@@ -241,8 +241,13 @@ output "next_steps" {
 
     ══════════════════ KIEM CHUNG ══════════════════
 
-    1. Vao EC2 o ${local.first_spoke} (vao duoc = duong egress OK):
-       aws ssm start-session --target ${try(aws_instance.test[local.first_spoke].id, "<bat enable_test_instances>")} --region ${var.region}
+    1. Vao EC2 o ${coalesce(local.first_spoke, "<khong co spoke local>")} (vao duoc = duong egress OK):
+       aws ssm start-session --target ${try(aws_instance.test[local.first_spoke].id, "<khong co EC2 local - xem ghi chu duoi>")} --region ${var.region}
+
+       KHONG CO SPOKE LOCAL thi khong vao duoc tu day: SSM cua account
+       nay khong voi tới instance o account khac. Phai dung credential
+       cua chinh account spoke. Va verify.sh muc 7 + 7c se bo qua, vi
+       chung dieu khien phep do TU MOT EC2 local.
 
     2. Trong session - IP ra Internet phai la NAT:
        curl -s https://checkip.amazonaws.com
