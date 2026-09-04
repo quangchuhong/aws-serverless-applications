@@ -77,13 +77,56 @@ if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "${STATE_BACKEND:-local}" == "local" ]]
     ########################################
 
     # 1. Layer cha khai backend tu xa -> state khong nam tren dia
-    BACKEND=$(grep -rhoE 'backend[[:space:]]+"[a-z0-9]+"' ../*.tf 2>/dev/null | head -1)
-    if [[ -n "$BACKEND" ]]; then
-      echo "  Layer cha khai $BACKEND - state khong nam tren dia."
-      echo "  Khai lai o day cho khop:"
+    #
+    # Khong dung lai o cho bao "co backend": cau hinh that nam san
+    # trong ../.terraform/terraform.tfstate - file Terraform ghi luc
+    # init de nho no dang tro di dau. Doc thang tu do thi khoi phai
+    # ai go lai bucket/key/region bang tay, va khoi go sai.
+    BACKEND_TYPE=$(grep -rhoE 'backend[[:space:]]+"[a-z0-9]+"' ../*.tf 2>/dev/null |
+      head -1 | sed -E 's/.*"([a-z0-9]+)"/\1/')
+
+    if [[ -n "$BACKEND_TYPE" ]]; then
+      echo "  Layer cha khai backend \"$BACKEND_TYPE\" - state KHONG nam tren dia."
       echo
-      echo "    state_backend = \"s3\""
-      echo "    state_config  = { bucket = \"...\", key = \"...\", region = \"...\" }"
+
+      CACHE="../.terraform/terraform.tfstate"
+      CFG=""
+      if [[ -s "$CACHE" ]] && command -v jq >/dev/null 2>&1; then
+        # Chi lay gia tri chuoi: bien state_config la map(string), nen
+        # mot dong bool nhu `encrypt = true` se lam terraform tu choi.
+        # Nhung khoa can de DOC state deu la chuoi (bucket, key,
+        # region, profile, role_arn, kms_key_id).
+        CFG=$(jq -r '
+          .backend.config // {}
+          | to_entries[]
+          | select(.value != null and (.value | type) == "string")
+          | "      \(.key) = \"\(.value)\""
+        ' "$CACHE" 2>/dev/null)
+      fi
+
+      if [[ -n "$CFG" ]]; then
+        echo "  Cau hinh that, doc tu $CACHE - dan vao ops/terraform.tfvars:"
+        echo
+        echo "    state_backend = \"$BACKEND_TYPE\""
+        echo "    state_config = {"
+        echo "$CFG"
+        echo "    }"
+        echo
+        echo "  Roi: terraform init -reconfigure && ./lint.sh"
+      else
+        echo "  Chua doc duoc cau hinh (thieu $CACHE hoac thieu jq)."
+        echo "  Xem truc tiep:"
+        echo
+        echo "    grep -A8 'backend \"$BACKEND_TYPE\"' ../*.tf"
+        echo
+        echo "  Roi khai lai o ops/terraform.tfvars cho khop:"
+        echo "    state_backend = \"$BACKEND_TYPE\""
+        echo "    state_config  = { bucket = \"...\", key = \"...\", region = \"...\" }"
+      fi
+
+      echo
+      echo "  LUU Y: state cua CHINH lop ops van dang ghi ra dia. Layer cha"
+      echo "  dung backend tu xa thi lop nay nen theo - xem versions.tf."
       echo
       exit 1
     fi

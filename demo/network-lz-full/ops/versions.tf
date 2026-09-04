@@ -33,6 +33,31 @@
 terraform {
   required_version = ">= 1.5.0"
 
+  ########################################
+  # BACKEND CUA CHINH LOP NAY
+  #
+  # Mac dinh: state local. Dung cho demo, du cho mot nguoi chay.
+  #
+  # Layer cha dung backend tu xa thi lop nay PHAI theo. Ly do khong
+  # phai cho dong bo cho dep: state cua lop nay giu ARN cua rule group
+  # ma firewall policy dang tham chieu. Mat file do la mat quyen sua
+  # va quyen xoa mot resource van dang chay - Terraform se doi tao
+  # rule group thu hai, con cai cu nam lai vinh vien khong ai quan.
+  #
+  # Va khi hai nguoi cung sua catalog, state local nghia la khong co
+  # khoa: hai lan apply song song, nguoi sau ghi de rule cua nguoi
+  # truoc, khong ben nao thay diff.
+  #
+  # Dung KHAC key voi layer cha - hai layer, hai state.
+  #
+  # backend "s3" {
+  #   bucket       = "acme-lz-tfstate"
+  #   key          = "network-ops/terraform.tfstate"
+  #   region       = "ap-southeast-1"
+  #   use_lockfile = true
+  # }
+  ########################################
+
   required_providers {
     aws = {
       source = "hashicorp/aws"

@@ -79,7 +79,7 @@ Từ đó về sau ARN không đổi nữa. Sửa catalog chỉ làm đổi `rul
 
 | Terraform báo | Nghĩa thật |
 |---|---|
-| `Unable to find remote state` / `No stored state was found` | Không thấy file state của layer cha. Câu này **không in ra đường dẫn đã thử** và đọc y hệt như "layer cha chưa bao giờ được apply". Kiểm: `ls -la ../terraform.tfstate` |
+| `Unable to find remote state` / `No stored state was found` | Không thấy state của layer cha. Câu này **không in ra đường dẫn đã thử** và đọc y hệt như "layer cha chưa bao giờ được apply" — trong khi nguyên nhân thường gặp nhất là layer cha dùng **backend S3**, nên trên đĩa không có file nào cả. `lint.sh` đọc `../.terraform/terraform.tfstate` và in ra khối `state_config` dán được ngay |
 | `This object does not have an attribute named "ops_handles"` | State có, nhưng layer cha chưa apply lại sau khi kéo code mới về — tức là bỏ qua bước 0 |
 
 Đường dẫn state mặc định tính theo **vị trí file `.tf`** (`${path.module}/../terraform.tfstate`), không theo thư mục đang chạy. Backend `local` của `terraform_remote_state` giải đường dẫn tương đối theo thư mục đang chạy — hai cái đó trùng nhau khi gõ `cd ops && terraform apply` và lệch nhau khi gõ `terraform -chdir=ops apply` hoặc khi chạy từ CI.
@@ -89,6 +89,21 @@ Nếu state của layer cha nằm chỗ khác, trỏ tới nó bằng **đườn
 ```hcl
 state_config = { path = "/Users/laptop/…/demo/network-lz-full/terraform.tfstate" }
 ```
+
+### Khi layer cha dùng backend S3
+
+Đọc state từ xa chỉ cần đổi hai biến trong `ops/terraform.tfvars`:
+
+```hcl
+state_backend = "s3"
+state_config = {
+  bucket = "…"
+  key    = "demo/network-lz-full/terraform.tfstate"   # key của LAYER CHA
+  region = "ap-southeast-1"
+}
+```
+
+Nhưng khi đó **state của chính lớp ops cũng nên chuyển sang S3** — bỏ chú thích khối `backend "s3"` trong `versions.tf`, với một `key` **khác**. Không phải cho đồng bộ cho đẹp: state này giữ ARN của rule group mà firewall policy đang tham chiếu. Mất file đó là mất quyền sửa và quyền xoá một resource vẫn đang chạy — Terraform sẽ đòi tạo rule group thứ hai, còn cái cũ nằm lại vĩnh viễn không ai quản. Và state local nghĩa là không có khoá: hai người cùng sửa catalog thì người apply sau ghi đè người trước, không bên nào thấy diff.
 
 Kiểm bootstrap đã xong chưa:
 
