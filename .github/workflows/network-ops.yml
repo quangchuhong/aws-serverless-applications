@@ -81,6 +81,23 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -check -recursive -diff
 
+      # validate BAT DUOC NHUNG THU fmt KHONG BAT.
+      #
+      # fmt chi doc cu phap. Mot chuoi noi suy dat sai cho - vi du
+      # "${path.module}" trong `description` cua mot variable - la cu
+      # phap HOAN TOAN HOP LE, fmt cho qua, va terraform chi tu choi
+      # luc init:
+      #
+      #   Error: Variables not allowed
+      #   Error: Unsuitable value type ... value must be known
+      #
+      # -backend=false de khong can credential va khong cham vao state:
+      # buoc nay chi kiem cau hinh, khong kiem ha tang.
+      - name: terraform validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
   ########################################
   # PLAN - can credential doc
   #

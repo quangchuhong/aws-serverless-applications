@@ -28,7 +28,7 @@ variable "state_config" {
   description = <<-EOT
     Cau hinh backend, dua cho terraform_remote_state.
 
-      local: de TRONG. Mac dinh la "${path.module}/../terraform.tfstate",
+      local: de TRONG. Mac dinh la "$${path.module}/../terraform.tfstate",
              tuc file state cua thu muc cha - tinh theo VI TRI FILE .tf
              chu khong theo thu muc dang chay.
 
