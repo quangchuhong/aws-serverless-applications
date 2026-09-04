@@ -108,6 +108,21 @@ terraform {
 provider "aws" {
   region = local.hub.region
 
+  # Profile de TAO RESOURCE - khac profile trong khoi backend o tren.
+  #
+  # Backend noi state nam o dau (co the la account management). Dong
+  # nay noi ha tang duoc tao o dau (account network). Gop hai thu do
+  # lam mot la cach chac chan nhat de mot ngay nao do rule group xuat
+  # hien trong account chua bucket state.
+  #
+  # De trong = dung chuoi giai credential mac dinh. Nho rang BIEN MOI
+  # TRUONG DUNG TRUOC profile trong chuoi do: co AWS_ACCESS_KEY_ID
+  # trong shell thi dong nay bi bo qua ma khong co gi bao.
+  #
+  # Precondition trong main.tf doi chieu account thuc te voi account
+  # ghi trong state cua layer cha, nen lech la plan dung lai.
+  profile = var.aws_profile != "" ? var.aws_profile : null
+
   default_tags {
     tags = {
       Project   = local.hub.project

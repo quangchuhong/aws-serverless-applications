@@ -42,6 +42,24 @@ variable "state_config" {
   default     = {}
 }
 
+variable "aws_profile" {
+  description = <<-EOT
+    Profile dung de TAO RESOURCE (rule group, route, endpoint, DNS).
+
+    KHAC voi profile trong khoi backend o versions.tf: cai do de doc
+    ghi STATE, thuong tro toi account chua bucket. Cai nay tro toi
+    account chua ha tang mang.
+
+    De trong = chuoi giai credential mac dinh. Luu y bien moi truong
+    AWS_ACCESS_KEY_ID/AWS_PROFILE dung TRUOC profile khai o day.
+
+    Lech account thi plan dung lai o precondition trong main.tf, chu
+    khong tao nham resource.
+  EOT
+  type        = string
+  default     = ""
+}
+
 variable "catalog_dir" {
   description = "Thu muc chua cac file YAML. Doi khi muon chay nhieu moi truong tu mot ban code."
   type        = string

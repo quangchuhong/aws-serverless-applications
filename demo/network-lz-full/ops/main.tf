@@ -44,6 +44,32 @@ locals {
 }
 
 ########################################
+# DANH TINH DANG DUNG DE TAO RESOURCE
+#
+# KHONG cung mot thu voi danh tinh doc state.
+#
+# State nam trong mot bucket co the thuoc account khac (thuong la
+# management), va backend co profile rieng. Con provider ben duoi thi
+# giai credential theo chuoi mac dinh. Hai duong do doc lap nhau, va
+# chung LECH NHAU rat de:
+#
+#   - backend khai profile, nhung bien moi truong de len profile
+#   - shell vua chay lenh o account khac
+#   - profile mac dinh la mot IAM user chi de day state len S3
+#
+# Khi lech, moi thu van chay: init thanh cong, doc state thanh cong,
+# plan in ra day du. Chi co dieu resource se duoc tao o SAI ACCOUNT -
+# rule group nam mot noi, firewall policy tham chieu no nam noi khac,
+# va ARN thi khong bao gio khop.
+#
+# verify.sh va teardown.sh da phai dung dung chot chan nay (loi 58).
+# Lop nay can no hon ca hai: no GHI, va no ghi vao mot account ma no
+# tu suy ra chu khong ai go tay.
+########################################
+
+data "aws_caller_identity" "current" {}
+
+########################################
 # DOC CATALOG
 #
 # yamldecode tra ve null cho file chi co comment, va null[...] thi
@@ -177,6 +203,24 @@ resource "terraform_data" "catalog_guard" {
   ########################################
 
   lifecycle {
+    ########################################
+    # ACCOUNT - kiem TRUOC moi thu khac
+    ########################################
+
+    precondition {
+      condition = data.aws_caller_identity.current.account_id == local.hub.account_id
+      error_message = join(" ", [
+        "SAI ACCOUNT.",
+        "State cua layer cha noi ha tang mang nam o account ${local.hub.account_id},",
+        "nhung provider dang goi AWS bang ${data.aws_caller_identity.current.account_id}",
+        "(${data.aws_caller_identity.current.arn}).",
+        "Apply se tao rule group, route va ban ghi DNS o SAI ACCOUNT - hoac that bai giua chung.",
+        "Chu y: danh tinh doc state va danh tinh tao resource la HAI duong khac nhau;",
+        "backend co the dung profile nay con provider dung credential khac.",
+        "Sua bang var.aws_profile, hoac dat lai bien moi truong AWS_* cho dung account.",
+      ])
+    }
+
     precondition {
       condition     = length(local.apps_bad_spoke) == 0
       error_message = "apps.yaml: ${join(", ", local.apps_bad_spoke)} khai spoke khong co trong layer cha. Spoke hop le: ${join(", ", sort(keys(local.hub.spokes)))}"
