@@ -149,16 +149,34 @@ Và vì S3 trả 403 chứ không phải 404 khi thiếu `ListBucket`, một th�
 - gọi bằng danh tính khác
 - bucket không tồn tại ở account đó
 
-### Vẫn 403 sau khi dán nguyên khối: thiếu `ListBucket`, không phải thiếu quyền key
+### Vẫn 403 sau khi dán nguyên khối
 
-`backend-hint.sh` in sẵn phép đo phân biệt — hai lệnh, khác nhau đúng một biến:
+Hai nguyên nhân, phân biệt bằng một phép đo. Chạy `./backend-hint.sh`, nó in sẵn hai lệnh khác nhau đúng một biến: `head-object` lên một key **đã tồn tại** (của layer cha) và lên một key **chưa tồn tại**, cùng prefix.
+
+**Cả A lẫn B đều 403 — biến môi trường đè lên `profile`**
+
+Khối backend khai `profile = "..."`, nhưng trong chuỗi giải credential của AWS SDK thì **biến môi trường đứng trước file cấu hình**. Có `AWS_ACCESS_KEY_ID` trong shell là `profile` bị bỏ qua — với cả Terraform lẫn `aws-cli`.
+
+Nghĩa là cùng một thư mục, cùng một file `.tf`, vẫn chạy bằng hai danh tính khác nhau tuỳ shell nào đang mở. Và không có gì báo: Terraform vẫn in `Successfully configured the backend`.
 
 ```bash
-aws s3api head-object --bucket <bucket> --key '<prefix>/terraform.tfstate'   # A: đã tồn tại
-aws s3api head-object --bucket <bucket> --key '<prefix>/khong-ton-tai'       # B: chưa tồn tại
+aws sts get-caller-identity                  # đang gọi bằng ai
+env | grep -oE '^AWS_[A-Z_]+'                # biến nào đang đè (chỉ in TÊN)
+aws sts get-caller-identity --profile default # profile default thật ra là account nào
 ```
 
-**A được mà B trả 403** thì đã rõ. S3 chỉ trả 404 cho object không tồn tại **khi người gọi có `s3:ListBucket`**; không có thì nó trả 403, để không tiết lộ cả việc object đó có tồn tại hay không.
+Hai account đó khác nhau thì gỡ biến đi:
+
+```bash
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
+terraform init -reconfigure
+```
+
+Cùng họ với lỗi 57 và 58: một phép đo đúng, trả lời cho một câu hỏi khác với câu đang hỏi.
+
+**A được mà B trả 403 — thiếu `ListBucket`, không phải thiếu quyền key**
+
+S3 chỉ trả 404 cho object không tồn tại **khi người gọi có `s3:ListBucket`**; không có thì nó trả 403, để không tiết lộ cả việc object đó có tồn tại hay không.
 
 `landing-zone/tf-backend` *có* cấp `s3:ListBucket` — nhưng kèm `Condition = { StringLike = { "s3:prefix" = ["<tên>/*"] } }`. Mà `s3:prefix` chỉ có mặt trong yêu cầu **list**. `HeadObject` không phải lệnh list, nên khoá đó không có trong ngữ cảnh, `StringLike` không khớp, và `ListBucket` coi như không được cấp.
 

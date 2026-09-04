@@ -232,7 +232,8 @@ Bảng này là thứ đọc lúc 2 giờ sáng. Mọi dòng đều là kiểu h
 | Chế độ `alert`: mọi thứ đều thông kể cả khi không có rule | Đúng thiết kế — mặc định là cho qua và chỉ ghi log | `terraform output next_steps` |
 | `Unable to find remote state` ở lớp ops | Không thấy state layer cha — thường vì layer cha dùng **backend S3** nên trên đĩa không có file nào. Câu lỗi không in đường dẫn đã thử | `./lint.sh` — nó đọc `.terraform/terraform.tfstate` và in `state_config` dán được ngay |
 | `does not have an attribute named "ops_handles"` | Bỏ qua bước 0 — layer cha chưa apply lại sau khi kéo code mới | `./lint.sh` (bắt trước Terraform) |
-| `HeadObject ... 403 Forbidden` khi `terraform init` lớp ops | `ListBucket` trong `tf-backend` bị điều kiện `s3:prefix`, mà khoá đó **chỉ có trong yêu cầu list** — HeadObject thì không. Nên key **đã tồn tại** đọc được, key **chưa tồn tại** trả 403: mọi layer mới hỏng ở lần init đầu, và chỉ lần đầu | `./backend-hint.sh` in phép đo A/B; sửa bằng `aws s3api put-object` tạo object rỗng một lần |
+| `HeadObject ... 403` **trên cả key đã tồn tại** | `AWS_ACCESS_KEY_ID` trong shell đè lên `profile` của backend — biến môi trường đứng trước file cấu hình trong chuỗi giải credential. Cùng thư mục, hai shell, hai danh tính | `aws sts get-caller-identity` so với `--profile default`; `unset` rồi thử lại |
+| `HeadObject ... 403` **chỉ trên key chưa tồn tại** | `ListBucket` trong `tf-backend` bị điều kiện `s3:prefix`, mà khoá đó **chỉ có trong yêu cầu list** — HeadObject thì không. Nên key **đã tồn tại** đọc được, key **chưa tồn tại** trả 403: mọi layer mới hỏng ở lần init đầu, và chỉ lần đầu | `./backend-hint.sh` in phép đo A/B; sửa bằng `aws s3api put-object` tạo object rỗng một lần |
 
 ---
 

@@ -110,9 +110,39 @@ echo
 echo "  # B. Object CHUA TON TAI, cung prefix"
 echo "  aws s3api head-object --bucket $BKT --key '$PREFIX/khong-ton-tai'"
 echo
-echo "  A duoc, B tra 403  -> Da ro. Xem muc duoi."
-echo "  A cung 403         -> Shell dang dung danh tinh khac layer cha:"
-echo "                        aws sts get-caller-identity"
+echo "  A duoc, B tra 403  -> Thieu ListBucket. Xem muc duoi."
+echo "  A CUNG 403         -> Khong phai ListBucket. Shell dang goi S3"
+echo "                        bang danh tinh khac Terraform. Xem muc ke."
+echo
+echo "-------------------------------------------------------------"
+echo "CA A LAN B DEU 403: BIEN MOI TRUONG DE LEN profile"
+echo
+echo "Backend khai profile = \"...\", nhung trong chuoi giai credential"
+echo "cua AWS SDK thi BIEN MOI TRUONG DUNG TRUOC file cau hinh. Co"
+echo "AWS_ACCESS_KEY_ID trong shell la profile bi bo qua - ca voi"
+echo "Terraform lan voi aws-cli."
+echo
+echo "Nghia la cung mot thu muc, cung mot file .tf, van chay bang hai"
+echo "danh tinh khac nhau tuy shell nao dang mo. Va khong co gi bao:"
+echo "Terraform van in \"Successfully configured the backend\"."
+echo
+echo "  # Dang goi bang ai"
+echo "  aws sts get-caller-identity"
+echo
+echo "  # Co bien nao dang de len khong (chi in TEN, khong in gia tri)"
+echo "  env | grep -oE '^AWS_[A-Z_]+'"
+echo
+echo "  # profile default that ra la account nao"
+echo "  aws sts get-caller-identity --profile default"
+echo
+echo "Neu hai account do khac nhau, go bien di roi thu lai:"
+echo
+echo "  unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE"
+echo "  aws sts get-caller-identity          # phai ra account cua profile default"
+echo "  terraform init -reconfigure"
+echo
+echo "Cung ho voi loi 57 va 58 trong doc 22: mot phep do dung, tra loi"
+echo "cho mot cau hoi khac voi cau dang hoi."
 echo
 echo "-------------------------------------------------------------"
 echo "A DUOC MA B 403: THIEU s3:ListBucket, KHONG PHAI THIEU QUYEN KEY"
