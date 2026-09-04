@@ -26,6 +26,20 @@ locals {
     # Doi ephemeral ve true (dung-xem-xoa) thi bo dong nay di.
     "demo/network-lz-full" = "demo-network-lz-full/terraform.tfstate"
 
+    # Lop van hanh cua layer tren - state RIENG, cung PREFIX.
+    #
+    # Cung prefix la bat buoc, khong phai cho gon: bucket policy cap
+    # quyen theo prefix (var.state_writer_accounts), va bucket nay
+    # cap cho layer tren qua profile (var.backend_profiles). Dat key
+    # ra mot prefix moi - "network-ops/" chang han - la khong co dong
+    # Allow nao phu, va terraform init bao 403 ma khong nhac gi toi
+    # prefix.
+    #
+    # State rieng vi hai lop doi voi nhip khac han nhau: layer tren
+    # doi vai thang mot lan, lop nay doi hang ngay. Xem
+    # demo/network-lz-full/ops/versions.tf.
+    "demo/network-lz-full/ops" = "demo-network-lz-full/ops/terraform.tfstate"
+
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.

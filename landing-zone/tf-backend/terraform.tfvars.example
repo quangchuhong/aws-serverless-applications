@@ -85,4 +85,9 @@ enable_access_logging = true
 backend_profiles = {
   # "demo/network-lz-full" = "default"   # chay AWS_PROFILE=lz-network,
   #                                      # nhung state van o management
+
+  # Lop van hanh cua layer tren - CUNG profile, khac key.
+  # Bo sot dong nay thi rieng no bao 403 con layer cha van chay,
+  # va khac biet do rat kho nhin ra.
+  # "demo/network-lz-full/ops" = "default"
 }

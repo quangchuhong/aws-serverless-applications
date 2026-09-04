@@ -34,64 +34,45 @@ terraform {
   required_version = ">= 1.5.0"
 
   ########################################
-  # BACKEND CUA CHINH LOP NAY
+  # BACKEND - do wire-backends.sh sinh ra, KHONG khai o day
   #
-  # Mac dinh: state local. Dung cho demo, du cho mot nguoi chay.
+  # Lop nay la mot layer nhu moi layer khac cua landing zone. Key cua
+  # no khai o landing-zone/tf-backend/outputs.tf (local.layers):
   #
-  # Layer cha dung backend tu xa thi lop nay PHAI theo. Ly do khong
-  # phai cho dong bo cho dep: state cua lop nay giu ARN cua rule group
-  # ma firewall policy dang tham chieu. Mat file do la mat quyen sua
-  # va quyen xoa mot resource van dang chay - Terraform se doi tao
-  # rule group thu hai, con cai cu nam lai vinh vien khong ai quan.
+  #   "demo/network-lz-full/ops" = "demo-network-lz-full/ops/terraform.tfstate"
   #
-  # Va khi hai nguoi cung sua catalog, state local nghia la khong co
-  # khoa: hai lan apply song song, nguoi sau ghi de rule cua nguoi
-  # truoc, khong ben nao thay diff.
+  # CUNG PREFIX voi layer cha. Bat buoc, khong phai cho gon: bucket
+  # policy cap quyen theo prefix, nen mot prefix moi la khong co dong
+  # Allow nao phu - va init bao 403 ma khong nhac gi toi prefix.
   #
-  # KEY PHAI NAM DUOI DUNG PREFIX MA ACCOUNT NAY DUOC CAP.
+  # Noi backend:
   #
-  # Bucket state cua landing-zone/tf-backend cap quyen THEO PREFIX,
-  # moi account mot prefix rieng (var.state_writer_accounts):
+  #   cd landing-zone/tf-backend
+  #   terraform apply                 # 0 resource doi, chi Outputs
+  #   ./wire-backends.sh              # ghi backend.tf + backend.hcl
+  #   cd demo/network-lz-full/ops
+  #   terraform init -backend-config=backend.hcl
   #
-  #   s3:ListBucket  tren bucket, dieu kien s3:prefix = "<ten>/*"
-  #   s3:GetObject   tren "<bucket>/<ten>/*"
-  #   s3:PutObject   tren "<bucket>/<ten>/*"
+  # DUNG go tay mot khoi backend "s3" vao file nay: wire-backends.sh
+  # ghi backend.tf rieng, va hai khoi backend trong mot module la loi.
   #
-  # Nghia la key cua lop nay phai bat dau bang CUNG prefix voi key
-  # cua layer cha. Dat mot prefix moi (vi du "network-ops/") thi
-  # khong co mot dong Allow nao phu, va S3 tra ve:
+  # Layer nay co BACKEND va RESOURCE o hai account khac nhau, nen no
+  # can them mot dong o landing-zone/tf-backend/terraform.tfvars:
   #
-  #   Error refreshing state: ... HeadObject ... StatusCode: 403
-  #   api error Forbidden: Forbidden
+  #   backend_profiles = {
+  #     "demo/network-lz-full"     = "default"
+  #     "demo/network-lz-full/ops" = "default"
+  #   }
   #
-  # 403 chu KHONG phai 404, du object chua he ton tai - vi khong co
-  # quyen ListBucket tren prefix do thi S3 khong duoc phep tiet lo ca
-  # viec object co ton tai hay khong. Va 403 doc nhu "sai credential",
-  # nen cho dau tien ai cung di kiem la vai tro va profile.
+  # VI SAO PHAI CO BACKEND TU XA
   #
-  # DUNG GO KHOI NAY BANG TAY. Chay:
+  # State nay giu ARN cua rule group ma firewall policy dang tham
+  # chieu. Mat no la mat quyen sua va quyen xoa mot resource van dang
+  # chay - Terraform se doi tao rule group thu hai, con cai cu nam lai
+  # vinh vien khong ai quan.
   #
-  #   ./backend-hint.sh
-  #
-  # No doc cau hinh ma `terraform init` cua layer cha da ghi ra, in lai
-  # NGUYEN VEN, va chi doi mot thu: key -> cung thu muc + "ops/".
-  #
-  # Go tay hong o hai cho, va ca hai deu ra cung mot loi 403:
-  #
-  #   1. Doan prefix. Prefix la mot chuoi tu dat luc dung tf-backend,
-  #      khong suy ra duoc tu ten layer hay ten account. "network/"
-  #      nghe hop ly va van sai neu that ra la "demo-network-lz-full/".
-  #
-  #   2. Bo sot dong. Cau hinh backend co the mang profile, role_arn,
-  #      assume_role, dynamodb_table. Thieu profile/role_arn thi lop
-  #      nay goi S3 bang MOT DANH TINH KHAC layer cha - cung bucket,
-  #      cung vung, khac nguoi goi - va 403 do khong lien quan gi toi
-  #      key.
-  #
-  # Cach khac: them mot prefix rieng vao state_writer_accounts ben
-  # landing-zone/tf-backend roi apply layer do. Chay duoc, nhung phai
-  # sua mot layer DUNG CHUNG cho ca to chuc chi de doi cho de mot file
-  # - va no pha vo bat bien "mot account, mot prefix" cua thiet ke do.
+  # Va state local nghia la khong co khoa: hai nguoi cung sua catalog
+  # thi nguoi apply sau ghi de nguoi truoc, khong ben nao thay diff.
   ########################################
 
   required_providers {

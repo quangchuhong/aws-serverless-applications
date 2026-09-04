@@ -133,7 +133,37 @@ api error Forbidden: Forbidden
 
 **403 chứ không phải 404**, dù object chưa hề tồn tại — không có `ListBucket` trên prefix đó thì S3 không được phép tiết lộ cả việc object có tồn tại hay không. Và 403 đọc như "sai credential", nên chỗ đầu tiên ai cũng đi kiểm là vai trò và profile.
 
-### Đừng chép tay khối backend — để `backend-hint.sh` in ra
+### Cách đúng: đăng ký như một layer của `tf-backend`
+
+Lớp này giờ có tên trong `local.layers` (`landing-zone/tf-backend/outputs.tf`), nên backend được **sinh ra** chứ không gõ tay:
+
+```bash
+# 1. Khai profile cho lớp ops — cùng profile với layer cha
+#    landing-zone/tf-backend/terraform.tfvars
+#      backend_profiles = {
+#        "demo/network-lz-full"     = "default"
+#        "demo/network-lz-full/ops" = "default"
+#      }
+
+# 2. Apply tf-backend (0 resource đổi, chỉ Outputs) rồi sinh file
+cd landing-zone/tf-backend
+terraform apply
+./wire-backends.sh              # ghi backend.tf + backend.hcl vào ops/
+
+# 3. Tạo sẵn object rỗng cho key mới — bước không ai đoán được
+aws s3api put-object --bucket <bucket> \
+  --key 'demo-network-lz-full/ops/terraform.tfstate'
+
+# 4. Nối
+cd demo/network-lz-full/ops
+terraform init -backend-config=backend.hcl
+```
+
+**Đừng gõ tay khối `backend "s3"` vào `versions.tf`** — `wire-backends.sh` ghi `backend.tf` riêng, và hai khối `backend` trong một module là lỗi. Thêm dòng thẳng vào `backend.hcl` cũng vô ích: file đó bị ghi đè mỗi lần chạy script, nên sửa tay sẽ biến mất im lặng.
+
+Bước 3 cần vì `ListBucket` mang điều kiện `s3:prefix`, mà khoá đó chỉ có trong yêu cầu list — `HeadObject` thì không. Chi tiết ở [`landing-zone/tf-backend/README.md`](../../../landing-zone/tf-backend/README.md).
+
+### Khi phải xem cấu hình backend của layer cha
 
 ```bash
 ./backend-hint.sh

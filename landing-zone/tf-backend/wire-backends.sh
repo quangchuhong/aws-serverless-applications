@@ -211,12 +211,20 @@ done < <(echo "$configs" | jq -r 'keys[]')
 
 missing=""
 n_missing=0
-repo_root="$(cd .. && pwd)"
 
-for d in "$repo_root"/*/; do
-  layer="landing-zone/$(basename "$d")"
+# Quet CA landing-zone LAN demo, va them mot cap long ben trong demo.
+#
+# Truoc day vong lap nay chi nhin landing-zone/*/. Nghia la mot lop
+# nam trong demo - vi du demo/network-lz-full/ops - khong bao gio bi
+# hoi toi, va phep kiem "co tren dia ma khong co trong state" im lang
+# bo qua dung loai thu muc no sinh ra de bat.
+#
+# Chinh no da bo sot demo/network-lz-full/ops.
+for d in "$REPO_ROOT"/landing-zone/*/ "$REPO_ROOT"/demo/*/ "$REPO_ROOT"/demo/*/*/; do
   # Chi tinh thu muc that su co code Terraform
   ls "$d"*.tf >/dev/null 2>&1 || continue
+  layer="${d#"$REPO_ROOT"/}"
+  layer="${layer%/}"
   if ! echo "$configs" | jq -e --arg k "$layer" 'has($k)' >/dev/null 2>&1; then
     missing="$missing $layer"
     n_missing=$((n_missing + 1))
