@@ -230,11 +230,26 @@ enable_test_instances = true
 # che do alert, DNS va VPC endpoint tap trung. Chi tiet trinh tu va
 # thoi gian: docs/24-Trien-khai-Network-LZ-Cross-Account.md
 #
-# Bo comment ca khoi duoi day roi doi account_id / ou_id cho dung.
+# ---------------------------------------------------------------
+# DUNG "BO COMMENT KHOI NAY" - NO SE XUNG DOT.
+#
+# Phan dau file da khai project, enable_firewall, enable_test_instances
+# va spokes. Khai mot bien HAI LAN trong cung mot file la loi cu phap,
+# va thong bao cua Terraform chi tro vao dong thu hai chu khong noi ro
+# la trung.
+#
+# Cach dung: XOA HET noi dung terraform.tfvars roi dan khoi duoi day
+# (da bo dau #). No tu du, khong can gi tu phan tren.
 ########################################
 
-# project   = "quh11-net"
-# ephemeral = true
+# region             = "ap-southeast-1"
+# availability_zones = ["ap-southeast-1a", "ap-southeast-1b"]
+#
+# project     = "quh11-net"
+# cost_center = "CC-0000"
+# owner       = "platform@example.com"
+# environment = "sandbox"
+# ephemeral   = true
 #
 # enable_firewall = true
 # firewall_mode   = "alert"          # KHONG bao gio dat "drop" o lan dau
