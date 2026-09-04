@@ -125,7 +125,12 @@ if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "$BACKEND_MODE" == "local" ]]; then
         echo "$CFG"
         echo "    }"
         echo
-        echo "  Roi: terraform init -reconfigure && ./lint.sh"
+        # KHONG can init lai. state_config chi dieu khien
+        # terraform_remote_state - mot DATA SOURCE. Backend cua chinh
+        # lop nay la chuyen khac, nam o backend.tf. Bao "init
+        # -reconfigure" o day la chi nguoi ta di lam mot viec khong
+        # lien quan, roi ho quay lai voi dung loi cu.
+        echo "  Roi chay lai: ./lint.sh && terraform plan"
       else
         echo "  Chua doc duoc cau hinh (thieu $CACHE hoac thieu jq)."
         echo "  Xem truc tiep:"
@@ -138,9 +143,14 @@ if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "$BACKEND_MODE" == "local" ]]; then
       fi
 
       echo
-      echo "  LUU Y: state cua CHINH lop ops van dang ghi ra dia. Layer cha"
-      echo "  dung backend tu xa thi lop nay nen theo - xem versions.tf."
-      echo
+      # Chi nhac khi lop nay THAT SU con dung state local. Sau khi
+      # wire-backends.sh chay thi backend.tf da co, va nhac nua la sai.
+      if [[ ! -f backend.tf ]]; then
+        echo "  LUU Y: state cua CHINH lop ops van dang ghi ra dia. Layer cha"
+        echo "  dung backend tu xa thi lop nay nen theo. Dang ky no nhu mot"
+        echo "  layer trong landing-zone/tf-backend - xem versions.tf."
+        echo
+      fi
       exit 1
     fi
 
