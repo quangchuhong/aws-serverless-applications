@@ -109,10 +109,15 @@ if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "$BACKEND_MODE" == "local" ]]; then
         # mot dong bool nhu `encrypt = true` se lam terraform tu choi.
         # Nhung khoa can de DOC state deu la chuoi (bucket, key,
         # region, profile, role_arn, kms_key_id).
+        #
+        # Bo dynamodb_table: terraform_remote_state chi DOC, khong bao
+        # gio khoa. Giu lai thi Terraform in canh bao deprecated moi
+        # lan plan - mot dong nhieu vo ich cho mot thu khong dung toi.
         CFG=$(jq -r '
           .backend.config // {}
           | to_entries[]
           | select(.value != null and (.value | type) == "string")
+          | select(.key != "dynamodb_table")
           | "      \(.key) = \"\(.value)\""
         ' "$CACHE" 2>/dev/null)
       fi

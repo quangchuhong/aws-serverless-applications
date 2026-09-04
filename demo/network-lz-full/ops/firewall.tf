@@ -32,8 +32,29 @@ locals {
       protocol = lower(try(r.protocol, "tcp"))
       ports    = try(r.ports, [])
       ticket   = try(r.ticket, "chua co")
-      expires  = try(r.expires, null)
       note     = try(r.note, "")
+
+      # NGAY HET HAN - hai bay chong len nhau.
+      #
+      # 1. yamldecode doi mot ngay KHONG DAT TRONG NHAY thanh dau thoi
+      #    gian day du: `expires: 2027-12-31` doc ra
+      #    "2027-12-31T00:00:00Z". Dat trong nhay thi van la chuoi 10
+      #    ky tu. substr(...,0,10) cho ca hai ve cung mot dang.
+      #
+      # 2. HCL KHONG so sanh duoc chuoi bang > hay <. Toan tu do doi
+      #    SO. So sanh hai chuoi ngay ISO trong thu tu tu dien la dung
+      #    ve mat lich, nhung Terraform tu choi thang:
+      #
+      #      Error: Invalid operand
+      #      Unsuitable value for left operand: a number is required.
+      #
+      # Nen doi thanh so YYYYMMDD - 20271231 - roi so bang so. Van
+      # giu dung thu tu thoi gian, va la thu HCL chiu.
+      expires = try(r.expires, null) == null ? null : substr(tostring(r.expires), 0, 10)
+
+      expires_num = try(r.expires, null) == null ? null : tonumber(
+        replace(substr(tostring(r.expires), 0, 10), "-", "")
+      )
 
       from_cidr = try(local.apps[r.from].cidr, local.unresolvable)
       to_cidr   = try(local.apps[r.to].cidr, local.unresolvable)
@@ -49,20 +70,23 @@ locals {
   # dung o day KHONG tao diff vinh vien. timestamp() thi co - va do la
   # ly do no khong duoc xuat hien o bat ky doi so resource nao trong
   # file nay.
-  today = substr(plantimestamp(), 0, 10)
+  today     = substr(plantimestamp(), 0, 10)
+  today_num = tonumber(replace(local.today, "-", ""))
 
-  # So sanh chuoi ngay ISO la so sanh dung thu tu thoi gian:
-  # "2026-09-04" > "2026-08-31" ve mat tu dien cung la ve mat lich.
+  # Moc 30 ngay toi, cung dang so YYYYMMDD
+  soon_num = tonumber(formatdate("YYYYMMDD", timeadd("${local.today}T00:00:00Z", "720h")))
+
   fw_expired = [
     for r in local.fw_rules : r.id
-    if r.expires != null && local.today > tostring(r.expires)
+    if r.expires_num != null && local.today_num > r.expires_num
   ]
 
   # Rule sap het han trong 30 ngay - dua vao output de doi lich.
   fw_expiring_soon = [
     for r in local.fw_rules : "${r.id} (${r.expires})"
-    if r.expires != null && !contains(local.fw_expired, r.id)
-    && tostring(r.expires) <= formatdate("YYYY-MM-DD", timeadd("${local.today}T00:00:00Z", "720h"))
+    if r.expires_num != null
+    && r.expires_num >= local.today_num
+    && r.expires_num <= local.soon_num
   ]
 
   ########################################
