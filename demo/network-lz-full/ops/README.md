@@ -368,7 +368,7 @@ Rule `pass` vẫn được nạp, nhưng mặc định của policy cũng là ch
 
 ---
 
-## Gỡ bỏ
+## Gỡ bỏ và dựng lại
 
 Thứ tự **ngược** với bootstrap:
 
@@ -379,11 +379,15 @@ cd ..
 terraform apply
 
 # 2. Rồi mới xoá lớp ops
-cd ops
-terraform destroy
+cd ops && terraform destroy && cd ..
+
+# 3. Rồi mới xoá layer cha
+./teardown.sh
 ```
 
-Làm ngược thứ tự thì layer cha giữ một tham chiếu tới rule group đã biến mất, và lần apply kế tiếp của nó hỏng với một lỗi đúng nhưng không nói ai đã xoá.
+Làm ngược thứ tự thì layer cha giữ một tham chiếu tới rule group đã biến mất, và lần apply kế tiếp của nó hỏng với một lỗi đúng nhưng không nói ai đã xoá. `teardown.sh` chặn nếu bạn bỏ qua bước 1.
+
+**Dựng lại thì ngắn hơn nhiều**: object state trong S3, đăng ký layer trong `tf-backend`, và `backend.tf`/`backend.hcl` đều còn nguyên sau `destroy`. Chỉ chạy lại `wire-backends.sh` nếu bạn clone lại repo. ARN của rule group cũng giống hệt lần trước — nó sinh từ region + account + tên. Trình tự đầy đủ ở [doc 25 mục 3b](../../../docs/25-Van-hanh-Network-Hang-Ngay.md).
 
 ---
 

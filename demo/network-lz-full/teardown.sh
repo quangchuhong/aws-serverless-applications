@@ -40,7 +40,7 @@ if [[ "$EPHEMERAL" == "false" ]]; then
 fi
 
 ########################################
-# CHAN: lop van hanh (ops/) con state khong
+# CHAN: lop van hanh (ops/) con dinh vao day khong
 #
 # ops/ tao mot Network Firewall rule group ma POLICY o layer nay tham
 # chieu qua ARN. Thu tu xoa phai nguoc voi thu tu dung:
@@ -50,16 +50,29 @@ fi
 #
 # Lam sai thu tu thi destroy o day co the bi tu choi vi rule group
 # dang duoc tham chieu, hoac te hon: destroy chay tron va de lai mot
-# rule group mo coi trong state cua ops/ - khong ai tra tien cho no
-# (capacity la $0), nen no nam do im lang cho toi lan bootstrap sau,
-# luc ARN cu khong con khop gi.
+# rule group mo coi khong ai quan.
+#
+# KIEM BANG OUTPUT, KHONG BANG FILE STATE.
+#
+# Ban dau cho nay kiem su ton tai cua ops/terraform.tfstate. Sai ngay
+# khi ops/ chuyen sang backend S3 - luc do KHONG co file state tren
+# dia, nen phep kiem im lang cho qua dung truong hop no sinh ra de
+# bat. Cung ho voi loi 73: mot phep kiem chay, bao xanh, va khong
+# nhin vao cho can nhin.
+#
+# ops_rule_group_arns la SU RANG BUOC THAT giua hai lop. Doc no tu
+# state cua chinh layer nay thi dung ke ca khi ops/ dung backend nao.
 ########################################
-if [[ -s "$(dirname "$0")/ops/terraform.tfstate" ]]; then
+OPS_ARNS=$(terraform output -json ops_handles 2>/dev/null |
+  jq -r '.firewall.ops_rule_group_arns // [] | length' 2>/dev/null || echo 0)
+
+if [[ "${SKIP_OPS_CHECK:-0}" != "1" && "${OPS_ARNS:-0}" != "0" ]]; then
   echo "════════════════════════════════════════════"
-  echo " LOP VAN HANH (ops/) CON STATE"
+  echo " LOP VAN HANH (ops/) VAN DANG DUOC THAM CHIEU"
   echo "════════════════════════════════════════════"
   echo
-  echo "Xoa theo thu tu NGUOC voi luc dung:"
+  echo "Firewall policy o layer nay dang tro toi $OPS_ARNS rule group do"
+  echo "thu muc ops/ so huu. Xoa theo thu tu NGUOC voi luc dung:"
   echo
   echo "  1. Go dong ops_rule_group_arns khoi terraform.tfvars"
   echo "  2. terraform apply           # policy thoi tham chieu rule group"
@@ -69,7 +82,22 @@ if [[ -s "$(dirname "$0")/ops/terraform.tfstate" ]]; then
   echo "Bo qua canh bao nay (rule group da xoa tay chang han):"
   echo "  SKIP_OPS_CHECK=1 ./teardown.sh"
   echo
-  [[ "${SKIP_OPS_CHECK:-0}" == "1" ]] || exit 1
+  exit 1
+fi
+
+# Phong khi output khong doc duoc: van con dau vet cua ops/
+if [[ "${SKIP_OPS_CHECK:-0}" != "1" && "${OPS_ARNS:-0}" == "0" ]]; then
+  OPS_DIR="$(dirname "$0")/ops"
+  if [[ -s "$OPS_DIR/terraform.tfstate" || -f "$OPS_DIR/backend.tf" ]]; then
+    echo "Luu y: thu muc ops/ da duoc noi backend hoac con state."
+    echo "Policy o layer nay khong con tham chieu rule group nao, nen"
+    echo "destroy o day chay duoc. Nhung rule group ben ops/ VAN CON:"
+    echo
+    echo "  cd ops && terraform destroy"
+    echo
+    echo "Khong chan - chi nhac. Rule group khong tinh tien theo gio."
+    echo
+  fi
 fi
 
 ########################################

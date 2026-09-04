@@ -107,9 +107,75 @@ terraform output bootstrap_done   # phải là true
 
 `false` là trạng thái nguy hiểm nhất trong cả lớp này, vì **nó đọc như thành công từ mọi phía**: apply xanh, rule group hiện trong console, `rules_string` đúng y nguyên catalog. Chỉ thiếu một thứ — không policy nào đọc nó. Mọi rule đang không có tác dụng, và không có chỗ nào báo điều đó.
 
-### Gỡ bỏ — thứ tự ngược lại
+---
 
-Gỡ ARN khỏi layer cha **trước**, apply, rồi mới `terraform destroy` lớp ops. Làm ngược thì layer cha giữ tham chiếu tới một rule group đã biến mất, và lần apply kế tiếp của nó hỏng với một lỗi đúng nhưng không nói ai đã xoá.
+## 3b. Xoá và dựng lại — trình tự đầy đủ
+
+Hai lớp dính nhau ở một điểm, nên thứ tự xoá là **ngược hẳn** thứ tự dựng. Làm sai thì layer cha giữ tham chiếu tới một rule group đã biến mất, và lần apply kế tiếp của nó hỏng với một lỗi đúng nhưng không nói ai đã xoá.
+
+### Xoá
+
+```bash
+# 1. Gỡ ARN khỏi layer cha TRƯỚC
+cd demo/network-lz-full
+#    xoá dòng ops_rule_group_arns khỏi terraform.tfvars
+terraform apply          # chỉ firewall policy đổi: bỏ tham chiếu ưu tiên 150
+
+# 2. Xoá lớp ops
+cd ops && terraform destroy && cd ..
+
+# 3. Xoá layer cha
+./teardown.sh
+```
+
+`teardown.sh` chặn ở bước 1 nếu bạn bỏ qua nó. Nó đọc `ops_rule_group_arns` từ **output của chính layer cha**, không phải từ sự tồn tại của `ops/terraform.tfstate` — vì khi lớp ops dùng backend S3 thì file đó không có trên đĩa, và phép kiểm sẽ im lặng cho qua đúng trường hợp nó sinh ra để bắt.
+
+### Thứ còn lại sau khi xoá
+
+Ba thứ **không** bị `destroy` đụng tới, và đó là điều tốt — chúng làm lần dựng lại ngắn hơn nhiều:
+
+| Còn lại | Ở đâu | Nghĩa là |
+|---|---|---|
+| Object state rỗng của lớp ops | `s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate` | Không phải chạy lại `put-object` — cái bẫy 403 lần đầu không lặp lại |
+| Đăng ký layer trong `tf-backend` | `local.layers`, `backend_profiles` | Không phải apply lại `tf-backend` |
+| `ops/backend.tf` + `backend.hcl` | Trên đĩa (gitignore) | Không phải chạy lại `wire-backends.sh` — **trừ khi** bạn clone lại repo |
+
+Nếu clone lại repo thì chạy lại `wire-backends.sh` từ `landing-zone/tf-backend`.
+
+### Dựng lại
+
+```bash
+# 1. Layer cha — terraform.tfvars KHÔNG có ops_rule_group_arns
+cd demo/network-lz-full
+terraform apply                                   # ~20-30 phút
+
+# 2. Lớp ops
+cd ops
+terraform init -backend-config=backend.hcl        # nếu .terraform đã mất
+./lint.sh && terraform apply
+terraform output -raw rule_group_arn
+
+# 3. Cắm ARN vào layer cha
+cd ..
+echo 'ops_rule_group_arns = ["<ARN vừa in>"]' >> terraform.tfvars
+terraform apply
+
+# 4. Xác nhận
+cd ops && terraform apply && terraform output bootstrap_done   # true
+```
+
+**ARN sẽ giống hệt lần trước** — nó sinh từ region + account + tên rule group, cả ba đều không đổi. Nhưng vẫn phải theo đúng thứ tự: ở bước 1, nếu `terraform.tfvars` còn dòng ARN cũ thì apply hỏng vì rule group chưa tồn tại.
+
+### Kiểm chứng cuối, đọc từ AWS
+
+```bash
+aws network-firewall describe-firewall-policy \
+  --firewall-policy-name <project>-policy \
+  --query 'FirewallPolicy.StatefulRuleGroupReferences[].[Priority,ResourceArn]' \
+  --output text
+```
+
+Ba dòng: **100** (layer cha) → **150** (ops) → **200** (egress domains). Đó mới là bằng chứng policy đang đọc catalog; `bootstrap_done` chỉ nói state nghĩ vậy.
 
 ---
 
