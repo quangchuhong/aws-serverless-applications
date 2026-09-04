@@ -122,16 +122,23 @@ api error Forbidden: Forbidden
 
 **403 chứ không phải 404**, dù object chưa hề tồn tại — không có `ListBucket` trên prefix đó thì S3 không được phép tiết lộ cả việc object có tồn tại hay không. Và 403 đọc như "sai credential", nên chỗ đầu tiên ai cũng đi kiểm là vai trò và profile.
 
-Đọc prefix thật của layer cha rồi đặt key ngay dưới nó:
+### Đừng chép tay khối backend — để `backend-hint.sh` in ra
 
 ```bash
-jq -r '.backend.config.key' ../.terraform/terraform.tfstate
-# network/terraform.tfstate  ->  prefix là "network/"
+./backend-hint.sh
 ```
 
-```hcl
-key = "network/ops/terraform.tfstate"
-```
+Nó đọc `../.terraform/terraform.tfstate` (file `terraform init` của layer cha ghi ra), in lại **nguyên khối backend** với đúng một thay đổi: `key` chuyển sang cùng thư mục + `ops/`.
+
+Giữ nguyên mọi dòng là điểm mấu chốt. Cấu hình backend có thể mang `role_arn`, `profile` hoặc `assume_role` — thiếu chúng thì Terraform vẫn báo `Successfully configured the backend`, rồi hỏng ở bước đọc state với đúng cái 403 ở trên. **403 đó không phải vì key sai**: lớp ops đang gọi S3 bằng một *danh tính khác* layer cha — credential mặc định trong shell, thay vì vai trò mà layer cha vào. Cùng bucket, cùng vùng, khác người gọi.
+
+Và vì S3 trả 403 chứ không phải 404 khi thiếu `ListBucket`, một thông báo duy nhất phủ ba nguyên nhân hoàn toàn khác nhau:
+
+- key nằm ngoài prefix được cấp
+- gọi bằng danh tính khác
+- bucket không tồn tại ở account đó
+
+Nếu dán nguyên khối `backend-hint.sh` in ra mà vẫn 403, script in sẵn hai lệnh phân biệt — quan trọng nhất là thử `head-object` lên **key của chính layer cha**: đọc được thì quyền có thật và vấn đề nằm ở prefix; 403 luôn thì shell đang dùng danh tính khác.
 
 Kiểm bootstrap đã xong chưa:
 

@@ -60,7 +60,20 @@ CATALOG="${CATALOG_DIR:-catalog}"
 
 HUB_STATE="${HUB_STATE:-../terraform.tfstate}"
 
-if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "${STATE_BACKEND:-local}" == "local" ]]; then
+# Doc state_backend TU terraform.tfvars, khong chi tu bien moi truong.
+#
+# Truoc day dong nay chi xem bien moi truong, nen ai khai
+# state_backend = "s3" trong tfvars van bi phep kiem local chan lai -
+# script tu bao mot loi ma chinh cau hinh cua nguoi dung da giai quyet.
+TFVARS_BACKEND=""
+if [[ -f terraform.tfvars ]]; then
+  TFVARS_BACKEND=$(grep -E '^[[:space:]]*state_backend[[:space:]]*=' terraform.tfvars 2>/dev/null |
+    head -1 | sed -E 's/.*=[[:space:]]*"([a-z0-9]+)".*/\1/')
+fi
+
+BACKEND_MODE="${STATE_BACKEND:-${TFVARS_BACKEND:-local}}"
+
+if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "$BACKEND_MODE" == "local" ]]; then
   if [[ ! -s "$HUB_STATE" ]]; then
     echo
     echo "  Khong tim thay state cua layer cha."
