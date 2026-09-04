@@ -26,13 +26,20 @@ variable "state_backend" {
 
 variable "state_config" {
   description = <<-EOT
-    Cau hinh backend, dua thang cho terraform_remote_state.
+    Cau hinh backend, dua cho terraform_remote_state.
 
-      local: { path = "../terraform.tfstate" }
+      local: de TRONG. Mac dinh la "${path.module}/../terraform.tfstate",
+             tuc file state cua thu muc cha - tinh theo VI TRI FILE .tf
+             chu khong theo thu muc dang chay.
+
+             Khai "path" o day chi khi state cua layer cha nam cho khac.
+             Duong dan tuong doi khai o day duoc giai theo THU MUC DANG
+             CHAY, nen dung duong dan tuyet doi cho chac.
+
       s3   : { bucket = "...", key = "network/terraform.tfstate", region = "..." }
   EOT
   type        = map(string)
-  default     = { path = "../terraform.tfstate" }
+  default     = {}
 }
 
 variable "catalog_dir" {

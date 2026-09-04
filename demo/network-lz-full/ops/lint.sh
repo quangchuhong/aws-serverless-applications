@@ -38,6 +38,66 @@ STRICT=0
 
 CATALOG="${CATALOG_DIR:-catalog}"
 
+########################################
+# STATE CUA LAYER CHA
+#
+# Kiem TRUOC catalog, vi thieu no thi khong mot phep kiem nao ben duoi
+# co nghia: ten spoke, bang route, ten zone - tat ca deu doc tu do.
+#
+# Terraform bao truong hop nay bang:
+#
+#   Error: Unable to find remote state
+#   No stored state was found for the given workspace in the given backend.
+#
+# Cau do khong in ra duong dan da thu, va doc y het nhu "layer cha
+# chua bao gio duoc apply". Hai nguyen nhan that su khac han nhau:
+# hoac chua apply, hoac apply roi nhung chua co output ops_handles.
+# Phan biet o day.
+#
+# Chi ap dung cho backend local. Voi S3 thi khong kiem duoc ma khong
+# goi mang, va script nay co y khong goi mang.
+########################################
+
+HUB_STATE="${HUB_STATE:-../terraform.tfstate}"
+
+if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "${STATE_BACKEND:-local}" == "local" ]]; then
+  if [[ ! -s "$HUB_STATE" ]]; then
+    echo
+    echo "  Khong tim thay state cua layer cha: $HUB_STATE"
+    echo
+    echo "  Lop nay doc moi thu tu do - ten spoke, bang route TGW, zone DNS."
+    echo "  Kiem thu:"
+    echo
+    echo "    ls -la ../terraform.tfstate"
+    echo "    ls -la ../terraform.tfstate.d/     # neu dang dung workspace"
+    echo
+    echo "  Neu file nam cho khac, tro toi no bang bien state_config:"
+    echo "    state_config = { path = \"/duong/dan/tuyet/doi/terraform.tfstate\" }"
+    echo
+    echo "  Bo qua phep kiem nay: SKIP_STATE_CHECK=1 ./lint.sh"
+    echo
+    exit 1
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    if [[ "$(jq -r '.outputs.ops_handles // "thieu"' "$HUB_STATE")" == "thieu" ]]; then
+      echo
+      echo "  State cua layer cha co, nhung CHUA co output \"ops_handles\"."
+      echo
+      echo "  Nghia la layer cha chua duoc apply lai sau khi keo code moi ve."
+      echo "  Chi them mot output, khong doi resource nao:"
+      echo
+      echo "    cd .. && terraform apply     # 0 to add, 0 to change"
+      echo
+      echo "  Bo qua buoc nay thi terraform ben duoi se bao:"
+      echo "    This object does not have an attribute named \"ops_handles\""
+      echo "  - mot cau khong he nhac toi viec phai apply layer cha."
+      echo
+      exit 1
+    fi
+  fi
+fi
+
 if ! python3 -c "import yaml" 2>/dev/null; then
   echo "Thieu module PyYAML. Cai bang:"
   echo "  python3 -m pip install --user pyyaml"

@@ -230,6 +230,8 @@ Bảng này là thứ đọc lúc 2 giờ sáng. Mọi dòng đều là kiểu h
 | Tên DNS "nhảy qua nhảy lại" | Trùng tên với bản ghi layer cha sinh ra — **cả hai plan đều sạch** | `terraform plan` (precondition bắt) |
 | Mở port giữa hai app cùng VPC không có tác dụng | Lưu lượng trong cùng VPC không qua TGW nên không tới firewall | `./lint.sh` |
 | Chế độ `alert`: mọi thứ đều thông kể cả khi không có rule | Đúng thiết kế — mặc định là cho qua và chỉ ghi log | `terraform output next_steps` |
+| `Unable to find remote state` ở lớp ops | Không thấy state layer cha. Câu lỗi **không in đường dẫn đã thử** | `ls -la ../terraform.tfstate` |
+| `does not have an attribute named "ops_handles"` | Bỏ qua bước 0 — layer cha chưa apply lại sau khi kéo code mới | `./lint.sh` (bắt trước Terraform) |
 
 ---
 

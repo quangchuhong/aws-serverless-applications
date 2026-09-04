@@ -64,7 +64,13 @@ jobs:
       # thi khong can moi thu hoan hao. Nhung mot canh bao di qua
       # duoc CI la mot canh bao se song mai: no khong bao gio du to
       # de ai do dung lai va sua.
+      #
+      # SKIP_STATE_CHECK: CI khong co state cua layer cha (state khong
+      # bao gio nam trong git). Phep kiem do chi co nghia tren may co
+      # thu muc cha da apply.
       - name: Kiem catalog
+        env:
+          SKIP_STATE_CHECK: "1"
         run: ./lint.sh --strict
 
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
@@ -183,4 +189,6 @@ jobs:
       # duoc in ra trong log de doc, nhung khong lam do bang - neu
       # khong thi bang se do trien mien va tin hieu that mat luon.
       - name: Rule qua han
+        env:
+          SKIP_STATE_CHECK: "1"
         run: ./lint.sh

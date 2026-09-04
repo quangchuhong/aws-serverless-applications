@@ -73,6 +73,23 @@ terraform apply
 
 Từ đó về sau ARN không đổi nữa. Sửa catalog chỉ làm đổi `rules_string` bên trong rule group — một thuộc tính sửa tại chỗ, không tạo lại resource, **không cần ai apply layer cha**.
 
+### Hai lỗi hay gặp ở bước 0–1
+
+`./lint.sh` kiểm cả hai trước khi Terraform chạy, nên chạy nó trước là nhanh nhất.
+
+| Terraform báo | Nghĩa thật |
+|---|---|
+| `Unable to find remote state` / `No stored state was found` | Không thấy file state của layer cha. Câu này **không in ra đường dẫn đã thử** và đọc y hệt như "layer cha chưa bao giờ được apply". Kiểm: `ls -la ../terraform.tfstate` |
+| `This object does not have an attribute named "ops_handles"` | State có, nhưng layer cha chưa apply lại sau khi kéo code mới về — tức là bỏ qua bước 0 |
+
+Đường dẫn state mặc định tính theo **vị trí file `.tf`** (`${path.module}/../terraform.tfstate`), không theo thư mục đang chạy. Backend `local` của `terraform_remote_state` giải đường dẫn tương đối theo thư mục đang chạy — hai cái đó trùng nhau khi gõ `cd ops && terraform apply` và lệch nhau khi gõ `terraform -chdir=ops apply` hoặc khi chạy từ CI.
+
+Nếu state của layer cha nằm chỗ khác, trỏ tới nó bằng **đường dẫn tuyệt đối**:
+
+```hcl
+state_config = { path = "/Users/laptop/…/demo/network-lz-full/terraform.tfstate" }
+```
+
 Kiểm bootstrap đã xong chưa:
 
 ```bash

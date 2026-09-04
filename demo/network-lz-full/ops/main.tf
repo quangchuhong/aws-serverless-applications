@@ -7,9 +7,36 @@
 # Lop nay khong tao duoc mot resource nao trong state kia du co muon.
 ########################################
 
+locals {
+  ########################################
+  # DUONG DAN STATE CUA LAYER CHA
+  #
+  # path.module, KHONG phai mot duong dan tuong doi tran.
+  #
+  # Backend local cua terraform_remote_state giai duong dan tuong doi
+  # theo THU MUC DANG CHAY, khong theo thu muc chua file .tf. Hai cai
+  # do trung nhau khi go `cd ops && terraform apply`, va lech nhau
+  # khi go `terraform -chdir=ops apply`, khi chay tu CI voi
+  # working-directory khac, hay khi lop nay duoc goi nhu mot module.
+  #
+  # Luc lech, loi la:
+  #
+  #   Error: Unable to find remote state
+  #   No stored state was found for the given workspace in the given backend.
+  #
+  # Cau do khong nhac gi toi duong dan, khong in ra duong dan da thu,
+  # va doc y het nhu "layer cha chua bao gio duoc apply" - trong khi
+  # state nam ngay day, chi la Terraform dang tim tu mot thu muc khac.
+  ########################################
+
+  state_config = var.state_backend != "local" ? var.state_config : {
+    path = lookup(var.state_config, "path", "${path.module}/../terraform.tfstate")
+  }
+}
+
 data "terraform_remote_state" "hub" {
   backend = var.state_backend
-  config  = var.state_config
+  config  = local.state_config
 }
 
 locals {
