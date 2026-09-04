@@ -75,12 +75,12 @@ terraform {
   # thi nguoi apply sau ghi de nguoi truoc, khong ben nao thay diff.
   ########################################
 
-backend "s3" {
-  bucket       = "qh11-lz-tfstate-609320954321"
-  key          = "demo-network-lz-full/ops/terraform.tfstate"
-  region       = "ap-southeast-1"
-  use_lockfile = true
-}
+# backend "s3" {
+#   bucket       = "qh11-lz-tfstate-609320954321"
+#   key          = "demo-network-lz-full/ops/terraform.tfstate"
+#   region       = "ap-southeast-1"
+#   use_lockfile = true
+# }
   
 
   required_providers {
