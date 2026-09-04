@@ -19,6 +19,7 @@ Toàn bộ số liệu dưới đây lấy từ lần chạy thật, không ư�
 |---|---|
 | Account | 5 account thấy TGW, **4 có VPC** nối vào + 1 spoke local |
 | Transit Gateway | 4 route table, `appliance_mode_support = enable` |
+| **Kiểm chứng** | `verify.sh` **46 đạt, 0 lỗi, 4 bỏ qua** |
 | Chi phí | `~$1.397/giờ` = **~$33.52/ngày** ở 2 AZ, đủ firewall + ingress + endpoint |
 | Thời gian | ~45 phút dựng 4 pha, ~20 phút xoá |
 
@@ -124,6 +125,13 @@ enable_interface_endpoints = true
 enable_internal_dns        = true
 enable_dns_profile         = true
 enable_test_instances      = true
+enable_ingress             = true
+
+# EC2 o MOI spoke + rule mesh de do east-west GIUA CAC ACCOUNT.
+# Khong co hai dong nay thi khong co gi de goi, va moi khang dinh ve
+# duong di deu dua tren doc route table thay vi gui goi tin.
+remote_test_instances = true
+east_west_mesh_ports  = [80]       # cong 22 CO Y khong co rule
 
 # --- RAM ---
 ram_use_external_principals                 = true    # doc muc 5 truoc khi bat
@@ -133,25 +141,25 @@ ram_invitations_accepted                    = false   # bat sau khi da nhan
 wire_remote_attachments                     = false   # bat o pha cuoi
 
 # Account chi CAN THAY TGW, chua dung VPC
-share_tgw_with_accounts = [
-  "609320954321",   # management
-  "458195083898",   # lz-security
-  "654560867047",   # lz-logarchive
-  "169873795883",   # lz-app-dev
-]
+share_tgw_with_accounts = ["609320954321"]   # management
 
 spokes = {
-  "app-dev"    = { cidr = "10.10.0.0/16" }             # LOCAL - giu lai
+  "probe" = { cidr = "10.11.0.0/16" }   # LOCAL - tram quan sat, BAT BUOC
 
-  "app-prod"   = { cidr = "10.20.0.0/16",  account_id = "761558631239", ou_id = "ou-..." }
+  "app-dev"    = { cidr = "10.10.0.0/16",  account_id = "169873795883", ou_id = "ou-o5ci-syf8rqi7" }
+  "app-prod"   = { cidr = "10.20.0.0/16",  account_id = "761558631239", ou_id = "ou-o5ci-75f3uqe6" }
   "security"   = { cidr = "10.8.0.0/16",   account_id = "458195083898", ou_id = "ou-o5ci-g5rv7do1" }
-  "logarchive" = { cidr = "10.100.0.0/16", account_id = "654560867047", ou_id = "ou-..." }
+  "logarchive" = { cidr = "10.100.0.0/16", account_id = "654560867047", ou_id = "ou-o5ci-g5rv7do1" }
 }
 ```
 
 **Chia sẻ ≠ có VPC.** `share_tgw_with_accounts` mở cửa cho account tự cắm sau; `spokes` mới dựng VPC. Đừng bịa spoke giả chỉ để share.
 
-**Giữ ít nhất một spoke local.** Template StackSet tạo VPC + attachment, **không tạo EC2**. Mà mục 7 của `verify.sh` — mục duy nhất đo luồng thật — chạy lệnh trên EC2 qua SSM.
+**Giữ ít nhất một spoke local.** Template StackSet tạo VPC + attachment và EC2, nhưng `verify.sh` mục 7, 7c, 7d đều **điều khiển** phép đo từ một EC2 trong account hub qua SSM — mà SSM không đi xuyên account. Không có spoke local là mất cả ba mục đó.
+
+> **Đừng "bỏ comment" khối này vào `terraform.tfvars.example` đang có.** Phần đầu file đó đã khai `project`, `enable_firewall`, `enable_test_instances` và `spokes`; khai hai lần trong một file là lỗi cú pháp. Xoá hết nội dung rồi dán khối đầy đủ vào.
+>
+> Làm nửa vời thì **im lặng**: Terraform chạy bằng mặc định bước 1, và không dòng nào trong output nói cấu hình của bạn bị bỏ qua — chỉ nhận ra qua `project = "lz-net"` và `accounts = []`.
 
 CIDR lấy từ [doc 17 mục 3](./17-Network-LZ-Design-Guide.md#3-quy-hoạch-cidr--bảng-chuẩn). Trùng CIDR trong lưới TGW thì route table không phân biệt được hai spoke, và sửa thì phải xoá VPC.
 
@@ -354,18 +362,28 @@ Dòng thứ ba là dòng `list-profile-associations` **không** chứng minh đ�
 Kết quả thật của lần chạy này:
 
 ```
-Loi moi RAM                  5/5 ASSOCIATED
-StackSet                     3/3 CURRENT
-app-prod    tgw-attach-0ae14ea9   10.20.0.0/16    active
-security    tgw-attach-0da4b75e   10.8.0.0/16     active
-logarchive  tgw-attach-0dfe8596   10.100.0.0/16   active
-DNS profile cross-account    COMPLETE
-Endpoint tap trung           ec2messages -> 10.1.31.184, 10.1.30.12
-Gateway endpoint S3          IP cong khai (dung - no lam viec o route table)
-Khong lot firewall           rtb-spokes / rtb-egress / rtb-ingress sach
-Ingress                      NLB -> TGW -> firewall -> app, HTTP 200
-verify.sh                    28 dat, 0 loi, 0 bo qua
+Loi moi RAM              5/5 ASSOCIATED
+StackSet                 4/4 CURRENT
+
+Spoke o account khac     noi rtb-spokes   duong ve hoc CIDR   cong 80 tu probe
+  169873795883 app-dev        da noi      10.10.0.0/16 active     THONG
+  761558631239 app-prod       da noi      10.20.0.0/16 active     THONG
+  458195083898 security       da noi      10.8.0.0/16  active     THONG
+  654560867047 logarchive     da noi      10.100.0.0/16 active    THONG
+
+DNS o TUNG account       4/4 spoke, moi cai ba dong:
+  ssm -> 10.1.30.x / 10.1.31.x       interface endpoint o security VPC
+  s3  -> IP cong khai                gateway endpoint - DUNG
+  probe.lz.internal -> 10.11.0.169   PHZ cua hub, phan giai duoc tu account khac
+
+Khong lot firewall       rtb-spokes / rtb-egress / rtb-ingress sach
+Ingress                  NLB -> TGW -> firewall -> app, HTTP 200
+verify.sh                46 dat, 0 loi, 4 bo qua
 ```
+
+**Dòng `probe.lz.internal -> 10.11.0.169` là dòng khó nhất.** Bốn account khác nhau phân giải được một cái tên chỉ tồn tại trong private hosted zone do `lz-network` sở hữu. `list-profile-associations` báo `COMPLETE` không chứng minh được điều đó — nó chỉ nói profile đã gắn vào VPC.
+
+Bốn "bỏ qua" là cổng 22 ở chế độ `alert`: security group mở, firewall chưa chặn. Đó là kết quả **đúng** — chúng chỉ thành phép kiểm thật khi chuyển sang `drop`.
 
 ---
 
