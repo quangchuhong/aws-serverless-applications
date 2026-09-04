@@ -166,15 +166,29 @@ Hai cách, khác nhau về mức độ đụng chạm:
 
 **Nhanh — không sửa layer dùng chung.** Gỡ biến môi trường để cả hai dòng `profile` có hiệu lực: backend dùng `default` (account chứa bucket), provider dùng `var.aws_profile` (account network).
 
-```bash
-unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-aws configure list-profiles
-aws sts get-caller-identity --profile <tên>   # phải ra account network
-```
-
 ```hcl
 # ops/terraform.tfvars
 aws_profile = "<tên profile của account network>"
+```
+
+Rồi chạy **gỡ biến ngay trong lệnh**, đừng dựa vào `unset`:
+
+```bash
+env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  terraform plan
+```
+
+`unset` chỉ có tác dụng trong đúng shell đó, và nhiều thiết lập SSO đặt lại `AWS_PROFILE` từ `~/.zshrc` hoặc mỗi khi mở tab mới — nên "đã unset rồi mà vẫn lỗi" thường nghĩa là biến đã quay lại chứ không phải cách sửa sai. `env -u` gỡ cho **đúng tiến trình đó**, không phụ thuộc shell.
+
+Khi ấy: backend dùng profile trong khối `backend` (account chứa bucket), provider dùng `var.aws_profile` (account network). Cả hai đọc từ `~/.aws`, không qua biến môi trường.
+
+Nếu vẫn lỗi, bốn dòng này nói đủ để kết luận:
+
+```bash
+env | grep -oE '^AWS_[A-Z_]+'                 # biến nào còn sót (chỉ in TÊN)
+aws sts get-caller-identity                   # shell đang là ai
+grep -A10 'backend "s3"' versions.tf          # backend khai profile gì
+grep -n 'aws_profile' terraform.tfvars        # provider khai profile gì
 ```
 
 **Đúng gốc — dùng đúng thứ `tf-backend` sinh ra để làm.** Thêm account network vào `state_writer_accounts` rồi apply `landing-zone/tf-backend` từ management account. Sau đó backend không cần `profile` nữa: chính credential SSO của account network đọc ghi được state.
