@@ -232,6 +232,7 @@ Bảng này là thứ đọc lúc 2 giờ sáng. Mọi dòng đều là kiểu h
 | Chế độ `alert`: mọi thứ đều thông kể cả khi không có rule | Đúng thiết kế — mặc định là cho qua và chỉ ghi log | `terraform output next_steps` |
 | `Unable to find remote state` ở lớp ops | Không thấy state layer cha — thường vì layer cha dùng **backend S3** nên trên đĩa không có file nào. Câu lỗi không in đường dẫn đã thử | `./lint.sh` — nó đọc `.terraform/terraform.tfstate` và in `state_config` dán được ngay |
 | `does not have an attribute named "ops_handles"` | Bỏ qua bước 0 — layer cha chưa apply lại sau khi kéo code mới | `./lint.sh` (bắt trước Terraform) |
+| `HeadObject ... 403 Forbidden` khi `terraform init` lớp ops | Key state nằm ngoài prefix mà account này được cấp trong `tf-backend`. **403 chứ không phải 404** vì thiếu `ListBucket` thì S3 không được tiết lộ object có tồn tại hay không — nên nó đọc như sai credential | `jq -r '.backend.config.key' ../.terraform/terraform.tfstate` rồi đặt key ngay dưới prefix đó |
 
 ---
 

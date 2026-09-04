@@ -48,14 +48,43 @@ terraform {
   # khoa: hai lan apply song song, nguoi sau ghi de rule cua nguoi
   # truoc, khong ben nao thay diff.
   #
-  # Dung KHAC key voi layer cha - hai layer, hai state.
+  # KEY PHAI NAM DUOI DUNG PREFIX MA ACCOUNT NAY DUOC CAP.
+  #
+  # Bucket state cua landing-zone/tf-backend cap quyen THEO PREFIX,
+  # moi account mot prefix rieng (var.state_writer_accounts):
+  #
+  #   s3:ListBucket  tren bucket, dieu kien s3:prefix = "<ten>/*"
+  #   s3:GetObject   tren "<bucket>/<ten>/*"
+  #   s3:PutObject   tren "<bucket>/<ten>/*"
+  #
+  # Nghia la key cua lop nay phai bat dau bang CUNG prefix voi key
+  # cua layer cha. Dat mot prefix moi (vi du "network-ops/") thi
+  # khong co mot dong Allow nao phu, va S3 tra ve:
+  #
+  #   Error refreshing state: ... HeadObject ... StatusCode: 403
+  #   api error Forbidden: Forbidden
+  #
+  # 403 chu KHONG phai 404, du object chua he ton tai - vi khong co
+  # quyen ListBucket tren prefix do thi S3 khong duoc phep tiet lo ca
+  # viec object co ton tai hay khong. Va 403 doc nhu "sai credential",
+  # nen cho dau tien ai cung di kiem la vai tro va profile.
+  #
+  # Doc prefix that cua layer cha:
+  #   jq -r '.backend.config.key' ../.terraform/terraform.tfstate
+  #
+  # Roi dat key cua lop nay NGAY DUOI no:
   #
   # backend "s3" {
-  #   bucket       = "acme-lz-tfstate"
-  #   key          = "network-ops/terraform.tfstate"
+  #   bucket       = "qh11-lz-tfstate-<account>"
+  #   key          = "network/ops/terraform.tfstate"   # network/ = prefix cua layer cha
   #   region       = "ap-southeast-1"
   #   use_lockfile = true
   # }
+  #
+  # Cach khac: them mot prefix rieng vao state_writer_accounts ben
+  # landing-zone/tf-backend roi apply layer do. Chay duoc, nhung phai
+  # sua mot layer DUNG CHUNG cho ca to chuc chi de doi cho de mot file
+  # - va no pha vo bat bien "mot account, mot prefix" cua thiet ke do.
   ########################################
 
   required_providers {

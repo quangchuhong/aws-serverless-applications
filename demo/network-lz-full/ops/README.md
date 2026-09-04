@@ -103,7 +103,35 @@ state_config = {
 }
 ```
 
-Nhưng khi đó **state của chính lớp ops cũng nên chuyển sang S3** — bỏ chú thích khối `backend "s3"` trong `versions.tf`, với một `key` **khác**. Không phải cho đồng bộ cho đẹp: state này giữ ARN của rule group mà firewall policy đang tham chiếu. Mất file đó là mất quyền sửa và quyền xoá một resource vẫn đang chạy — Terraform sẽ đòi tạo rule group thứ hai, còn cái cũ nằm lại vĩnh viễn không ai quản. Và state local nghĩa là không có khoá: hai người cùng sửa catalog thì người apply sau ghi đè người trước, không bên nào thấy diff.
+Nhưng khi đó **state của chính lớp ops cũng nên chuyển sang S3** — bỏ chú thích khối `backend "s3"` trong `versions.tf`. Không phải cho đồng bộ cho đẹp: state này giữ ARN của rule group mà firewall policy đang tham chiếu. Mất file đó là mất quyền sửa và quyền xoá một resource vẫn đang chạy — Terraform sẽ đòi tạo rule group thứ hai, còn cái cũ nằm lại vĩnh viễn không ai quản. Và state local nghĩa là không có khoá: hai người cùng sửa catalog thì người apply sau ghi đè người trước, không bên nào thấy diff.
+
+**Key phải nằm dưới đúng prefix mà account này được cấp.** `landing-zone/tf-backend` cấp quyền theo prefix, mỗi account một prefix riêng (`var.state_writer_accounts`):
+
+```
+s3:ListBucket   trên bucket, điều kiện s3:prefix = "<tên>/*"
+s3:GetObject    trên "<bucket>/<tên>/*"
+s3:PutObject    trên "<bucket>/<tên>/*"
+```
+
+Đặt một prefix mới (`network-ops/`) thì không có dòng Allow nào phủ, và `terraform init` báo:
+
+```
+Error refreshing state: ... HeadObject ... StatusCode: 403
+api error Forbidden: Forbidden
+```
+
+**403 chứ không phải 404**, dù object chưa hề tồn tại — không có `ListBucket` trên prefix đó thì S3 không được phép tiết lộ cả việc object có tồn tại hay không. Và 403 đọc như "sai credential", nên chỗ đầu tiên ai cũng đi kiểm là vai trò và profile.
+
+Đọc prefix thật của layer cha rồi đặt key ngay dưới nó:
+
+```bash
+jq -r '.backend.config.key' ../.terraform/terraform.tfstate
+# network/terraform.tfstate  ->  prefix là "network/"
+```
+
+```hcl
+key = "network/ops/terraform.tfstate"
+```
 
 Kiểm bootstrap đã xong chưa:
 
