@@ -212,6 +212,22 @@ done < <(echo "$configs" | jq -r 'keys[]')
 missing=""
 n_missing=0
 
+########################################
+# Demo CO Y dung state local - khong phai thieu sot.
+#
+# Dung-xem-xoa thi state tren dia la du, va dua chung vao bucket chi
+# lam ban them. Khong khai o day thi phep kiem ben duoi keu chung
+# moi lan chay - va mot canh bao keu mai ve thu khong sai la cach
+# chac chan nhat de nguoi ta thoi doc canh bao.
+#
+# Bo mot dong khoi day khi demo do duoc giu lai lam ha tang thuong
+# tru (ephemeral = false), giong demo/network-lz-full.
+########################################
+LOCAL_STATE_LAYERS="
+demo/centralized-network
+demo/centralized-network-multiaccount
+"
+
 # Quet CA landing-zone LAN demo, va them mot cap long ben trong demo.
 #
 # Truoc day vong lap nay chi nhin landing-zone/*/. Nghia la mot lop
@@ -225,6 +241,8 @@ for d in "$REPO_ROOT"/landing-zone/*/ "$REPO_ROOT"/demo/*/ "$REPO_ROOT"/demo/*/*
   ls "$d"*.tf >/dev/null 2>&1 || continue
   layer="${d#"$REPO_ROOT"/}"
   layer="${layer%/}"
+  # Bo qua demo co y dung state local
+  case " $(echo $LOCAL_STATE_LAYERS) " in *" $layer "*) continue ;; esac
   if ! echo "$configs" | jq -e --arg k "$layer" 'has($k)' >/dev/null 2>&1; then
     missing="$missing $layer"
     n_missing=$((n_missing + 1))
