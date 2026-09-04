@@ -149,6 +149,38 @@ Và vì S3 trả 403 chứ không phải 404 khi thiếu `ListBucket`, một th�
 - gọi bằng danh tính khác
 - bucket không tồn tại ở account đó
 
+### `Error acquiring the state lock` — 403 trên `.tflock`
+
+Đây là lỗi **hữu ích nhất** trong cả nhóm, vì nó nói đủ: principal nào, hành động nào, resource nào, và vì sao.
+
+```
+User: arn:aws:sts::436908791055:assumed-role/AWSReservedSSO_lz-account-admin/quang
+is not authorized to perform: s3:PutObject on resource:
+"arn:aws:s3:::qh11-lz-tfstate-609320954321/demo-network-lz-full/ops/terraform.tfstate.tflock"
+because no resource-based policy allows the s3:PutObject action
+```
+
+`no resource-based policy` = gọi **xuyên account**, nên phải có **bucket policy** cho phép. Backend khai `profile = "default"` (IAM user trong account chứa bucket), nhưng shell đang mang credential SSO của account network — và biến môi trường đứng trước `profile`, nên profile bị bỏ qua. Account network không nằm trong `state_writer_accounts` cho prefix này, nên bucket policy không phủ.
+
+Hai cách, khác nhau về mức độ đụng chạm:
+
+**Nhanh — không sửa layer dùng chung.** Gỡ biến môi trường để cả hai dòng `profile` có hiệu lực: backend dùng `default` (account chứa bucket), provider dùng `var.aws_profile` (account network).
+
+```bash
+unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+aws configure list-profiles
+aws sts get-caller-identity --profile <tên>   # phải ra account network
+```
+
+```hcl
+# ops/terraform.tfvars
+aws_profile = "<tên profile của account network>"
+```
+
+**Đúng gốc — dùng đúng thứ `tf-backend` sinh ra để làm.** Thêm account network vào `state_writer_accounts` rồi apply `landing-zone/tf-backend` từ management account. Sau đó backend không cần `profile` nữa: chính credential SSO của account network đọc ghi được state.
+
+Cách hai bỏ luôn được IAM user dùng chung cho state — một access key dài hạn, đúng thứ [doc 10](../../../docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) tồn tại để loại bỏ.
+
 ### Vẫn 403 sau khi dán nguyên khối
 
 Hai nguyên nhân, phân biệt bằng một phép đo. Chạy `./backend-hint.sh`, nó in sẵn hai lệnh khác nhau đúng một biến: `head-object` lên một key **đã tồn tại** (của layer cha) và lên một key **chưa tồn tại**, cùng prefix.
