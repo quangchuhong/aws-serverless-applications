@@ -69,17 +69,24 @@ terraform {
   # viec object co ton tai hay khong. Va 403 doc nhu "sai credential",
   # nen cho dau tien ai cung di kiem la vai tro va profile.
   #
-  # Doc prefix that cua layer cha:
-  #   jq -r '.backend.config.key' ../.terraform/terraform.tfstate
+  # DUNG GO KHOI NAY BANG TAY. Chay:
   #
-  # Roi dat key cua lop nay NGAY DUOI no:
+  #   ./backend-hint.sh
   #
-  # backend "s3" {
-  #   bucket       = "qh11-lz-tfstate-<account>"
-  #   key          = "network/ops/terraform.tfstate"   # network/ = prefix cua layer cha
-  #   region       = "ap-southeast-1"
-  #   use_lockfile = true
-  # }
+  # No doc cau hinh ma `terraform init` cua layer cha da ghi ra, in lai
+  # NGUYEN VEN, va chi doi mot thu: key -> cung thu muc + "ops/".
+  #
+  # Go tay hong o hai cho, va ca hai deu ra cung mot loi 403:
+  #
+  #   1. Doan prefix. Prefix la mot chuoi tu dat luc dung tf-backend,
+  #      khong suy ra duoc tu ten layer hay ten account. "network/"
+  #      nghe hop ly va van sai neu that ra la "demo-network-lz-full/".
+  #
+  #   2. Bo sot dong. Cau hinh backend co the mang profile, role_arn,
+  #      assume_role, dynamodb_table. Thieu profile/role_arn thi lop
+  #      nay goi S3 bang MOT DANH TINH KHAC layer cha - cung bucket,
+  #      cung vung, khac nguoi goi - va 403 do khong lien quan gi toi
+  #      key.
   #
   # Cach khac: them mot prefix rieng vao state_writer_accounts ben
   # landing-zone/tf-backend roi apply layer do. Chay duoc, nhung phai

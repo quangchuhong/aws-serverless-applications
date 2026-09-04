@@ -90,18 +90,29 @@ Nếu state của layer cha nằm chỗ khác, trỏ tới nó bằng **đườn
 state_config = { path = "/Users/laptop/…/demo/network-lz-full/terraform.tfstate" }
 ```
 
-### Khi layer cha dùng backend S3
+### Khi layer cha dùng backend S3 — hai thứ khác nhau, cần cả hai
 
-Đọc state từ xa chỉ cần đổi hai biến trong `ops/terraform.tfvars`:
+Rất dễ làm một nửa rồi tưởng xong, vì mỗi nửa hỏng ở một chỗ khác nhau.
+
+| | Ở đâu | Để làm gì | Key |
+|---|---|---|---|
+| `state_config` | `ops/terraform.tfvars` | **Đọc** state layer cha | key **của layer cha** |
+| `backend "s3"` | `ops/versions.tf` | **Ghi** state của chính lớp ops | key **của ops**, cùng prefix |
+
+Thiếu `backend` → ops vẫn chạy nhưng state nằm trên máy một người. Thiếu `state_config` → `Unable to find remote state`.
 
 ```hcl
+# ops/terraform.tfvars — ĐỌC state layer cha
 state_backend = "s3"
 state_config = {
-  bucket = "…"
-  key    = "demo/network-lz-full/terraform.tfstate"   # key của LAYER CHA
-  region = "ap-southeast-1"
+  bucket  = "…"
+  key     = "demo-network-lz-full/terraform.tfstate"   # key của LAYER CHA
+  region  = "ap-southeast-1"
+  profile = "default"                                  # nếu layer cha có
 }
 ```
+
+`state_config` là `map(string)` nên bỏ các giá trị không phải chuỗi (`encrypt = true`) — chúng không cần để đọc. `./lint.sh` in ra khối này đã lọc sẵn.
 
 Nhưng khi đó **state của chính lớp ops cũng nên chuyển sang S3** — bỏ chú thích khối `backend "s3"` trong `versions.tf`. Không phải cho đồng bộ cho đẹp: state này giữ ARN của rule group mà firewall policy đang tham chiếu. Mất file đó là mất quyền sửa và quyền xoá một resource vẫn đang chạy — Terraform sẽ đòi tạo rule group thứ hai, còn cái cũ nằm lại vĩnh viễn không ai quản. Và state local nghĩa là không có khoá: hai người cùng sửa catalog thì người apply sau ghi đè người trước, không bên nào thấy diff.
 
