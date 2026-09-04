@@ -9,9 +9,12 @@ Doc 17 là thiết kế. Doc 24 là trình tự dựng lần đầu. Tài liệu
 | | |
 |---|---|
 | **Nền tảng** | Đã dựng thật, 4 account, `verify.sh` **46 đạt, 0 lỗi** — xem doc 24 |
-| **Lớp vận hành** | Code viết xong, `terraform fmt` sạch, `lint.sh` kiểm chứng bằng catalog hỏng cố ý (12 lỗi + 8 cảnh báo bắt đủ) |
-| **Chưa** | Chưa apply lần nào. Bootstrap hai bước ở mục 3 chưa ai chạy |
+| **Lớp vận hành** | **Đã apply thật.** `bootstrap_done = true`, 4 rule đang chạy, state riêng trong S3 qua `tf-backend` |
+| **Kiểm chứng** | `describe-firewall-policy` trả về ba rule group: **100** (layer cha) → **150 (ops)** → **200** (egress domains) |
+| **Chưa** | Chưa chuyển `drop`. Chưa tắt `east_west_mesh_ports`. Chưa có route/endpoint/DNS trong catalog |
 | **CI** | `.github/workflows/network-ops.yml` — job `lint` và `expiry` chạy được ngay, job `plan` tự bỏ qua tới khi có OIDC role |
+
+Tám lỗi gặp khi dựng lớp này — trong đó năm cái không phát ra lỗi ở nơi có vấn đề — ghi ở [doc 22 mục 7ak](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
 ---
 

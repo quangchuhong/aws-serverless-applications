@@ -48,11 +48,11 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | **RAM share Transit Gateway** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ⚠️ chạy được, nhưng **phải đi đường vòng**² |
 | 3rd-party VPC + Site-to-Site VPN | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | — | ⬜ |
 | SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
-| **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `demo/network-lz-full/ops/` | ⏳ code xong, `fmt` sạch, **chưa apply lần nào**⁴ |
+| **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `demo/network-lz-full/ops/` | ✅ apply thật, policy đọc rule group ở ưu tiên 150⁴ |
 
 ¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
 
-⁴ State riêng, chạm vào layer chính đúng một điểm (`var.ops_rule_group_arns`). Catalog YAML khai bằng **tên app** chứ không phải CIDR: gõ nhầm một chữ số trong CIDR thì apply vẫn xanh và rule không khớp gì trọn đời — cùng loại im lặng với lỗi 62. `lint.sh` chạy không cần AWS.
+⁴ State riêng trong S3 qua `tf-backend`, chạm vào layer chính đúng một điểm (`var.ops_rule_group_arns`). Catalog YAML khai bằng **tên app** chứ không phải CIDR: gõ nhầm một chữ số trong CIDR thì apply vẫn xanh và rule không khớp gì trọn đời — cùng loại im lặng với lỗi 62. `lint.sh` chạy không cần AWS.
 
 ² Share trong phạm vi tổ chức (`allow_external_principals = false`, principal là account ID hoặc OU) **không chạy** trên tổ chức này: RAM không phân giải được organization, kể cả khi gọi từ management account. Đang chờ AWS Support. Đường vòng hiện dùng là `allow_external_principals = true` — nới rào chắn và mỗi account phải bấm nhận lời mời một lần. Chi tiết và phép đo đối chứng: [doc 22 lỗi 56](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 

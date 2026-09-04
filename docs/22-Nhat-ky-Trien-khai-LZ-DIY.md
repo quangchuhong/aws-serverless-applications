@@ -140,7 +140,16 @@ Xếp theo thứ tự gặp phải.
 
 | 65 | Sửa template StackSet rồi `terraform apply` → **code cũ vẫn chạy ở bốn account** | `terraform apply` báo `1 changed`, `list-stack-set-operations` có `UPDATE SUCCEEDED`, `list-stack-instances` báo `CURRENT` — ba chỉ số đều xanh, và cả ba đều **không** nói instance đang chạy template nào. Thứ cho câu trả lời là nội dung trang HTTP: vẫn là trang nginx cũ | **Giới hạn công cụ** | *(mục 7aj)* |
 
-**56/65 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 66 | Bốn nguyên nhân khác hẳn nhau, **một thông báo duy nhất**: `HeadObject ... 403 Forbidden` | Key ngoài prefix được cấp / thiếu `role_arn` / thiếu `ListBucket` / sai danh tính — S3 trả cùng một câu cho cả bốn. Đoán ba lần đều sai. Phép đo phân biệt: `head-object` lên một key **đã tồn tại** rồi lên một key **chưa tồn tại**, cùng prefix | **Giới hạn công cụ** | *(mục 7ak)* |
+| 67 | `s3:ListBucket` được cấp nhưng **không có tác dụng** khi Terraform hỏi "state đã có chưa" | Statement mang `Condition = { StringLike = { "s3:prefix" = ... } }`, mà `s3:prefix` **chỉ có trong yêu cầu list**. `HeadObject` không phải lệnh list → điều kiện không khớp → coi như không cấp. Hệ quả: key đã tồn tại đọc được, key chưa tồn tại 403 — **mọi layer mới hỏng ở lần init đầu và chỉ lần đầu** | **Lỗi thiết kế** (chính repo) | *(mục 7ak)* |
+| 68 | `unset` biến môi trường rồi mà Terraform **vẫn gọi bằng danh tính cũ** | `unset` chỉ tác dụng trong đúng shell đó; thiết lập SSO đặt lại `AWS_PROFILE` từ `~/.zshrc` hoặc mỗi tab mới. Và biến môi trường **đứng trước** `profile` trong chuỗi giải credential — cùng thư mục, hai shell, hai danh tính, không có gì báo | **Giới hạn công cụ** | *(mục 7ak)* |
+| 69 | `${path.module}` trong `description` của một variable → `init` hỏng | Terraform nội suy cả chuỗi trong `description`, mà `path.module` không dùng được ở đó. `terraform fmt` cho qua (cú pháp đúng), và môi trường viết code không ra được registry nên `validate` chưa từng chạy | **Lỗi code** | *(mục 7ak)* |
+| 70 | So sánh hai chuỗi ngày ISO bằng `>` → `Invalid operand: a number is required` | HCL chỉ so sánh **số** bằng `>`/`<`. Thứ tự từ điển của ngày ISO đúng về mặt lịch nhưng Terraform từ chối thẳng. Đổi sang số `YYYYMMDD` | **Lỗi code** | *(mục 7ak)* |
+| 71 | `x != null && f(x)` vẫn nổ vì `null` — ở **năm chỗ** | `&&` trong HCL **không short-circuit**: cả hai vế đều được tính, kể cả khi vế trái đã false. `can(...)` đặt ở vế trái làm chắn cũng vô tác dụng. Không báo lúc viết, chỉ báo khi có dữ liệu thật đi qua nhánh đó | **Lỗi code** | *(mục 7ak)* |
+| 72 | `terraform output bootstrap_done` báo `false` cho một cấu hình **đã đúng** | `output` in giá trị **đã lưu trong state**, không tính lại. Giá trị đó tính từ lần apply trước, khi ARN chưa được cắm. Phải `terraform apply` để đọc lại `terraform_remote_state` | **Giới hạn công cụ** | *(mục 7ak)* |
+| 73 | `wire-backends.sh` có phép kiểm "layer trên đĩa mà không có trong state" — và **không kêu** về layer mới | Vòng lặp chỉ quét `landing-zone/*/`. Một layer nằm trong `demo/` không bao giờ bị hỏi tới. Phép kiểm tồn tại, chạy, báo xanh, và không nhìn vào chỗ cần nhìn | **Lỗi code** | *(mục 7ak)* |
+
+**63/73 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2776,9 +2785,70 @@ Xoá stack ở account đích rồi tạo lại từ template hiện tại. Đ�
 
 ---
 
+## 7ak. Lỗi 66–73 — dựng lớp vận hành, và một thông báo phủ bốn nguyên nhân
+
+Bối cảnh: [doc 25](./25-Van-hanh-Network-Hang-Ngay.md) — lớp `ops/` có state riêng, chạm layer cha đúng một điểm.
+
+### Cái 403 mất năm vòng
+
+Nối lớp ops vào bucket state cho ra `HeadObject ... 403 Forbidden` năm lần liên tiếp, **cùng một chuỗi ký tự**, với bốn nguyên nhân hoàn toàn khác nhau:
+
+| Lần | Nguyên nhân thật | Thứ tôi đoán |
+|---|---|---|
+| 1 | Key ở prefix mới (`network-ops/`) ngoài vùng được cấp | Đúng — nhưng chỉ là một phần |
+| 2 | Prefix thật là `demo-network-lz-full/`, không phải `network/` | Tôi đoán `network/` — sai |
+| 3 | Thiếu `ListBucket` cho key chưa tồn tại | Đúng cơ chế, sai ca này |
+| 4–5 | **Sai danh tính** — biến môi trường đè lên `profile` | Mất ba vòng mới tới |
+
+Không có gì trong thông báo phân biệt được bốn thứ đó. Nó không in đường dẫn đã thử, không nhắc `ListBucket`, không nhắc prefix — và 403 thì đọc y hệt "sai credential", nên chỗ đầu tiên ai cũng đi kiểm là vai trò và profile, hai thứ đang đúng.
+
+**Phép đo phân biệt** (giá như làm từ vòng một):
+
+```bash
+aws s3api head-object --bucket <b> --key '<prefix>/terraform.tfstate'   # A: đã tồn tại
+aws s3api head-object --bucket <b> --key '<prefix>/khong-ton-tai'       # B: chưa tồn tại
+```
+
+A được, B 403 → thiếu `ListBucket`. A cũng 403 → sai danh tính. Hai lệnh chia bốn nguyên nhân thành hai nhóm ngay lập tức.
+
+> **Bài học:** khi một thông báo phủ nhiều nguyên nhân, đừng chọn nguyên nhân *hợp lý nhất*. Tìm phép đo tách chúng ra. `backend-hint.sh` giờ in sẵn phép đo này kèm cách xử lý từng nhánh.
+
+### Lỗi 67 — điều kiện đúng cho lệnh này, vô nghĩa cho lệnh kia
+
+`tf-backend` cấp `s3:ListBucket` kèm `Condition = { StringLike = { "s3:prefix" = ["<tên>/*"] } }` để mỗi account chỉ thấy prefix của mình. Hợp lý — cho lệnh **list**.
+
+Nhưng `s3:prefix` chỉ tồn tại trong ngữ cảnh của yêu cầu list. `HeadObject` không phải lệnh list, nên khoá đó vắng mặt, `StringLike` không khớp, và `ListBucket` coi như không được cấp. Mà S3 chỉ trả 404 cho object không tồn tại **khi người gọi có `ListBucket`**.
+
+Kết quả: một quyền được cấp đúng ý đồ lại tạo ra một cái bẫy chỉ nổ **một lần cho mỗi layer mới** — đúng lúc người ta đang dựng thứ gì đó lần đầu và ít có cơ sở nhất để nghi ngờ hạ tầng cũ.
+
+Cách đi qua: tạo sẵn object rỗng một lần (`aws s3api put-object` không có `--body`). Cách sửa gốc: bỏ điều kiện, đổi lấy việc account đó nhìn thấy **tên key** của prefix khác — không đọc được nội dung. Đánh đổi nhỏ nhưng có thật, nên nó là lựa chọn chứ không phải bản vá hiển nhiên.
+
+### Lỗi 71 — `&&` không short-circuit, và nó nằm im ở năm chỗ
+
+```hcl
+if r.expires_num != null && local.today_num > r.expires_num
+```
+
+Trong hầu hết ngôn ngữ, vế phải không chạy khi vế trái false. **HCL tính cả hai.** Nên dòng trên vẫn so sánh với `null` và dừng plan.
+
+Cùng giả định sai đó nằm ở bốn chỗ nữa, tất cả dùng `can(...)` ở vế trái làm chắn: kiểm port, bao hàm CIDR của app, phát hiện route đi tắt, và kiểm địa chỉ nội bộ trong DNS. Không chỗ nào báo lúc viết — chúng chờ dữ liệu đi qua đúng nhánh đó.
+
+Cách sửa không phải né `null` mà là **loại nó khỏi phép tính**: rule vĩnh viễn nhận mốc `99991231`. Bốn chỗ còn lại bọc **cả biểu thức** trong `try(..., false)`, với giá trị dự phòng chọn theo hướng báo to chứ không im lặng — CIDR không đọc được thì coi như nằm ngoài spoke, địa chỉ không đọc được thì coi như ra ngoài.
+
+### Lỗi 72 và 73 — hai phép kiểm trả lời câu hỏi khác
+
+`terraform output bootstrap_done` báo `false` sau khi cấu hình đã đúng: `output` in giá trị **đã lưu trong state**, tính từ lần apply trước. Nó trả lời trung thực cho *"lần chạy trước thấy gì"*, không phải *"bây giờ thế nào"* — cùng họ với lỗi 65.
+
+`wire-backends.sh` có sẵn phép kiểm "layer trên đĩa mà không có trong state", đúng thứ lẽ ra phải cảnh báo rằng `demo/network-lz-full/ops` chưa được đăng ký. Nó không kêu, vì vòng lặp chỉ quét `landing-zone/*/`. **Một phép kiểm tồn tại, chạy, báo xanh, và không nhìn vào chỗ cần nhìn** — chủ đề lặp lại nhiều nhất trong cả tài liệu này.
+
+> **Bài học chung của tám lỗi này:** năm trong tám không phát ra lỗi ở nơi có vấn đề. Chúng phát ở nơi *phát hiện ra* vấn đề — muộn hơn, và thường trong một layer không ai vừa sửa gì.
+
+---
+
 ## Liên quan
 | | |
 |---|---|
+| [25 – Vận hành network hằng ngày](./25-Van-hanh-Network-Hang-Ngay.md) | Lớp `ops/` — bối cảnh của lỗi 66–73 |
 | [23 – Lớp phát hiện](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | Cơ chế GuardDuty / Security Hub / log archive — kết quả của mục 7h–7p |
 | [TEARDOWN](../landing-zone/TEARDOWN.md) | Chiều ngược lại — hai cổng khoá, parking account |
 | [RUNBOOK](../landing-zone/RUNBOOK.md) | Làm gì, theo thứ tự nào — bảng lỗi ở cuối |

@@ -22,7 +22,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | [06](./docs/06-Aws-Landing-Zone.md) | **Landing Zone** – Organizations, OU, SCP, logging, Identity Center |
 | **[20](./docs/20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md)** | **Vận hành LZ** – remote state, khoá state, quy trình thay đổi hằng ngày |
 | **[21](./docs/21-Control-Tower-vs-DIY.md)** | **Control Tower vs DIY** – hai cách dựng nền tảng, code cả hai để đối chiếu |
-| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – dựng thật, xoá thật, dựng lại: 65 lỗi và cách sửa |
+| **[22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md)** | **Nhật ký triển khai** – dựng thật, xoá thật, dựng lại: 73 lỗi và cách sửa |
 | **[23](./docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md)** | **Lớp phát hiện** – GuardDuty, Security Hub, log archive: cơ chế, tính năng, chi phí |
 | [09](./docs/09-Account-Vending-Tu-Dong.md) | Account vending tự động – request as code, StackSet baseline |
 | [10](./docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | CI/CD cho LZ – GitHub Actions + OIDC, không dùng access key |
@@ -60,7 +60,7 @@ Dựng một lần rồi để đó, **không nằm trong teardown của demo**.
 
 **Chạy lần đầu: [`landing-zone/RUNBOOK.md`](./landing-zone/RUNBOOK.md)** · **Xoá: [`landing-zone/TEARDOWN.md`](./landing-zone/TEARDOWN.md)** — hướng dẫn theo thứ tự, từ tài khoản trắng đến LZ hoạt động. Các README dưới đây nói *vì sao*; runbook nói *làm gì trước, làm gì sau*.
 
-**Đã dựng thật, xoá thật, rồi dựng lại** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 65 lỗi gặp phải và cách sửa, trong đó **56 lỗi nằm ở chính code của repo**. Mười ba lỗi cuối chỉ lộ ra khi đi ngược chiều và khi dựng lớp phát hiện. Đọc mục 6 trước khi dựng, mục 7 trước khi xoá.
+**Đã dựng thật, xoá thật, rồi dựng lại** — [doc 22](./docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 73 lỗi gặp phải và cách sửa, trong đó **63 lỗi nằm ở chính code của repo**. Mười ba lỗi cuối chỉ lộ ra khi đi ngược chiều và khi dựng lớp phát hiện. Đọc mục 6 trước khi dựng, mục 7 trước khi xoá.
 
 Cơ chế của lớp phát hiện — GuardDuty đọc log ở đâu, Security Hub gom bằng cách nào, và vì sao bucket log archive vẫn cần dù không dịch vụ nào đọc nó — nằm ở [doc 23](./docs/23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md).
 
@@ -87,7 +87,7 @@ Terraform dựng lên xem rồi xoá. **Không tạo AWS account** — account k
 | Demo | Nội dung | Chi phí |
 |---|---|---|
 | **[`demo/network-lz-full`](./demo/network-lz-full/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, DNS + endpoint tập trung, và **spoke VPC ở account khác** (StackSet + RAM). Kịch bản 7 bước. Chưa có Palo Alto/F5 | ~$0.34–1.40/giờ |
-| [`demo/network-lz-full/ops`](./demo/network-lz-full/ops/) | **Lớp vận hành** — state riêng cho bốn việc đổi hằng ngày: rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Catalog YAML khai bằng **tên app** thay vì CIDR, `lint.sh` chạy không cần AWS | $0 (trừ endpoint) |
+| **[`demo/network-lz-full/ops`](./demo/network-lz-full/ops/)** | **Lớp vận hành — đã apply thật** — state riêng cho bốn việc đổi hằng ngày: rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Catalog YAML khai bằng **tên app** thay vì CIDR, `lint.sh` chạy không cần AWS | $0 (trừ endpoint) |
 | [`demo/centralized-network`](./demo/centralized-network/) | Bản tối giản: TGW, egress tập trung, cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](./demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, PHZ cross-account | ~$0.22/giờ |
 
