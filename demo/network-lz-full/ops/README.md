@@ -271,8 +271,13 @@ Cách kia là bỏ điều kiện `s3:prefix` khỏi statement `ListBucket` tron
 Kiểm bootstrap đã xong chưa:
 
 ```bash
+terraform apply                   # 0 added, 0 changed — chỉ cập nhật Outputs
 terraform output bootstrap_done   # true
 ```
+
+**Phải `apply` trước.** `terraform output` in giá trị **đã lưu trong state**, không tính lại — và giá trị đó được tính ở lần apply trước, khi `ops_rule_group_arns` bên layer cha còn rỗng. Chạy `output` ngay sau khi apply layer cha sẽ ra `false` cho một cấu hình đã đúng.
+
+Cùng họ với lỗi 65: một chỉ báo xanh (hoặc đỏ) trả lời trung thực cho câu hỏi *"lần chạy trước thấy gì"*, không phải *"bây giờ thế nào"*. `terraform apply` đọc lại `terraform_remote_state` và tính lại; `terraform apply -refresh-only` cũng được.
 
 `false` nghĩa là rule group tồn tại, hiện trong console, `rules_string` đúng y nguyên catalog — và không policy nào đọc nó. Mọi rule trong catalog đang không có tác dụng, và không có chỗ nào báo điều đó. Terraform in cảnh báo cho trạng thái này (`check "rule_group_is_referenced"`).
 

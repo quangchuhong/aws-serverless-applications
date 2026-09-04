@@ -96,8 +96,11 @@ Từ đó ARN không đổi nữa. Sửa catalog chỉ làm đổi `rules_string
 ### Kiểm bootstrap
 
 ```bash
+terraform apply                   # 0 added, 0 changed - chỉ cập nhật Outputs
 terraform output bootstrap_done   # phải là true
 ```
+
+`terraform output` in giá trị **đã lưu trong state**, không tính lại. Chạy nó ngay sau khi apply layer cha sẽ ra `false` cho một cấu hình đã đúng — giá trị đó tính từ lần apply trước, khi `ops_rule_group_arns` còn rỗng.
 
 `false` là trạng thái nguy hiểm nhất trong cả lớp này, vì **nó đọc như thành công từ mọi phía**: apply xanh, rule group hiện trong console, `rules_string` đúng y nguyên catalog. Chỉ thiếu một thứ — không policy nào đọc nó. Mọi rule đang không có tác dụng, và không có chỗ nào báo điều đó.
 
