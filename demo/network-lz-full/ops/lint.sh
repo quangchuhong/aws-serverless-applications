@@ -63,15 +63,75 @@ HUB_STATE="${HUB_STATE:-../terraform.tfstate}"
 if [[ "${SKIP_STATE_CHECK:-0}" != "1" && "${STATE_BACKEND:-local}" == "local" ]]; then
   if [[ ! -s "$HUB_STATE" ]]; then
     echo
-    echo "  Khong tim thay state cua layer cha: $HUB_STATE"
+    echo "  Khong tim thay state cua layer cha."
+    echo "    Da thu: $(cd .. 2>/dev/null && pwd)/terraform.tfstate"
     echo
-    echo "  Lop nay doc moi thu tu do - ten spoke, bang route TGW, zone DNS."
-    echo "  Kiem thu:"
+
+    ########################################
+    # DI TIM THAY VI BAO NGUOI DUNG DI TIM
+    #
+    # "Khong thay file X" la mot cau tra loi dung nhung vo dung: no
+    # bat nguoi doc lam lai chinh phep tim ma script vua lam. Bon
+    # nguyen nhan duoi day chiem gan het cac truong hop, va ca bon
+    # deu tra loi duoc ma khong can hoi ai.
+    ########################################
+
+    # 1. Layer cha khai backend tu xa -> state khong nam tren dia
+    BACKEND=$(grep -rhoE 'backend[[:space:]]+"[a-z0-9]+"' ../*.tf 2>/dev/null | head -1)
+    if [[ -n "$BACKEND" ]]; then
+      echo "  Layer cha khai $BACKEND - state khong nam tren dia."
+      echo "  Khai lai o day cho khop:"
+      echo
+      echo "    state_backend = \"s3\""
+      echo "    state_config  = { bucket = \"...\", key = \"...\", region = \"...\" }"
+      echo
+      exit 1
+    fi
+
+    # 2. Workspace khac "default"
+    if [[ -d "../terraform.tfstate.d" ]]; then
+      echo "  Co ../terraform.tfstate.d/ - layer cha dang dung WORKSPACE:"
+      for w in ../terraform.tfstate.d/*/; do
+        [[ -s "$w/terraform.tfstate" ]] && echo "    $(basename "$w")"
+      done
+      echo
+      echo "  terraform_remote_state doc workspace 'default'. Tro thang toi file:"
+      echo "    state_config = { path = \"$(cd .. && pwd)/terraform.tfstate.d/<ten>/terraform.tfstate\" }"
+      echo
+      exit 1
+    fi
+
+    # 3. State nam o cho khac trong repo - tim that
+    ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "..")
+    FOUND=$(find "$ROOT" -maxdepth 4 -name 'terraform.tfstate' -size +1c \
+      -not -path '*/.terraform/*' 2>/dev/null | head -10)
+
+    if [[ -n "$FOUND" ]]; then
+      echo "  Tim thay state o cho khac trong repo:"
+      echo
+      while IFS= read -r f; do
+        # In kem ID account de biet cai nao la layer network
+        acct=""
+        command -v jq >/dev/null 2>&1 && acct=$(jq -r '.outputs.account_id.value // ""' "$f" 2>/dev/null)
+        [[ -n "$acct" ]] && echo "    $f   (account $acct)" || echo "    $f"
+      done <<< "$FOUND"
+      echo
+      echo "  Tro toi cai dung bang duong dan TUYET DOI:"
+      echo "    state_config = { path = \"<duong dan o tren>\" }"
+      echo
+      exit 1
+    fi
+
+    # 4. Khong co gi ca
+    echo "  Khong tim thay file terraform.tfstate nao trong repo."
     echo
-    echo "    ls -la ../terraform.tfstate"
-    echo "    ls -la ../terraform.tfstate.d/     # neu dang dung workspace"
+    echo "  Nghia la thu muc da apply layer cha KHONG PHAI thu muc cha cua"
+    echo "  thu muc nay - rat co the ban chay demo tu mot ban sao khac."
+    echo "  Tim tren ca may:"
     echo
-    echo "  Neu file nam cho khac, tro toi no bang bien state_config:"
+    echo "    find ~ -name terraform.tfstate -path '*network-lz-full*' 2>/dev/null"
+    echo
+    echo "  Roi tro toi no:"
     echo "    state_config = { path = \"/duong/dan/tuyet/doi/terraform.tfstate\" }"
     echo
     echo "  Bo qua phep kiem nay: SKIP_STATE_CHECK=1 ./lint.sh"
