@@ -163,14 +163,23 @@ locals {
   #
   # Kem dieu kien do dai tien to: mot /8 khong nam trong mot /16 du
   # dia chi mang trung nhau.
+  # try() bao CA khoi, khong phai can() o mot ve.
+  #
+  # && trong HCL KHONG short-circuit - ca hai ve deu duoc tinh. Nen
+  # `can(cidrhost(x)) && split("/", x)[1]` van chay split tren mot
+  # chuoi hong va bao loi chi so, du can() da tra false.
+  #
+  # try(..., false): cidr khong doc duoc thi coi la NAM NGOAI spoke,
+  # tuc bi bao loi. Nghieng ve phia an toan - mot cidr khong phan
+  # tich duoc thi khong nen im lang di vao rule firewall.
   apps_cidr_outside = [
     for k, v in local.apps : k
-    if v.narrowed && v.spoke_known && !(
-      can(cidrhost(v.cidr, 0))
-      && tonumber(split("/", v.cidr)[1]) >= tonumber(split("/", local.hub.spokes[v.spoke].cidr)[1])
+    if v.narrowed && v.spoke_known && !try(
+      tonumber(split("/", v.cidr)[1]) >= tonumber(split("/", local.hub.spokes[v.spoke].cidr)[1])
       && cidrhost(
         "${split("/", v.cidr)[0]}/${split("/", local.hub.spokes[v.spoke].cidr)[1]}", 0
-      ) == cidrhost(local.hub.spokes[v.spoke].cidr, 0)
+      ) == cidrhost(local.hub.spokes[v.spoke].cidr, 0),
+      false,
     )
   ]
 }

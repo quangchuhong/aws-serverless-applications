@@ -125,14 +125,22 @@ locals {
   #
   # Khong chan - co truong hop dung that (blackhole de cach ly chinh
   # la kieu nay). Nhung phai noi to.
+  # try() bao ca khoi: && trong HCL khong short-circuit, nen can() o
+  # mot ve khong ngan duoc ve kia chay tren mot CIDR hong.
+  #
+  # destination khong doc duoc -> false, tuc KHONG bao la duong tat.
+  # Truong hop do da co precondition rt_bad_target/destination bat
+  # rieng, va bao hai lan cho mot loi thi nguoi doc phai doan xem co
+  # phai hai van de khac nhau khong.
   rt_bypass_suspects = [
     for k, v in local.routes : k
-    if v.table == "spokes" && !v.blackhole && can(cidrhost(v.destination, 0))
-    && tonumber(split("/", v.destination)[1]) >= tonumber(split("/", local.hub.internal_supernet)[1])
-    && cidrhost(
-      "${split("/", v.destination)[0]}/${split("/", local.hub.internal_supernet)[1]}", 0
-    ) == cidrhost(local.hub.internal_supernet, 0)
-    && v.target != "hub:security"
+    if v.table == "spokes" && !v.blackhole && v.target != "hub:security" && try(
+      tonumber(split("/", v.destination)[1]) >= tonumber(split("/", local.hub.internal_supernet)[1])
+      && cidrhost(
+        "${split("/", v.destination)[0]}/${split("/", local.hub.internal_supernet)[1]}", 0
+      ) == cidrhost(local.hub.internal_supernet, 0),
+      false,
+    )
   ]
 }
 

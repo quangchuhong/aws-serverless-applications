@@ -52,7 +52,23 @@ locals {
       # giu dung thu tu thoi gian, va la thu HCL chiu.
       expires = try(r.expires, null) == null ? null : substr(tostring(r.expires), 0, 10)
 
-      expires_num = try(r.expires, null) == null ? null : tonumber(
+      # KHONG de null o day. Dung mot moc xa - nam 9999 - cho rule
+      # vinh vien.
+      #
+      # && TRONG HCL KHONG SHORT-CIRCUIT: ca hai ve deu duoc tinh, ke
+      # ca khi ve trai da false. Nen "x != null && today > x" VAN cham
+      # vao phep so sanh voi null, va Terraform dung lai:
+      #
+      #   Error: Operation failed
+      #   Error during operation: argument must not be null.
+      #
+      # Day la cho khac han hau het cac ngon ngu khac, va no khong bao
+      # o luc viet - chi bao khi co du lieu that di qua nhanh do.
+      #
+      # 99991231 lon hon moi ngay that, nen rule vinh vien khong bao
+      # gio qua han va khong bao gio "sap het han". Truong `expires`
+      # o tren van la null, va output dung no de in "vinh vien".
+      expires_num = try(r.expires, null) == null ? 99991231 : tonumber(
         replace(substr(tostring(r.expires), 0, 10), "-", "")
       )
 
@@ -78,15 +94,13 @@ locals {
 
   fw_expired = [
     for r in local.fw_rules : r.id
-    if r.expires_num != null && local.today_num > r.expires_num
+    if local.today_num > r.expires_num
   ]
 
   # Rule sap het han trong 30 ngay - dua vao output de doi lich.
   fw_expiring_soon = [
     for r in local.fw_rules : "${r.id} (${r.expires})"
-    if r.expires_num != null
-    && r.expires_num >= local.today_num
-    && r.expires_num <= local.soon_num
+    if r.expires_num >= local.today_num && r.expires_num <= local.soon_num
   ]
 
   ########################################
@@ -113,7 +127,10 @@ locals {
       # tcp/udp thi phai co it nhat mot port hop le
       || (r.protocol != "icmp" && (
         length(r.ports) == 0
-        || !alltrue([for p in r.ports : can(tonumber(p)) && tonumber(p) >= 1 && tonumber(p) <= 65535])
+        # try() bao ca bieu thuc, khong phai can() o mot ve: && khong
+        # short-circuit, nen tonumber(p) o ve phai van chay tren mot
+        # gia tri khong phai so. Port khong doc duoc -> false -> bi bao.
+        || !alltrue([for p in r.ports : try(tonumber(p) >= 1 && tonumber(p) <= 65535, false)])
       ))
       || !contains(["tcp", "udp", "icmp"], r.protocol)
     )

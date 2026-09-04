@@ -67,13 +67,22 @@ locals {
   # A tro ra IP cong khai o day gan nhu luon la go nham mot dai dia
   # chi - va neu khong phai, no van dang keo mot ten cong khai vao
   # trong khong gian ten rieng cua ca to chuc.
+  # try() bao ca bieu thuc: && khong short-circuit trong HCL, nen
+  # can() o ve trai khong ngan cidrhost o ve phai chay tren mot gia
+  # tri khong phai IP.
+  #
+  # Gia tri khong doc duoc -> false -> ban ghi bi bao la tro ra ngoai.
+  # Dung huong: lint.sh da bat rieng "gia tri khong phai IPv4", va o
+  # day thi mot gia tri kho hieu KHONG nen duoc coi la noi bo.
   dns_external_ip = [
     for k, v in local.dns_records : k
     if v.type == "A" && !v.allow_external && !alltrue([
-      for ip in v.values :
-      can(cidrhost("${ip}/32", 0)) && cidrhost(
-        "${ip}/${split("/", local.hub.internal_supernet)[1]}", 0
-      ) == cidrhost(local.hub.internal_supernet, 0)
+      for ip in v.values : try(
+        cidrhost(
+          "${ip}/${split("/", local.hub.internal_supernet)[1]}", 0
+        ) == cidrhost(local.hub.internal_supernet, 0),
+        false,
+      )
     ])
   ]
 }
