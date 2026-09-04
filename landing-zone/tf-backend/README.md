@@ -164,6 +164,58 @@ Hai điều kèm theo:
 
 > `aws_dynamodb_resource_policy` cần provider AWS tương đối mới. Nếu apply báo không nhận resource này thì nâng provider, hoặc cấp quyền khoá qua IAM policy phía account con.
 
+### Thêm một account (hoặc một layer mới) làm state writer
+
+Bốn bước, và **bước 3 là thứ không ai đoán được**.
+
+```bash
+# 1. Khai prefix -> account. Tên prefix chính là thư mục trong bucket.
+#    landing-zone/tf-backend/terraform.tfvars
+#      state_writer_accounts = {
+#        network              = "222222222222"
+#        demo-network-lz-full = "436908791055"   <- thêm
+#      }
+
+# 2. Apply TỪ MANAGEMENT ACCOUNT (account chứa bucket)
+cd landing-zone/tf-backend && terraform apply
+
+# 3. Tạo sẵn object rỗng cho MỖI key mới, chạy từ account con
+aws s3api put-object --bucket <bucket> \
+  --key 'demo-network-lz-full/ops/terraform.tfstate'
+
+# 4. Giờ account con init được
+cd <layer> && terraform init -reconfigure
+```
+
+**Vì sao cần bước 3.** Statement `ListBucket` mang `Condition = { StringLike = { "s3:prefix" = ["<tên>/*"] } }`, mà `s3:prefix` **chỉ có mặt trong yêu cầu list**. `HeadObject` không phải lệnh list, nên khoá đó vắng mặt, `StringLike` không khớp, và `ListBucket` coi như không được cấp.
+
+S3 chỉ trả 404 cho object không tồn tại **khi người gọi có `ListBucket`**; không có thì trả 403, để không tiết lộ object có tồn tại hay không. Nên key **đã tồn tại** đọc ghi bình thường, còn key **chưa tồn tại** thì 403 — mọi layer mới hỏng ở lần `init` đầu tiên và **chỉ lần đầu**:
+
+```
+Error refreshing state: ... HeadObject ... StatusCode: 403
+api error Forbidden: Forbidden
+```
+
+Câu đó không nhắc `ListBucket`, không nhắc prefix, và đọc y hệt sai credential.
+
+Bỏ `Condition` đi thì hết bước 3, nhưng account con sẽ nhìn thấy **tên key** của mọi prefix khác — không đọc được nội dung, vì quyền object vẫn theo prefix. Đánh đổi nhỏ nhưng có thật.
+
+### Đọc state và tạo resource là hai đường credential khác nhau
+
+Backend nói state nằm ở đâu; provider nói hạ tầng được tạo ở đâu. Chúng giải credential **độc lập**, và lệch nhau rất dễ.
+
+Cái bẫy: **biến môi trường đứng trước `profile`** trong chuỗi giải credential của AWS SDK. Có `AWS_ACCESS_KEY_ID` hay `AWS_PROFILE` trong shell là mọi dòng `profile` khai trong backend bị bỏ qua — cùng thư mục, cùng file `.tf`, vẫn chạy bằng hai danh tính khác nhau tuỳ shell nào đang mở. Terraform vẫn in `Successfully configured the backend` rồi mới hỏng ở bước sau.
+
+Cách đọc triệu chứng:
+
+| Thông báo | Nghĩa |
+|---|---|
+| `no resource-based policy allows...` | Gọi **xuyên account** → thiếu bucket policy → account đó chưa có trong `state_writer_accounts` |
+| `HeadObject 403` trên key **chưa tồn tại**, key cũ vẫn đọc được | Bước 3 ở trên |
+| `HeadObject 403` trên **cả key đang tồn tại** | Sai danh tính — so `aws sts get-caller-identity` với `--profile <tên trong backend>` |
+
+Cách bền nhất là đừng dùng biến môi trường: khai profile cho backend, khai profile riêng cho provider, và để mỗi dòng có hiệu lực.
+
 ---
 
 ## Bước thủ công: MFA Delete
