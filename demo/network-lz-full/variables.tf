@@ -421,6 +421,49 @@ variable "firewall_mode" {
   }
 }
 
+variable "ops_rule_group_arns" {
+  description = <<-EOT
+    CHO CAM cho lop van hanh (thu muc ops/).
+
+    Bai toan: mo mot port giua hai app la viec HANG NGAY, nhung
+    east_west_rules nam trong chinh layer so huu firewall, TGW va moi
+    VPC. Sua no nghia la chay `terraform apply` tren layer do - mot
+    plan cham vao 200+ resource chi de them mot dong rule. Khong ai
+    duyet noi mot plan nhu vay moi ngay, va mot ngay nao do co nguoi
+    bam yes qua nhanh.
+
+    Lop ops/ co state RIENG. No tao rule group cua no, va bien nay la
+    cho duy nhat hai lop cham nhau: mot danh sach ARN.
+
+    BOOTSTRAP hai buoc, chi lam MOT LAN:
+
+      1. cd ops/ && terraform apply     -> tao rule group, in ra ARN
+      2. dien ARN do vao day, apply layer nay -> policy tro toi no
+
+    Tu do ve sau, them/sua/xoa rule chi cham vao ops/: ARN khong doi,
+    chi rules_string ben trong doi. Layer nay khong can apply nua.
+
+    Priority bat dau tu 150: sau east_west (100, chua cac luong HA TANG
+    nhu NLB->app va SSM->endpoint) va truoc egress_domains (200). Rule
+    ha tang phai duoc doc truoc - lop ops khong duoc quyen lam mat SSM.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for a in var.ops_rule_group_arns :
+      can(regex("^arn:aws[a-z-]*:network-firewall:", a))
+    ])
+    error_message = "ops_rule_group_arns phai la ARN cua Network Firewall rule group. Lay bang: cd ops && terraform output -raw rule_group_arn"
+  }
+
+  validation {
+    condition     = length(var.ops_rule_group_arns) == length(distinct(var.ops_rule_group_arns))
+    error_message = "ops_rule_group_arns co ARN trung. Hai stateful_rule_group_reference cung ARN thi CreateFirewallPolicy bi tu choi."
+  }
+}
+
 variable "enable_ingress" {
   description = "Ingress VPC + NLB. Palo Alto va F5 KHONG co trong demo nay - xem README."
   type        = bool

@@ -1,0 +1,92 @@
+# ==============================================================
+# BAN GHI TRONG PHZ TAP TRUNG
+#
+# Zone do layer cha so huu (var.internal_dns_domain, mac dinh
+# lz.internal). File nay chi THEM ban ghi vao trong no.
+#
+# --------------------------------------------------------------
+# DAY LA KHONG GIAN TEN CHUNG CUA CA TO CHUC
+#
+# PHZ nay gan vao MOI VPC cua landing zone qua Route 53 Profile. Mot
+# ban ghi o day hien ra o ca nam account.
+#
+# Khong gian ten chung ma khong co mot cho duy nhat de doc thi som
+# muon se co hai doi dat trung ten - roi ca hai deu bao DNS "chap
+# chon", trong khi Route 53 tra loi hoan toan nhat quan theo ban ghi
+# cua ben ghi de sau cung. File nay la cho duy nhat do.
+#
+# --------------------------------------------------------------
+# TRUONG
+#
+#   name    BAT BUOC  ten NGAN, khong gom ten mien. "@" = chinh zone.
+#                     "order-api" -> order-api.lz.internal
+#   type              A (mac dinh) | AAAA | CNAME | TXT | SRV
+#   values  BAT BUOC  danh sach gia tri
+#   ttl               giay, 30..86400. Mac dinh 60.
+#   ticket  NEN CO
+#   allow_external    true de cho phep ban ghi A tro ra IP NGOAI
+#                     internal_supernet. Mac dinh false, va mac dinh
+#                     do la co y - xem duoi.
+#   note
+#
+# --------------------------------------------------------------
+# TTL: chon truoc, khong sua sau
+#
+# Ten hay doi (tro toi mot instance, mot IP dang di chuyen) thi de
+# 60. Ten on dinh thi de cao hon cho do truy van.
+#
+# TTL cao tren mot ten dang can doi la thu bien mot thao tac hai phut
+# thanh mot su co mot tieng: sua xong roi van phai cho cache het han
+# o resolver cua tung VPC. Ha TTL xuong TRUOC khi doi, khong phai
+# trong luc doi.
+#
+# --------------------------------------------------------------
+# VI SAO CHAN BAN GHI A TRO RA NGOAI
+#
+# PHZ noi bo CHE MAT ten that doi voi moi VPC duoc gan. Mot ban ghi A
+# tro ra IP cong khai o day gan nhu luon la go nham mot dai dia chi;
+# va neu dung la co y, no van dang keo mot ten cong khai vao trong
+# khong gian ten rieng cua ca to chuc, noi khong ai nghi den viec di
+# tim. Neu that su can thi khai allow_external: true de no hien ra
+# trong diff cua PR.
+#
+# --------------------------------------------------------------
+# TRUNG TEN VOI LAYER CHA
+#
+# Layer cha tu sinh mot ban ghi cho moi spoke co EC2 test
+# (probe.lz.internal ...). Dat trung mot trong so do la kieu hong te
+# nhat trong ca lop nay, vi CA HAI PLAN DEU SACH: moi state tin rang
+# no so huu ban ghi, apply ben nao la ghi de ben kia, va khong ben
+# nao thay diff. Ten do nhay qua nhay lai theo thu tu ai chay sau.
+#
+# Terraform chan truong hop nay o plan. Danh sach ten layer cha dang
+# giu: `cd .. && terraform output -json ops_handles | jq '.dns.managed_records'`
+# ==============================================================
+
+records: []
+
+# --------------------------------------------------------------
+# Vi du (dang tat)
+#
+# records:
+#   - name: order-api
+#     type: A
+#     ttl: 60
+#     values: ["10.20.0.10"]
+#     ticket: NET-1150
+#     note: VIP cua order-api trong app-prod
+#
+#   - name: db
+#     type: CNAME
+#     ttl: 300
+#     values: ["prod-db.cluster-abc123.ap-southeast-1.rds.amazonaws.com"]
+#     ticket: NET-1151
+#     note: Bi danh cho endpoint RDS - doi cluster khong phai doi app
+#
+#   - name: registry
+#     type: A
+#     ttl: 60
+#     values: ["10.10.5.20", "10.10.6.20"]
+#     ticket: OPS-4420
+#     note: Hai node, Route 53 tra vong tron
+# --------------------------------------------------------------

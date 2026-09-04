@@ -11,6 +11,7 @@ Tài liệu thiết kế **chuẩn** cho phần network của Landing Zone. Đâ
 | [15 – Security VPC](./15-Security-VPC-Network-Firewall.md) | Chi tiết Network Firewall, rule group |
 | [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Chi tiết VPN, private NAT, 3rd-party VPC |
 | **[24 – Triển khai cross-account](./24-Trien-khai-Network-LZ-Cross-Account.md)** | **Làm gì, theo thứ tự nào** — lệnh thật, kiểm chứng thật, chi phí thật |
+| **[25 – Vận hành hằng ngày](./25-Van-hanh-Network-Hang-Ngay.md)** | **Sau khi mạng đã chạy** — mở port, route ngoại lệ, endpoint, DNS |
 
 Khi có mâu thuẫn giữa tài liệu này và docs 12–16, **tài liệu này thắng**.
 
@@ -24,6 +25,7 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 |---|---|
 | ✅ | Code chạy được, đã `apply` và `destroy` được |
 | ⏸ | Code viết sẵn, `plan` kiểm chứng được, **chưa bật** (chờ license) |
+| ⏳ | Code viết xong, `fmt`/`lint` sạch, **chưa apply lần nào** |
 | ⬜ | Mới có thiết kế trong doc, chưa thành code |
 
 ### Tầng network
@@ -46,8 +48,11 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | **RAM share Transit Gateway** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ⚠️ chạy được, nhưng **phải đi đường vòng**² |
 | 3rd-party VPC + Site-to-Site VPN | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | — | ⬜ |
 | SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
+| **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `demo/network-lz-full/ops/` | ⏳ code xong, `fmt` sạch, **chưa apply lần nào**⁴ |
 
 ¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
+
+⁴ State riêng, chạm vào layer chính đúng một điểm (`var.ops_rule_group_arns`). Catalog YAML khai bằng **tên app** chứ không phải CIDR: gõ nhầm một chữ số trong CIDR thì apply vẫn xanh và rule không khớp gì trọn đời — cùng loại im lặng với lỗi 62. `lint.sh` chạy không cần AWS.
 
 ² Share trong phạm vi tổ chức (`allow_external_principals = false`, principal là account ID hoặc OU) **không chạy** trên tổ chức này: RAM không phân giải được organization, kể cả khi gọi từ management account. Đang chờ AWS Support. Đường vòng hiện dùng là `allow_external_principals = true` — nới rào chắn và mỗi account phải bấm nhận lời mời một lần. Chi tiết và phép đo đối chứng: [doc 22 lỗi 56](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
@@ -63,7 +68,7 @@ Bảng này từng nói *"chưa thành code"* cho gần như mọi dòng. Nó đ
 | IAM Identity Center + permission set | [06 mục 10](./06-Aws-Landing-Zone.md), [19](./19-Permission-Set-cho-Landing-Zone.md) | ✅ [`landing-zone/permission-sets/`](../landing-zone/permission-sets/) — 17 set, 15 group, 53 assignment |
 | Đồng bộ AD | [08](./08-Dong-bo-User-AD-sang-IAM-Identity-Center.md) | ⬜ |
 | Account baseline (thay AFT) | [09](./09-Account-Vending-Tu-Dong.md) | ✅ [`landing-zone/account-baseline/`](../landing-zone/account-baseline/) — StackSet + Lambda xoá default VPC³ |
-| CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⬜ `.github/workflows/` còn rỗng |
+| CI/CD OIDC | [10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | ⏳ mới có `network-ops.yml` (lint + expiry chạy được ngay, plan chờ OIDC role). Chưa có job apply |
 | **Billing guard** (cost allocation tag, budget, anomaly) | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ✅ [`landing-zone/billing-guard/`](../landing-zone/billing-guard/) |
 | Tag policy + SCP + Cost Categories + CUR | [11](./11-Tag-Policy-va-Cost-Allocation.md) | ⬜ |
 | Remote state (S3 + Object Lock + khoá) | [20](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) | ✅ [`landing-zone/tf-backend/`](../landing-zone/tf-backend/) |

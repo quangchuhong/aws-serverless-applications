@@ -98,10 +98,39 @@ resource "aws_networkfirewall_firewall_policy" "main" {
       resource_arn = aws_networkfirewall_rule_group.east_west[0].arn
     }
 
+    # RULE GROUP CUA LOP VAN HANH - state khac, doi chu khac.
+    #
+    # Xem var.ops_rule_group_arns. Khoi nay rong o lan apply dau (chua
+    # co ops/), va do la trang thai dung: policy khong the tro toi mot
+    # ARN chua ton tai.
+    #
+    # ARN o day duoc tao boi thu muc ops/. Neu ai do chay `terraform
+    # destroy` ben ops/ ma khong go ARN khoi bien nay truoc, layer nay
+    # se hong o lan apply ke tiep voi loi bao khong tim thay rule group
+    # - dung nhung khong noi ai xoa. teardown ben ops/ nhac lai dieu do.
+    dynamic "stateful_rule_group_reference" {
+      for_each = var.ops_rule_group_arns
+      content {
+        priority     = 150 + stateful_rule_group_reference.key
+        resource_arn = stateful_rule_group_reference.value
+      }
+    }
+
     stateful_rule_group_reference {
       priority     = 200
       resource_arn = aws_networkfirewall_rule_group.egress_domains[0].arn
     }
+  }
+}
+
+# Lop ops chi co cho cam khi firewall dang bat. Khong co check nay thi
+# ai do dat ops_rule_group_arns voi enable_firewall = false se thay
+# apply chay tron va khong hieu vi sao rule cua minh khong co tac dung:
+# policy khong duoc tao, nen khong co gi doc rule group ca.
+check "ops_rule_groups_are_attached" {
+  assert {
+    condition     = length(var.ops_rule_group_arns) == 0 || var.enable_firewall
+    error_message = "ops_rule_group_arns co ${length(var.ops_rule_group_arns)} ARN nhung enable_firewall = false. Rule group van ton tai va van tinh phi capacity, nhung KHONG policy nao doc no - moi rule trong lop ops dang khong lam gi."
   }
 }
 

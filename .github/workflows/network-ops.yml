@@ -1,0 +1,186 @@
+# Vong phan hoi cho lop van hanh mang.
+#
+# Ba viec, tach ra vi chung can nhung thu khac nhau:
+#
+#   lint    khong can AWS, khong can secret, chay tren MOI PR va MOI
+#           push - ke ca tu fork. Vai giay.
+#   plan    can credential doc. Chi chay khi repo da cau hinh OIDC.
+#   expiry  chay theo lich, khong can gi ca. Do chinh la ly do no ton
+#           tai: rule firewall het han khong sinh ra su kiện git nao,
+#           nen neu khong co cai gi chay theo dong ho thi khong ai
+#           biet - cho toi khi co nguoi tinh co mo file YAML ra xem.
+#
+# VI SAO KHONG CO JOB APPLY
+#
+# Doc 10 co day du mau workflow apply qua OIDC. Chua noi vao day vi
+# repo nay chua dung IAM role that; noi mot job apply vao mot role
+# khong ton tai thi moi lan merge se co mot dau X do, va nguoi ta se
+# quen dan viec nhin vao dau X. Khi da co role, chep phan apply o doc
+# 10 sang - phan kho la lint, va no da xong.
+
+name: network-ops
+
+on:
+  pull_request:
+    paths:
+      - "demo/network-lz-full/ops/**"
+      - ".github/workflows/network-ops.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "demo/network-lz-full/ops/**"
+  schedule:
+    # 01:00 UTC = 08:00 gio Viet Nam, moi ngay
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: demo/network-lz-full/ops
+
+jobs:
+  ########################################
+  # KIEM CATALOG - khong can AWS
+  ########################################
+  lint:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install pyyaml==6.0.2
+        working-directory: .
+
+      # --strict: canh bao cung lam that bai o CI.
+      #
+      # Tren may ca nhan thi canh bao chi la canh bao - dang sua do
+      # thi khong can moi thu hoan hao. Nhung mot canh bao di qua
+      # duoc CI la mot canh bao se song mai: no khong bao gio du to
+      # de ai do dung lai va sua.
+      - name: Kiem catalog
+        run: ./lint.sh --strict
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff
+
+  ########################################
+  # PLAN - can credential doc
+  #
+  # Bo qua khi repo chua cau hinh OIDC. Bo qua CO CHU DICH, va job van
+  # xanh: mot job do vinh vien vi thieu cau hinh la mot job khong ai
+  # con doc.
+  ########################################
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # bat buoc cho OIDC
+      pull-requests: write # de dan ket qua plan vao PR
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Kiem cau hinh OIDC
+        id: cfg
+        run: |
+          if [ -n "${{ vars.OPS_PLAN_ROLE_ARN }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Chua dat bien repo OPS_PLAN_ROLE_ARN - bo qua buoc plan."
+            echo "Cach dat: Settings > Secrets and variables > Actions > Variables."
+            echo "Vai tro can quyen doc; xem doc 10 muc 3."
+          fi
+
+      # PR tu FORK khong lay duoc OIDC token: GitHub khong phat hanh
+      # id-token cho fork. Job se that bai o day, va do la hanh vi
+      # DUNG - dung "sua" no bang cach chuyen sang access key.
+      - name: Lay credential qua OIDC
+        if: steps.cfg.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ vars.OPS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-southeast-1' }}
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        if: steps.cfg.outputs.ready == 'true'
+        with:
+          terraform_version: "1.9.8"
+          terraform_wrapper: false
+
+      - name: terraform plan
+        if: steps.cfg.outputs.ready == 'true'
+        id: plan
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tfplan | tee plan.txt
+
+      # Ket qua giai TEN THANH CIDR - thu quan trong nhat de nguoi
+      # duyet nhin. YAML noi "order-api goi user-db"; bang nay noi
+      # "10.20.0.0/16 -> 10.21.0.0/16 port 5432". Doc bang nay la doc
+      # cai that su se duoc nap vao firewall.
+      - name: Bang rule sau khi giai ten
+        if: steps.cfg.outputs.ready == 'true'
+        run: terraform show -json tfplan > /dev/null && terraform output -json rules 2>/dev/null || true
+
+      - name: Dan ket qua vao PR
+        if: steps.cfg.outputs.ready == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const p = 'demo/network-lz-full/ops/plan.txt';
+            let body = 'Khong doc duoc ket qua plan.';
+            if (fs.existsSync(p)) {
+              let t = fs.readFileSync(p, 'utf8');
+              if (t.length > 60000) t = t.slice(-60000);
+              body = '### terraform plan - network ops\n\n```\n' + t + '\n```';
+            }
+            body += '\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_';
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+  ########################################
+  # RULE HET HAN - chay theo lich
+  #
+  # Rule firewall het han khong sinh ra su kien git nao. Khong co cai
+  # nay thi truong `expires` chi la mot ghi chu de doc, va ai cung
+  # biet ghi chu de doc thi khong ai doc.
+  #
+  # Chay chinh lint.sh - khong co logic thu hai de lech nhau.
+  ########################################
+  expiry:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - run: python -m pip install pyyaml==6.0.2
+        working-directory: .
+
+      # KHONG --strict o day. Chay theo lich thi chi nen do vi mot ly
+      # do: co rule DA qua han. Rule sap het han va thieu ticket van
+      # duoc in ra trong log de doc, nhung khong lam do bang - neu
+      # khong thi bang se do trien mien va tin hieu that mat luon.
+      - name: Rule qua han
+        run: ./lint.sh

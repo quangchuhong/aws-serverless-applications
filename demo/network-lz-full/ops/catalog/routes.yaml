@@ -1,0 +1,94 @@
+# ==============================================================
+# ROUTE NGOAI LE TRONG TRANSIT GATEWAY
+#
+# DOC HET PHAN NAY TRUOC KHI THEM DONG DAU TIEN.
+#
+# --------------------------------------------------------------
+# BAN GAN NHU CHAC CHAN KHONG CAN FILE NAY
+#
+# Cau hoi "them route de VPC A noi duoc VPC B" co cau tra loi la
+# KHONG CAN. Thiet ke o ../../tgw.tf dat DUNG MOT dong trong bang
+# rtb-spokes:
+#
+#     0.0.0.0/0  ->  security VPC
+#
+# Mot dong do phu MOI dich den: Internet, spoke khac, ingress VPC.
+# Goi tin roi khoi bat ky spoke nao deu vao firewall truoc, roi TGW
+# moi quyet dinh no di tiep dau.
+#
+# Muon mo A goi B thi sua firewall-rules.yaml. Them route o day KHONG
+# mo them ket noi nao - route cu the hon 0.0.0.0/0 nen no THANG, va
+# ket qua la mot duong tat VONG QUA FIREWALL. Do dung la thu ca thiet
+# ke nay ton tien de ngan.
+#
+# --------------------------------------------------------------
+# BA TRUONG HOP THAT SU CAN
+#
+#   1. blackhole    Cach ly nhanh mot dai dia chi ngay o tang TGW,
+#                   truoc ca firewall. Dung khi mot spoke bi xam nhap
+#                   hoac mot dai doi tac phai cat gap.
+#
+#   2. doi tac      Dai khong thuoc landing zone, den qua VPN hoac
+#                   Direct Connect attachment.
+#
+#   3. sua duong    Dua mot dai cu the di khac mac dinh.
+#
+# --------------------------------------------------------------
+# TRUONG
+#
+#   id           BAT BUOC  rt-NNNN, duy nhat
+#   table        BAT BUOC  spokes | security | egress | ingress
+#   destination  BAT BUOC  CIDR
+#   target       BAT BUOC  blackhole
+#                          spoke:<ten spoke>
+#                          hub:<egress|security|ingress>
+#                          attachment:<tgw-attach-...>
+#   ticket       NEN CO
+#   note                   ly do - BAT BUOC ve mat nguoi, neu day la
+#                          mot route bo qua firewall
+#
+# Terraform tu choi truoc khi goi AWS neu:
+#   - table khong ton tai
+#   - target khong giai duoc
+#   - destination trung mot route DO LAYER CHA SO HUU
+#
+# Va canh bao (khong chan) neu route nam trong bang spokes, tro toi
+# mot dai ben trong landing zone, va khong di qua security VPC.
+# ==============================================================
+
+routes: []
+
+# --------------------------------------------------------------
+# Vi du (dang tat)
+#
+# routes:
+#   # 1. Cach ly khan cap mot dai bi xam nhap.
+#   #    Dat trong bang spokes: moi spoke deu mat duong toi dai nay
+#   #    ngay lap tuc, khong doi firewall.
+#   - id: rt-0001
+#     table: spokes
+#     destination: 10.13.7.0/24
+#     target: blackhole
+#     ticket: SEC-2201
+#     note: Cach ly subnet bi xam nhap - go sau khi doi IR dong ticket
+#
+#   # 2. Dai on-premise den qua VPN attachment.
+#   #    attachment id lay tu: aws ec2 describe-transit-gateway-attachments
+#   - id: rt-0002
+#     table: spokes
+#     destination: 192.168.0.0/16
+#     target: attachment:tgw-attach-0123456789abcdef0
+#     ticket: NET-1188
+#     note: Dai on-premise qua Site-to-Site VPN
+#
+#   # 3. Duong ve on-premise sau khi qua thanh tra.
+#   #    Thieu dong nay thi goi tra loi khop 0.0.0.0/0 va bi day ra
+#   #    egress VPC - request toi noi, xu ly xong, khong ai nhan duoc
+#   #    phan hoi. Dung kieu hong da gap voi ingress VPC.
+#   - id: rt-0003
+#     table: security
+#     destination: 192.168.0.0/16
+#     target: attachment:tgw-attach-0123456789abcdef0
+#     ticket: NET-1188
+#     note: Duong ve on-premise sau thanh tra
+# --------------------------------------------------------------

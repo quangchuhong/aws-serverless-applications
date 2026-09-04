@@ -40,6 +40,39 @@ if [[ "$EPHEMERAL" == "false" ]]; then
 fi
 
 ########################################
+# CHAN: lop van hanh (ops/) con state khong
+#
+# ops/ tao mot Network Firewall rule group ma POLICY o layer nay tham
+# chieu qua ARN. Thu tu xoa phai nguoc voi thu tu dung:
+#
+#   dung : ops apply -> cam ARN vao day -> apply o day
+#   xoa  : go ARN khoi day -> apply o day -> ops destroy
+#
+# Lam sai thu tu thi destroy o day co the bi tu choi vi rule group
+# dang duoc tham chieu, hoac te hon: destroy chay tron va de lai mot
+# rule group mo coi trong state cua ops/ - khong ai tra tien cho no
+# (capacity la $0), nen no nam do im lang cho toi lan bootstrap sau,
+# luc ARN cu khong con khop gi.
+########################################
+if [[ -s "$(dirname "$0")/ops/terraform.tfstate" ]]; then
+  echo "════════════════════════════════════════════"
+  echo " LOP VAN HANH (ops/) CON STATE"
+  echo "════════════════════════════════════════════"
+  echo
+  echo "Xoa theo thu tu NGUOC voi luc dung:"
+  echo
+  echo "  1. Go dong ops_rule_group_arns khoi terraform.tfvars"
+  echo "  2. terraform apply           # policy thoi tham chieu rule group"
+  echo "  3. cd ops && terraform destroy && cd .."
+  echo "  4. Chay lai ./teardown.sh"
+  echo
+  echo "Bo qua canh bao nay (rule group da xoa tay chang han):"
+  echo "  SKIP_OPS_CHECK=1 ./teardown.sh"
+  echo
+  [[ "${SKIP_OPS_CHECK:-0}" == "1" ]] || exit 1
+fi
+
+########################################
 # CHAN CHAY NHAM ACCOUNT
 #
 # O day nguy hiem hon verify.sh: script nay goi `terraform destroy`.

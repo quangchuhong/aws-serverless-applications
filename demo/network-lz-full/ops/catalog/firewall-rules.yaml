@@ -1,0 +1,116 @@
+# ==============================================================
+# MO PORT GIUA CAC APP O CAC VPC KHAC NHAU
+#
+# Day la file duoc sua nhieu nhat trong ca repo. Toan bo quy trinh mo
+# mot luong:
+#
+#   1. them mot khoi vao day
+#   2. ./lint.sh
+#   3. mo PR - CI chay terraform plan va dan ket qua vao PR
+#   4. co nguoi duyet, merge
+#   5. terraform apply
+#
+# KHONG dong route nao. Route 0.0.0.0/0 trong rtb-spokes da phu moi
+# cap VPC roi (xem ../../tgw.tf). Them route spoke-to-spoke khong mo
+# them ket noi - no tao duong tat vong qua firewall.
+#
+# CON PHAI LAM NGOAI FILE NAY: security group cua instance dich. Hai
+# lop, hai chu so huu, khong lop nao mot minh mo duoc duong. Neu sau
+# khi apply van khong thong thi kiem security group truoc.
+#
+# --------------------------------------------------------------
+# id: KHONG BAO GIO DUNG LAI, KHONG BAO GIO DANH SO LAI
+#
+# id sinh ra sid Suricata (fw-0042 -> sid 20042), va sid la thu hien
+# trong log alert. Giu id co dinh nghia la mot dong log tu thang truoc
+# van tra nguoc ve dung mot dong trong git blame - ke ca sau khi cac
+# rule khac da bi xoa.
+#
+# Xoa mot rule thi de trong id do luon. So khong thieu.
+#
+# (Cach cu danh sid theo VI TRI trong danh sach: chen mot rule vao
+# giua la doi sid cua moi rule sau no, rules_string doi hoan toan, va
+# o STRICT_ORDER thi ca thu tu danh gia cung doi.)
+#
+# --------------------------------------------------------------
+# TRUONG
+#
+#   id        BAT BUOC  fw-NNNN, 0001..8999, duy nhat, khong tai su dung
+#   from      BAT BUOC  ten trong apps.yaml - ben GOI
+#   to        BAT BUOC  ten trong apps.yaml - ben NHAN
+#   ports     BAT BUOC  danh sach port o phia NHAN (tru protocol: icmp)
+#   protocol            tcp (mac dinh) | udp | icmp
+#   ticket    NEN CO    ma ticket - de mot nam sau con biet vi sao
+#   expires             YYYY-MM-DD, hoac bo trong = vinh vien
+#   note                mot cau tieng nguoi
+#
+# CHIEU: chi khai chieu GOI. Firewall la stateful nen goi tra ve tu
+# dong duoc cho qua. Khai them chieu nguoc la mo them mot duong that
+# su moi - hiem khi la y cua nguoi khai.
+#
+# --------------------------------------------------------------
+# expires: rule qua han KHONG TU BIEN MAT
+#
+# Co chu y. Go mot rule firewall luc nua dem vi khong ai gia han
+# ticket la mot su co dang cho san, va no se xay ra vao dung luc
+# khong ai truc.
+#
+# Thay vao do, qua han lam lint.sh thoat khac 0, lam plan in canh
+# bao, va lam CI theo lich do len ke ca khi khong ai sua gi. Viec go
+# van la mot commit co nguoi duyet.
+# ==============================================================
+
+rules:
+  - id: fw-0001
+    from: probe
+    to: app-dev
+    ports: [80]
+    ticket: NET-1001
+    note: Probe do duong xuong dev qua HTTP
+
+  - id: fw-0002
+    from: probe
+    to: app-prod
+    ports: [80]
+    ticket: NET-1001
+    note: Probe do duong xuong prod qua HTTP
+
+  - id: fw-0003
+    from: app-dev
+    to: app-prod
+    ports: [80, 443]
+    ticket: NET-1042
+    expires: 2027-12-31          # ngay VI DU - sua theo ticket that
+    note: Dev goi API cua prod trong ky doi soat cuoi nam
+
+  - id: fw-0004
+    from: log-collector
+    to: security-tools
+    protocol: udp
+    ports: [514]
+    ticket: NET-1007
+    note: Day syslog tu logarchive sang cum thu gom ben security
+
+  # ------------------------------------------------------------
+  # Vi du khac (dang tat)
+  #
+  # - id: fw-0005
+  #   from: app-prod
+  #   to: app-prod-db          # app thu hep xuong mot subnet
+  #   ports: [5432]
+  #   ticket: NET-1099
+  #   note: App goi PostgreSQL o tang du lieu
+  # ------------------------------------------------------------
+  #
+  # protocol: icmp - CO CU PHAP NHUNG GAN NHU KHONG CAN.
+  #
+  # Layer cha da co san mot rule cho MOI luong icmp noi bo di qua
+  # (sid 1900 trong ../../firewall.tf), va rule do nam o rule group
+  # uu tien 100 - truoc rule group cua lop nay o 150. O STRICT_ORDER
+  # thi hanh dong pass la ket thuc danh gia, nen mot rule icmp khai o
+  # day khong bao gio duoc doc toi.
+  #
+  # No van apply thanh cong. Van hien trong console. Van chiem
+  # capacity. Chi la khong lam gi ca. Terraform canh bao truong hop
+  # nay - xem check "icmp_rules_are_shadowed" trong ../firewall.tf.
+

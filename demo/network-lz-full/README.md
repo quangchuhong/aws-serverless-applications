@@ -155,6 +155,8 @@ Xem plan: **chỉ rule group thay đổi. Không có route nào bị sửa.** Sa
 
 Xoá dòng đó đi, apply lại — SSH bị chặn ngay. Vẫn không đụng route nào.
 
+> **Về lâu dài đừng dùng `east_west_rules` cho việc hằng ngày.** Nó nằm trong chính layer sở hữu firewall, TGW và mọi VPC — mở một port là một plan chạm hơn 200 resource, và nó khai bằng CIDR thô (gõ nhầm một chữ số thì apply vẫn xanh và rule không khớp gì trọn đời). [`ops/`](./ops/) giải cả hai: state riêng, và catalog khai bằng **tên app**. Xem [doc 25](../../docs/25-Van-hanh-Network-Hang-Ngay.md).
+
 ### Bước 5 — Interface endpoint trong security VPC
 
 ```hcl
@@ -376,8 +378,9 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | `plan-check.sh` | Chạy `terraform plan` cho 9 tổ hợp biến, không apply |
 | `vpc-spokes.tf` | Spoke VPC, route một dòng, gateway endpoint |
 | `instances.tf` | EC2 nginx, vào bằng SSM |
-| `verify.sh` | 8 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM |
+| `verify.sh` | 12 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM |
 | `teardown.sh` | Destroy + xác nhận sạch |
+| `ops/` | **Lớp vận hành, state riêng** — catalog YAML cho rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Chạm vào layer này đúng một điểm: `var.ops_rule_group_arns` |
 
 ---
 

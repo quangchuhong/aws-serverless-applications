@@ -1,0 +1,90 @@
+# ==============================================================
+# INTERFACE ENDPOINT TAP TRUNG - THEM/BOT DICH VU AWS
+#
+# Endpoint dat trong security VPC va dung chung cho MOI account cua
+# landing zone. Mot dong o day thay cho mot endpoint moi VPC moi
+# account - do la ca ly do lam DNS tap trung.
+#
+# --------------------------------------------------------------
+# CAI NAO NAM O LAYER CHA, CAI NAO NAM O DAY
+#
+# Layer cha giu bo toi thieu: ssm, ssmmessages, ec2messages. Thieu ba
+# cai do thi khong vao duoc instance nao de sua bat cu thu gi khac -
+# chung la ha tang, khong phai lua chon van hanh.
+#
+# Moi dich vu them sau do nam o day: mot doi noi ho can, co nguoi
+# duyet, va bo di duoc khi khong dung nua.
+#
+# Khai trung mot dich vu layer cha da co thi Terraform tu choi: hai
+# bo ENI, hai hoa don, va hai PHZ cung ten - Route 53 tra loi bang
+# MOT trong hai va khong noi la cai nao.
+#
+# --------------------------------------------------------------
+# TIEN
+#
+# ~$0.01/gio moi AZ moi dich vu, cong phi xu ly theo GB. Chay 2 AZ
+# thi moi dong o day la ~$0.02/gio = ~$14.60/thang, ke ca khi khong
+# ai goi den no.
+#
+# Doi lai: luu luong toi dich vu do khong ra Internet nua, nen bot
+# phi NAT ($0.045/GB) va bot mot duong ra khoi mang. Voi dich vu bi
+# goi nhieu thi endpoint RE HON. Voi dich vu goi vai lan mot ngay thi
+# dat hon - va do la lua chon dung khi ly do la BAO MAT chu khong
+# phai tien.
+#
+# --------------------------------------------------------------
+# TRUONG
+#
+#   service   BAT BUOC  ten ngan cua dich vu (kms, secretsmanager, ...)
+#                       Terraform ghep thanh com.amazonaws.<region>.<service>
+#   wildcard            true de tao them ban ghi *.<service>.<region>.
+#                       amazonaws.com. Can cho dich vu co ten nam o
+#                       tien to - ecr.dkr, ecr.api, elasticfilesystem.
+#                       Thua thi vo hai; THIEU thi mot nua so loi goi
+#                       di ra Internet con nua kia thi khong, va kieu
+#                       chap chon do rat kho lan.
+#   ticket    NEN CO
+#   note
+#
+# --------------------------------------------------------------
+# KIEM CHUNG SAU KHI APPLY - phai lam TU TRONG SPOKE
+#
+#   aws ssm start-session --target <instance-id>
+#   dig +short kms.<region>.amazonaws.com
+#
+# Ket qua PHAI la IP trong security VPC. Ra IP cong khai nghia la PHZ
+# chua toi duoc spoke do: endpoint van tinh tien, luu luong van di
+# vong ra Internet, va khong co gi bao. Chay `terraform output
+# endpoints_dns` de lay san cac lenh.
+#
+# Kiem tu account NAY thi khong chung minh duoc gi - VPC o day duoc
+# gan PHZ truc tiep. Phai kiem tu mot account khac.
+# ==============================================================
+
+endpoints: []
+
+# --------------------------------------------------------------
+# Vi du (dang tat)
+#
+# endpoints:
+#   - service: kms
+#     ticket: SEC-3301
+#     note: Ung dung prod goi KMS - khong duoc phep di qua Internet
+#
+#   - service: secretsmanager
+#     ticket: SEC-3302
+#     note: Lay secret luc khoi dong
+#
+#   - service: logs
+#     ticket: OPS-4410
+#     note: CloudWatch Logs agent tren moi instance
+#
+#   - service: ecr.dkr
+#     wildcard: true          # ten repository nam o TIEN TO
+#     ticket: OPS-4411
+#     note: Keo image container. Thieu wildcard thi keo duoc mot so
+#           repo va mot so thi khong.
+#
+#   - service: ecr.api
+#     ticket: OPS-4411
+# --------------------------------------------------------------

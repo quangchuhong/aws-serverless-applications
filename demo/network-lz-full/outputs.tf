@@ -378,3 +378,123 @@ output "project" {
   description = "Tien to ten dung cho moi resource"
   value       = var.project
 }
+
+########################################
+# HANDLE CHO LOP VAN HANH (ops/)
+#
+# Mot output duy nhat thay vi muoi hai cai roi rac. Ly do khong phai
+# gon mat: ops/ doc bo nay qua terraform_remote_state, va MOI LAN them
+# mot output la mot lan hai file phai sua khop nhau. Gom lai thi hop
+# dong giua hai layer la MOT ten - de thay khi no doi, va `terraform
+# output ops_handles` in ra dung nhung gi lop kia nhin thay.
+#
+# Moi truong nay dung state LOCAL. Voi landing-zone/network (backend
+# S3) thi ops/ chi doi state_backend/state_config, khong doi gi khac.
+########################################
+
+output "ops_handles" {
+  description = "Moi thu thu muc ops/ can. Doc qua terraform_remote_state, dung tra tay."
+
+  value = {
+    project           = var.project
+    region            = var.region
+    account_id        = data.aws_caller_identity.current.account_id
+    internal_supernet = var.internal_supernet
+    security_vpc_cidr = var.security_vpc_cidr
+    ingress_vpc_cidr  = var.ingress_vpc_cidr
+
+    firewall = {
+      enabled = var.enable_firewall
+      mode    = var.firewall_mode
+      arn     = try(aws_networkfirewall_firewall.main[0].arn, null)
+
+      # ops/ doi chieu danh sach nay voi rule group cua chinh no. Lech
+      # nghia la ai do apply ops/ ma quen cam ARN vao layer nay - rule
+      # ton tai, tinh phi, va khong duoc doc. Xem check trong ops/.
+      ops_rule_group_arns = var.ops_rule_group_arns
+    }
+
+    transit_gateway_id = aws_ec2_transit_gateway.hub.id
+
+    # Ten bang -> id. ops/ khai route theo TEN ("spokes"), khong phai
+    # tgw-rtb-0abc: id doi moi lan dung lai, ten thi khong.
+    route_tables = merge(
+      {
+        spokes = aws_ec2_transit_gateway_route_table.spokes.id
+        egress = aws_ec2_transit_gateway_route_table.egress.id
+      },
+      var.enable_firewall ? { security = aws_ec2_transit_gateway_route_table.security[0].id } : {},
+      var.enable_ingress ? { ingress = aws_ec2_transit_gateway_route_table.ingress[0].id } : {},
+    )
+
+    # Bang tra cuu TEN SPOKE -> CIDR + attachment.
+    #
+    # Day la thu lam cho catalog cua ops/ khai duoc bang ten thay vi
+    # CIDR. Go nham mot chu so trong CIDR thi rule khong khop cai gi
+    # ca va KHONG CO LOI O DAU HET - firewall im lang la trang thai
+    # binh thuong cua no. Go nham mot cai ten thi Terraform dung ngay.
+    spokes = {
+      for k, v in var.spokes : k => {
+        cidr       = v.cidr
+        account_id = try(v.account_id, null)
+        is_local   = try(v.account_id, null) == null
+
+        # Chi spoke LOCAL moi co vpc_id. VPC cua spoke remote nam
+        # trong account khac va Terraform nay khong doc duoc no - do
+        # cung la ly do PHZ phai di qua Route 53 Profile chu khong gan
+        # thang duoc. Xem ../dns.tf.
+        vpc_id = try(aws_vpc.spoke[k].id, null)
+
+        # Attachment id:
+        #   spoke local  - doc thang tu resource
+        #   spoke remote - chi giai duoc khi account do co DUNG MOT
+        #                  attachment. Nhieu hon mot thi khong doan,
+        #                  tra null va de nguoi van hanh khai tay.
+        attachment_id = try(
+          aws_ec2_transit_gateway_vpc_attachment.spoke[k].id,
+          one([
+            for att_id in try(data.aws_ec2_transit_gateway_attachments.remote_by_account[v.account_id].ids, []) : att_id
+          ]),
+          null,
+        )
+      }
+    }
+
+    # Attachment cua ha tang - dich hop le cho route tinh trong ops/
+    hub_attachments = merge(
+      { egress = aws_ec2_transit_gateway_vpc_attachment.egress.id },
+      var.enable_firewall ? { security = aws_ec2_transit_gateway_vpc_attachment.security[0].id } : {},
+      var.enable_ingress ? { ingress = aws_ec2_transit_gateway_vpc_attachment.ingress[0].id } : {},
+    )
+
+    dns = {
+      enabled   = var.enable_internal_dns
+      zone_id   = try(aws_route53_zone.internal[0].zone_id, null)
+      zone_name = try(aws_route53_zone.internal[0].name, null)
+
+      # Ban ghi do CHINH layer nay sinh ra. ops/ phai tranh trung ten
+      # voi chung: hai aws_route53_record cung ten trong hai state
+      # khac nhau thi cai apply sau ghi de cai truoc, va khong ben nao
+      # bao gi - tham chi `terraform plan` cua ca hai deu sach.
+      managed_records = [for k, r in aws_route53_record.spoke_app : r.name]
+
+      profile_enabled = var.enable_dns_profile
+      profile_id      = try(aws_route53profiles_profile.shared[0].id, null)
+    }
+
+    endpoints = {
+      enabled            = var.enable_interface_endpoints
+      vpc_id             = try(aws_vpc.security[0].id, null)
+      subnet_ids         = [for z in var.availability_zones : try(aws_subnet.security_endpoints[z].id, null)]
+      security_group_id  = try(aws_security_group.endpoints[0].id, null)
+      route_table_id     = try(aws_route_table.security_endpoints[0].id, null)
+      availability_zones = var.availability_zones
+
+      # Dich vu layer nay da tao. ops/ them dich vu MOI va phai khong
+      # dam vao danh sach nay - hai aws_vpc_endpoint cung service_name
+      # trong cung VPC la hai ENI, hai hoa don, va PHZ thu hai che mat
+      # PHZ thu nhat.
+      managed_services = var.enable_interface_endpoints ? sort(var.interface_endpoint_services) : []
+    }
+  }
+}

@@ -1,0 +1,74 @@
+# ==============================================================
+# DANH BA APP
+#
+# File nay khong tao ra resource nao. No la BANG TRA CUU: ten app ->
+# dai dia chi, de moi file con lai khai bang ten thay vi CIDR.
+#
+# VI SAO PHAI CO MOT LOP TEN
+#
+# Cach cu (east_west_rules ben ../../variables.tf) khai CIDR tho:
+#
+#     from_cidr = "10.10.0.0/16"
+#
+# Go nham mot chu so thi terraform apply van xanh, firewall van nap
+# rule, va rule do khong khop mot goi tin nao tron doi. Khong loi,
+# khong canh bao, khong dong log nao noi "rule 1003 chua tung khop".
+# Nguoi mo ticket bao van khong ket noi duoc, va cho dau tien ai cung
+# di kiem tra la route va security group - hai cho hoan toan dung.
+#
+# Khai bang ten thi go nham la Terraform dung ngay o plan, kem danh
+# sach ten hop le.
+#
+# NGUYEN TAC
+#
+#   - name  la khoa. Doi ten = doi moi cho tro toi no.
+#   - spoke phai khop ten spoke ben layer cha (var.spokes).
+#   - cidr  BO TRONG de lay ca CIDR cua spoke. Chi khai khi that su
+#           can thu hep xuong mot subnet/host, va khi do no phai NAM
+#           TRONG spoke - Terraform kiem dieu do.
+#   - owner de biet hoi ai. Khong bat buoc nhung nen co.
+# ==============================================================
+
+apps:
+  # ------------------------------------------------------------
+  # Ca spoke. Dang thuong dung nhat: mot doi, mot VPC.
+  # ------------------------------------------------------------
+  - name: probe
+    spoke: probe
+    owner: platform-network
+    note: EC2 do duong trong VPC cua chinh account network
+
+  - name: app-dev
+    spoke: app-dev
+    owner: team-app
+    note: Moi truong dev
+
+  - name: app-prod
+    spoke: app-prod
+    owner: team-app
+    note: Moi truong prod
+
+  - name: security-tools
+    spoke: security
+    owner: team-security
+
+  - name: log-collector
+    spoke: logarchive
+    owner: team-security
+
+  # ------------------------------------------------------------
+  # THU HEP xuong mot phan cua spoke.
+  #
+  # Dung khi mot VPC chua nhieu thu va ban khong muon mo cho ca VPC.
+  # cidr o day PHAI nam trong CIDR cua spoke - khai lech ra ngoai thi
+  # rule van khop luu luong, chi la khop nham mang khac, nen Terraform
+  # chan truong hop do.
+  #
+  # Vi du (dang tat): chi subnet tang du lieu cua app-prod
+  #
+  # - name: app-prod-db
+  #   spoke: app-prod
+  #   cidr: 10.20.10.0/24
+  #   owner: team-app
+  #   note: Chi tang du lieu, khong phai ca VPC
+  # ------------------------------------------------------------
