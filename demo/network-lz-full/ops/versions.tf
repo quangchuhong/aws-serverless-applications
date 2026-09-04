@@ -77,7 +77,7 @@ terraform {
 
 backend "s3" {
   bucket       = "qh11-lz-tfstate-609320954321"
-  key          = "network/ops/terraform.tfstate"
+  key          = "demo-network-lz-full/ops/terraform.tfstate"
   region       = "ap-southeast-1"
   use_lockfile = true
 }
