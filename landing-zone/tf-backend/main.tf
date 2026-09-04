@@ -288,6 +288,38 @@ resource "aws_s3_bucket_policy" "state" {
 
       # Moi account con chi ghi duoc vao prefix cua chinh no.
       # Account network khong doc duoc state cua account security.
+      #
+      # CAI GIA CUA DIEU KIEN s3:prefix - doc truoc khi them layer moi.
+      #
+      # s3:prefix CHI co mat trong yeu cau LIST. HeadObject khong phai
+      # lenh list, nen khi Terraform hoi "object state nay da co chua",
+      # khoa do khong co trong ngu canh, StringLike khong khop, va
+      # ListBucket coi nhu khong duoc cap.
+      #
+      # Ma S3 chi tra 404 cho object khong ton tai KHI nguoi goi co
+      # s3:ListBucket. Khong co thi no tra 403 - de khong tiet lo ca
+      # viec object do co ton tai hay khong.
+      #
+      # Ket qua: key DA TON TAI thi doc ghi binh thuong, con key CHUA
+      # TON TAI thi 403. Nghia la MOI LAYER MOI deu hong o lan
+      # `terraform init` dau tien, va chi lan dau:
+      #
+      #   Error refreshing state: ... HeadObject ... StatusCode: 403
+      #   api error Forbidden: Forbidden
+      #
+      # Cau do khong nhac gi toi ListBucket, khong nhac toi prefix, va
+      # doc y het nhu sai credential.
+      #
+      # Cach di qua ma khong cham vao bucket policy - tao san object
+      # rong MOT LAN cho layer moi:
+      #
+      #   aws s3api put-object --bucket <bucket> --key <ten>/<layer>/terraform.tfstate
+      #
+      # Terraform doc payload rong la coi nhu chua co state.
+      #
+      # Cach kia la bo dieu kien StringLike o duoi. Luc do account do
+      # nhin thay TEN KEY cua moi prefix khac - khong doc duoc noi dung
+      # vi quyen object van theo prefix. Danh doi nho nhung co that.
       flatten([
         for name, id in var.state_writer_accounts : [
           {

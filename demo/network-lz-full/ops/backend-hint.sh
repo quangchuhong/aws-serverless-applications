@@ -100,16 +100,56 @@ echo "Roi:"
 echo "  terraform init -reconfigure"
 echo
 echo "Neu VAN 403 sau khi dan nguyen khoi nay, nguyen nhan khong con la"
-echo "cau hinh nua. Kiem hai thu, theo thu tu:"
+echo "cau hinh. Phep do phan biet, hai lenh, chay ngay:"
 echo
-echo "  # 1. Doc duoc state cua CHINH layer cha khong?"
-echo "  aws s3api head-object --bucket $(jq -r '.backend.config.bucket // "?"' "$CACHE") \\"
-echo "    --key '$PARENT_KEY'"
+BKT=$(jq -r '.backend.config.bucket // "?"' "$CACHE")
+PREFIX="${PARENT_KEY%/*}"
+echo "  # A. Object DA TON TAI (cua layer cha)"
+echo "  aws s3api head-object --bucket $BKT --key '$PARENT_KEY'"
 echo
-echo "     Duoc  -> quyen co that, van de nam o prefix cua key moi."
-echo "     403   -> shell dang dung danh tinh khac layer cha. So:"
-echo "              aws sts get-caller-identity"
+echo "  # B. Object CHUA TON TAI, cung prefix"
+echo "  aws s3api head-object --bucket $BKT --key '$PREFIX/khong-ton-tai'"
 echo
-echo "  # 2. Account nay co trong state_writer_accounts khong?"
-echo "  #    Xem landing-zone/tf-backend/terraform.tfvars"
+echo "  A duoc, B tra 403  -> Da ro. Xem muc duoi."
+echo "  A cung 403         -> Shell dang dung danh tinh khac layer cha:"
+echo "                        aws sts get-caller-identity"
+echo
+echo "-------------------------------------------------------------"
+echo "A DUOC MA B 403: THIEU s3:ListBucket, KHONG PHAI THIEU QUYEN KEY"
+echo
+echo "S3 chi tra 404 cho mot object khong ton tai khi nguoi goi co"
+echo "s3:ListBucket tren bucket. Khong co thi no tra 403 - de khong"
+echo "tiet lo ca viec object do co ton tai hay khong."
+echo
+echo "landing-zone/tf-backend CO cap s3:ListBucket, nhung kem dieu kien:"
+echo
+echo "    Condition = { StringLike = { \"s3:prefix\" = [\"<ten>/*\"] } }"
+echo
+echo "Ma s3:prefix chi co mat trong yeu cau LIST. HeadObject khong phai"
+echo "lenh list, nen khoa do KHONG CO trong ngu canh, StringLike khong"
+echo "khop, va ListBucket coi nhu khong duoc cap."
+echo
+echo "Hau qua: moi key DA TON TAI thi doc duoc (nho s3:GetObject tren"
+echo "<bucket>/<ten>/*), con key CHUA TON TAI thi 403. Tuc la moi layer"
+echo "MOI deu hong o lan init dau tien, va chi lan dau."
+echo
+echo "Hai cach sua:"
+echo
+echo "  1. TAO SAN OBJECT RONG - khong dung toi layer dung chung"
+echo
+echo "     aws s3api put-object --bucket $BKT \\"
+echo "       --key '$PREFIX/ops/terraform.tfstate'"
+echo
+echo "     Khong co --body nen object rong. Terraform doc payload rong"
+echo "     la coi nhu chua co state - dung cai no can o lan init dau."
+echo "     Chi phai lam MOT LAN cho moi layer moi."
+echo
+echo "  2. BO DIEU KIEN s3:prefix khoi statement ListBucket"
+echo "     (landing-zone/tf-backend/main.tf, Sid ListBucketFor*)"
+echo
+echo "     Sua han goc, nhung phai apply mot layer dung chung cho ca to"
+echo "     chuc. Doi lai: account do nhin thay TEN KEY cua cac prefix"
+echo "     khac. KHONG doc duoc noi dung - quyen object van theo prefix."
+echo "     Ro ri ten key la nho, nhung no co that, nen day la mot lua"
+echo "     chon co danh doi chu khong phai mot ban sua hien nhien."
 echo

@@ -149,7 +149,30 @@ Và vì S3 trả 403 chứ không phải 404 khi thiếu `ListBucket`, một th�
 - gọi bằng danh tính khác
 - bucket không tồn tại ở account đó
 
-Nếu dán nguyên khối `backend-hint.sh` in ra mà vẫn 403, script in sẵn hai lệnh phân biệt — quan trọng nhất là thử `head-object` lên **key của chính layer cha**: đọc được thì quyền có thật và vấn đề nằm ở prefix; 403 luôn thì shell đang dùng danh tính khác.
+### Vẫn 403 sau khi dán nguyên khối: thiếu `ListBucket`, không phải thiếu quyền key
+
+`backend-hint.sh` in sẵn phép đo phân biệt — hai lệnh, khác nhau đúng một biến:
+
+```bash
+aws s3api head-object --bucket <bucket> --key '<prefix>/terraform.tfstate'   # A: đã tồn tại
+aws s3api head-object --bucket <bucket> --key '<prefix>/khong-ton-tai'       # B: chưa tồn tại
+```
+
+**A được mà B trả 403** thì đã rõ. S3 chỉ trả 404 cho object không tồn tại **khi người gọi có `s3:ListBucket`**; không có thì nó trả 403, để không tiết lộ cả việc object đó có tồn tại hay không.
+
+`landing-zone/tf-backend` *có* cấp `s3:ListBucket` — nhưng kèm `Condition = { StringLike = { "s3:prefix" = ["<tên>/*"] } }`. Mà `s3:prefix` chỉ có mặt trong yêu cầu **list**. `HeadObject` không phải lệnh list, nên khoá đó không có trong ngữ cảnh, `StringLike` không khớp, và `ListBucket` coi như không được cấp.
+
+Hệ quả: key **đã tồn tại** thì đọc ghi bình thường; key **chưa tồn tại** thì 403. Nghĩa là **mọi layer mới đều hỏng ở lần `init` đầu tiên, và chỉ lần đầu** — đó là lý do layer cha chạy tốt suốt còn lớp ops thì không.
+
+**Cách đi qua** — tạo sẵn object rỗng, một lần cho mỗi layer mới:
+
+```bash
+aws s3api put-object --bucket <bucket> --key '<prefix>/ops/terraform.tfstate'
+```
+
+Không có `--body` nên object rỗng; Terraform đọc payload rỗng là coi như chưa có state — đúng cái nó cần ở lần init đầu.
+
+Cách kia là bỏ điều kiện `s3:prefix` khỏi statement `ListBucket` trong `tf-backend`. Sửa hẳn gốc, nhưng phải apply một layer dùng chung cho cả tổ chức, và account đó sẽ nhìn thấy **tên key** của mọi prefix khác — không đọc được nội dung, vì quyền object vẫn theo prefix. Rò rỉ tên key là nhỏ, nhưng có thật, nên đây là một lựa chọn có đánh đổi chứ không phải bản sửa hiển nhiên.
 
 Kiểm bootstrap đã xong chưa:
 
