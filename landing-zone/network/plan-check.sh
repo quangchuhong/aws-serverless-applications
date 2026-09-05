@@ -331,6 +331,14 @@ run_plan "DAY DU: appliance + firewall + CDN" \
   -var='enable_appliances=true' \
   -var="pa_ami_id=$DUMMY_AMI" -var="f5_ami_id=$DUMMY_AMI"
 
+# To hop giong terraform.tfvars THAT nhat: co spoke o account khac.
+# Chin to hop tren deu dung var.spokes mac dinh (khong account_id),
+# nen chung khong bao gio cham vao bai toan thu tu.
+run_plan_two_step "Spoke o ACCOUNT KHAC (giong terraform.tfvars that)" \
+  -var='enable_firewall=true' -var='firewall_mode=alert' \
+  -var='enable_ingress=true' -var='enable_cdn=false' -var='enable_appliances=false' \
+  -var='spokes={"app-remote":{"cidr":"10.20.0.0/16","account_id":"111122223333","ou_id":"ou-test-00000000"}}'
+
 ########################################
 hdr "3. Kiem tra hanh vi mong doi trong plan day du"
 ########################################
