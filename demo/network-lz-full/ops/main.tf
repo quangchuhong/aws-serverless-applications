@@ -270,6 +270,7 @@ resource "terraform_data" "catalog_guard" {
     endpoints = length(local.endpoints_raw)
     records   = length(local.dns_raw)
     partners  = length(local.partners_raw)
+    services  = length(local.partner_services)
   }
 
   ########################################
@@ -332,6 +333,52 @@ resource "terraform_data" "catalog_guard" {
     precondition {
       condition     = var.allow_expired_rules || length(local.partner_expired) == 0
       error_message = "partners.yaml: hop dong DA HET HAN: ${join(", ", local.partner_expired)}. Gia han truong expires, hoac go doi tac va cac rule cua ho. Muon apply tam thi dat allow_expired_rules = true."
+    }
+
+    ########################################
+    # partners.yaml - DICH VU CONG BO (vpn.tf)
+    #
+    # Tat ca deu chan o day chu khong phai o giua apply. Hong o giua
+    # apply nghia la mot nua so target group da duoc tao va ban phai
+    # don tay truoc khi thu lai.
+    ########################################
+
+    precondition {
+      condition     = length(local.partner_target_unknown) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_target_unknown)} tro toi mot app khong co trong apps.yaml. App hop le: ${join(", ", sort(keys(local.apps)))}. Hoac khai target_ip thang neu dich khong phai mot app trong catalog."
+    }
+
+    # Tach RIENG khoi phep kiem tren: hai nguyen nhan khac nhau, va
+    # gop lai thi thong bao phai noi ca hai kha nang - tuc khong noi
+    # duoc kha nang nao.
+    precondition {
+      condition     = length(local.partner_target_unresolved) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_target_unresolved)} khong giai duoc thanh MOT dia chi. NLB can mot dia chi, khong phai mot dai - app duoc tro toi dang lay ca CIDR cua spoke. Cach sua: trong apps.yaml khai cidr dang 10.10.0.10/32 cho app do, hoac khai target_ip thang trong partners.yaml."
+    }
+
+    precondition {
+      condition     = length(local.partner_port_bad) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_port_bad)} khai cong ngoai khoang 1-65535 (hoac khong phai so)."
+    }
+
+    precondition {
+      condition     = length(local.partner_port_reserved) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_port_reserved)} dung cong ${try(local.hub.partner.reserved_port, "?")} - cong nay LAYER CHA da chiem cho dich vu mac dinh. Mot NLB chi cho MOT listener tren mot cong; khai trung thi AWS tu choi o giua apply bang mot ma loi khong noi gi ve layer cha. Doi sang cong khac."
+    }
+
+    precondition {
+      condition     = length(local.partner_port_dup) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_port_dup)} dung trung cong nhau. Mot NLB chi cho MOT listener tren mot cong, ke ca khi hai dich vu thuoc hai doi tac khac nhau - vi ca hai doi tac di chung mot NLB. Muon tach hoan toan thi can NLB rieng cho moi doi tac (doc 16 muc 3)."
+    }
+
+    precondition {
+      condition     = length(local.partner_tg_name_long) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_tg_name_long)} co ten qua dai. Ten target group = '${try(local.hub.project, "?")}-p-<doi tac>-<dich vu>' va AWS gioi han 32 ky tu. Dat ten doi tac hoac dich vu ngan lai - cat bot tu dong se lam hai dich vu ten gan giong nhau cham ten nhau."
+    }
+
+    precondition {
+      condition     = var.allow_expired_rules || length(local.partner_service_expired) == 0
+      error_message = "partners.yaml: dich vu DA HET HAN: ${join(", ", local.partner_service_expired)}. Con listener nghia la doi tac VAN GOI DUOC - het han o day khong tu dong dong cua. Gia han, hoac go dich vu khoi ho so."
     }
 
     precondition {

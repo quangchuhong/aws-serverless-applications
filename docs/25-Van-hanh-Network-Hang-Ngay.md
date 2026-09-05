@@ -28,6 +28,8 @@ Tám lỗi gặp khi dựng lớp này — trong đó năm cái không phát ra 
 | Nối một dải on-premise qua VPN | `routes.yaml` | Đây *là* route |
 | Thêm VPC endpoint (KMS, ECR, Secrets Manager…) | `endpoints.yaml` | Không |
 | Thêm một tên vào DNS nội bộ | `dns-records.yaml` | Không |
+| **Công bố một dịch vụ cho đối tác** | `partners.yaml` (khối `services`) | Không |
+| **Đối tác công bố thêm một dải** | `partners.yaml` (`extra_cidrs`) | Đây *là* route VPN |
 | **"Thêm route để VPC A nói được VPC B"** | — | **Yêu cầu này sai đề** |
 
 ### Vì sao "route giữa các VPC" không phải là bề mặt vận hành
@@ -293,6 +295,58 @@ PHZ này gắn vào **mọi VPC** của landing zone qua Route 53 Profile. Một
 
 Blackhole ở bảng `spokes` chặn **trước cả firewall**: mọi spoke mất đường tới dải đó ngay lập tức, không phụ thuộc rule nào. Đây là công cụ đúng khi cần cắt nhanh và chưa kịp phân tích.
 
+### 4.6. Công bố một dịch vụ cho đối tác
+
+Đây là thao tác đối tác hay xin nhất, và nó **không** động tới đường hầm.
+
+```yaml
+# ops/catalog/partners.yaml
+partners:
+  - name: acme
+    remote_cidr: 172.16.0.0/16
+    contact: netops@acme.example
+    ticket: PARTNER-2024-11
+    expires: 2026-12-31
+    services:
+      - name: order
+        port: 8080
+        target: app-dev-web      # app trong apps.yaml, cidr PHẢI là /32
+        expires: 2026-06-30      # dịch vụ có thể hết hạn trước hợp đồng
+```
+
+Sinh ra một target group + một listener trên NLB của đối tác. Ba điều đáng nhớ:
+
+| | |
+|---|---|
+| **Cổng là tài nguyên dùng chung** | Một NLB cho **mọi** đối tác, và NLB chỉ cho một listener trên một cổng. Nên Acme và Globex vẫn chạm cổng nhau được — `lint.sh` bắt, kèm tên dịch vụ kia |
+| **`target` phải giải ra một địa chỉ** | NLB cần một IP, không phải một dải. App khai cả spoke `/16` thì không dùng làm target được: khai thêm `cidr: 10.10.0.10/32` trong `apps.yaml`, hoặc `target_ip` thẳng |
+| **Listener và rule firewall là hai lớp** | Listener trả lời *"đối tác gọi được tới đâu"*; rule firewall trả lời *"gói tin có đi tiếp tới spoke không"*. Gỡ một trong hai là đủ để cắt — giữ cả hai để một sai sót ở một lớp không tự nó mở đường |
+
+Cắt một dịch vụ: xoá khối `services` đó. Listener biến mất ngay — **không** chờ rule firewall.
+
+Đưa cho đối tác:
+
+```bash
+terraform output -raw partner_handover
+```
+
+Bản văn kỹ thuật dán thẳng vào email: dải bạn công bố, dải họ công bố, danh sách dịch vụ kèm cổng và ngày hết hạn, và câu cuối nói rằng ngoài những dải đó **không có đường nào tồn tại** — không phải bị chặn, mà là không tồn tại.
+
+### 4.7. Đường hầm dứt thì ai biết
+
+`vpn.tf` tạo hai cảnh báo CloudWatch trên `TunnelState`:
+
+| Cảnh báo | Ngưỡng | Nghĩa |
+|---|---|---|
+| `partner-vpn-DUT` | Average < 0.5, 2 phút | Cả hai đường hầm xuống — kết nối đứt hẳn |
+| `partner-vpn-mat-du-phong` | Average < 1, 15 phút | Một đường hầm xuống — **vẫn chạy**, nhưng hết dự phòng |
+
+Hai mức vì chúng đòi hai hành động khác nhau. Gộp làm một thì hoặc bỏ qua trạng thái mất dự phòng, hoặc kêu to mỗi lần AWS bảo trì một đường hầm — và kiểu thứ hai thì sau vài lần không ai đọc nữa.
+
+Mức "đứt" đặt `treat_missing_data = "breaching"`: một VPN connection **ngừng phát metric** là tin xấu, không phải tin trung tính. Mặc định của CloudWatch là im lặng trong trường hợp đó.
+
+Cảnh báo chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì chúng vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo. `lint.sh` nhắc khi có dịch vụ mà danh sách rỗng.
+
 ---
 
 ## 5. Triệu chứng → nguyên nhân
@@ -315,6 +369,9 @@ Bảng này là thứ đọc lúc 2 giờ sáng. Mọi dòng đều là kiểu h
 | `does not have an attribute named "ops_handles"` | Bỏ qua bước 0 — layer cha chưa apply lại sau khi kéo code mới | `./lint.sh` (bắt trước Terraform) |
 | `HeadObject ... 403` **trên cả key đã tồn tại** | `AWS_ACCESS_KEY_ID` trong shell đè lên `profile` của backend — biến môi trường đứng trước file cấu hình trong chuỗi giải credential. Cùng thư mục, hai shell, hai danh tính | `aws sts get-caller-identity` so với `--profile default`; `unset` rồi thử lại |
 | `HeadObject ... 403` **chỉ trên key chưa tồn tại** | `ListBucket` trong `tf-backend` bị điều kiện `s3:prefix`, mà khoá đó **chỉ có trong yêu cầu list** — HeadObject thì không. Nên key **đã tồn tại** đọc được, key **chưa tồn tại** trả 403: mọi layer mới hỏng ở lần init đầu, và chỉ lần đầu | `./backend-hint.sh` in phép đo A/B; sửa bằng `aws s3api put-object` tạo object rỗng một lần |
+| Đối tác báo *"gọi vào cổng X không có gì trả lời"* | Chưa có `services` khai cổng đó trong `partners.yaml` — không có listener thì NLB không lắng nghe cổng đó, và im lặng là hành vi đúng của TCP |
+| Đối tác gọi được cổng nhưng nhận `connection reset` | Có listener, thiếu rule firewall. Hai lớp khác nhau: listener mở cửa, firewall quyết định gói tin có đi tiếp không |
+| Thêm dịch vụ, `apply` hỏng giữa chừng ở target group | Trùng cổng với dịch vụ khác hoặc với `reserved_port` của layer cha. `lint.sh` và precondition bắt trước — chạy chúng thì không tới bước này |
 
 ---
 

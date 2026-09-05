@@ -40,12 +40,20 @@ output "summary" {
     routes    = length(local.routes)
     endpoints = length(local.endpoints)
     records   = length(local.dns_records)
+    partners  = length(local.partners_raw)
+    services  = length(local.partner_services)
 
     capacity = "${local.fw_capacity_used}/${var.rule_group_capacity}"
 
     firewall_mode = local.hub.firewall.mode
     expired       = local.fw_expired
     expiring_30d  = local.fw_expiring_soon
+
+    # Dich vu doi tac het han la mot CUA MO ra ngoai con mo. Tach
+    # rieng khoi rule firewall vi hai thu doi hai hanh dong khac
+    # nhau: go rule la thu hep, go listener la dong cua.
+    services_expired      = local.partner_service_expired
+    services_expiring_30d = local.partner_service_soon
   }
 }
 
@@ -108,4 +116,67 @@ output "next_steps" {
     local.fw_capacity_used <= var.rule_group_capacity * 0.8
     ? "" : "Capacity da dung ${local.fw_capacity_used}/${var.rule_group_capacity} (>80%). Nang capacity la TAO LAI rule group va doi ARN - lam som, dung doi day.",
   ])
+}
+
+########################################
+# DICH VU CONG BO CHO DOI TAC
+#
+# Bang nay la thu dua cho nguoi duyet, va la thu dua cho chinh doi
+# tac. No noi bang dia chi va cong - khong bang ten - vi ten chi co
+# nghia trong catalog nay, con doi tac thi cam mot dia chi va mot so.
+########################################
+
+output "partner_services" {
+  description = "Doi tac nao goi duoc gi, o cong nao, toi dia chi nao"
+  value = {
+    for k, s in local.partner_services : k => {
+      partner  = s.partner
+      service  = s.service
+      endpoint = "${try(local.hub.partner.nlb_dns, "?")}:${s.port}"
+      target   = "${s.target} (${s.target_ip})"
+      ticket   = s.ticket
+      expires  = s.expires == null ? "khong han" : tostring(s.expires)
+    }
+  }
+}
+
+output "partner_handover" {
+  description = "Van ban ky thuat dua cho doi tac - dan thang vao email"
+  value = !try(local.hub.partner.enabled, false) ? "(chua bat ket noi doi tac o layer cha)" : join("\n", concat([
+    "",
+    "════════ THONG TIN KY THUAT CHO DOI TAC ════════",
+    "",
+    "1. DAI CHUNG TOI CONG BO CHO BAN",
+    "   ${try(local.hub.partner.nat_cidr, "?")}   (dia chi nguon khi chung toi goi ra)",
+    "   ${try(local.hub.partner.nlb_cidr, "?")}  (dia chi dich vu ban goi vao)",
+    "",
+    "   Dinh tuyen THEM bat cu dai nao khac qua duong ham nay se khong",
+    "   di toi dau: khong co duong, va goi tin bi vut khong bao loi.",
+    "",
+    "2. DAI BAN CONG BO CHO CHUNG TOI",
+    "   ${try(local.hub.partner.remote_cidr, "?")}",
+    ], length(local.partner_extra_cidrs) == 0 ? [] : [
+    "   ${join("\n   ", local.partner_extra_cidrs)}   (dai phu)",
+    ], [
+    "",
+    "3. DICH VU BAN GOI DUOC",
+    ], length(local.partner_services) == 0 ? [
+    "   (chua cong bo dich vu nao)",
+    ] : [
+    for k, s in local.partner_services :
+    "   ${s.partner}/${s.service}   ${try(local.hub.partner.nlb_dns, "?")}:${s.port}${s.expires == null ? "" : "   den ${s.expires}"}"
+    ], [
+    "",
+    "4. DUONG HAM",
+    "   IKEv2, PSK, static route (khong BGP).",
+    "   Hai duong ham - AWS chi bao dam MOT UP tai mot thoi diem.",
+    "   Thiet bi cua ban phai chap nhan ca hai va tu chuyen khi mot cai dut.",
+    "",
+    "5. DIEU KHONG THE THUONG LUONG",
+    "   Ban khong goi duoc toi bat cu dia chi nao ngoai muc 1. Do khong",
+    "   phai gioi han cau hinh - khong co duong nao ton tai.",
+    "",
+    "════════════════════════════════════════════════",
+    "",
+  ]))
 }

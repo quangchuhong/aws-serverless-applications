@@ -484,13 +484,33 @@ output "ops_handles" {
     # cua doi tac: chieu do phai qua private NAT, va rule tro thang se
     # khong khop gi vi nguon da bi doi dia chi.
     partner = {
-      enabled      = var.enable_partner_vpn
-      vpc_cidr     = var.enable_partner_vpn ? var.partner_vpc_cidr : null
-      nat_cidr     = var.enable_partner_vpn ? local.partner_nat_cidr : null
-      nlb_cidr     = var.enable_partner_vpn ? local.partner_nlb_cidr : null
-      remote_cidr  = var.enable_partner_vpn ? var.partner_sim_cidr : null
-      service_port = var.partner_service_port
-      nlb_dns      = try(aws_lb.partner[0].dns_name, null)
+      enabled     = var.enable_partner_vpn
+      vpc_cidr    = var.enable_partner_vpn ? var.partner_vpc_cidr : null
+      nat_cidr    = var.enable_partner_vpn ? local.partner_nat_cidr : null
+      nlb_cidr    = var.enable_partner_vpn ? local.partner_nlb_cidr : null
+      remote_cidr = var.enable_partner_vpn ? var.partner_sim_cidr : null
+      nlb_dns     = try(aws_lb.partner[0].dns_name, null)
+
+      # Cong layer cha DA CHIEM.
+      #
+      # Mot NLB chi cho MOT listener tren mot cong. Lop ops mo them
+      # listener cho dich vu moi, va neu no cham vao cong nay thi AWS
+      # tu choi o GIUA apply - mot ma loi API khong noi rang cong do
+      # thuoc layer khac.
+      #
+      # Doi ten thanh "reserved" de cho nao doc cung thay ngay day la
+      # dieu cam, khong phai mot gia tri de dung lai.
+      reserved_port = var.partner_service_port
+
+      # BA HANDLE cho lop ops.
+      #
+      # Thieu chung thi lop ops khong the tu tao target group hay
+      # listener, va viec cong bo mot dich vu moi cho doi tac lai phai
+      # sua layer cha - tuc la mot thay doi hang tuan phai di qua mot
+      # plan 200 resource.
+      nlb_arn           = try(aws_lb.partner[0].arn, null)
+      vpc_id            = try(aws_vpc.partner[0].id, null)
+      vpn_connection_id = try(aws_vpn_connection.partner[0].id, null)
     }
 
     dns = {

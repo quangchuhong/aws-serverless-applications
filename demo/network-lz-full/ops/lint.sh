@@ -312,6 +312,7 @@ soon = today + datetime.timedelta(days=30)
 ########################################
 F = "partners.yaml"
 partners = {}
+services = []   # (khoa, doi tac, ten dich vu, khoi dich vu, khoi doi tac)
 for i, p in enumerate(ptn_raw):
     if not isinstance(p, dict):
         err(F, f"muc thu {i+1} khong phai mot khoi khoa/gia tri"); continue
@@ -346,6 +347,32 @@ for i, p in enumerate(ptn_raw):
     else:
         warn(F, f"{n}: khong co 'expires' - ket noi doi tac vinh vien la thu khong ai ra soat lai bao gio")
 
+    if p.get("extra_cidrs"):
+        if not isinstance(p["extra_cidrs"], list):
+            err(F, f"{n}: 'extra_cidrs' phai la mot danh sach")
+        else:
+            for c in p["extra_cidrs"]:
+                if not is_cidr(c):
+                    err(F, f"{n}: extra_cidrs co dai khong hop le: {c}")
+                elif c == p.get("remote_cidr"):
+                    err(F, f"{n}: extra_cidrs lap lai remote_cidr ({c}) - "
+                           "layer cha da so huu route do, khai lai thi AWS tu choi "
+                           "o GIUA apply bang mot ma loi khong noi gi ve layer cha")
+
+    for j, s in enumerate(p.get("services", []) or []):
+        if not isinstance(s, dict):
+            err(F, f"{n}: dich vu thu {j+1} khong phai mot khoi khoa/gia tri"); continue
+        sn = s.get("name")
+        if not sn:
+            err(F, f"{n}: dich vu thu {j+1} thieu 'name'"); continue
+        key = f"{n}-{sn}"
+        # Ten target group = "<project>-p-<key>", AWS gioi han 32 ky tu.
+        # Khong biet project o day nen chua mot khoang du rong.
+        if len(key) > 20:
+            err(F, f"{key}: ten qua dai ({len(key)} ky tu). Ten target group ghep tu "
+                   "'<project>-p-<doi tac>-<dich vu>' va AWS gioi han 32 ky tu")
+        services.append((key, n, sn, s, p))
+
     partners[n] = p
 
 ########################################
@@ -375,6 +402,73 @@ for i, a in enumerate(apps_raw):
     if not a.get("owner"):
         warn(F, f"{n}: chua khai 'owner' - mot nam nua se khong biet hoi ai")
     apps[n] = a
+
+########################################
+# DICH VU CONG BO CHO DOI TAC
+#
+# Chay SAU apps.yaml: target duoc khai bang TEN APP, nen phai co bang
+# apps roi moi giai duoc.
+#
+# Cong la tai nguyen dung chung: MOT NLB cho moi doi tac, va NLB chi
+# cho MOT listener tren mot cong. Nen hai doi tac khac nhau van cham
+# cong nhau duoc - do la thu kiem o day, va la thu khong ai ngo khi
+# chi doc ho so cua rieng mot doi tac.
+########################################
+F = "partners.yaml"
+port_owner = {}
+for key, pn, sn, s, p in services:
+    port = s.get("port")
+    try:
+        port = int(port)
+        if not (1 <= port <= 65535): raise ValueError
+    except Exception:
+        err(F, f"{key}: 'port' khong hop le: {s.get('port')!r}"); port = None
+
+    if port is not None:
+        if port in port_owner:
+            err(F, f"{key}: trung cong {port} voi {port_owner[port]}. Mot NLB chi cho "
+                   "MOT listener tren mot cong, ke ca khi hai dich vu thuoc hai doi tac "
+                   "khac nhau - vi ca hai di chung mot NLB")
+        else:
+            port_owner[port] = key
+
+    tip, tgt = s.get("target_ip"), s.get("target")
+    if tip:
+        if not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", str(tip)):
+            err(F, f"{key}: target_ip phai la MOT dia chi, dang co {tip!r}")
+    elif not tgt:
+        err(F, f"{key}: thieu 'target' (ten app trong apps.yaml) hoac 'target_ip'")
+    elif tgt not in apps:
+        err(F, f"{key}: target={tgt} khong co trong apps.yaml")
+    elif apps[tgt].get("partner"):
+        err(F, f"{key}: target={tgt} la mot DOI TAC, khong phai ung dung. "
+               "NLB se tro ve chinh dai NLB - mot vong lap")
+    elif not str(apps[tgt].get("cidr", "")).endswith("/32"):
+        err(F, f"{key}: target={tgt} giai ra mot DAI, khong phai mot dia chi. "
+               "NLB can dung mot dia chi. Cach sua: trong apps.yaml khai "
+               f"cidr dang 10.x.x.x/32 cho {tgt}, hoac khai target_ip thang o day")
+
+    if not s.get("ticket") and not p.get("ticket"):
+        warn(F, f"{key}: chua khai 'ticket' - mot cua mo cho ben ngoai ma khong "
+                "co gi ghi lai ai duyet")
+
+    exp = s.get("expires", p.get("expires"))
+    if exp is not None:
+        try:
+            d = exp if isinstance(exp, datetime.date) else datetime.date.fromisoformat(str(exp))
+        except Exception:
+            err(F, f"{key}: expires phai la YYYY-MM-DD, dang co {exp!r}"); d = None
+        if d:
+            if d < today:
+                err(F, f"{key}: DICH VU DA HET HAN {d} - con listener nghia la doi tac "
+                       "VAN GOI DUOC. Het han o day khong tu dong dong cua")
+            elif d <= soon:
+                warn(F, f"{key}: dich vu het han {d} (con {(d-today).days} ngay)")
+
+if services and not os.environ.get("OPS_ALARM_OK"):
+    warn("partners.yaml", f"co {len(services)} dich vu cong bo ra ngoai - kiem lai "
+         "bien alarm_actions da tro toi SNS topic that chua, neu khong thi canh bao "
+         "duong ham dut se khong goi ai (dat OPS_ALARM_OK=1 de tat nhac nay)")
 
 ########################################
 # firewall-rules.yaml
@@ -597,6 +691,8 @@ for i, r in enumerate(dns_raw):
 print()
 print("  Catalog: %d app, %d rule firewall, %d route, %d endpoint, %d ban ghi DNS, %d doi tac"
       % (len(apps), len(ids), len(rt_ids), len(ep_seen), len(dns_seen), len(partners)))
+if services:
+    print("  Dich vu cong bo cho doi tac: %d" % len(services))
 # Network Firewall tinh capacity theo so to hop nguon x dich x port.
 # Rule cua ta luon 1 nguon x 1 dich, nen chi phi la so port. +10% du.
 print("  Capacity uoc tinh: ~%d (mac dinh rule group: 1000)" % (int(n_ports_total * 1.1) + 1))

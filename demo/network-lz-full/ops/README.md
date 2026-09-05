@@ -43,6 +43,45 @@ Cùng lý do, `to: partner-*` là **sai chiều** — dải NLB là nguồn, kh�
 
 `expires` ở đây là **ngày hết hợp đồng**, và nó làm job `expiry` trong CI đỏ mỗi ngày khi quá hạn. Kết nối đối tác không tự cắt — cắt đường của đối tác lúc nửa đêm là một cuộc gọi điện lúc nửa đêm.
 
+### Dịch vụ công bố cho đối tác
+
+Khối `services` là thứ đối tác **thật sự cham vào**. Mỗi mục sinh ra một target group + một listener trên NLB của vùng đệm:
+
+```yaml
+# partners.yaml
+- name: acme
+  remote_cidr: 172.16.0.0/16
+  extra_cidrs: [10.240.0.0/16]   # dải phụ họ công bố thêm → route VPN
+  services:
+    - name: order
+      port: 8080
+      target: app-dev-web        # app trong apps.yaml, cidr PHẢI là /32
+      expires: 2026-06-30
+```
+
+Hai lớp trả lời hai câu hỏi khác nhau, và cần cả hai:
+
+| Lớp | Câu hỏi |
+|---|---|
+| `services` (listener) | Đối tác **gọi được tới đâu** |
+| `firewall-rules.yaml` | Gói tin có **đi tiếp** tới spoke không |
+
+Gỡ một trong hai là đủ để cắt. Giữ cả hai để một sai sót ở một lớp không tự nó mở đường.
+
+Ba cái bẫy, cả ba đều bị `lint.sh` và precondition chặn **trước** khi apply:
+
+- **Cổng là tài nguyên dùng chung.** Một NLB cho mọi đối tác, và NLB chỉ cho một listener trên một cổng — nên Acme và Globex chạm cổng nhau được. Cổng `reserved_port` của layer cha cũng cấm.
+- **`target` phải giải ra một địa chỉ.** NLB cần một IP. App khai cả spoke `/16` thì không dùng làm target được.
+- **Tên ghép `<đối tác>-<dịch vụ>` đi vào tên target group**, và AWS giới hạn 32 ký tự cả tiền tố project.
+
+`terraform output -raw partner_handover` in ra bản văn kỹ thuật dán thẳng vào email cho đối tác.
+
+### Đường hầm dứt thì ai biết
+
+Hai cảnh báo CloudWatch trên `TunnelState`: `-DUT` (cả hai xuống) và `-mat-du-phong` (một xuống, vẫn chạy). Hai mức vì chúng đòi hai hành động khác nhau.
+
+Chúng chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì cảnh báo vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo, và `lint.sh` nhắc khi có dịch vụ mà danh sách rỗng.
+
 ---
 
 ## Vì sao tách state

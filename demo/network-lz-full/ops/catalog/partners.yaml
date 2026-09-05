@@ -53,6 +53,44 @@
 #   ticket     NEN CO    hop dong hoac ticket phe duyet
 #   expires              YYYY-MM-DD - ngay het hop dong
 #   note                 mot cau tieng nguoi
+#   extra_cidrs          dai PHU doi tac cong bo them (danh sach).
+#                        Moi dai thanh mot route tinh tren VPN.
+#                        KHONG lap lai remote_cidr - layer cha da so
+#                        huu route do
+#   services             danh sach dich vu ban CONG BO cho ho, xem duoi
+#
+# --------------------------------------------------------------
+# services - CUA MO RA NGOAI
+#
+# Moi muc sinh ra mot target group + mot listener tren NLB cua doi
+# tac. Do la thu doi tac THAT SU cham vao - go no di la dong cua ngay
+# lap tuc, ke ca khi rule firewall van con.
+#
+#   name       BAT BUOC  ten ngan. Ghep thanh "<doi tac>-<name>", va
+#                        chuoi do di vao ten target group (AWS gioi
+#                        han 32 ky tu ca tien to project)
+#   port       BAT BUOC  cong tren NLB. DUY NHAT trong CA file nay -
+#                        mot NLB chi cho mot listener moi cong, ke ca
+#                        giua hai doi tac khac nhau
+#   target     BAT BUOC  ten app trong apps.yaml. App do phai giai ra
+#                        MOT dia chi (cidr dang x.x.x.x/32) vi NLB can
+#                        mot dia chi, khong phai mot dai
+#   target_ip            loi thoat: khai thang dia chi, khi dich khong
+#                        phai mot app trong catalog
+#   ticket / expires     ke thua tu ho so doi tac neu khong khai rieng
+#
+# CONG NAO DUOC DUNG: bat cu cong nao TRU cong layer cha da chiem
+# (ops_handles.partner.reserved_port, mac dinh 80). Cham vao no thi
+# plan dung - chu khong phai apply hong o giua.
+#
+# --------------------------------------------------------------
+# HAI LOP, HAI CAU HOI
+#
+#   listener (file nay)          doi tac GOI DUOC toi dau
+#   rule firewall                goi tin co DI TIEP toi spoke khong
+#
+# Go mot trong hai la du de cat duong. Giu ca hai de mot sai sot o
+# mot lop khong tu no mo duong.
 #
 # CIDR ban cong bo cho ho KHONG khai o day - no do layer cha quyet
 # dinh (dai NLB + dai NAT) va lop nay doc tu ops_handles. Khai lai o
@@ -72,11 +110,27 @@ partners: []
 #     expires: 2026-12-31
 #     note: Doi soat don hang hang dem, chi goi vao order-api
 #
+#     services:
+#       - name: order
+#         port: 8080
+#         target: order-api        # app trong apps.yaml, cidr phai la /32
+#         expires: 2026-12-31
+#
+#       - name: doi-soat
+#         port: 8443
+#         target_ip: 10.10.0.25    # khong phai app trong catalog
+#         ticket: PARTNER-2025-07
+#
 #   - name: globex
 #     remote_cidr: 192.168.50.0/24
+#     extra_cidrs: [10.240.0.0/16]   # trung tam du lieu thu hai
 #     contact: infra@globex.example
 #     ticket: PARTNER-2025-03
 #     note: Khong co ngay het han - hop dong khung
+#     services:
+#       - name: api
+#         port: 9090               # KHAC 8080 va 8443 o tren, va khac 80
+#         target: order-api
 #
 # Roi trong firewall-rules.yaml:
 #

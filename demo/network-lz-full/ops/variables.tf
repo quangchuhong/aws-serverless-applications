@@ -139,3 +139,22 @@ variable "allow_expired_rules" {
   type        = bool
   default     = false
 }
+
+variable "alarm_actions" {
+  description = <<-EOT
+    ARN cua SNS topic nhan canh bao duong ham VPN doi tac.
+
+    De rong thi canh bao VAN DUOC TAO va van doi trang thai trong
+    console - chi la khong ai duoc bao. Do la mot buoc lui hop ly khi
+    dang dung thu, va la mot cai bay khi len that: mot canh bao khong
+    goi ai la mot canh bao chi phat hien ra su co SAU khi doi tac goi
+    dien.
+
+    lint.sh in canh bao khi co doi tac ma danh sach nay rong.
+
+    Vi du:
+      alarm_actions = ["arn:aws:sns:ap-southeast-1:123456789012:netops"]
+  EOT
+  type        = list(string)
+  default     = []
+}
