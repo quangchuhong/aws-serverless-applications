@@ -164,7 +164,9 @@ Xếp theo thứ tự gặp phải.
 
 | 83 | Bỏ khối `ingress` lồng nhau đi, `apply` báo `InvalidPermission.Duplicate` | Trong provider AWS, `ingress`/`egress` của `aws_security_group` là **Optional+Computed**: bỏ hẳn khối đi nghĩa là *"thôi không quản nữa"*, **không phải** *"xoá hết rule"*. Không sinh diff, rule cũ nằm nguyên trong AWS, và resource rời đụng đúng nó. Build mới không gặp — chỉ bản đã apply mới phải gỡ tay một lần | **Giới hạn công cụ** | *(mục 7am)* |
 
-**72/83 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 84 | `plan-check.sh` báo `Khong lay duoc AMI gia` — không nói vì sao | `2>/dev/null` nuốt stderr của `aws ssm get-parameter`. Hết token, sai region và thiếu `ssm:GetParameter` cho ra **cùng một dòng**, trong khi ba cách sửa khác hẳn nhau. Lần thứ ba của cùng khuyết điểm trong một phiên (75, 80) | **Lỗi code** | *(mục 7an)* |
+
+**73/84 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -3031,6 +3033,20 @@ Nên `plan-check.sh` mở chính file template, thay nội suy bằng giá trị
 | Bỏ một thẻ đóng | `bootstrap.xml SAI CU PHAP: mismatched tag: line 114` |
 | Bỏ khối `<profiles>` | `THIEU: profile quan tri interface - health check cua GWLB khong bao gio dat` |
 | Bỏ `plugin-op-commands` | `init-cfg.txt thieu khoa: plugin-op-commands` |
+
+### Lỗi 84 — cùng một khuyết điểm, lần thứ ba trong một phiên
+
+Chạy `plan-check.sh` lần đầu:
+
+```
+✗ Khong lay duoc AMI gia - dat bien DUMMY_AMI=ami-xxxx roi chay lai
+```
+
+`2>/dev/null` trên lệnh `aws ssm get-parameter`. Hết token, sai region, và thiếu quyền `ssm:GetParameter` đều cho ra **đúng một dòng** đó — trong khi ba cách sửa khác hẳn nhau.
+
+Cùng khuyết điểm với lỗi 75 (`|| true` nuốt "không có unit nào") và lỗi 80 (`A || B` khi A thoát 0 mà không in gì), cả ba trong **cùng một phiên làm việc**. Nó không phải một sai sót hiếm gặp; nó là thói quen viết shell mặc định.
+
+Sửa: giữ `stderr` lại và in ra khi thất bại, kèm ba nguyên nhân hay gặp và cách sửa từng cái. Thêm một lối thoát thứ hai qua `ec2:DescribeImages` — quyền khác với `ssm:GetParameter`, và vài tổ chức cấp cái này mà không cấp cái kia.
 
 > Bài học lặp lại lần thứ năm trong tài liệu này: thứ đắt nhất không phải lỗi làm `apply` đỏ, mà là cấu hình **đi qua được mọi công cụ** rồi mới sai lúc chạy. Với mỗi thứ như vậy, phải tự dựng phép kiểm — và phải thử phá nó, vì một phép kiểm chưa bao giờ thất bại thì chưa biết nó có kiểm gì không.
 

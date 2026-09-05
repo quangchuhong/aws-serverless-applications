@@ -30,16 +30,47 @@ echo "════════════════════════�
 hdr "0. Chuan bi"
 ########################################
 
+# 2>/dev/null o day tung nuot MOI nguyen nhan: het token, sai region,
+# thieu quyen ssm:GetParameter deu ra cung mot dong "khong lay duoc".
+# Ba nguyen nhan, ba cach sua khac han nhau, mot thong bao - cung hinh
+# dang voi loi 66 va loi 75.
+#
+# Giu stderr lai va in ra khi that bai.
 if [[ -z "$DUMMY_AMI" ]]; then
+  AMI_ERR=$(mktemp)
   DUMMY_AMI=$(aws ssm get-parameter --region "$REGION" \
     --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
-    --query 'Parameter.Value' --output text 2>/dev/null)
+    --query 'Parameter.Value' --output text 2>"$AMI_ERR")
+
+  # Loi thoat thu hai: doc AMI truc tiep. Can ec2:DescribeImages thay
+  # vi ssm:GetParameter - hai quyen khac nhau, va vai to chuc cap cai
+  # nay ma khong cap cai kia.
+  if [[ -z "$DUMMY_AMI" || "$DUMMY_AMI" == "None" ]]; then
+    DUMMY_AMI=$(aws ec2 describe-images --region "$REGION" --owners amazon \
+      --filters 'Name=name,Values=al2023-ami-2023.*-x86_64' 'Name=state,Values=available' \
+      --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text 2>>"$AMI_ERR")
+  fi
 fi
 
 if [[ -n "$DUMMY_AMI" && "$DUMMY_AMI" != "None" ]]; then
   ok "AMI gia cho plan appliance: $DUMMY_AMI"
 else
-  bad "Khong lay duoc AMI gia - dat bien DUMMY_AMI=ami-xxxx roi chay lai"
+  bad "Khong lay duoc AMI gia. Loi that su tu AWS:"
+  sed 's/^/      /' "${AMI_ERR:-/dev/null}" 2>/dev/null || true
+  echo
+  echo "  Ba nguyen nhan hay gap, ba cach sua khac nhau:"
+  echo "    ExpiredToken / InvalidClientTokenId  -> lay lai credential"
+  echo "    AccessDenied                         -> thieu ssm:GetParameter"
+  echo "                                            VA ec2:DescribeImages"
+  echo "    Could not connect                    -> sai region (dang dung $REGION)"
+  echo
+  echo "  Khong sua duoc thi cho thang mot AMI bat ky trong region:"
+  echo "    DUMMY_AMI=ami-xxxxxxxx ./plan-check.sh"
+  echo
+  echo "  AMI nao cung duoc - plan chi can MOT ID hop le, khong bao gio"
+  echo "  khoi dong no. Lay mot cai tu instance dang chay:"
+  echo "    aws ec2 describe-instances --region $REGION \\"
+  echo "      --query 'Reservations[0].Instances[0].ImageId' --output text"
   exit 1
 fi
 
