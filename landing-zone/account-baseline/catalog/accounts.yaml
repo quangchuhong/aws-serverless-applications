@@ -78,18 +78,17 @@
 
 accounts:
   # ============================================================
-  # BUOC 1 cua nam buoc - xem README muc "Nam buoc, ba layer".
+  # DANG O BUOC 4/5 - xem README muc "Nam buoc, ba layer".
   #
-  # Ba khoi duoi day CHUA CO khoi `network:`. Do la co y: TGW khong
-  # chia se duoc cho mot account chua ton tai, nen lan apply nay chi
-  # TAO ACCOUNT. CIDR da chon san, nam trong chu thich ngay duoi moi
-  # khoi, de buoc 4 chi la bo chu thich.
+  #   [x] 1. tao account            598122632665 / 913051689123 / 792207721718
+  #   [x] 2. share_tgw_with_accounts o layer network
+  #   [x] 3. account thay share quh11-net-tgw
+  #   [ ] 4. khoi `network:` duoi day - apply layer nay
+  #   [ ] 5. layer network apply lai de noi attachment vao rtb-spokes
   #
-  # Sau khi apply xong:
-  #   terraform output account_ids      -> lay ba ID
-  #   -> buoc 2: share_tgw_with_accounts o layer network
-  #   -> buoc 3: moi account tu nhan loi moi RAM
-  #   -> buoc 4: quay lai day, bo chu thich khoi network:
+  # Buoc 5 KHONG bo duoc: attachment hien ra o account network, layer
+  # nay khong voi toi. Bo qua thi VPC ton tai, attachment ton tai o
+  # trang thai available, va khong goi tin nao di dau ca.
   # ============================================================
 
   - name: app-uat
@@ -101,9 +100,8 @@ accounts:
     cost_center: CC-1042
     ticket: ACC-2026-001
     note: Moi truong UAT - account nonprod dau tien tao bang catalog
-    # BUOC 4 - bo chu thich sau khi account nay da nhan loi moi RAM:
-    # network:
-    #   vpc_cidr: 10.12.0.0/16
+    network:
+      vpc_cidr: 10.12.0.0/16
 
   - name: app-payments-prod
     email: quang.hong.0991+lz-app-payments-prod@gmail.com
@@ -114,9 +112,8 @@ accounts:
     cost_center: CC-4021
     ticket: ACC-2026-002
     note: Workload thanh toan - prod. SCP prod_guard ap dung o OU nay
-    # BUOC 4:
-    # network:
-    #   vpc_cidr: 10.21.0.0/16
+    network:
+      vpc_cidr: 10.21.0.0/16
 
   - name: sandbox-thu-nghiem
     email: quang.hong.0991+lz-sandbox-01@gmail.com
@@ -127,12 +124,11 @@ accounts:
     cost_center: CC-0000
     ticket: ACC-2026-003
     note: Sandbox - KHONG noi TGW, tu lo duong ra Internet
-    # BUOC 4 - sandbox khong noi TGW nen cung khong lay DNS tap trung
-    # (attach_dns mac dinh bang attach_tgw). Voi attach_tgw = false thi
-    # buoc 2 va 3 KHONG can cho account nay - no khong dung TGW.
-    # network:
-    #   vpc_cidr: 10.60.0.0/16
-    #   attach_tgw: false
+    # Khong noi TGW nen cung khong lay DNS tap trung: attach_dns mac
+    # dinh bang attach_tgw. Buoc 2 va 3 KHONG can cho account nay.
+    network:
+      vpc_cidr: 10.60.0.0/16
+      attach_tgw: false
 
 # --------------------------------------------------------------
 # Vi du (dang tat)
