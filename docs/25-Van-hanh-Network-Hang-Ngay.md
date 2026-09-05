@@ -434,7 +434,17 @@ Chỉ `endpoints.yaml` tốn tiền thật. Đổi lại nó bớt phí NAT ($0.
 
 ## 9. Còn thiếu
 
-- Lớp ops chưa apply lần nào. Bootstrap ở mục 3 chưa ai chạy.
+- Lớp ops **đã chạy thật**: rule group ở ưu tiên 150, `verify.sh` 54 đạt 0 lỗi, và dịch vụ đối tác công bố qua catalog đo được `http=200` đầu-cuối. Bootstrap ở mục 3 đã chạy.
 - `landing-zone/network` chưa có `output "ops_handles"` và `var.ops_rule_group_arns` — hiện chỉ `demo/network-lz-full` có. Bản thân layer đó cũng chưa từng được apply, và bước RAM share của nó đã đo là hỏng (RUNBOOK giai đoạn 10).
 - Chưa có job `apply` trong CI (mục 7).
 - Chưa đọc log `UNMATCHED east-west` để dựng catalog từ lưu lượng thật. Đó là việc phải làm **trước** khi chuyển `firewall_mode = "drop"` — catalog hiện tại là ví dụ, không phải bản đồ luồng thật.
+
+---
+
+## Liên quan
+| | |
+|---|---|
+| [16 mục 10](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Runbook đầy đủ cho phần đối tác — thêm, công bố dịch vụ, cắt |
+| [26 – Vận hành chuỗi ingress](./26-Van-hanh-Chuoi-Ingress-va-Appliance.md) | Vai trò tương đương, cho chiều **vào**: CloudFront, WAF, Palo Alto, F5 |
+| [15 – Security VPC](./15-Security-VPC-Network-Firewall.md) | Network Firewall — engine, thứ tự đánh giá, chi phí |
+| [22 – Nhật ký triển khai](./22-Nhat-ky-Trien-khai-LZ-DIY.md) | 85 lỗi và cách sửa |

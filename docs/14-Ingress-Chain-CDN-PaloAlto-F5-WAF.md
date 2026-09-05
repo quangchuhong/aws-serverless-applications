@@ -6,6 +6,8 @@ Ví dụ 14: Chuỗi thanh tra nhiều tầng cho luồng vào, mở rộng ph�
 
 Egress vẫn giữ nguyên: spoke → TGW → egress VPC → NAT Gateway → Internet. Bài này chỉ nói về chiều **vào**.
 
+> **Vận hành hằng ngày** — ai sửa gì ở đâu, sửa xong thì thiết bị có nhận không, đọc gì khi hỏng, và chi phí — ở [26 – Vận hành chuỗi ingress](./26-Van-hanh-Chuoi-Ingress-va-Appliance.md). Bài này nói **thiết kế**; bài kia nói **vận hành**.
+
 ---
 
 ## 1. Bốn tầng, và tầng nào làm gì
