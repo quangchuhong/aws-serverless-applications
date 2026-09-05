@@ -75,12 +75,13 @@ terraform {
   # thi nguoi apply sau ghi de nguoi truoc, khong ben nao thay diff.
   ########################################
 
-  # backend "s3" {
-  #   bucket       = "qh11-lz-tfstate-609320954321"
-  #   key          = "demo-network-lz-full/ops/terraform.tfstate"
-  #   region       = "ap-southeast-1"
-  #   use_lockfile = true
-  # }
+  # KHONG co khoi backend o day, va KHONG co khoi backend bi chu thich
+  # de ai do bo chu thich di.
+  #
+  # wire-backends.sh ghi mot file backend.tf RIENG. Bo chu thich mot
+  # khoi o day nghia la hai khoi backend trong cung mot module, va
+  # Terraform tu choi init voi "Duplicate backend configuration" - mot
+  # cau khong nhac gi toi cai file vua duoc sinh ra ben canh.
 
 
   required_providers {
