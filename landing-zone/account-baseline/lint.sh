@@ -70,9 +70,28 @@ if not isinstance(raw, list):
 #
 # Giu o day chu khong doc tu AWS: lint phai chay duoc offline, va mot
 # ten OU go nham can bi chan TRUOC khi ai do co credential.
+#
+# NHAN CA HAI CACH VIET, va day khong phai de de dai.
+#
+# Ten that do var.ou_structure ben layer organization quyet dinh, va
+# no la mot bien. Mac dinh cua no sinh ra "Non-Production",
+# "Production", "Data Analytics"; cay long nhau thi thanh
+# "Workloads/Production"; con nhieu ban do ou_ids duoc go tay bang ten
+# ngan "NonProd", "Prod".
+#
+# Danh sach nay truoc day CHI co ten ngan - tuc no TU CHOI dung nhung
+# ten ma layer organization thuc su sinh ra, va CHAP NHAN nhung ten
+# khong ton tai o dau ca. Mot phep kiem quay lung lai voi thuc te.
+#
+# NGUON SU THAT VAN LA var.ou_ids trong terraform.tfvars, ma lint
+# khong doc duoc. Nen mot ten qua duoc day van co the hong o plan -
+# luc do precondition trong accounts.tf in ra dung danh sach khoa that.
 OUS = {
-    "Infrastructure", "Security", "Workloads", "NonProd", "Prod",
-    "Analytics", "Sandbox", "Suspended", "Root",
+    "Infrastructure", "Security", "Workloads", "Suspended", "Root",
+    "Non-Production", "Workloads/Non-Production", "NonProd",
+    "Production", "Workloads/Production", "Prod",
+    "Data Analytics", "Analytics",
+    "Sandbox",
 }
 SCOPES = {"analytics", "nonprod", "prod", "none"}
 ENVS = {"dev", "staging", "prod", "sandbox"}
@@ -89,10 +108,24 @@ ENVS = {"dev", "staging", "prod", "sandbox"}
 # ngoac la y dinh that; phan CIDR la mot phep tinh sai chua ai chay.
 # Giu KHOANG - do la thu con nguoi thoa thuan voi nhau - va bo cach
 # viet CIDR di.
+# Khoa la TEN OU nhu no xuat hien trong var.ou_ids - tuc thu nguoi ta
+# go vao truong `ou` cua catalog.
+#
+# Ten that phu thuoc ou_structure ben layer organization, va no la mot
+# BIEN. Cay long nhau cho khoa "Workloads/Production"; cay phang cho
+# khoa "Production". Nen nhan ca ba cach viet cho cung mot dai.
 ALLOCATED = {
+    "Non-Production": (10, 13),
+    "Workloads/Non-Production": (10, 13),
     "NonProd": (10, 13),
+
+    "Production": (20, 23),
+    "Workloads/Production": (20, 23),
     "Prod": (20, 23),
+
+    "Data Analytics": (30, 33),
     "Analytics": (30, 33),
+
     "Sandbox": (60, 63),
 }
 
@@ -197,7 +230,20 @@ for i, a in enumerate(raw):
             err(f"{n}: vpc_cidr {cidr} DAM VAO dai ha tang {r} ({ten})")
 
     alloc = ALLOCATED.get(a.get("ou"))
-    if alloc:
+    if alloc is None:
+        # KHONG bo qua im lang.
+        #
+        # Truoc day day la `if alloc:` khong co nhanh else, nen doi ten
+        # OU tu "NonProd" sang "Non-Production" - mot viec dung, de
+        # khop var.ou_ids - lam TAT toan bo phep kiem dai cap phat ma
+        # khong in ra mot chu nao. Catalog van "sach", va mot /16 dat
+        # sai dai chi lo ra khi hai spoke trung nhau, luc do sua nghia
+        # la XOA VPC.
+        err(f"{n}: co vpc_cidr nhung OU {a.get('ou')!r} khong co dai cap phat trong "
+            f"bang o doc 17 muc 3. Ten nhan duoc: {', '.join(sorted(ALLOCATED))}. "
+            "Doi ten OU thi phai them no vao bang nay - neu khong, phep kiem "
+            "'CIDR co nam trong dai cua OU' se im lang khong chay")
+    else:
         lo, hi = alloc
         first, last = int(v[0]) >> 16 & 0xFF, int(v[-1]) >> 16 & 0xFF
         in_range = (int(v[0]) >> 24) == 10 and lo <= first and last <= hi

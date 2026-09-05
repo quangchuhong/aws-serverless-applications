@@ -107,6 +107,34 @@ locals {
     { for k, v in aws_organizations_organizational_unit.level1 : k => v.id },
     { for k, v in aws_organizations_organizational_unit.level2 : k => v.id },
   )
+
+  ########################################
+  # SCOPE -> OU ID, khong phu thuoc cach khai ou_structure
+  #
+  # Ba scope duoi day co y nghia o layer khac (permission-sets doc
+  # chung, account-baseline dat account theo chung). Nhung TEN OU thi
+  # do ou_structure quyet dinh, va ou_structure la mot bien:
+  #
+  #   long nhau   "Workloads/Production"
+  #   phang       "Production"
+  #   go tay      "Prod"
+  #
+  # Truoc day cac cho dung deu tra cuu MOT chuoi cung
+  # ("Workloads/Production") boc trong try(..., ""). Khai phang thi
+  # tra cuu do truot, try tra ve chuoi rong, va output goi y in ra mot
+  # o TRONG ma khong noi tai sao. Nguoi doc thay mot o trong va di tim
+  # xem minh quen dien gi.
+  ########################################
+  ou_scope_names = {
+    nonprod   = ["Workloads/Non-Production", "Non-Production", "NonProd"]
+    prod      = ["Workloads/Production", "Production", "Prod"]
+    analytics = ["Data Analytics", "Analytics"]
+  }
+
+  ou_scope_ids = {
+    for s, names in local.ou_scope_names :
+    s => try(coalesce([for n in names : try(local.ou_ids[n], null)]...), "")
+  }
 }
 
 ########################################
@@ -115,17 +143,20 @@ locals {
 
 check "ou_scopes_match_permission_sets" {
   assert {
-    condition = alltrue([
-      for required in ["Workloads/Non-Production", "Workloads/Production", "Data Analytics"] :
-      contains(keys(local.ou_ids), required)
-    ])
+    # Hoi theo SCOPE, khong hoi theo mot cach viet ten cu the. Truoc
+    # day khoi nay doi dung chuoi "Workloads/Production", nen mot cay
+    # OU phang - hop le, va la cay dang chay that - lam no do vinh
+    # vien trong khi khong co gi sai.
+    condition = alltrue([for s, id in local.ou_scope_ids : id != ""])
 
     error_message = join(" ", [
-      "Thieu OU ma landing-zone/permission-sets trong doi:",
-      "Workloads/Non-Production (scope nonprod),",
-      "Workloads/Production (scope prod),",
-      "Data Analytics (scope analytics).",
-      "Doi ou_structure thi phai doi ca accounts_by_scope ben do.",
+      "Khong tim thay OU cho scope:",
+      join(", ", [for s, id in local.ou_scope_ids : s if id == ""]),
+      ". landing-zone/permission-sets va account-baseline deu can chung.",
+      "Ten da thu:",
+      join(" | ", [for s, ns in local.ou_scope_names : "${s}: ${join(", ", ns)}"]),
+      ". OU co that:", join(", ", sort(keys(local.ou_ids))),
+      ". Doi ou_structure thi phai doi ca accounts_by_scope ben do.",
     ])
   }
 }

@@ -329,6 +329,30 @@ locals {
 
   scp_enabled = { for k, v in local.scp_definitions : k => v if v.enabled }
 
+  ########################################
+  # GIAI TEN TARGET THANH OU ID
+  #
+  # Target o tren viet theo duong dan: "Workloads/Production". Do la
+  # cach local.ou_ids danh khoa KHI ou_structure khai Production la OU
+  # con cua Workloads.
+  #
+  # Nhung ou_structure la mot BIEN. Khai phang - Production nam thang
+  # duoi root - thi khoa la "Production", va "Workloads/Production"
+  # khong ton tai.
+  #
+  # Nen thu ca hai: duong dan day du truoc, roi doan cuoi.
+  ########################################
+  scp_target_id = {
+    for t in distinct(flatten([for _, d in local.scp_enabled : d.targets])) :
+    t => t == "ROOT" ? local.root_id : try(
+      local.ou_ids[t],
+      local.ou_ids[element(split("/", t), length(split("/", t)) - 1)],
+      null
+    )
+  }
+
+  scp_targets_unresolved = [for t, id in local.scp_target_id : t if id == null]
+
   # (policy, target) -> mot attachment
   scp_attachments = var.scp_dry_run ? {} : {
     for item in flatten([
@@ -336,11 +360,27 @@ locals {
         for t in def.targets : {
           key    = "${name}|${t}"
           policy = name
-          target = t == "ROOT" ? local.root_id : try(local.ou_ids[t], null)
+          target = local.scp_target_id[t]
         }
       ]
     ]) : item.key => item if item.target != null
   }
+
+  # Chinh sach BAT nhung khong gan duoc vao dau.
+  #
+  # Truoc day dieu nay xay ra IM LANG: `if item.target != null` loai
+  # muc do khoi map, khong con dau vet. aws_organizations_policy van
+  # duoc tao, console van thay chinh sach, va scp_summary van in ra
+  # danh sach target NHU DA KHAI - trong khi khong co attachment nao.
+  #
+  # Da xay ra that: ou_structure khai phang, prod_guard nham
+  # "Workloads/Production", va OU chua account production khong co
+  # guardrail nao. Khong loi, khong canh bao, khong resource nao thieu
+  # mot cach nhin thay duoc.
+  scp_policies_orphan = var.scp_dry_run ? [] : [
+    for name, def in local.scp_enabled : name
+    if length([for t in def.targets : t if local.scp_target_id[t] != null]) == 0
+  ]
 }
 
 ########################################
@@ -365,6 +405,85 @@ resource "aws_organizations_policy_attachment" "scp" {
 
   policy_id = aws_organizations_policy.scp[each.value.policy].id
   target_id = each.value.target
+}
+
+########################################
+# CHOT: KHONG CHO MOT SCP TON TAI MA KHONG GAN VAO DAU
+#
+# precondition chu khong phai check. Mot chinh sach khong gan vao dau
+# khong phai "nen xem lai" - no la mot guardrail mo tren giay va
+# khong ton tai trong thuc te, va moi thu khac deu bao rang no co.
+########################################
+resource "terraform_data" "scp_guard" {
+  input = {
+    orphan     = local.scp_policies_orphan
+    unresolved = local.scp_targets_unresolved
+  }
+
+  lifecycle {
+    precondition {
+      condition = length(local.scp_policies_orphan) == 0
+      error_message = join(" ", [
+        "SCP dang BAT nhung khong gan duoc vao OU nao:",
+        join(", ", local.scp_policies_orphan),
+        "- chinh sach van duoc tao, console van thay no, va khong co gi bi chan.",
+        "Target khong giai duoc:", join(", ", local.scp_targets_unresolved),
+        ". Ten OU co that:", join(", ", sort(keys(local.ou_ids))),
+        ". Sua targets trong scp_definitions cho khop var.ou_structure,",
+        "hoac doi ou_structure cho khop targets.",
+      ])
+    }
+
+    # Target hong le - chinh sach van con target khac nen khong thanh
+    # mo coi. Van phai noi: mot OU dang le duoc bao ve thi khong.
+    precondition {
+      condition = length(local.scp_targets_unresolved) == 0
+      error_message = join(" ", [
+        "Target cua SCP khong giai duoc thanh OU ID:",
+        join(", ", local.scp_targets_unresolved),
+        ". OU do KHONG duoc chinh sach nao gan vao, va viec do khong",
+        "hien ra o bat cu dau: aws_organizations_policy van duoc tao,",
+        "scp_summary van in ten target nhu da khai.",
+        "Ten OU co that:", join(", ", sort(keys(local.ou_ids))),
+      ])
+    }
+  }
+}
+
+########################################
+# OU KHONG DUOC SCP NAO GAN VAO
+#
+# check chu khong phai precondition: co OU khong can SCP rieng that -
+# chung duoc phu boi SCP gan o ROOT. Nhung mot OU chua workload ma
+# khong co guardrail nao ngoai ROOT thi phai duoc NHIN THAY, khong
+# phai suy ra bang cach doc ba file.
+#
+# Truong hop that: ou_structure khai phang, "Workloads" ton tai nhung
+# RONG, con Non-Production va Production - hai OU chua toan bo
+# workload - khong nam trong targets cua network_lock. SCP do la thu
+# chan tao IGW, tuc la thu giu cho moi duong ra Internet di qua
+# account network. Thieu no thi ca thiet ke egress tap trung chi con
+# la mot quy uoc.
+########################################
+check "moi_ou_deu_co_scp" {
+  assert {
+    condition = length([
+      for name, id in local.ou_ids : name
+      if !contains([for _, a in local.scp_attachments : a.target], id)
+    ]) == 0
+
+    error_message = join(" ", [
+      "OU khong duoc SCP nao gan truc tiep:",
+      join(", ", [
+        for name, id in local.ou_ids : name
+        if !contains([for _, a in local.scp_attachments : a.target], id)
+      ]),
+      ". Chung chi con SCP gan o ROOT (region_lock).",
+      "Kiem lai targets trong local.scp_definitions co khop cay OU that khong -",
+      "vi du network_lock nham \"Workloads\" trong khi account nam o",
+      "Non-Production va Production la hai OU ngang hang, khong phai con.",
+    ])
+  }
 }
 
 ########################################

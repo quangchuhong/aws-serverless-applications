@@ -14,11 +14,21 @@ output "ou_ids" {
 output "scp_summary" {
   description = "SCP nao dang bat, gan vao dau, dai bao nhieu ky tu"
   value = {
+    # targets doc tu scp_attachments - tuc tu thu THAT SU duoc gan -
+    # chu khong tu v.targets, la thu da KHAI.
+    #
+    # Hai cai do tung lech nhau ma khong ai thay: mot target khong
+    # giai duoc thanh OU ID bi loai khoi scp_attachments im lang,
+    # trong khi output nay van in ten no ra. Bang tom tat khang dinh
+    # mot guardrail dang chay, con thuc te khong co attachment nao.
     for k, v in local.scp_enabled : k => {
-      id      = aws_organizations_policy.scp[k].id
-      targets = var.scp_dry_run ? ["(dry-run: chua gan)"] : v.targets
-      bytes   = length(format("{\"Version\":\"2012-10-17\",\"Statement\":[%s]}", join(",", v.statements)))
-      limit   = 5120
+      id = aws_organizations_policy.scp[k].id
+      targets = var.scp_dry_run ? ["(dry-run: chua gan)"] : [
+        for a in local.scp_attachments : "${a.target}" if a.policy == k
+      ]
+      targets_khai = v.targets
+      bytes        = length(format("{\"Version\":\"2012-10-17\",\"Statement\":[%s]}", join(",", v.statements)))
+      limit        = 5120
     }
   }
 }
@@ -45,11 +55,10 @@ output "accounts_by_scope_hint" {
 
     roi dien vao accounts_by_scope cua permission-sets.
   EOT
-  value = {
-    analytics = try(local.ou_ids["Data Analytics"], "")
-    nonprod   = try(local.ou_ids["Workloads/Non-Production"], "")
-    prod      = try(local.ou_ids["Workloads/Production"], "")
-  }
+  # Giai qua local.ou_scope_ids, thu moi cach viet ten - xem
+  # organization.tf. Tra cuu mot chuoi cung o day tung tra ve o TRONG
+  # cho mot cay OU hoan toan hop le.
+  value = local.ou_scope_ids
 }
 
 output "next_steps" {
