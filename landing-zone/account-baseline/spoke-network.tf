@@ -73,9 +73,25 @@ locals {
 
   # Account xin noi TGW nhung chua co TGW de noi.
   #
-  # Khong chan apply: VPC van dung duoc, chi la chua noi vao luoi. Nhung
-  # phai NOI RA, vi mot VPC khong noi TGW trong thu giong het mot VPC
-  # da noi cho toi khi co ai do thu goi mot dia chi o spoke khac.
+  # DAY LA PRECONDITION, KHONG PHAI check - va no da tung la check.
+  #
+  # Ly do cu ghi o day la "khong chan apply: VPC van dung duoc, chi la
+  # chua noi vao luoi". Cau do SAI. Template nay co y khong tao IGW va
+  # khong tao NAT, vi duong ra Internet di qua egress VPC tap trung.
+  # Bo not TGW ra thi VPC con lai KHONG CO DUONG NAO DI DAU CA: khong
+  # ra Internet, khong sang spoke khac, khong toi interface endpoint.
+  # No khong "dung duoc"; no la mot cai vo.
+  #
+  # Va gia phai tra khong chi la mot VPC vo dung. Stack duoc tao voi
+  # AttachTgw = false, nen lan sua sau la mot CloudFormation UPDATE
+  # tren stack dang chay o account khac - dat hon han viec dung lai
+  # ba muoi giay de dan mot dong network_handles.
+  #
+  # Canh bao thi doc duoc, cuon qua duoc, va se bi cuon qua: no nam
+  # giua mot man hinh plan day chu, sau mot dong "Plan: 4 to add" trong
+  # nhu moi thu deu on.
+  #
+  # Account khai attach_tgw = false KHONG bi chan - no co y khong noi.
   spokes_without_tgw = [
     for k, v in local.spoke_requests : k
     if v.attach_tgw && try(local.net.transit_gateway_id, "") == ""
@@ -188,10 +204,27 @@ resource "aws_cloudformation_stack_set_instance" "spoke_network" {
 # KIEM TRA CHEO
 ########################################
 
-check "spokes_have_a_transit_gateway" {
-  assert {
-    condition     = length(local.spokes_without_tgw) == 0
-    error_message = "Account xin noi TGW nhung network_handles chua co transit_gateway_id: ${join(", ", local.spokes_without_tgw)}. VPC van duoc tao va van dung duoc - no chi khong noi vao luoi chung, va mot VPC chua noi trong GIONG HET mot VPC da noi cho toi khi co ai do thu goi sang spoke khac. Lay handle: cd ../network && terraform output network_handles"
+# CHAN, khong phai canh bao. Ly do day du o chu thich cua
+# local.spokes_without_tgw.
+resource "terraform_data" "spoke_network_guard" {
+  count = local.spokes_on ? 1 : 0
+
+  input = { thieu_tgw = local.spokes_without_tgw }
+
+  lifecycle {
+    precondition {
+      condition = length(local.spokes_without_tgw) == 0
+      error_message = join(" ", [
+        "network_handles chua co transit_gateway_id, nhung cac account nay xin noi TGW:",
+        join(", ", local.spokes_without_tgw),
+        ".",
+        "Template nay CO Y khong tao IGW va khong tao NAT - duong ra Internet di qua",
+        "egress VPC tap trung. Thieu not TGW thi VPC dung len se KHONG CO DUONG NAO",
+        "DI DAU CA, va sua sau la mot CloudFormation UPDATE tren stack o account khac.",
+        "Lay handle:  cd ../network && terraform output -raw paste_network_handles",
+        "Account co y khong noi TGW thi khai attach_tgw: false trong catalog.",
+      ])
+    }
   }
 }
 
