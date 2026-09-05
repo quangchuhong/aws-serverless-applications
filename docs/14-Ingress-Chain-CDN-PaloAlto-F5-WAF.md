@@ -402,10 +402,11 @@ resource "aws_instance" "palo_alto" {
   iam_instance_profile = aws_iam_instance_profile.palo_alto.name
 
   # Bootstrap qua S3: init-cfg.txt + bootstrap.xml
-  # Xem tài liệu Palo Alto "Bootstrap the VM-Series Firewall on AWS"
-  user_data = base64encode(join(";", [
-    "vmseries-bootstrap-aws-s3bucket=${aws_s3_bucket.pa_bootstrap.id}",
-  ]))
+  #
+  # KHONG boc base64encode: aws_instance.user_data TU ma hoa base64.
+  # Boc them la ma hoa hai lan, PAN-OS doc ra mot chuoi base64 thay vi
+  # chuoi khoa=gia tri, va no bo qua bootstrap - im lang.
+  user_data = "vmseries-bootstrap-aws-s3bucket=${aws_s3_bucket.pa_bootstrap.id}"
 
   root_block_device {
     volume_size = 60
@@ -450,6 +451,40 @@ resource "aws_security_group" "palo_alto" {
 ```
 
 `source_dest_check = false` là bắt buộc — thiếu nó thì EC2 vứt bỏ mọi gói không có đích là chính nó, và firewall sẽ không chuyển tiếp được gì.
+
+#### Bốn thứ mà thiếu một cái là bootstrap bị bỏ qua — im lặng
+
+Cài đặt thật ở [`demo/network-lz-full/appliances.tf`](../demo/network-lz-full/appliances.tf) cùng hai template `templates/pa-init-cfg.txt.tftpl` và `templates/pa-bootstrap.xml.tftpl`. Bốn điều dưới đây đều cho ra **cùng một triệu chứng**: thiết bị lên bình thường với cấu hình gốc, GWLB báo target `unhealthy` mãi mãi, không log, không lỗi.
+
+| | |
+|---|---|
+| **`user_data` không phải script** | PAN-OS đọc nó như chuỗi `khoá=giá trị`. Một script bash ở đó bị bỏ qua hoàn toàn |
+| **Ba thư mục rỗng phải tồn tại** | `license/`, `software/`, `content/`. Thiếu **bất kỳ** cái nào là PAN-OS bỏ qua **cả gói** bootstrap. S3 không có thư mục thật, nên phải tạo ba object rỗng kết thúc bằng `/` |
+| **`s3:ListBucket` là quyền trên bucket** | Không phải trên object. Thiếu nó thì `GetObject` vẫn chạy mà bootstrap vẫn bị bỏ qua, vì PAN-OS không liệt kê được bốn thư mục |
+| **Phải có hai ENI** | Xem dưới |
+
+#### Hai giao diện, và vì sao một cái không đủ
+
+> **GWLB gửi GENEVE tới ENI *chính* của instance.** Mặc định PAN-OS lấy `eth0` làm giao diện **quản trị**. Nên với một ENI duy nhất, lưu lượng cần quét đến một cổng không xử lý được gói tin, còn mặt phẳng dữ liệu thì nằm ở một ENI không tồn tại.
+
+Cách sửa là `op-command-modes=mgmt-interface-swap` trong `init-cfg.txt`, cộng một ENI thứ hai:
+
+| ENI | Subnet | Sau khi swap |
+|---|---|---|
+| `eth0` | appliance | `ethernet1/1` — dữ liệu, GWLB gửi vào đây |
+| `eth1` | mgmt | giao diện quản trị |
+
+#### Mật khẩu: cố ý không đặt
+
+`bootstrap.xml` không đặt mật khẩu admin. VM-Series trên AWS đăng nhập lần đầu bằng key pair (`ssh -i key.pem admin@<ip mgmt>`), rồi tự đặt.
+
+Một phash viết sẵn trong XML sẽ nằm trong S3 **và** trong state, và nó sẽ sống lâu hơn ý định của người viết nó.
+
+#### `plan` không đọc file XML
+
+`templatefile()` chỉ ghép chuỗi. `bootstrap.xml` có thể thiếu thẻ đóng hay thiếu cả một khối bắt buộc — `plan` xanh, `apply` xanh, object vẫn lên S3. PAN-OS mới là thứ đọc nó, và nó đọc lúc **boot**.
+
+Nên `plan-check.sh` tự phân tích template thành XML và đòi sáu khối phải có mặt, gồm cả `interface-management-profile` — thiếu nó thì health check của GWLB không bao giờ đạt, dù mọi thứ khác đúng.
 
 ### 6.3. Ingress routing – gắn route table vào IGW
 
