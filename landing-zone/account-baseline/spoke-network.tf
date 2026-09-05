@@ -68,6 +68,17 @@ locals {
   # Bat ca nhanh nay bang mot dieu kien duy nhat, giong local.enabled.
   spokes_on = local.enabled && length(local.spoke_requests) > 0
 
+  # Spoke se THAT SU sinh ra mot TGW attachment.
+  #
+  # Chi nhung account nay moi duoc dua sang var.spokes cua layer
+  # network. Account attach_tgw = false khong bao gio tao attachment,
+  # nen dua no sang do lam check "remote_attachments_wired" ben kia
+  # lech vinh vien - va thong bao cua check do bao nguoi ta apply lai,
+  # mot viec khong bao gio sua duoc nguyen nhan.
+  spokes_can_wire = {
+    for k, v in local.spoke_requests : k => v if v.attach_tgw
+  }
+
   # Handle tu layer network. Rong = chua ai dan vao.
   net = var.network_handles
 

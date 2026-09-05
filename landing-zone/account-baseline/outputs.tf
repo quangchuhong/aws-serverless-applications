@@ -233,15 +233,25 @@ output "paste_spokes" {
     nam trong route table nao thi no khong hoc duoc duong nao, va
     khong ai hoc duoc duong toi no. Trieu chung doc nhu mot loi dinh
     tuyen trong spoke - noi khong co gi sai ca.
+
+    ACCOUNT KHAI attach_tgw: false KHONG CO TRONG DANH SACH NAY, va
+    su vang mat do la co y - dung di them tay vao.
+
+    Layer network dem so spoke da khai roi doi chieu voi so attachment
+    tim duoc (check "remote_attachments_wired"). Mot account khong bao
+    gio tao attachment se lam phep dem do LECH VINH VIEN, va thong bao
+    cua no bao nguoi ta "chay lai terraform apply mot lan nua" - mot
+    lan nua se khong bao gio du. Ngoai ra no con lam layer kia share
+    TGW cho mot account co y khong dung TGW.
   EOT
-  value = length(local.spoke_requests) == 0 ? "(chua co account nao xin mang)" : join("\n", concat(
+  value = length(local.spokes_can_wire) == 0 ? "(chua co account nao xin noi vao luoi)" : join("\n", concat(
     ["spokes = {"],
     flatten([
-      for k in sort(keys(local.spoke_requests)) : [
+      for k in sort(keys(local.spokes_can_wire)) : [
         "  \"${k}\" = {",
-        "    cidr       = \"${local.spoke_requests[k].vpc_cidr}\"",
+        "    cidr       = \"${local.spokes_can_wire[k].vpc_cidr}\"",
         "    account_id = \"${try(aws_organizations_account.this[k].id, "chua-tao")}\"",
-        "    ou_id      = \"${try(var.ou_ids[local.spoke_requests[k].ou], "chua-biet")}\"",
+        "    ou_id      = \"${try(var.ou_ids[local.spokes_can_wire[k].ou], "chua-biet")}\"",
         "    manual_vpc = true",
         "  }",
       ]
@@ -254,10 +264,20 @@ output "spoke_networks" {
   description = "Account nao nhan VPC nao, va no co noi vao luoi khong"
   value = {
     for k, v in local.spoke_requests : k => {
-      account_id    = try(aws_organizations_account.this[k].id, "chua-tao")
-      vpc_cidr      = v.vpc_cidr
-      noi_tgw       = v.attach_tgw && try(local.net.transit_gateway_id, "") != ""
-      dns_tap_trung = try(local.net.dns_profile_id, "") != ""
+      account_id = try(aws_organizations_account.this[k].id, "chua-tao")
+      vpc_cidr   = v.vpc_cidr
+      noi_tgw    = v.attach_tgw && try(local.net.transit_gateway_id, "") != ""
+
+      # PHAI hoi ca v.attach_dns, giong dong tren hoi v.attach_tgw.
+      #
+      # Truoc day dong nay chi hoi "co dns_profile_id trong
+      # network_handles khong", nen mot account attach_dns = false van
+      # duoc bao cao la co DNS tap trung - trong khi stack instance
+      # cua no nhan DnsProfileId = "" va khong gan Profile nao ca.
+      #
+      # Cung kieu voi scp_summary in target DA KHAI thay vi target DA
+      # GAN: mot bang tom tat khang dinh mot thu khong ton tai.
+      dns_tap_trung = v.attach_dns && try(local.net.dns_profile_id, "") != ""
     }
   }
 }
