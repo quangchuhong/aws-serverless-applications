@@ -8,9 +8,9 @@ Doc 17 là thiết kế. Doc 24 là trình tự dựng lần đầu. Tài liệu
 
 | | |
 |---|---|
-| **Nền tảng** | Đã dựng thật, 4 account, `verify.sh` **46 đạt, 0 lỗi** — xem doc 24 |
-| **Lớp vận hành** | **Đã apply thật.** `bootstrap_done = true`, 4 rule đang chạy, state riêng trong S3 qua `tf-backend` |
-| **Kiểm chứng** | `describe-firewall-policy` trả về ba rule group: **100** (layer cha) → **150 (ops)** → **200** (egress domains) |
+| **Nền tảng** | Đã dựng thật, 4 account — xem doc 24 |
+| **Lớp vận hành** | **Đã apply thật, và dựng lại từ đầu một lần.** `bootstrap_done = true`, 4 rule đang chạy, state riêng trong S3 qua `tf-backend` |
+| **Kiểm chứng** | `verify.sh` **49 đạt, 0 lỗi, 4 bỏ qua** — mục 9 đọc `describe-firewall-policy` và thấy **100** (layer cha) → **150 (ops)** → **200** (egress domains) |
 | **Chưa** | Chưa chuyển `drop`. Chưa tắt `east_west_mesh_ports`. Chưa có route/endpoint/DNS trong catalog |
 | **CI** | `.github/workflows/network-ops.yml` — job `lint` và `expiry` chạy được ngay, job `plan` tự bỏ qua tới khi có OIDC role |
 
@@ -168,6 +168,10 @@ cd ops && terraform apply && terraform output bootstrap_done   # true
 ```
 
 **ARN sẽ giống hệt lần trước** — nó sinh từ region + account + tên rule group, cả ba đều không đổi. Nhưng vẫn phải theo đúng thứ tự: ở bước 1, nếu `terraform.tfvars` còn dòng ARN cũ thì apply hỏng vì rule group chưa tồn tại.
+
+### Đã chạy thật một lần
+
+Toàn bộ trình tự trên đã được xoá và dựng lại từ đầu: layer cha, lớp ops, cắm ARN, `verify.sh` ra **49 đạt, 0 lỗi**. ARN của rule group **giống hệt lần trước** — nó sinh từ region + account + tên, cả ba không đổi. Và cái bẫy 403 ở lần init đầu **không lặp lại**, vì object state trong S3 vẫn còn.
 
 ### Kiểm chứng cuối, đọc từ AWS
 
