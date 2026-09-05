@@ -180,10 +180,17 @@ systemctl enable vpn-vti.service || true
 ########################################
 # %%{http_code} PHAI viet hai dau phan tram.
 #
-# Terraform doc %%{ la mo mot directive cua template - giong ${ }. Viet
-# mot dau phan tram thi templatefile() hong ngay o PLAN, truoc khi co
-# resource nao duoc tao, va thong bao noi ve "Invalid template
-# directive" chu khong noi day la mot chuoi dinh dang cua curl.
+# Terraform doc no la mo mot directive, cung ho voi dau do-la-ngoac.
+# Viet mot dau phan tram thi templatefile() hong ngay o PLAN, truoc khi
+# co resource nao duoc tao, va thong bao noi ve "Invalid template
+# control keyword" chu khong noi day la chuoi dinh dang cua curl.
+#
+# LUU Y CHO NGUOI SUA FILE NAY: file .tftpl KHONG CO CHU THICH. Moi
+# dong deu la van ban cua template, ke ca dong bat dau bang #. Viet mot
+# dau do-la-ngoac trong chu thich de GIAI THICH cu phap do se lam
+# template hong y het nhu viet no that.
+#
+# Chinh dong nay tung lam hong plan mot lan vi ly do do.
 #
 # Cung ho voi loi 69: mot chuoi hoan toan hop le trong ngu canh cua no,
 # dat vao mot ngu canh khac thi thanh cu phap cua ngon ngu khac.

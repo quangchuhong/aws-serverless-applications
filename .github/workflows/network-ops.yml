@@ -24,11 +24,16 @@ on:
   pull_request:
     paths:
       - "demo/network-lz-full/ops/**"
+      # Template nam NGOAI ops/. Thieu dong nay thi phep quet noi suy
+      # ben duoi khong bao gio chay cho dung file no sinh ra de kiem -
+      # cung hinh dang voi loi 73.
+      - "demo/network-lz-full/templates/**"
       - ".github/workflows/network-ops.yml"
   push:
     branches: ["main"]
     paths:
       - "demo/network-lz-full/ops/**"
+      - "demo/network-lz-full/templates/**"
   schedule:
     # 01:00 UTC = 08:00 gio Viet Nam, moi ngay
     - cron: "0 1 * * *"
@@ -72,6 +77,37 @@ jobs:
         env:
           SKIP_STATE_CHECK: "1"
         run: ./lint.sh --strict
+
+      # File .tftpl KHONG CO CHU THICH: moi dong deu la van ban cua
+      # template, ke ca dong bat dau bang #. Nen mot dau do-la-ngoac
+      # viet trong "chu thich" de giai thich cu phap do van la mot
+      # bieu thuc that - va templatefile() hong o PLAN.
+      #
+      # terraform fmt khong doc file .tftpl. terraform validate cung
+      # khong - loi chi hien ra khi co resource that su goi
+      # templatefile(). Nen quet o day.
+      - name: Kiem noi suy trong template
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import re, sys, glob
+          bad = []
+          for f in glob.glob("**/*.tftpl", recursive=True):
+              src = open(f, encoding="utf-8").read()
+              for m in re.finditer(r'(?<!\$)\$\{([^}]*)\}', src):
+                  body = m.group(1).strip()
+                  if not re.fullmatch(r'[a-z_][a-z0-9_.]*', body):
+                      bad.append(f"{f}:{src[:m.start()].count(chr(10))+1}  {m.group(0)}")
+              for m in re.finditer(r'(?<!%)%\{([^}]*)\}', src):
+                  body = m.group(1).strip()
+                  if not re.match(r'(for|endfor|if|else|endif)\b', body):
+                      bad.append(f"{f}:{src[:m.start()].count(chr(10))+1}  {m.group(0)}")
+          if bad:
+              print("Noi suy khong hop le trong template (dung $$ hoac %% de viet chu):")
+              print("\n".join("  " + b for b in bad))
+              sys.exit(1)
+          print("Template: moi noi suy hop le")
+          PY
 
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
