@@ -245,6 +245,38 @@ terraform apply
 
 ---
 
+## Đã chạy thật một lần — số đo
+
+Ba account vending qua catalog, đủ năm bước, `verify.sh` ở layer `network` ra **60 đạt / 0 lỗi**:
+
+| Account | ID | OU | CIDR | Kết quả đo |
+|---|---|---|---|---|
+| `app-uat` | `598122632665` | Non-Production | `10.12.0.0/16` | attachment `01cd43d5` trong `rtb-spokes`, `rtb-security` đã học CIDR |
+| `app-payments-prod` | `913051689123` | Production | `10.21.0.0/16` | attachment `03b8edd1` trong `rtb-spokes`, `rtb-security` đã học CIDR |
+| `sandbox-thu-nghiem` | `792207721718` | Sandbox | `10.60.0.0/16` | không TGW, không DNS tập trung — đúng khai báo |
+
+Bốn chỗ vấp trong lần chạy đó, cả bốn đều **không làm `apply` đỏ**, và đều đã vá:
+
+| | |
+|---|---|
+| Khối `network:` bật ngay từ lần apply đầu | TGW chưa chia sẻ được cho account chưa tồn tại → giờ catalog dặn để trống, README có đủ năm bước |
+| `network_handles` để rỗng | Ba VPC không IGW, không NAT, không TGW — tức không đường nào đi đâu. Giờ là **precondition**, chặn plan |
+| `paste_spokes` gồm cả account `attach_tgw: false` | Làm `check "remote_attachments_wired"` bên layer `network` lệch vĩnh viễn. Giờ đã lọc |
+| Dán `paste_spokes` **cạnh** khối `spokes` thay vì **vào trong** | Terraform chỉ kêu `Warning: Value for undeclared variable` rồi chạy tiếp — `apply` xanh, `0 changed`, và hai account không bao giờ được nối |
+
+Cái cuối không sửa bằng code được: Terraform coi khoá thừa trong `tfvars` là cảnh báo, không phải lỗi. Cách bắt là **đếm trước khi apply**:
+
+```bash
+cd ../network
+python3 -c "
+import re
+s=open('terraform.tfvars').read()
+i=s.find('spokes')
+print(re.findall(r'\"([a-z0-9-]+)\"\s*=\s*\{', s[i:s.index('\n}',i)]))"
+```
+
+Số spoke phải khớp số bạn mong đợi. `Apply complete` không trả lời câu đó.
+
 ## Kiểm chứng
 
 ```bash
