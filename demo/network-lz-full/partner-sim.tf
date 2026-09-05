@@ -28,16 +28,26 @@
 # kiem chung boi terraform plan, terraform validate, hay bat ky cai gi
 # ngoai viec duong ham co len hay khong.
 #
-# Khi tunnel khong len, doc theo thu tu nay:
+# Khi tunnel khong len, DOC COT StatusMessage TRUOC, khong phai cot
+# Status. Rong = AWS chua tung nhan goi IKE nao, nen moi gia thuyet ve
+# PSK va bo thuat toan deu bi loai ngay. Co chu = ho nhan roi tu choi,
+# va chu do chi thang vao nguyen nhan.
+#
+# Voi cot rong thi vao may nay:
 #
 #   aws ssm start-session --target <id cua strongSwan>
-#   sudo cat /var/log/user-data.log          # goi cai duoc khong
-#   sudo strongswan statusall                # SA co len khong
-#   sudo journalctl -u strongswan -n 50      # loi thuc su
-#   ip route show table all | grep vti       # route co gan vao vti chua
+#   sudo tail -40 /var/log/user-data.log   # KET LUAN nam o cuoi file
+#   sudo vpn-check
 #
-# verify.sh muc 10 in trang thai tunnel doc tu AWS, nen no noi duoc
-# "chua len" ngay - khong phai doan tu viec ping khong thong.
+# Script tu ket luan o dong cuoi: hoac "IKE SA DA LEN", hoac 40 dong
+# journalctl kem cach doc. Khong phai doan tu viec ping khong thong.
+#
+# Dung lai rieng may nay, KHONG dung vao VPN:
+#
+#   terraform apply -replace='aws_instance.partner_sim[0]'
+#
+# An toan vi EIP la resource rieng - customer gateway giu nguyen dia
+# chi, aws_vpn_connection khong bi tao lai, PSK khong doi.
 ########################################
 
 resource "aws_vpc" "partner_sim" {

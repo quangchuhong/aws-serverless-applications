@@ -15,7 +15,8 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Code** | [`demo/network-lz-full/partner.tf`](../demo/network-lz-full/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
-| **Chưa apply** | Phần cấu hình strongSwan trong `templates/strongswan.sh.tftpl` chưa chạy thật lần nào — xem mục 5.2 |
+| **Đã apply** | `50 added, 1 changed, 0 destroyed`. Hạ tầng đúng: `verify.sh` mục 10 đạt 4/5 — `rtb-partner` sạch, đường về có, NLB target healthy |
+| **Còn hỏng** | Cả hai đường hầm `DOWN`. Đã sửa ba khiếm khuyết trong `templates/strongswan.sh.tftpl` (lỗi 74–76) — xem **mục 5.3** |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 
 Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
@@ -375,6 +376,58 @@ data "aws_secretsmanager_secret_version" "psk" {
 
 # tunnel1_preshared_key = jsondecode(data.aws_secretsmanager_secret_version.psk.secret_string)["partner-a-t1"]
 ```
+
+### 5.2. Phần duy nhất không có gì kiểm được
+
+Mọi thứ khác trong bộ này đều có lưới: `terraform validate` bắt cấu hình sai, `plan-check.sh` bắt hành vi sai, `verify.sh` đo bằng gói tin thật, phép quét `.tftpl` trong CI bắt nội suy sai.
+
+Cấu hình IPsec nằm trong `user_data` thì **không có cái nào chạm tới**. Nó là một chuỗi ký tự cho tới khi máy boot. Terraform không biết `ipsec.conf` là gì, và AWS chỉ trả lời được một câu duy nhất: đường hầm lên hay không.
+
+Nên khi phần này hỏng, hãy dự tính là phải vào máy đọc log — đó là thiết kế, không phải sự cố.
+
+### 5.3. Đường hầm `DOWN` — đọc theo thứ tự nào
+
+```bash
+aws ec2 describe-vpn-connections --region ap-southeast-1 \
+  --vpn-connection-ids <id> \
+  --query 'VpnConnections[0].VgwTelemetry[].[OutsideIpAddress,Status,StatusMessage]' \
+  --output table
+```
+
+**Cột `StatusMessage` là thứ cần đọc trước, không phải cột `Status`.** Nó chia bài toán làm đôi:
+
+| `StatusMessage` | Nghĩa | Tìm ở đâu |
+|---|---|---|
+| **Rỗng** | AWS **chưa từng nhận** gói IKE nào | Phía đối tác: daemon có chạy không, gói tin có ra khỏi máy không, địa chỉ nguồn có đúng không |
+| Có chữ | AWS **nhận được** rồi từ chối | Nội dung thông báo chỉ thẳng: PSK, bộ thuật toán, traffic selector |
+
+Rỗng thì mọi giả thuyết từ IKE_SA_INIT trở đi đều bị loại — kể cả bộ thuật toán, kể cả PSK. Đó là bước thu hẹp mạnh nhất trong cả quy trình, và nó miễn phí.
+
+Với đường rỗng, vào máy giả lập:
+
+```bash
+aws ssm start-session --target <instance-id> --region ap-southeast-1
+sudo tail -40 /var/log/user-data.log   # kết luận nằm ở CUỐI file
+sudo vpn-check
+```
+
+`user-data.log` tự kết luận ở dòng cuối: hoặc `=== IKE SA DA LEN ===`, hoặc 40 dòng `journalctl` kèm cách đọc. Ba thông báo hay gặp:
+
+| Trong `journalctl` | Nguyên nhân |
+|---|---|
+| `no matching peer config` | `leftid` không khớp IP mà AWS nhìn thấy — gần như luôn là chuyện NAT |
+| `retransmit` lặp mãi, không gì khác | Gói tin không tới được AWS — security group, hoặc route ra Internet |
+| `NO_PROPOSAL_CHOSEN` | Lệch `ike=` / `esp=` với tuỳ chọn đường hầm phía AWS |
+
+**Dựng lại chỉ máy giả lập**, không đụng vào VPN:
+
+```bash
+terraform apply -replace='aws_instance.partner_sim[0]'
+```
+
+An toàn vì EIP là resource riêng: customer gateway giữ nguyên địa chỉ, `aws_vpn_connection` không bị tạo lại, PSK và dải địa chỉ trong đường hầm không đổi. Phía AWS không biết có gì vừa xảy ra.
+
+> Ba khiếm khuyết đầu tiên tìm được ở đây — tuỳ chọn `install_routes` đặt nhầm file, `|| true` nuốt mất trường hợp "không có unit nào", và cuộc đua giữa lúc charon khởi động với lúc EIP được gắn — ghi ở [doc 22 mục 7al](./22-Nhat-ky-Trien-khai-LZ-DIY.md). Cả ba đều cho ra đúng một triệu chứng: hai đường hầm `DOWN`, `StatusMessage` rỗng.
 
 ---
 

@@ -148,8 +148,11 @@ Xếp theo thứ tự gặp phải.
 | 71 | `x != null && f(x)` vẫn nổ vì `null` — ở **năm chỗ** | `&&` trong HCL **không short-circuit**: cả hai vế đều được tính, kể cả khi vế trái đã false. `can(...)` đặt ở vế trái làm chắn cũng vô tác dụng. Không báo lúc viết, chỉ báo khi có dữ liệu thật đi qua nhánh đó | **Lỗi code** | *(mục 7ak)* |
 | 72 | `terraform output bootstrap_done` báo `false` cho một cấu hình **đã đúng** | `output` in giá trị **đã lưu trong state**, không tính lại. Giá trị đó tính từ lần apply trước, khi ARN chưa được cắm. Phải `terraform apply` để đọc lại `terraform_remote_state` | **Giới hạn công cụ** | *(mục 7ak)* |
 | 73 | `wire-backends.sh` có phép kiểm "layer trên đĩa mà không có trong state" — và **không kêu** về layer mới | Vòng lặp chỉ quét `landing-zone/*/`. Một layer nằm trong `demo/` không bao giờ bị hỏi tới. Phép kiểm tồn tại, chạy, báo xanh, và không nhìn vào chỗ cần nhìn | **Lỗi code** | *(mục 7ak)* |
+| 74 | `install_routes = no` viết trong `ipsec.conf` — **không có tác dụng và không có lỗi** | Đó là tuỳ chọn của `charon`, chỉ đọc từ `strongswan.conf`. Đặt nhầm file thì strongSwan bỏ qua, im lặng. Hệ quả: SA vừa lên là charon tự cắm route `0.0.0.0/0` vào bảng 220, máy mất đường ra Internet — mất luôn SSM, tức mất đường vào để xem vì sao | **Lỗi code** | *(mục 7al)* |
+| 75 | `systemctl enable A \|\| systemctl enable B \|\| true` nuốt **mọi** thất bại | Dấu `true` ở cuối là để "không sao nếu tên unit khác" — nhưng nó cũng nuốt cả trường hợp **không có unit nào**. Script chạy tiếp, kết thúc bằng dòng "xong", và không có daemon nào chạy | **Lỗi code** | *(mục 7al)* |
+| 76 | Tunnel `DOWN` với `StatusMessage` **rỗng** ở cả hai đầu | EIP được gắn **sau** khi instance boot. `auto=start` bắn IKE ngay từ IP công khai tạm; AWS không có customer gateway nào khớp địa chỉ đó nên vứt gói tin **và không ghi gì**. Nhìn từ phía AWS, triệu chứng này không phân biệt được với "daemon không chạy" | **Lỗi code** | *(mục 7al)* |
 
-**63/73 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**66/76 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2845,9 +2848,76 @@ Cách sửa không phải né `null` mà là **loại nó khỏi phép tính**: 
 
 ---
 
+## 7al. Lỗi 74–76 — hai đường hầm `DOWN` với `StatusMessage` rỗng
+
+`terraform apply` xong sạch: **50 added, 1 changed, 0 destroyed**. `verify.sh` báo **53 đạt, 1 lỗi** — và một lỗi duy nhất đó là VPN:
+
+```
+|  13.215.221.92 |  DOWN  |   |
+|  52.77.185.28  |  DOWN  |   |
+```
+
+Cột thứ ba **rỗng**. Đó không phải chi tiết phụ, đó là toàn bộ thông tin có được. AWS ghi `StatusMessage` khi họ *nhận được* gói IKE rồi từ chối — sai PSK, lệch bộ thuật toán, không khớp traffic selector đều có chữ. Rỗng nghĩa là **chưa từng có gói IKE nào đến nơi**.
+
+Việc đó thu hẹp phạm vi rất mạnh: mọi thứ từ IKE_SA_INIT trở đi đều **không phải** nghi phạm. Chỉ còn ba khả năng — không có daemon, gói tin không ra khỏi máy, hoặc gói tin ra nhưng mang **sai địa chỉ nguồn**.
+
+Chưa có `/var/log/user-data.log` trong tay nên tôi chưa biết cái nào. Nhưng đọc lại chính file mình viết thì tìm được **ba khiếm khuyết, mỗi cái đủ để tự nó tạo ra đúng triệu chứng này**. Cả ba đều đã sửa; log sẽ nói cái nào đã nổ trước.
+
+### Lỗi 74 — đúng tuỳ chọn, sai file
+
+```
+# ipsec.conf
+conn %default
+    installpolicy=yes
+    # install_routes=no  <- KHÔNG BAO GIỜ ĐƯỢC ĐỌC Ở ĐÂY
+```
+
+`install_routes` là tuỳ chọn của **charon**, chỉ đọc từ `strongswan.conf`. Trong `ipsec.conf` nó không phải lỗi cú pháp — chỉ là một khoá không ai hỏi tới. strongSwan khởi động bình thường, không cảnh báo gì.
+
+Điều tệ hơn: chú thích trong file **khẳng định** tuỳ chọn đó đang có tác dụng. Người đọc sau — kể cả tôi, hai tuần sau — không có lý do gì để nghi ngờ.
+
+Hệ quả không nằm ở lúc khởi động mà ở **giây SA lên**. Với `leftsubnet=0.0.0.0/0`, charon cắm ngay một route `0.0.0.0/0` vào bảng 220. Máy mất đường ra Internet, SSM rớt, và **đường vào để chẩn đoán biến mất đúng lúc cần nó nhất**.
+
+### Lỗi 75 — dấu `|| true` nuốt cả trường hợp không lường trước
+
+```bash
+systemctl enable strongswan 2>/dev/null || systemctl enable strongswan-starter 2>/dev/null || true
+```
+
+Ý định thì hợp lý: tên unit khác nhau giữa Debian và Fedora, thử cả hai. Nhưng `|| true` không phân biệt *"cái thứ nhất không có, cái thứ hai có"* với *"không có cái nào"*. Trường hợp thứ hai — gói cài hỏng, hoặc bản đóng gói dùng tên thứ ba — chạy qua **không một dòng nào trong log**, và script kết thúc bằng `=== xong ===`.
+
+Đây là lỗi 27 mặc bộ đồ khác: **im lặng đúng bằng im lặng của thành công**.
+
+Sửa: tìm tên unit **trước**, hỏng to nếu không có cái nào, và in ra mọi unit có chữ `swan` để câu hỏi tiếp theo đã có sẵn câu trả lời.
+
+Cùng họ, cách đó vài dòng: `dnf install -y strongswan` có thể trả về 0 mà gói vẫn không nằm trên máy. Giờ hỏi lại bằng `rpm -q`.
+
+### Lỗi 76 — địa chỉ đúng, thời điểm sai
+
+Đây là cái tôi nghi nhất, vì nó giải thích được **chính xác cột `StatusMessage` rỗng**.
+
+Terraform tạo instance **trước**, gắn EIP **sau** — thứ tự bắt buộc, và đúng là thứ tự đã cắt vòng phụ thuộc EIP → CGW → VPN → `user_data` → instance ở mục trước. Nhưng giữa hai bước đó, máy vẫn có một IP công khai: cái AWS tự phát vì `associate_public_ip_address = true`.
+
+`user_data` chạy ngay khi boot. `auto=start` bắn IKE ngay khi charon lên. Nếu điều đó xảy ra trước khi EIP được gắn, gói tin đến VPN endpoint mang địa chỉ nguồn là **IP tạm**. AWS không có customer gateway nào khớp địa chỉ đó, nên họ vứt gói tin — và không ghi gì cả, vì với họ đây là gói tin lạ từ Internet, không phải một đối tác cấu hình sai.
+
+Cả hai đầu `DOWN`, `StatusMessage` rỗng. Y hệt "daemon không chạy".
+
+> **Điểm chung của cả ba:** không cái nào phát ra lỗi. Một tuỳ chọn đặt nhầm file, một `|| true` quá rộng, một cuộc đua vài chục giây — và cả ba cùng đổ về một triệu chứng duy nhất không mang thông tin. `terraform plan`, `terraform validate`, `terraform fmt` và phép quét nội suy `.tftpl` đều xanh. Cấu hình IPsec trong `user_data` là **phần duy nhất của cả repo không có gì kiểm được ngoài việc thử**.
+
+Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối đa 60 giây, rồi hoặc in `=== IKE SA DA LEN ===`, hoặc in 40 dòng `journalctl` kèm cách đọc ba thông báo hay gặp nhất. Kết luận nằm ở cuối file người ta vừa mở, không phải ở lệnh tiếp theo họ phải nghĩ ra.
+
+**Dựng lại chỉ máy giả lập** — EIP là resource riêng nên customer gateway và VPN connection không đổi, phía AWS không biết có gì xảy ra:
+
+```bash
+terraform apply -replace='aws_instance.partner_sim[0]'
+```
+
+---
+
 ## Liên quan
 | | |
 |---|---|
+| [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | 3rd-party VPC và VPN — bối cảnh của lỗi 74–76 |
 | [25 – Vận hành network hằng ngày](./25-Van-hanh-Network-Hang-Ngay.md) | Lớp `ops/` — bối cảnh của lỗi 66–73 |
 | [23 – Lớp phát hiện](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | Cơ chế GuardDuty / Security Hub / log archive — kết quả của mục 7h–7p |
 | [TEARDOWN](../landing-zone/TEARDOWN.md) | Chiều ngược lại — hai cổng khoá, parking account |

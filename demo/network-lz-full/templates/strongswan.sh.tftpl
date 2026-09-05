@@ -32,9 +32,41 @@ dnf install -y strongswan nmap-ncat bind-utils tcpdump || {
   exit 1
 }
 
+# dnf tra ve 0 ke ca khi mot goi khong ton tai trong vai truong hop, nen
+# hoi lai rpm - thu duy nhat biet chac goi da nam tren may hay chua.
+rpm -q strongswan || {
+  echo "dnf bao thanh cong nhung strongswan KHONG co tren may."
+  echo "Day la nhanh im lang nhat cua ca script: khong co daemon thi"
+  echo "khong co goi IKE nao roi khoi may, va phia AWS bao ca hai"
+  echo "duong ham DOWN voi StatusMessage RONG - dung trieu chung nay."
+  exit 1
+}
+
 # Duong dan khac nhau theo ban dong goi. AL2023 dung /etc/strongswan.
 CONF_DIR=/etc/strongswan
 [ -d "$CONF_DIR" ] || CONF_DIR=/etc
+
+########################################
+# 1b. install_routes = no
+#
+# Day la mot tuy chon cua charon, nam trong strongswan.conf - KHONG
+# phai trong ipsec.conf. Viet no vao ipsec.conf thi khong co tac dung
+# nao va cung khong co loi nao.
+#
+# Thieu no, voi leftsubnet=0.0.0.0/0 o muc 2, charon tu them mot route
+# 0.0.0.0/0 vao bang 220 ngay khi SA len. May mat duong ra Internet:
+# SSM rot, va ban mat luon duong vao de xem vi sao.
+#
+# Ta tu quan ly route o muc 4, va chi cho hai dai duoc cong bo.
+########################################
+if ! grep -q "install_routes" "$CONF_DIR/strongswan.conf" 2>/dev/null; then
+  cat >> "$CONF_DIR/strongswan.conf" <<'SWANCONF'
+
+charon {
+    install_routes = no
+}
+SWANCONF
+fi
 
 ########################################
 # 2. Cau hinh duong ham
@@ -47,9 +79,12 @@ CONF_DIR=/etc/strongswan
 # deu bao "established".
 #
 # mark=100/200: danh dau goi tin de gan vao dung interface vti.
-# install_routes=no: khong de strongSwan tu them route, ta tu them o
-# muc 4 - neu khong thi hai ben tranh nhau va route bien mat moi lan
-# SA rekey.
+#
+# Viec chan charon tu them route nam o MUC 1b, trong strongswan.conf.
+# Truoc day chu thich o day noi "install_routes=no" nhu the no duoc
+# dat trong chinh file ipsec.conf ben duoi - va no khong he co trong
+# do. Mot tuy chon cua charon viet nham vao ipsec.conf khong sinh loi
+# nao ca, no chi im lang khong co tac dung.
 ########################################
 cat > "$CONF_DIR/ipsec.conf" <<'IPSEC'
 config setup
@@ -103,11 +138,19 @@ chmod 600 "$CONF_DIR/ipsec.secrets"
 # neu khong thi goi tin ra khoi vti se khong duoc ma hoa - di ra
 # Internet dang tho va bien mat.
 ########################################
+modprobe ip_vti || {
+  echo "KHONG NAP DUOC module ip_vti - khong tao duoc interface duong ham."
+  exit 1
+}
+
 setup_vti() {
   local name=$1 mark=$2 local_ip=$3 remote_ip=$4 inside_local=$5 inside_remote=$6
 
   ip link del "$name" 2>/dev/null || true
-  ip tunnel add "$name" mode vti local "$local_ip" remote "$remote_ip" key "$mark"
+  ip tunnel add "$name" mode vti local "$local_ip" remote "$remote_ip" key "$mark" || {
+    echo "KHONG TAO DUOC $name."
+    return 1
+  }
   ip addr add "$inside_local" remote "$inside_remote" dev "$name"
   ip link set "$name" up mtu 1436
 
@@ -144,8 +187,73 @@ ip route replace ${cidr} dev vti1 metric 100
 ip route append ${cidr} dev vti2 metric 200
 %{ endfor ~}
 
-systemctl enable strongswan 2>/dev/null || systemctl enable strongswan-starter 2>/dev/null || true
-systemctl restart strongswan 2>/dev/null || systemctl restart strongswan-starter 2>/dev/null || true
+########################################
+# 4b. Cho EIP duoc gan XONG roi moi khoi dong charon
+#
+# Terraform tao instance TRUOC, gan EIP SAU. Trong khoang giua do may
+# van co mot IP cong khai - cai AWS tu phat khi bat
+# associate_public_ip_address - va no KHONG phai EIP.
+#
+# charon voi auto=start ban goi IKE ngay khi len. Neu no ban trong
+# khoang do, goi tin toi VPN endpoint mang dia chi nguon la IP tam.
+# AWS khong co customer gateway nao khop dia chi do nen vut goi tin
+# ma khong ghi gi ca: ca hai duong ham DOWN, StatusMessage RONG.
+#
+# Trieu chung nay khong the phan biet voi "daemon khong chay" neu chi
+# nhin tu phia AWS - do la ly do phai chan o day chu khong doan sau.
+########################################
+imds() {
+  local token
+  token=$(curl -s -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' \
+    http://169.254.169.254/latest/api/token)
+  curl -s -H "X-aws-ec2-metadata-token: $token" \
+    "http://169.254.169.254/latest/meta-data/$1"
+}
+
+EXPECTED_EIP="${local_id}"
+for _ in $(seq 1 60); do
+  CURRENT_IP=$(imds public-ipv4)
+  [ "$CURRENT_IP" = "$EXPECTED_EIP" ] && break
+  echo "cho EIP: dang la '$CURRENT_IP', can '$EXPECTED_EIP'"
+  sleep 5
+done
+
+if [ "$CURRENT_IP" != "$EXPECTED_EIP" ]; then
+  echo "SAU 5 PHUT EIP VAN CHUA DUOC GAN."
+  echo "leftid trong ipsec.conf la $EXPECTED_EIP nhung may dang ra"
+  echo "Internet bang $CURRENT_IP - IKE se khong bao gio khop."
+  echo "Kiem aws_eip_association.partner_sim o phia Terraform."
+  exit 1
+fi
+echo "EIP da gan: $CURRENT_IP"
+
+########################################
+# 4c. Ten unit khac nhau theo ban dong goi
+#
+# Debian: strongswan-starter. Fedora/AL2023: strongswan.
+#
+# Truoc day cho nay viet "enable A || enable B || true", va dau `true`
+# o cuoi nuot MOI that bai: khong tim thay unit nao thi script van chay
+# tiep va bao thanh cong. Tim ten TRUOC roi hong to neu khong co.
+########################################
+UNIT=""
+for u in strongswan strongswan-starter charon-systemd; do
+  if systemctl list-unit-files | grep -q "^$u\.service"; then
+    UNIT=$u
+    break
+  fi
+done
+
+if [ -z "$UNIT" ]; then
+  echo "KHONG TIM THAY UNIT systemd nao cua strongswan."
+  echo "Cac unit co chua chu swan tren may nay:"
+  systemctl list-unit-files | grep -i swan || echo "  (khong co cai nao)"
+  exit 1
+fi
+echo "Dung unit: $UNIT"
+
+systemctl enable "$UNIT"
+systemctl restart "$UNIT"
 
 ########################################
 # 5. Dung lai VTI sau khi khoi dong lai
@@ -217,4 +325,30 @@ sed -i "s|__NLB__|${nlb_dns}|" /usr/local/bin/vpn-check
 sed -i "s|__PORT__|${service_port}|" /usr/local/bin/vpn-check
 chmod +x /usr/local/bin/vpn-check
 
+########################################
+# 7. Noi ngay ket qua, trong chinh file log nay
+#
+# Khong co doan nay thi user-data.log ket thuc bang "xong" ke ca khi
+# khong co SA nao - va nguoi doc phai tu di tim tiep. Ket luan phai
+# nam o cuoi file ma ho vua mo.
+########################################
+echo "=== cho IKE SA (toi da 60 giay) ==="
+for _ in $(seq 1 12); do
+  if strongswan status 2>/dev/null | grep -q ESTABLISHED ||
+    ipsec status 2>/dev/null | grep -q ESTABLISHED; then
+    echo "=== IKE SA DA LEN ==="
+    strongswan status 2>/dev/null || ipsec status
+    echo "=== xong ==="
+    exit 0
+  fi
+  sleep 5
+done
+
+echo "=== IKE SA CHUA LEN. 40 dong nhat ky cua $UNIT: ==="
+journalctl -u "$UNIT" -n 40 --no-pager || true
+echo
+echo "Doc theo thu tu: 'no matching peer config' la sai leftid;"
+echo "'retransmit' lap lai ma khong co gi khac la goi tin khong toi"
+echo "duoc AWS (kiem security group); 'NO_PROPOSAL_CHOSEN' la lech"
+echo "bo thuat toan o dong ike=/esp= trong ipsec.conf."
 echo "=== xong, chay vpn-check de xem trang thai ==="
