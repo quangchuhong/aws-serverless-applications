@@ -15,8 +15,8 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Code** | [`demo/network-lz-full/partner.tf`](../demo/network-lz-full/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
-| **Đã apply** | `50 added, 1 changed, 0 destroyed`. Hạ tầng đúng: `verify.sh` mục 10 đạt 4/5 — `rtb-partner` sạch, đường về có, NLB target healthy |
-| **Còn hỏng** | Cả hai đường hầm `DOWN`. Nguyên nhân đã xác định từ log: **AL2023 không có gói `strongswan`** — máy giả lập chuyển sang Ubuntu. Kèm ba khiếm khuyết nằm sau chỗ đó, sửa luôn (lỗi 74–77) — xem **mục 5.3** |
+| **Đã chạy thật** | **Cả hai đường hầm `UP`**, hai IPsec SA `ESTABLISHED`. `rtb-partner` sạch, đường về có, NLB target healthy |
+| **Đường tới đó** | Bốn lỗi, mất bốn vòng dựng lại máy giả lập — trong đó nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77). Máy giả lập chạy Ubuntu. Chi tiết ở **mục 5.3** và [doc 22 mục 7al](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 
 Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
@@ -384,6 +384,25 @@ Mọi thứ khác trong bộ này đều có lưới: `terraform validate` bắt
 Cấu hình IPsec nằm trong `user_data` thì **không có cái nào chạm tới**. Nó là một chuỗi ký tự cho tới khi máy boot. Terraform không biết `ipsec.conf` là gì, và AWS chỉ trả lời được một câu duy nhất: đường hầm lên hay không.
 
 Nên khi phần này hỏng, hãy dự tính là phải vào máy đọc log — đó là thiết kế, không phải sự cố.
+
+### 5.2b. Trạng thái khi đã chạy đúng
+
+```
+Security Associations (2 up, 0 connecting):
+  Tunnel1[1]: ESTABLISHED, 172.16.0.79[47.130.178.166]...13.215.221.92[13.215.221.92]
+  Tunnel1{1}:  INSTALLED, TUNNEL, reqid 1, ESP in UDP SPIs: c666a30e_i c094a554_o
+  Tunnel2[2]: ESTABLISHED, 172.16.0.79[47.130.178.166]...52.77.185.28[52.77.185.28]
+```
+
+Ba chi tiết đáng đọc kỹ, vì mỗi cái xác nhận một quyết định thiết kế:
+
+| Trong output | Xác nhận điều gì |
+|---|---|
+| `172.16.0.79[47.130.178.166]` | Interface mang IP **riêng**, danh tính IKE là **EIP**. Đó là lý do `leftid` phải khai EIP — khai IP interface thì IKE hỏng ở bước xác thực danh tính với thông báo `no matching peer config`, đúng nhưng không chỉ vào địa chỉ |
+| `ESP in UDP` | NAT-T đang hoạt động. Có NAT giữa EC2 và Internet nên ESP thô không qua được; nếu chỗ này ghi `ESP` trần thì security group thiếu UDP 4500 |
+| `0.0.0.0/0 === 0.0.0.0/0` | Traffic selector mở hoàn toàn — **đúng thiết kế**. Việc chọn dải nào đi đường hầm nào là của route gắn vào `vti`, không phải của traffic selector. Đây là điểm khác nhau giữa route-based và policy-based, và ghép nhầm hai kiểu cho ra lỗi tệ nhất: SA có mà không gói tin nào qua |
+
+Trên Ubuntu, unit là **`strongswan-starter`**, không phải `strongswan` — vòng dò tên unit ở mục 4c của script tồn tại vì lý do này.
 
 ### 5.3. Đường hầm `DOWN` — đọc theo thứ tự nào
 

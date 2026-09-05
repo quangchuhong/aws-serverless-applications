@@ -2928,6 +2928,23 @@ Sửa: máy giả lập chuyển sang **Ubuntu**, nơi `strongswan` nằm trong 
 
 Đây là **máy duy nhất trong cả bộ không chạy AL2023**. Ràng buộc đó ghi ở đầu `strongswan.sh.tftpl` và trong `description` của biến, vì thêm một dòng `dnf` vào file đó sau này sẽ hỏng không rõ lý do.
 
+### Kết quả
+
+```
+|  13.215.221.92 |  UP |    |
+|  52.77.185.28  |  UP |    |
+
+Security Associations (2 up, 0 connecting):
+  Tunnel1[1]: ESTABLISHED, 172.16.0.79[47.130.178.166]...13.215.221.92
+  Tunnel2[2]: ESTABLISHED, 172.16.0.79[47.130.178.166]...52.77.185.28
+```
+
+Cả hai đường hầm lên, hai SA `ESTABLISHED`. Bốn lỗi, bốn vòng thay máy giả lập.
+
+Hai dòng đó cũng xác nhận ngược lại hai chỗ trong lỗi 76: `172.16.0.79[47.130.178.166]` — interface mang IP riêng, danh tính IKE là EIP. Đúng cặp mà cuộc đua EIP–charon có thể phá, và là lý do phải chặn nó chứ không đoán sau.
+
+Unit hoá ra là **`strongswan-starter`** — tên của Debian/Ubuntu. Nhánh thứ hai trong vòng dò của lỗi 75; với `|| true` cũ thì nhánh đó vẫn chạy đúng, nhưng nhánh "không có unit nào" thì im lặng đi qua.
+
 Kèm theo: `apt-get -o DPkg::Lock::Timeout=600`. `cloud-init` và `unattended-upgrades` cùng chạy lúc máy vừa lên và giữ khoá `dpkg`; thiếu dòng này thì `apt-get` chết vì `Could not get lock` — và triệu chứng phía AWS lại đúng là hai đường hầm `DOWN`, không liên quan gì tới IPsec.
 
 > **Điểm chung của lỗi 74–76:** không cái nào phát ra lỗi. Một tuỳ chọn đặt nhầm file, một `|| true` quá rộng, một cuộc đua vài chục giây — và cả ba cùng đổ về một triệu chứng duy nhất không mang thông tin. `terraform plan`, `terraform validate`, `terraform fmt` và phép quét nội suy `.tftpl` đều xanh. Cấu hình IPsec trong `user_data` là **phần duy nhất của cả repo không có gì kiểm được ngoài việc thử**.
