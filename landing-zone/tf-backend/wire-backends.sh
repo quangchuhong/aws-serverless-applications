@@ -209,6 +209,13 @@ done < <(echo "$configs" | jq -r 'keys[]')
 # khong keu da gap suot ca du an.
 ########################################
 
+# Ten layer duoc gom bang XUONG DONG, khong phai dau cach.
+#
+# Truoc day khoi nay gom bang dau cach roi in bang `for m in $missing`.
+# Mot thu muc co dau cach trong ten - vi du mot cau lenh bi dan nham
+# vao `mkdir` - bi tach thanh muc: dem bao "1 layer" trong khi ben
+# duoi in ra muoi mot dong. Con so dung, danh sach sai, va nguoi doc
+# tin vao danh sach.
 missing=""
 n_missing=0
 
@@ -244,7 +251,7 @@ for d in "$REPO_ROOT"/landing-zone/*/ "$REPO_ROOT"/demo/*/ "$REPO_ROOT"/demo/*/*
   # Bo qua demo co y dung state local
   case " $(echo $LOCAL_STATE_LAYERS) " in *" $layer "*) continue ;; esac
   if ! echo "$configs" | jq -e --arg k "$layer" 'has($k)' >/dev/null 2>&1; then
-    missing="$missing $layer"
+    missing="${missing}${layer}"$'\n'
     n_missing=$((n_missing + 1))
   fi
 done
@@ -252,13 +259,23 @@ done
 if [ "$n_missing" -gt 0 ]; then
   echo
   amber "CO $n_missing LAYER TREN DIA MA KHONG CO TRONG STATE:"
-  for m in $missing; do echo "    $m"; done
+  # In nguyen ten, ke ca khi trong ten co dau cach. Dau nhay quanh ten
+  # de mot thu muc rac - ten co dau cach, ky tu la - nhin ra ngay la
+  # rac chu khong lan vao danh sach layer that.
+  printf '%s' "$missing" | while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    echo "    \"$m\""
+  done
   echo
   echo "  backend_hcl la output cua Terraform, va output nam trong state."
   echo "  Them dong vao local.layers (outputs.tf) roi PHAI apply lai:"
   echo
   echo "    terraform apply        # 0 resource doi, chi Outputs"
   echo "    ./wire-backends.sh"
+  echo
+  echo "  Ten co dau cach hay ky tu la KHONG phai layer thieu khai bao -"
+  echo "  do la mot thu muc rac nam trong demo/ hoac landing-zone/."
+  echo "  Xem va xoa:  find demo landing-zone -maxdepth 2 -type d"
   echo
 fi
 
