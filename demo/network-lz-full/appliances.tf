@@ -184,6 +184,243 @@ resource "aws_security_group" "palo_alto" {
   tags = { Name = "${var.project}-pa" }
 }
 
+########################################
+# BOOTSTRAP PALO ALTO
+#
+# VM-Series doc cau hinh khoi dau tu MOT BUCKET S3 co dung bon thu
+# muc: config/, license/, software/, content/. Thieu bat cu thu muc
+# nao thi PAN-OS bo qua CA goi bootstrap - va no bo qua IM LANG:
+# thiet bi len binh thuong voi cau hinh goc, khong interface, khong
+# zone, khong policy.
+#
+# Trieu chung: GWLB bao target unhealthy mai mai, va khong co gi noi
+# tai sao. Do la ly do ba thu muc rong van phai duoc tao ra.
+#
+# S3 khong co thu muc that - mot object rong ket thuc bang "/" la du
+# de PAN-OS thay tien to do khi liet ke.
+########################################
+
+resource "aws_s3_bucket" "pa_bootstrap" {
+  count = local.app_on
+
+  bucket        = "${var.project}-pa-bootstrap-${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
+
+  tags = { Name = "${var.project}-pa-bootstrap" }
+}
+
+resource "aws_s3_bucket_public_access_block" "pa_bootstrap" {
+  count = local.app_on
+
+  bucket = aws_s3_bucket.pa_bootstrap[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "pa_bootstrap" {
+  count = local.app_on
+
+  bucket = aws_s3_bucket.pa_bootstrap[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Ba thu muc RONG. Khong co chung thi ca goi bootstrap bi bo qua.
+resource "aws_s3_object" "pa_bootstrap_dirs" {
+  for_each = local.app_on > 0 ? toset(["license/", "software/", "content/"]) : toset([])
+
+  bucket  = aws_s3_bucket.pa_bootstrap[0].id
+  key     = each.value
+  content = ""
+}
+
+resource "aws_s3_object" "pa_init_cfg" {
+  count = local.app_on
+
+  bucket = aws_s3_bucket.pa_bootstrap[0].id
+  key    = "config/init-cfg.txt"
+
+  # mgmt-interface-swap: doi eth0 va eth1.
+  #
+  # GWLB gui GENEVE toi ENI CHINH cua instance. Mac dinh PAN-OS lay
+  # eth0 lam giao dien QUAN TRI, nen khong doi thi luu luong can quet
+  # den mot cong khong xu ly duoc goi tin, va giao dien du lieu thi
+  # nam o ENI phu ma GWLB khong bao gio gui toi.
+  #
+  # Doi lai thi eth0 thanh du lieu (ethernet1/1) va eth1 thanh quan
+  # tri - dung thu tu ma phan dinh tuyen va security group ben duoi
+  # gia dinh.
+  #
+  # aws-gwlb-inspect: bat ket cuoi GENEVE. Thieu no thi PAN-OS nhan
+  # duoc goi GENEVE va khong biet lam gi voi chung.
+  content = templatefile("${path.module}/templates/pa-init-cfg.txt.tftpl", {
+    hostname           = "${var.project}-pa"
+    dns_primary        = "169.254.169.253"
+    dns_secondary      = "8.8.8.8"
+    op_command_modes   = "mgmt-interface-swap"
+    plugin_op_commands = "aws-gwlb-inspect:enable"
+  })
+}
+
+resource "aws_s3_object" "pa_bootstrap_xml" {
+  count = local.app_on
+
+  bucket = aws_s3_bucket.pa_bootstrap[0].id
+  key    = "config/bootstrap.xml"
+
+  content = templatefile("${path.module}/templates/pa-bootstrap.xml.tftpl", {
+    panos_version          = var.pa_panos_version
+    hostname               = "${var.project}-pa"
+    dns_primary            = "169.254.169.253"
+    dns_secondary          = "8.8.8.8"
+    permitted_ips          = var.pa_mgmt_allowed_cidrs
+    zone_name              = var.pa_zone_name
+    allowed_applications   = var.pa_allowed_applications
+    security_profile_group = var.pa_security_profile_group
+    default_action         = var.pa_default_action
+  })
+}
+
+########################################
+# Quyen doc bucket bootstrap
+#
+# CHI doc, CHI bucket nay. VM-Series khong can gi khac tu AWS.
+########################################
+
+resource "aws_iam_role" "pa" {
+  count = local.app_on
+
+  name = "${var.project}-pa-bootstrap"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "pa" {
+  count = local.app_on
+
+  name = "bootstrap-read"
+  role = aws_iam_role.pa[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        # ListBucket la quyen tren CHINH bucket, khong phai tren
+        # object - va PAN-OS can no de tim bon thu muc. Thieu no thi
+        # GetObject van chay ma bootstrap van bi bo qua.
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = aws_s3_bucket.pa_bootstrap[0].arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.pa_bootstrap[0].arn}/*"
+      },
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "pa" {
+  count = local.app_on
+
+  name = "${var.project}-pa-bootstrap"
+  role = aws_iam_role.pa[0].name
+}
+
+########################################
+# Security group cho giao dien QUAN TRI
+#
+# Tach khoi security group cua giao dien du lieu. Hai giao dien phuc
+# vu hai muc dich va chiu hai muc rui ro khac nhau; dung chung mot
+# security group nghia la noi long cho cai nay la noi long cho ca cai
+# kia.
+########################################
+
+resource "aws_security_group" "pa_mgmt" {
+  count = local.app_on
+
+  name        = "${var.project}-pa-mgmt"
+  description = "Giao dien quan tri Palo Alto - chi tu dai quan tri"
+  vpc_id      = aws_vpc.ingress[0].id
+
+  tags = { Name = "${var.project}-pa-mgmt" }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "pa_mgmt_https" {
+  for_each = local.app_on > 0 ? toset(var.pa_mgmt_allowed_cidrs) : toset([])
+
+  security_group_id = aws_security_group.pa_mgmt[0].id
+  description       = "Giao dien web quan tri"
+
+  cidr_ipv4   = each.value
+  from_port   = 443
+  to_port     = 443
+  ip_protocol = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "pa_mgmt_ssh" {
+  for_each = local.app_on > 0 ? toset(var.pa_mgmt_allowed_cidrs) : toset([])
+
+  security_group_id = aws_security_group.pa_mgmt[0].id
+  description       = "SSH - dang nhap lan dau bang key pair"
+
+  cidr_ipv4   = each.value
+  from_port   = 22
+  to_port     = 22
+  ip_protocol = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "pa_mgmt" {
+  count = local.app_on
+
+  security_group_id = aws_security_group.pa_mgmt[0].id
+  description       = "Cap nhat chu ky, license, bootstrap"
+
+  cidr_ipv4   = "0.0.0.0/0"
+  ip_protocol = "-1"
+}
+
+########################################
+# Instance Palo Alto
+#
+# HAI GIAO DIEN, va thu tu cua chung quan trong:
+#
+#   eth0  subnet appliance  <- GWLB gui GENEVE toi day
+#   eth1  subnet mgmt       <- nguoi quan tri vao day
+#
+# Cong voi mgmt-interface-swap trong init-cfg.txt, PAN-OS doc eth0
+# thanh ethernet1/1 (du lieu) va eth1 thanh giao dien quan tri.
+#
+# Mot giao dien thoi thi KHONG chay: GWLB gui toi ENI chinh, va neu
+# ENI chinh la giao dien quan tri thi goi tin can quet khong bao gio
+# toi mat phang du lieu.
+########################################
+
+resource "aws_network_interface" "pa_mgmt" {
+  count = local.app_on
+
+  subnet_id       = aws_subnet.ingress_mgmt[0].id
+  security_groups = [aws_security_group.pa_mgmt[0].id]
+
+  description = "Giao dien quan tri Palo Alto (eth1 sau khi swap)"
+  tags        = { Name = "${var.project}-pa-mgmt" }
+}
+
 resource "aws_instance" "palo_alto" {
   count = local.app_on
 
@@ -192,10 +429,24 @@ resource "aws_instance" "palo_alto" {
 
   subnet_id              = aws_subnet.ingress_appliance[0].id
   vpc_security_group_ids = [aws_security_group.palo_alto[0].id]
+  iam_instance_profile   = aws_iam_instance_profile.pa[0].name
+
+  # Rong = khong ai vao duoc thiet bi. Xem mo ta bien pa_key_name.
+  key_name = var.pa_key_name != "" ? var.pa_key_name : null
 
   # BAT BUOC: firewall phai chuyen tiep goi khong phai cua minh.
   # Thieu dong nay thi EC2 vut bo moi goi va PA khong nhan duoc gi.
   source_dest_check = false
+
+  # KHONG phai mot script.
+  #
+  # VM-Series doc user_data nhu mot chuoi khoa=gia tri, khong phai
+  # shell. Dung dong nay chi tro toi bucket; toan bo cau hinh nam
+  # trong config/init-cfg.txt va config/bootstrap.xml o do.
+  #
+  # Ghi mot script bash vao day thi PAN-OS bo qua, va thiet bi len
+  # voi cau hinh goc - im lang, khong loi.
+  user_data = "vmseries-bootstrap-aws-s3bucket=${aws_s3_bucket.pa_bootstrap[0].id}"
 
   root_block_device {
     volume_size = 60
@@ -203,7 +454,24 @@ resource "aws_instance" "palo_alto" {
     encrypted   = true
   }
 
+  # Bootstrap doc S3 LUC BOOT. Object phai co truoc instance, neu
+  # khong thiet bi len voi cau hinh goc va chi mot lan thay instance
+  # moi sua duoc.
+  depends_on = [
+    aws_s3_object.pa_init_cfg,
+    aws_s3_object.pa_bootstrap_xml,
+    aws_s3_object.pa_bootstrap_dirs,
+  ]
+
   tags = { Name = "${var.project}-pa" }
+}
+
+resource "aws_network_interface_attachment" "pa_mgmt" {
+  count = local.app_on
+
+  instance_id          = aws_instance.palo_alto[0].id
+  network_interface_id = aws_network_interface.pa_mgmt[0].id
+  device_index         = 1
 }
 
 resource "aws_lb_target_group_attachment" "palo_alto" {

@@ -895,3 +895,99 @@ variable "organization_arn" {
   type        = string
   default     = ""
 }
+
+########################################
+# PALO ALTO - BOOTSTRAP
+########################################
+
+variable "pa_key_name" {
+  description = <<-EOT
+    Ten EC2 key pair de dang nhap Palo Alto lan dau.
+
+    VM-Series tren AWS KHONG co mat khau mac dinh: lan dau vao bang
+    `ssh -i <key>.pem admin@<ip mgmt>`, roi tu dat mat khau. Bootstrap
+    o day CO CHU DICH khong dat mat khau - mot phash viet san trong
+    XML nam trong S3 va trong state, va no se song lau hon y dinh cua
+    nguoi viet no.
+
+    De trong thi instance van tao duoc nhung KHONG AI VAO DUOC. Chap
+    nhan duoc khi chi chay plan de kiem code; khong chap nhan duoc khi
+    apply that.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "pa_mgmt_allowed_cidrs" {
+  description = <<-EOT
+    Dai duoc phep goi vao giao dien quan tri cua Palo Alto.
+
+    Vao CA security group LAN `permitted-ip` trong bootstrap.xml -
+    hai lop, va lop thu hai la lop duy nhat con tac dung neu ai do noi
+    long security group.
+
+    MAC DINH LA DAI NOI BO, khong phai 0.0.0.0/0. Mo giao dien quan
+    tri cua mot firewall ra Internet la cach nhanh nhat de bien thiet
+    bi bao ve thanh duong vao.
+  EOT
+  type        = list(string)
+  default     = ["10.0.0.0/8"]
+
+  validation {
+    condition     = !contains(var.pa_mgmt_allowed_cidrs, "0.0.0.0/0")
+    error_message = "pa_mgmt_allowed_cidrs khong duoc chua 0.0.0.0/0 - do la giao dien quan tri cua firewall."
+  }
+}
+
+variable "pa_panos_version" {
+  description = "Phien ban PAN-OS ghi vao thuoc tinh version cua bootstrap.xml. PHAI khop AMI dang dung."
+  type        = string
+  default     = "11.1.0"
+}
+
+variable "pa_zone_name" {
+  description = "Ten security zone chua interface du lieu"
+  type        = string
+  default     = "inspect"
+}
+
+variable "pa_allowed_applications" {
+  description = <<-EOT
+    App-ID duoc cho qua trong rule dau tien.
+
+    Khai bang TEN UNG DUNG, khong phai cong. Do la ca ly do dung Palo
+    Alto thay vi mot ACL: `web-browsing` tren cong 8080 van duoc nhan
+    ra, con mot ket noi SSH nguy trang thanh cong 443 thi khong.
+  EOT
+  type        = list(string)
+  default     = ["web-browsing", "ssl"]
+}
+
+variable "pa_security_profile_group" {
+  description = <<-EOT
+    Nhom profile bao mat gan vao rule cho qua.
+
+    "best-practice" la nhom dung san trong PAN-OS 10.0 tro len. Cho
+    qua ma khong gan profile nao thi firewall chi lam viec cua mot
+    ACL - dung thu ma khong ai muon tra $1.3/gio de co.
+  EOT
+  type        = string
+  default     = "best-practice"
+}
+
+variable "pa_default_action" {
+  description = <<-EOT
+    Hanh dong cua rule CUOI CUNG: "allow" hay "deny".
+
+    Bat dau bang "allow" de doc log truoc - cung ly do voi
+    firewall_mode = "alert" cua Network Firewall. Chuyen sang "deny"
+    khi da biet cai gi that su di qua.
+  EOT
+  type        = string
+  default     = "allow"
+
+  validation {
+    condition     = contains(["allow", "deny", "drop", "reset-both"], var.pa_default_action)
+    error_message = "pa_default_action phai la allow, deny, drop hoac reset-both."
+  }
+}

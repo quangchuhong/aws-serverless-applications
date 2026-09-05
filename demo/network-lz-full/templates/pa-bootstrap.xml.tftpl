@@ -1,0 +1,218 @@
+<?xml version="1.0"?>
+<config version="${panos_version}" urldb="paloaltonetworks">
+  <mgt-config>
+    <users>
+      <entry name="admin">
+        <permissions>
+          <role-based>
+            <superuser>yes</superuser>
+          </role-based>
+        </permissions>
+      </entry>
+    </users>
+  </mgt-config>
+
+  <shared>
+    <log-settings>
+      <profiles>
+        <entry name="default">
+          <match-list>
+            <entry name="all-traffic">
+              <log-type>traffic</log-type>
+              <filter>All Logs</filter>
+            </entry>
+            <entry name="all-threat">
+              <log-type>threat</log-type>
+              <filter>All Logs</filter>
+            </entry>
+          </match-list>
+        </entry>
+      </profiles>
+    </log-settings>
+  </shared>
+
+  <devices>
+    <entry name="localhost.localdomain">
+      <deviceconfig>
+        <system>
+          <hostname>${hostname}</hostname>
+          <type>
+            <dhcp-client>
+              <send-hostname>yes</send-hostname>
+              <send-client-id>yes</send-client-id>
+              <accept-dhcp-hostname>no</accept-dhcp-hostname>
+              <accept-dhcp-domain>no</accept-dhcp-domain>
+            </dhcp-client>
+          </type>
+          <dns-setting>
+            <servers>
+              <primary>${dns_primary}</primary>
+              <secondary>${dns_secondary}</secondary>
+            </servers>
+          </dns-setting>
+          <update-server>updates.paloaltonetworks.com</update-server>
+          <update-schedule>
+            <threats>
+              <recurring>
+                <daily>
+                  <at>02:00</at>
+                  <action>download-and-install</action>
+                </daily>
+              </recurring>
+            </threats>
+          </update-schedule>
+          <permitted-ip>
+%{ for cidr in permitted_ips ~}
+            <entry name="${cidr}"/>
+%{ endfor ~}
+          </permitted-ip>
+        </system>
+        <setting>
+          <management>
+            <initcfg>
+              <type>
+                <dhcp-client>
+                  <send-hostname>yes</send-hostname>
+                  <send-client-id>yes</send-client-id>
+                </dhcp-client>
+              </type>
+            </initcfg>
+          </management>
+        </setting>
+      </deviceconfig>
+
+      <network>
+        <profiles>
+          <interface-management-profile>
+            <entry name="gwlb-health-check">
+              <http>yes</http>
+              <ping>yes</ping>
+            </entry>
+          </interface-management-profile>
+        </profiles>
+
+        <interface>
+          <ethernet>
+            <entry name="ethernet1/1">
+              <layer3>
+                <dhcp-client>
+                  <enable>yes</enable>
+                  <create-default-route>yes</create-default-route>
+                </dhcp-client>
+                <interface-management-profile>gwlb-health-check</interface-management-profile>
+              </layer3>
+            </entry>
+          </ethernet>
+        </interface>
+
+        <virtual-router>
+          <entry name="default">
+            <interface>
+              <member>ethernet1/1</member>
+            </interface>
+          </entry>
+        </virtual-router>
+      </network>
+
+      <vsys>
+        <entry name="vsys1">
+          <zone>
+            <entry name="${zone_name}">
+              <network>
+                <layer3>
+                  <member>ethernet1/1</member>
+                </layer3>
+              </network>
+              <enable-user-identification>no</enable-user-identification>
+            </entry>
+          </zone>
+
+          <import>
+            <network>
+              <interface>
+                <member>ethernet1/1</member>
+              </interface>
+            </network>
+          </import>
+
+          <rulebase>
+            <security>
+              <rules>
+                <entry name="allow-inspected-web">
+                  <from>
+                    <member>${zone_name}</member>
+                  </from>
+                  <to>
+                    <member>${zone_name}</member>
+                  </to>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <source-user>
+                    <member>any</member>
+                  </source-user>
+                  <application>
+%{ for app in allowed_applications ~}
+                    <member>${app}</member>
+%{ endfor ~}
+                  </application>
+                  <service>
+                    <member>application-default</member>
+                  </service>
+                  <category>
+                    <member>any</member>
+                  </category>
+                  <action>allow</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <log-setting>default</log-setting>
+                  <profile-setting>
+                    <group>
+                      <member>${security_profile_group}</member>
+                    </group>
+                  </profile-setting>
+                  <description>Cho qua ung dung da khai, kem bo profile de quet</description>
+                </entry>
+
+                <entry name="deny-everything-else">
+                  <from>
+                    <member>any</member>
+                  </from>
+                  <to>
+                    <member>any</member>
+                  </to>
+                  <source>
+                    <member>any</member>
+                  </source>
+                  <destination>
+                    <member>any</member>
+                  </destination>
+                  <source-user>
+                    <member>any</member>
+                  </source-user>
+                  <application>
+                    <member>any</member>
+                  </application>
+                  <service>
+                    <member>any</member>
+                  </service>
+                  <category>
+                    <member>any</member>
+                  </category>
+                  <action>${default_action}</action>
+                  <log-start>no</log-start>
+                  <log-end>yes</log-end>
+                  <log-setting>default</log-setting>
+                  <description>Rule cuoi cung. Doi thanh deny khi da doc du log.</description>
+                </entry>
+              </rules>
+            </security>
+          </rulebase>
+        </entry>
+      </vsys>
+    </entry>
+  </devices>
+</config>

@@ -56,6 +56,71 @@ terraform validate >/dev/null 2>&1 \
   || { bad "terraform validate that bai:"; terraform validate; }
 
 ########################################
+# CAU HINH THIET BI - thu plan KHONG NHIN VAO
+#
+# templatefile() chi ghep chuoi. bootstrap.xml cua Palo Alto co the
+# thieu the dong, thieu ca mot khoi bat buoc, hay sai cau truc hoan
+# toan - plan van xanh, apply van xanh, object van len S3. PAN-OS moi
+# la thu doc no, va no doc luc BOOT.
+#
+# Khi cau hinh sai, trieu chung la: GWLB bao target unhealthy mai mai,
+# khong log, khong loi. Cung ho voi cau hinh IPsec cua strongSwan -
+# phan duy nhat cua ca bo khong co gi kiem duoc ngoai viec thu.
+#
+# Nen kiem o day: cu phap XML, va cac khoi ma thieu chung thi thiet bi
+# len nhung khong quet gi.
+########################################
+python3 - <<'PYCHK'
+import re, sys, xml.etree.ElementTree as ET
+
+src = open("templates/pa-bootstrap.xml.tftpl", encoding="utf-8").read()
+
+# Dung templatefile bang tay: gia tri gia, chi de kiem CAU TRUC.
+loops = {"permitted_ips": ("cidr", ["10.0.0.0/8"]),
+         "allowed_applications": ("app", ["web-browsing", "ssl"])}
+for name, (var, vals) in loops.items():
+    src = re.sub(r"%\{ for " + var + r" in " + name + r" ~\}(.*?)%\{ endfor ~\}\n",
+                 lambda m: "".join(m.group(1).replace("${" + var + "}", v) for v in vals),
+                 src, flags=re.S)
+src = re.sub(r"\$\{[a-z_][a-z0-9_.]*\}", "X", src)
+
+leftover = re.findall(r"[$%]\{[^}]*\}", src)
+if leftover:
+    print("  con sot noi suy chua thay the:", leftover); sys.exit(1)
+
+try:
+    root = ET.fromstring(src)
+except ET.ParseError as e:
+    print("  bootstrap.xml SAI CU PHAP:", e); sys.exit(1)
+
+need = {
+    "./devices/entry/network/interface/ethernet/entry": "interface du lieu",
+    "./devices/entry/network/virtual-router/entry": "virtual router",
+    "./devices/entry/network/profiles/interface-management-profile/entry":
+        "profile quan tri interface - THIEU thi health check cua GWLB khong bao gio dat",
+    "./devices/entry/vsys/entry/zone/entry": "security zone",
+    "./devices/entry/vsys/entry/import/network/interface":
+        "import interface vao vsys - THIEU thi zone khong gan vao interface nao",
+    "./devices/entry/vsys/entry/rulebase/security/rules/entry": "rule bao mat",
+}
+missing = [ten for xp, ten in need.items() if not root.findall(xp)]
+if missing:
+    print("  bootstrap.xml THIEU:"); [print("    -", m) for m in missing]; sys.exit(1)
+
+# init-cfg.txt: hai khoa ma thieu chung thi thiet bi len nhung khong
+# nhan duoc goi tin nao can quet.
+cfg = open("templates/pa-init-cfg.txt.tftpl", encoding="utf-8").read()
+for key in ("op-command-modes", "plugin-op-commands", "type=dhcp-client"):
+    if key not in cfg:
+        print(f"  init-cfg.txt thieu khoa: {key}"); sys.exit(1)
+PYCHK
+if [[ $? -eq 0 ]]; then
+  ok "Cau hinh Palo Alto: XML hop le, du khoi bat buoc"
+else
+  bad "Cau hinh Palo Alto khong hop le - xem tren"
+fi
+
+########################################
 run_plan() {
   local label="$1"; shift
   local out

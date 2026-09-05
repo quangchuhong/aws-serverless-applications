@@ -2969,6 +2969,73 @@ terraform apply -replace='aws_instance.partner_sim[0]'
 
 ---
 
+## 7an. Palo Alto không có bootstrap — một thiết bị $1.3/giờ không làm gì
+
+`enable_appliances = true` dựng đủ: GWLB, GWLB endpoint, target group GENEVE, security group, instance Palo Alto, và toàn bộ định tuyến ép lưu lượng vào qua thanh tra. F5 bên cạnh có `f5-runtime-init.yaml` cài DO/AS3/TS và áp declaration.
+
+Palo Alto **không có `user_data` nào cả**.
+
+Nghĩa là nó boot với cấu hình gốc: không interface dữ liệu, không zone, không virtual router, không một rule nào. Một VM-Series ở trạng thái đó không phải là "firewall chưa cấu hình" — nó là một EC2 `m5.xlarge` giá ~$1.3/giờ không nhận được gói tin nào.
+
+Triệu chứng: **GWLB báo target `unhealthy` mãi mãi**, không log, không lỗi. Và đây là chỗ đáng chú ý — `terraform plan` xanh, `apply` xanh, mọi resource tồn tại đúng như khai báo. Cùng hình dạng với cấu hình strongSwan: phần duy nhất không có gì kiểm được ngoài việc thử.
+
+### Bootstrap của VM-Series không phải là một script
+
+```hcl
+user_data = "vmseries-bootstrap-aws-s3bucket=${bucket}"
+```
+
+Đúng một dòng. PAN-OS đọc `user_data` như một chuỗi `khoá=giá trị`, **không phải shell** — viết một script bash vào đó thì nó bỏ qua, im lặng, và thiết bị lên với cấu hình gốc.
+
+Cấu hình thật nằm trong S3, theo đúng bốn thư mục:
+
+| | |
+|---|---|
+| `config/init-cfg.txt` | Thiết bị lấy IP thế nào, bật plugin nào |
+| `config/bootstrap.xml` | Toàn bộ cấu hình: interface, zone, virtual router, rule |
+| `license/`, `software/`, `content/` | **Rỗng, nhưng phải tồn tại** |
+
+Ba thư mục rỗng đó là cái bẫy đầu tiên: thiếu **bất kỳ** cái nào thì PAN-OS bỏ qua **cả gói** bootstrap — và bỏ qua im lặng. S3 không có thư mục thật, nên phải tạo ba object rỗng kết thúc bằng `/`.
+
+Cái bẫy thứ hai là quyền: `s3:ListBucket` là quyền trên **chính bucket**, không phải trên object. Thiếu nó thì `GetObject` vẫn chạy mà bootstrap vẫn bị bỏ qua, vì PAN-OS không liệt kê được bốn thư mục.
+
+### Hai giao diện, và thứ tự của chúng
+
+Bản cũ gắn một ENI duy nhất. Không chạy được, và lý do đáng nhớ:
+
+> **GWLB gửi GENEVE tới ENI *chính* của instance.** Mặc định PAN-OS lấy `eth0` làm giao diện **quản trị**. Nên với một ENI, lưu lượng cần quét đến một cổng không xử lý được gói tin, còn mặt phẳng dữ liệu thì nằm ở một ENI không tồn tại.
+
+Cách sửa là `op-command-modes=mgmt-interface-swap` trong `init-cfg.txt`, cộng một ENI thứ hai:
+
+| ENI | Subnet | Sau khi swap |
+|---|---|---|
+| `eth0` | `ingress_appliance` | `ethernet1/1` — dữ liệu, GWLB gửi vào đây |
+| `eth1` | `ingress_mgmt` | giao diện quản trị |
+
+Subnet `ingress_mgmt` đã tồn tại trong code từ trước và **không ai dùng** — dấu vết của một thiết kế hai NIC chỉ đi được nửa đường.
+
+### Mật khẩu: cố ý không đặt
+
+`bootstrap.xml` không đặt mật khẩu admin. VM-Series trên AWS đăng nhập lần đầu bằng key pair (`ssh -i key.pem admin@<ip mgmt>`), rồi tự đặt.
+
+Một phash viết sẵn trong XML sẽ nằm trong S3 **và** trong state, và nó sẽ sống lâu hơn ý định của người viết nó. Đổi lại: `pa_key_name` để rỗng thì instance vẫn tạo được nhưng **không ai vào được** — chấp nhận được khi chỉ chạy `plan`, không chấp nhận được khi apply thật. Mô tả biến nói thẳng điều đó.
+
+### Phép kiểm cho thứ không kiểm được
+
+`templatefile()` chỉ ghép chuỗi. `bootstrap.xml` có thể thiếu thẻ đóng, thiếu cả một khối bắt buộc, hay sai cấu trúc hoàn toàn — `plan` vẫn xanh, `apply` vẫn xanh, object vẫn lên S3.
+
+Nên `plan-check.sh` mở chính file template, thay nội suy bằng giá trị giả, phân tích XML, và đòi sáu khối phải có mặt. Thử phá ba kiểu để chắc nó không phải một dấu tích trang trí:
+
+| Phá | Kết quả |
+|---|---|
+| Bỏ một thẻ đóng | `bootstrap.xml SAI CU PHAP: mismatched tag: line 114` |
+| Bỏ khối `<profiles>` | `THIEU: profile quan tri interface - health check cua GWLB khong bao gio dat` |
+| Bỏ `plugin-op-commands` | `init-cfg.txt thieu khoa: plugin-op-commands` |
+
+> Bài học lặp lại lần thứ năm trong tài liệu này: thứ đắt nhất không phải lỗi làm `apply` đỏ, mà là cấu hình **đi qua được mọi công cụ** rồi mới sai lúc chạy. Với mỗi thứ như vậy, phải tự dựng phép kiểm — và phải thử phá nó, vì một phép kiểm chưa bao giờ thất bại thì chưa biết nó có kiểm gì không.
+
+---
+
 ## 7am. Lỗi 78–80 — đường hầm lên rồi, và không gói tin nào về
 
 Đường hầm `UP`, hai SA `ESTABLISHED`. Rồi:
