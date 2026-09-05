@@ -352,7 +352,7 @@ Job `expiry` cố ý **không** dùng `--strict`: chạy theo lịch thì chỉ 
 
 | | |
 |---|---|
-| Rule group | **$0** — Network Firewall tính theo giờ endpoint và GB xử lý, không theo capacity hay số rule |
+| Rule group | **$0** — Network Firewall tính theo giờ endpoint và GB xử lý, không theo capacity hay số rule. [Doc 15 mục 8.0](./15-Security-VPC-Network-Firewall.md) liệt kê đủ những gì **không** tính tiền |
 | Route TGW | $0 |
 | Bản ghi DNS | ~$0 (Route 53 tính $0.40/triệu truy vấn) |
 | Interface endpoint | **~$0.01/giờ mỗi AZ mỗi dịch vụ** — 2 AZ = ~$14.60/tháng cho mỗi dòng, kể cả khi không ai gọi |

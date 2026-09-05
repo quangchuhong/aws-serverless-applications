@@ -991,6 +991,38 @@ Hai lớp bổ sung nhau: DNS Firewall nói *"đừng hỏi địa chỉ đó"*,
 | TGW data processing | ~$0.02/GB | **× 4 lần** |
 | NAT (ở egress VPC) | ~$0.045/giờ + $0.045/GB | ~$66 + traffic |
 
+### 8.0. Chỉ có hai chiều tính tiền
+
+Network Firewall tính tiền theo **đúng hai** thứ:
+
+```
+chi phí = (số AZ × $0.395/giờ)  +  (số GB firewall xử lý × $0.065)
+              ↑ endpoint                    ↑ dữ liệu
+```
+
+Chiều thứ nhất là **cố định**, trả kể cả khi không một gói tin nào đi qua. Chiều thứ hai đếm **cả request lẫn response** — một vòng đi-về 1 GB là 2 GB được xử lý.
+
+#### Những thứ KHÔNG tính tiền
+
+Đây là chỗ nhiều người ước lượng sai theo hướng ngược lại — sợ tốn nên để chật, rồi mắc kẹt:
+
+| Thứ | Phí |
+|---|---|
+| **Capacity** của rule group | **$0** — giữ trước 1000 hay 100 đều như nhau. Và nó **bất biến**, sửa là tạo lại resource, nên để rộng ngay từ đầu |
+| Số **rule** trong một group | $0 |
+| Số **rule group** trong policy | $0 |
+| **Managed rule group** của AWS | $0 thêm — bộ chữ ký botnet/malware không tính phí riêng |
+| Bản thân **firewall policy** | $0 |
+| Toàn bộ [lớp vận hành `ops/`](./25-Van-hanh-Network-Hang-Ngay.md) | $0 — nó chỉ sinh rule; chỉ `endpoints.yaml` mới tốn tiền |
+
+Nghĩa là: **thêm rule không làm hoá đơn tăng.** Thứ làm hoá đơn tăng là thêm AZ, và lượng dữ liệu chảy qua.
+
+#### Khoản dễ quên: log
+
+FLOW log ghi **mọi phiên**, không chỉ phiên bị chặn. Ở môi trường bận, đó là hàng chục GB mỗi ngày đổ vào S3 — tính phí PUT request và lưu trữ, tách khỏi giá firewall ở trên.
+
+ALERT log thì nhỏ hơn nhiều. Bật cả hai ở giai đoạn lập bản đồ, rồi cân nhắc chỉ giữ ALERT — xem [mục 8.2](#82-ba-cách-giảm-mà-không-mất-khả-năng-kiểm-soát).
+
 ### 8.1. Cái giá của việc tách VPC
 
 Vì security VPC tách khỏi egress VPC, một vòng đi-về của gói tin qua TGW **bốn lần**:
@@ -1024,6 +1056,41 @@ Chênh lệch ~**$436/tháng** ở mức 10 TB. Đây là cái giá của ranh g
 2. **FLOW log có chọn lọc.** Bật giai đoạn đầu để lập bản đồ luồng, sau đó cân nhắc chỉ giữ ALERT.
 
 3. **Xem lại phạm vi east-west.** Nếu chỉ vài cặp spoke cần nói chuyện, PrivateLink giữa đúng cặp đó rẻ hơn nhiều so với đẩy toàn bộ qua firewall.
+
+### 8.3. Bộ đang chạy — tính từng khoản
+
+`demo/network-lz-full` với 5 spoke (1 local + 4 ở account khác), 2 AZ, firewall bật, ingress bật, 3 interface endpoint. `terraform output estimated_cost` cho **~$1.397/giờ**. Nó ra từ đâu:
+
+| Khoản | Cách tính | USD/giờ |
+|---|---|---|
+| **Firewall endpoint** | 2 AZ × $0.395 | **0.790** |
+| TGW attachment | 8 × $0.05 — 5 spoke + egress + security + ingress | 0.400 |
+| NAT Gateway | 2 AZ × $0.045 | 0.090 |
+| Interface endpoint | 2 AZ × 3 dịch vụ × $0.01 | 0.060 |
+| NLB | 2 AZ × $0.0225 | 0.045 |
+| EC2 kiểm chứng | 1 × t3.micro | 0.012 |
+| | **Cộng** | **~1.397** |
+
+≈ **$33.52/ngày**, ≈ **$1.020/tháng** — chưa tính data transfer.
+
+Ba điều đọc ra từ bảng này:
+
+**Firewall chiếm 57%.** Và nó nhân theo **số AZ**, không theo lưu lượng hay số spoke. Chạy 3 AZ là $1.185/giờ chỉ riêng endpoint. Đây là lý do demo mặc định 2 AZ — nhưng cũng là lý do 2 AZ là **tối thiểu** cho môi trường thật: một AZ thì subnet ở AZ đó mất mạng khi endpoint hỏng, và `appliance_mode_support` chưa từng được kiểm chứng ([mục 4](#4-appliance_mode_support--thiết-lập-quan-trọng-nhất)).
+
+**Attachment đứng thứ hai, và nó tăng theo số VPC.** Mỗi spoke mới là $0.05/giờ = $36.50/tháng, trước khi có một gói tin nào. Spoke chỉ để thử thì xoá sau khi thử xong.
+
+**Bốn spoke ở account khác không đắt hơn spoke local.** Attachment tính như nhau bất kể VPC nằm ở account nào — cross-account không phải khoản phụ thu.
+
+#### Muốn rẻ đi ngay
+
+| Đổi | Tiết kiệm | Mất gì |
+|---|---|---|
+| `enable_firewall = false` | **−$0.79/giờ** (57%) | Không còn east-west inspection. Vẫn kiểm chứng được egress tập trung, cách ly spoke, ingress |
+| `enable_ingress = false` | −$0.095/giờ | Không có NLB và attachment ingress |
+| `enable_interface_endpoints = false` | −$0.06/giờ | SSM đi vòng ra Internet qua NAT — **tốn phí NAT thay vào** |
+| Bớt spoke thử nghiệm | −$0.05/giờ mỗi cái | |
+
+Dòng thứ ba là bẫy: tắt interface endpoint **không** luôn rẻ hơn. $0.06/giờ cố định đổi lấy $0.045/GB phí NAT cộng $0.065/GB phí firewall cho lưu lượng SSM. Với vài chục instance gọi SSM liên tục thì endpoint rẻ hơn; với một demo bốn tiếng thì không. Và khi lý do là **bảo mật** — không cho lưu lượng tới AWS API đi ra Internet — thì phép so tiền không phải là phép so đúng.
 
 ---
 
