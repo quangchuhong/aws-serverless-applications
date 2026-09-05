@@ -91,6 +91,13 @@ rules:
     ticket: NET-1007
     note: Day syslog tu logarchive sang cum thu gom ben security
 
+  - id: fw-0020
+    from: partner-sim
+    to: app-dev-web
+    ports: [80]          # target_port, KHÔNG phải 8080
+    ticket: DEMO-1
+    expires: 2026-12-31
+
   # ------------------------------------------------------------
   # Vi du khac (dang tat)
   #
