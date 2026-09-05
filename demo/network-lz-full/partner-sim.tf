@@ -210,9 +210,13 @@ resource "aws_iam_instance_profile" "partner_sim" {
   role = aws_iam_role.partner_sim[0].name
 }
 
+# UBUNTU, khong phai AL2023 - xem var.partner_sim_ami_ssm_parameter.
+#
+# AL2023 khong co goi strongswan trong repo. Day la may duy nhat trong
+# ca bo chay Ubuntu, va user_data cua no dung apt-get.
 data "aws_ssm_parameter" "partner_sim_ami" {
   count = local.ptn
-  name  = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+  name  = var.partner_sim_ami_ssm_parameter
 }
 
 resource "aws_instance" "partner_sim" {

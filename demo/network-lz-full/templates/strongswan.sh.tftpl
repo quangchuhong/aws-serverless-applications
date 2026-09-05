@@ -1,6 +1,10 @@
 #!/bin/bash
 # strongSwan gia lap thiet bi VPN cua doi tac.
 #
+# CHAY TREN UBUNTU. Day la may duy nhat trong ca bo khong phai AL2023,
+# vi AL2023 khong co goi strongswan trong repo. Moi lenh goi trinh quan
+# ly goi o day la apt-get - them mot dong dnf/yum vao la hong.
+#
 # Sinh tu partner-sim.tf. DUNG sua tren may - lan thay instance ke
 # tiep se ghi de.
 #
@@ -26,23 +30,42 @@ net.ipv4.conf.default.rp_filter = 0
 SYSCTL
 sysctl -p /etc/sysctl.d/99-vpn.conf
 
-dnf install -y strongswan nmap-ncat bind-utils tcpdump || {
-  echo "KHONG CAI DUOC strongswan tu repo mac dinh."
-  echo "Kiem: dnf search strongswan"
+########################################
+# 1a. Cai goi - UBUNTU, khong phai Amazon Linux
+#
+# AL2023 KHONG CO goi strongswan: `dnf install strongswan` tra ve
+# "Unable to find a match". AWS cat phan lon goi mang khoi repo do.
+# Nen may nay - va chi may nay trong ca bo - chay Ubuntu.
+#
+# DPkg::Lock::Timeout: cloud-init va unattended-upgrades cung chay luc
+# may vua len va giu khoa dpkg. Khong co dong nay thi apt-get chet ngay
+# voi "Could not get lock", va trieu chung phia AWS lai la hai duong
+# ham DOWN - khong lien quan gi toi IPsec.
+########################################
+export DEBIAN_FRONTEND=noninteractive
+APT="apt-get -o DPkg::Lock::Timeout=600 -y"
+
+$APT update
+$APT install strongswan strongswan-starter netcat-openbsd dnsutils tcpdump || {
+  echo "KHONG CAI DUOC strongswan."
+  echo "Kiem: apt-cache policy strongswan"
+  echo "Neu day khong phai Ubuntu, kiem var.partner_sim_ami_ssm_parameter."
   exit 1
 }
 
-# dnf tra ve 0 ke ca khi mot goi khong ton tai trong vai truong hop, nen
-# hoi lai rpm - thu duy nhat biet chac goi da nam tren may hay chua.
-rpm -q strongswan || {
-  echo "dnf bao thanh cong nhung strongswan KHONG co tren may."
+# apt-get co the tra ve 0 ma goi van khong o trang thai 'installed'.
+# dpkg -s la thu duy nhat biet chac.
+dpkg -s strongswan >/dev/null 2>&1 || {
+  echo "apt bao thanh cong nhung strongswan KHONG co tren may."
   echo "Day la nhanh im lang nhat cua ca script: khong co daemon thi"
   echo "khong co goi IKE nao roi khoi may, va phia AWS bao ca hai"
   echo "duong ham DOWN voi StatusMessage RONG - dung trieu chung nay."
   exit 1
 }
 
-# Duong dan khac nhau theo ban dong goi. AL2023 dung /etc/strongswan.
+# Duong dan khac nhau theo ban dong goi:
+#   Ubuntu/Debian  /etc/ipsec.conf, /etc/strongswan.conf
+#   Fedora/RHEL    /etc/strongswan/...
 CONF_DIR=/etc/strongswan
 [ -d "$CONF_DIR" ] || CONF_DIR=/etc
 

@@ -16,7 +16,7 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
 | **Đã apply** | `50 added, 1 changed, 0 destroyed`. Hạ tầng đúng: `verify.sh` mục 10 đạt 4/5 — `rtb-partner` sạch, đường về có, NLB target healthy |
-| **Còn hỏng** | Cả hai đường hầm `DOWN`. Đã sửa ba khiếm khuyết trong `templates/strongswan.sh.tftpl` (lỗi 74–76) — xem **mục 5.3** |
+| **Còn hỏng** | Cả hai đường hầm `DOWN`. Nguyên nhân đã xác định từ log: **AL2023 không có gói `strongswan`** — máy giả lập chuyển sang Ubuntu. Kèm ba khiếm khuyết nằm sau chỗ đó, sửa luôn (lỗi 74–77) — xem **mục 5.3** |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 
 Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
@@ -427,7 +427,9 @@ terraform apply -replace='aws_instance.partner_sim[0]'
 
 An toàn vì EIP là resource riêng: customer gateway giữ nguyên địa chỉ, `aws_vpn_connection` không bị tạo lại, PSK và dải địa chỉ trong đường hầm không đổi. Phía AWS không biết có gì vừa xảy ra.
 
-> Ba khiếm khuyết đầu tiên tìm được ở đây — tuỳ chọn `install_routes` đặt nhầm file, `|| true` nuốt mất trường hợp "không có unit nào", và cuộc đua giữa lúc charon khởi động với lúc EIP được gắn — ghi ở [doc 22 mục 7al](./22-Nhat-ky-Trien-khai-LZ-DIY.md). Cả ba đều cho ra đúng một triệu chứng: hai đường hầm `DOWN`, `StatusMessage` rỗng.
+> **Máy giả lập chạy Ubuntu, không phải Amazon Linux.** AL2023 không có gói `strongswan` trong repo — `dnf install` trả về `Unable to find a match`. Đó là nguyên nhân đầu tiên của lần `DOWN` này, và nó nằm ở dòng thứ mười của `user-data.log` ngay từ lần chạy đầu. Thêm một dòng `dnf`/`yum` vào `strongswan.sh.tftpl` sau này sẽ làm hỏng máy đó.
+>
+> Ba khiếm khuyết tiếp theo tìm được ở đây — tuỳ chọn `install_routes` đặt nhầm file, `|| true` nuốt mất trường hợp "không có unit nào", và cuộc đua giữa lúc charon khởi động với lúc EIP được gắn — ghi ở [doc 22 mục 7al](./22-Nhat-ky-Trien-khai-LZ-DIY.md). Cả ba đều cho ra đúng một triệu chứng: hai đường hầm `DOWN`, `StatusMessage` rỗng.
 
 ---
 

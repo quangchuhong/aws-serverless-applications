@@ -152,7 +152,9 @@ Xếp theo thứ tự gặp phải.
 | 75 | `systemctl enable A \|\| systemctl enable B \|\| true` nuốt **mọi** thất bại | Dấu `true` ở cuối là để "không sao nếu tên unit khác" — nhưng nó cũng nuốt cả trường hợp **không có unit nào**. Script chạy tiếp, kết thúc bằng dòng "xong", và không có daemon nào chạy | **Lỗi code** | *(mục 7al)* |
 | 76 | Tunnel `DOWN` với `StatusMessage` **rỗng** ở cả hai đầu | EIP được gắn **sau** khi instance boot. `auto=start` bắn IKE ngay từ IP công khai tạm; AWS không có customer gateway nào khớp địa chỉ đó nên vứt gói tin **và không ghi gì**. Nhìn từ phía AWS, triệu chứng này không phân biệt được với "daemon không chạy" | **Lỗi code** | *(mục 7al)* |
 
-**66/76 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 77 | `dnf install strongswan` → `Unable to find a match` trên Amazon Linux 2023 | **AL2023 không có gói `strongswan`** — không phải tên khác, không phải phiên bản khác, không có. AWS cắt phần lớn gói mạng khỏi repo AL2023. Đây là nguyên nhân **đầu tiên** của hai đường hầm `DOWN`; lỗi 74–76 nằm sau chỗ này và chưa bao giờ chạy tới | **Giới hạn nền tảng** | *(mục 7al)* |
+
+**67/77 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2902,7 +2904,33 @@ Terraform tạo instance **trước**, gắn EIP **sau** — thứ tự bắt bu
 
 Cả hai đầu `DOWN`, `StatusMessage` rỗng. Y hệt "daemon không chạy".
 
-> **Điểm chung của cả ba:** không cái nào phát ra lỗi. Một tuỳ chọn đặt nhầm file, một `|| true` quá rộng, một cuộc đua vài chục giây — và cả ba cùng đổ về một triệu chứng duy nhất không mang thông tin. `terraform plan`, `terraform validate`, `terraform fmt` và phép quét nội suy `.tftpl` đều xanh. Cấu hình IPsec trong `user_data` là **phần duy nhất của cả repo không có gì kiểm được ngoài việc thử**.
+### Lỗi 77 — và điều đáng nói nhất về ba lỗi trên
+
+Dựng lại máy giả lập xong, log trả lời trong mười dòng đầu:
+
+```
++ dnf install -y strongswan nmap-ncat bind-utils tcpdump
+No match for argument: strongswan
+Error: Unable to find a match: strongswan
++ echo 'KHONG CAI DUOC strongswan tu repo mac dinh.'
++ exit 1
+```
+
+**Amazon Linux 2023 không có gói `strongswan`.** Không phải tên khác, không phải phiên bản khác — AWS cắt phần lớn gói mạng khỏi repo AL2023. Mọi máy khác trong bộ này chạy AL2023 và không sao; máy này cần một thứ AL2023 không có.
+
+Đáng nói: **không lỗi nào trong ba lỗi 74–76 là nguyên nhân.** Cả ba nằm ở đoạn sau `dnf`, và chưa bao giờ được chạy tới. Chúng là ba khiếm khuyết thật, sẽ nổ lần lượt sau khi cái này được sửa, nhưng chúng không gây ra thứ đang nhìn thấy.
+
+Ba lần đoán, ba lần trượt — và câu trả lời nằm trong `user-data.log` suốt từ đầu, ở dòng thứ mười. Cái `dnf install || exit 1` bản gốc đã bắt đúng và dừng đúng ngay lần chạy đầu tiên. Phép đo thì có sẵn; chỉ là chưa ai đọc nó.
+
+> Đó là bài học lớn hơn cả ba lỗi kia gộp lại, và nó lặp lại lần thứ tư trong tài liệu này: **khi có một phép đo chưa đọc, đừng suy luận từ triệu chứng.** `StatusMessage` rỗng thu hẹp được phạm vi rất đẹp — và thu hẹp đúng — nhưng nó không bao giờ chỉ ra được "gói không tồn tại trong repo". Chỉ có log nói được điều đó.
+
+Sửa: máy giả lập chuyển sang **Ubuntu**, nơi `strongswan` nằm trong `main` và cũng là nền tảng AWS dùng trong tài liệu cấu hình VPN của họ. Đường dẫn AMI thành biến `partner_sim_ami_ssm_parameter` để đổi được mà không sửa code.
+
+Đây là **máy duy nhất trong cả bộ không chạy AL2023**. Ràng buộc đó ghi ở đầu `strongswan.sh.tftpl` và trong `description` của biến, vì thêm một dòng `dnf` vào file đó sau này sẽ hỏng không rõ lý do.
+
+Kèm theo: `apt-get -o DPkg::Lock::Timeout=600`. `cloud-init` và `unattended-upgrades` cùng chạy lúc máy vừa lên và giữ khoá `dpkg`; thiếu dòng này thì `apt-get` chết vì `Could not get lock` — và triệu chứng phía AWS lại đúng là hai đường hầm `DOWN`, không liên quan gì tới IPsec.
+
+> **Điểm chung của lỗi 74–76:** không cái nào phát ra lỗi. Một tuỳ chọn đặt nhầm file, một `|| true` quá rộng, một cuộc đua vài chục giây — và cả ba cùng đổ về một triệu chứng duy nhất không mang thông tin. `terraform plan`, `terraform validate`, `terraform fmt` và phép quét nội suy `.tftpl` đều xanh. Cấu hình IPsec trong `user_data` là **phần duy nhất của cả repo không có gì kiểm được ngoài việc thử**.
 
 Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối đa 60 giây, rồi hoặc in `=== IKE SA DA LEN ===`, hoặc in 40 dòng `journalctl` kèm cách đọc ba thông báo hay gặp nhất. Kết luận nằm ở cuối file người ta vừa mở, không phải ở lệnh tiếp theo họ phải nghĩ ra.
 

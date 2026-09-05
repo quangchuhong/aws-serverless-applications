@@ -712,6 +712,32 @@ variable "instance_type" {
   default = "t3.micro"
 }
 
+variable "partner_sim_ami_ssm_parameter" {
+  description = <<-EOT
+    AMI cho may gia lap doi tac. UBUNTU, khong phai Amazon Linux.
+
+    VI SAO KHONG DUNG AL2023 NHU MOI MAY KHAC TRONG BO NAY
+
+    AL2023 KHONG CO goi strongswan. Khong phai ten khac, khong phai
+    phien ban khac - `dnf install strongswan` tra ve "Unable to find a
+    match". AWS cat rat nhieu goi mang khoi repo AL2023.
+
+    Ubuntu co strongswan trong `main`, va do cung la nen tang AWS dung
+    trong tai lieu cau hinh VPN cua ho. Doi AMI re hon nhieu so voi
+    viet lai cau hinh IPsec cho libreswan.
+
+    Day la may DUY NHAT trong bo nay chay Ubuntu. Neu ban them lenh
+    dnf/yum vao user_data cua no, no se hong.
+
+    De thanh bien de doi duoc sang ban khac ma khong phai sua code -
+    va de mot duong dan tham so sai bao loi ngay o apply, thay vi
+    thanh mot AMI khong ai ngo.
+  EOT
+
+  type    = string
+  default = "/aws/service/canonical/ubuntu/server/jammy/stable/current/amd64/hvm/ebs-gp2/ami-id"
+}
+
 ########################################
 # Rule east-west - DAY LA PHAN DE THU NGHIEM
 ########################################
