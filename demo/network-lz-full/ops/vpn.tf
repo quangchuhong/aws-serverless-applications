@@ -263,7 +263,12 @@ resource "aws_lb_target_group" "partner_service" {
   }
 
   tags = {
-    Name    = "${local.hub.project}-p-${each.key}"
+    # Khop CHINH XAC voi name o tren, ke ca duoi cong.
+    #
+    # De the Name khac ten that thi console hien mot dang, `aws elbv2
+    # describe-target-groups` hien mot dang khac, va nguoi doi chieu
+    # hai cai se ket luan co hai target group.
+    Name    = "${local.hub.project}-p-${each.key}-${each.value.target_port}"
     Partner = each.value.partner
     Service = each.value.service
     Ticket  = each.value.ticket
