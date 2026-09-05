@@ -238,6 +238,45 @@ variable "scp_exempt_role_names" {
   default     = []
 }
 
+variable "s3_pab_automation_roles" {
+  description = <<-EOT
+    Ten IAM role duoc phep goi s3:PutAccountPublicAccessBlock.
+
+    RIENG mot duong mien tru cho MOT statement, khong dung chung voi
+    scp_exempt_role_names - vi hai viec khac nhau han. Cai kia mien
+    tru khoi ca SCP baseline; cai nay chi mo dung mot API.
+
+    VI SAO PHAI CO:
+
+    Statement ProtectS3PublicAccessBlock cam
+    s3:PutAccountPublicAccessBlock. Nhung do la MOT API cho ca BAT lan
+    TAT - no dat ca bon co ve true hay false - va SCP khong doc duoc
+    noi dung request. Cam ca cum nghia la khong ai bat duoc no, ke ca
+    lop hardening cua account-baseline sinh ra de bat.
+
+    Ket qua: setting khong bao gio duoc dat, SCP canh mot can phong
+    trong, va dau hieu duy nhat la mot chu "SKIP" trong SweepResult.
+
+    DIEN GI VAO DAY: ten role cua Lambda quet default VPC o
+    landing-zone/account-baseline - mac dinh la
+    "<project>-default-vpc-sweep", voi project cua LAYER DO, co the
+    khac project cua layer nay.
+
+      cd ../account-baseline && grep -n 'RoleName' vpc-sweep.tf
+
+    KHONG co gia tri mac dinh, co chu dich: doan bua mot ten role se
+    tao ra mot lo hong im lang (mot Deny khong bao gio ap dung cho ai)
+    thay vi mot loi. check "s3_pab_co_the_bat_duoc" keu khi danh sach
+    nay rong ma statement van bat.
+
+    DANH DOI: ai tao duoc mot role trung ten trong mot account thi tat
+    duoc public access block cua account do. Chon ten kho trung, va
+    nho rang baseline SCP da cam tao IAM user nhung KHONG cam tao role.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 ########################################
 # 7. TAG POLICY
 ########################################

@@ -97,13 +97,45 @@ locals {
       Resource = "*"
     }, local.has_exempt ? { Condition = local.exempt_condition } : {})),
 
-    # Khong ai duoc mo public access block o muc account
-    jsonencode({
+    # Khong ai duoc TAT public access block o muc account.
+    #
+    # ---------------------------------------------------------------
+    # MOT API CHO CA BAT LAN TAT - va do la ca van de.
+    #
+    # s3:PutAccountPublicAccessBlock dat CA BON co ve true hay false.
+    # SCP khong doc duoc noi dung request, va khong co condition key
+    # nao cho gia tri ben trong PublicAccessBlockConfiguration. Nen
+    # cam ca cum nghia la KHONG AI BAT DUOC NO, ke ca lop hardening
+    # sinh ra de bat.
+    #
+    # Truoc day statement nay khong co Condition - khac han cac
+    # statement con lai trong cung SCP. Hau qua: setting khong bao gio
+    # duoc dat, va SCP canh mot can phong trong. Trieu chung duy nhat
+    # la mot chu "SKIP" trong SweepResult cua tung account:
+    #
+    #   s3/pab:SKIP:ClientError
+    #
+    # Nen phai chua MOT loi ra cho automation dat no. Danh sach nay
+    # KHONG mac dinh - ten role tuy tung ban trien khai, va mot gia
+    # tri doan bua se tao ra mot lo hong im lang thay vi mot loi.
+    # check "s3_pab_co_the_bat_duoc" o cuoi file keu khi danh sach
+    # rong ma statement van bat.
+    # ---------------------------------------------------------------
+    jsonencode(merge({
       Sid      = "ProtectS3PublicAccessBlock"
       Effect   = "Deny"
       Action   = ["s3:PutAccountPublicAccessBlock"]
       Resource = "*"
-    }),
+      }, length(var.s3_pab_automation_roles) > 0 ? {
+      Condition = {
+        ArnNotLike = {
+          "aws:PrincipalArn" = [
+            for n in var.s3_pab_automation_roles :
+            "arn:${local.partition}:iam::*:role/${n}"
+          ]
+        }
+      }
+    } : {})),
   ]
 
   ####################################
@@ -479,6 +511,31 @@ resource "terraform_data" "scp_guard" {
 # la cach chac chan nhat de nguoi ta thoi doc canh bao. Chinh repo nay
 # viet dieu do trong wire-backends.sh, roi lai vi pham no ngay day.
 ########################################
+
+########################################
+# CAM MOT API DUNG CHO CA BAT LAN TAT = KHONG AI BAT DUOC
+########################################
+check "s3_pab_co_the_bat_duoc" {
+  assert {
+    condition = (
+      !try(var.enable_scp.baseline, true)
+      || length(var.s3_pab_automation_roles) > 0
+    )
+
+    error_message = join(" ", [
+      "SCP baseline dang cam s3:PutAccountPublicAccessBlock cho MOI principal,",
+      "va s3_pab_automation_roles de rong.",
+      "Do la MOT API cho ca bat lan tat, nen khong ai - ke ca lop hardening cua",
+      "account-baseline - bat duoc account-level public access block.",
+      "Setting se KHONG BAO GIO duoc dat, va SCP dang canh mot can phong trong.",
+      "Dau hieu duy nhat la 's3/pab:SKIP' trong SweepResult cua tung account:",
+      "cd ../account-baseline && ./check-sweep.sh",
+      "Sua: dien ten role Lambda quet (mac dinh '<project>-default-vpc-sweep')",
+      "vao s3_pab_automation_roles, hoac tat han statement neu ban chon phat hien",
+      "thay vi ngan chan.",
+    ])
+  }
+}
 
 ########################################
 # KIEM TRA GIOI HAN

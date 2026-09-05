@@ -96,6 +96,24 @@ scp_exempt_role_names = []
 # scp_exempt_role_names = ["lz-cicd-deploy", "AWSControlTowerExecution"]
 
 # ---------------------------------------------------------------
+# BAT BUOC neu dung harden_s3_public_access_block o account-baseline
+#
+# baseline SCP cam s3:PutAccountPublicAccessBlock. Do la MOT API cho
+# ca BAT lan TAT, nen cam ca cum = khong ai bat duoc, ke ca lop
+# hardening sinh ra de bat. Setting khong bao gio duoc dat, va dau
+# hieu duy nhat la "s3/pab:SKIP" trong SweepResult.
+#
+# Dien ten role Lambda quet default VPC - lay tu layer do, project
+# cua no CO THE KHAC project o day:
+#   cd ../account-baseline && grep -n 'RoleName' vpc-sweep.tf
+#
+# check "s3_pab_co_the_bat_duoc" keu khi de rong ma statement van bat.
+# ---------------------------------------------------------------
+
+s3_pab_automation_roles = []
+# s3_pab_automation_roles = ["quh11-lz-default-vpc-sweep"]
+
+# ---------------------------------------------------------------
 # CAN THIET NEU DUNG landing-zone/config-detective
 #
 # baseline SCP chan config:DeleteConfigurationRecorder va
