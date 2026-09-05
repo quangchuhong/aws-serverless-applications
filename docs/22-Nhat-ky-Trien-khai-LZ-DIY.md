@@ -178,13 +178,13 @@ Xếp theo thứ tự gặp phải.
 
 | 90 | `terraform plan` ở lớp `ops` báo `ResourceNotFoundException: Requested resource not found` về **bảng khoá vẫn đang tồn tại** | Backend S3 địa chỉ bảng khoá bằng **tên**, và một tên luôn được giải trong account của **người gọi**. Resource policy trên bảng cho phép account khác gọi nhưng không giúp họ **gọi tên** được. Layer cha có `profile` trỏ về account chủ nên chạy bình thường; lớp `ops` thiếu dòng đó nên hỏng — và hỏng ở `plan`, không phải `init`, vì init không lấy khoá | **Lỗi thiết kế** | *(mục 7aq)* |
 
-| 91 | `prod_guard` **được gắn vào không gì cả** — không lỗi, không cảnh báo | Target khai `"Workloads/Production"`, mà `ou_structure` đang chạy là cây **phẳng** nên khoá đó không tồn tại. `try(local.ou_ids[t], null)` trả `null`, rồi `if item.target != null` **loại mục đó khỏi map**. Policy vẫn được tạo, console vẫn thấy, và `scp_summary` vẫn in target **như đã khai**. Ba nguồn cùng nói "có" cho một guardrail không tồn tại | **Lỗi code** | *(mục 7ar)* |
+| 91 | ~~`prod_guard` được gắn vào không gì cả~~ — **chẩn đoán sai của chính tôi** | Tôi đọc một bản in `ou_ids` thành cây OU phẳng rồi kết luận `"Workloads/Production"` không giải được. Cây **lồng nhau**, khoá tồn tại, và `list-policies-for-target` cho thấy `prod_guard` đang gắn. Cơ chế im lặng (`try(...,null)` + lọc `!= null`) là **có thật và vẫn đáng chặn**, nhưng nó chưa từng nổ ở đây | **Đọc sai bằng chứng** | *(mục 7ar)* |
 
 | 92 | `lint.sh` **từ chối tên OU có thật** và chấp nhận tên không tồn tại | `OUS` liệt kê `NonProd`, `Prod`, `Analytics` — không tên nào do `ou_structure` sinh ra (thật là `Non-Production`, `Production`, `Data Analytics`). Tệ hơn: `ALLOCATED` cũng keyed như vậy và tra bằng `if alloc:` không có nhánh `else`, nên đổi catalog sang tên thật làm **tắt hẳn** phép kiểm "CIDR nằm trong dải của OU" mà không in một chữ | **Lỗi code** | *(mục 7ar)* |
 
 | 93 | `unmapped_accounts` **rỗng ở đúng lần apply tạo account** | Nó tính từ `data.aws_organizations_organization`, mà data source được đọc **trước** khi account tồn tại. Lưới an toàn cho câu "có account nào chưa ai khai phạm vi không" trả lời "không" ở đúng lần chạy duy nhất mà câu đó quan trọng — và `paste_permission_sets` cùng lúc in ra danh sách thiếu ba account vừa tạo | **Lỗi thiết kế** | *(mục 7ar)* |
 
-**82/93 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+**81/93 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại. Mục 91 là ngoại lệ theo chiều khác: không phải lỗi của repo mà là **một chẩn đoán sai của tôi**, giữ lại nguyên vẹn vì ba thay đổi nó kéo theo đã kịp vào repo trước khi bị bác bỏ.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2993,48 +2993,69 @@ terraform apply -replace='aws_instance.partner_sim[0]'
 
 Tạo ba account đầu tiên bằng catalog. Mọi thứ xanh: `lint.sh` sạch, `plan` sạch, `Apply complete! 4 added, 1 changed, 0 destroyed`. Ba lỗi lộ ra trong vòng mười phút sau đó, và cả ba đều **không phát ra tín hiệu nào**.
 
-### Lỗi 91 — một guardrail tồn tại trên giấy
+### Lỗi 91 — một chẩn đoán sai, và ba thứ hỏng vì nó
 
-`terraform output ou_ids` ở layer organization:
+Người dùng dán ra `terraform output ou_ids`:
 
 ```
+"Data Analytics" = "ou-o5ci-lovqpj5y"
+"Infrastructure" = "ou-o5ci-popibm5d"
+"Sandbox"        = "ou-o5ci-ivhzg9qe"
+"Security"       = "ou-o5ci-g5rv7do1"
+"Suspended"      = "ou-o5ci-k9ld7ek7"
+"Workloads"      = "ou-o5ci-fz0yuca3"
 "Non-Production" = "ou-o5ci-syf8rqi7"
 "Production"     = "ou-o5ci-75f3uqe6"
-"Workloads"      = "ou-o5ci-fz0yuca3"
 ```
 
-Cây **phẳng**: `Production` là OU cấp 1, ngang hàng với `Workloads`, không phải con. Nhưng `scp.tf` khai:
+Tôi đọc thành **cây phẳng** — `Production` ngang hàng với `Workloads` — rồi kết luận `prod_guard` nhắm `"Workloads/Production"` sẽ giải ra `null` và bị lọc đi im lặng, tức account production đang chạy không có guardrail nào.
 
-```hcl
-prod_guard = { targets = ["Workloads/Production"] }
+**Sai.** Và bằng chứng bác bỏ nằm ngay trong khối tôi vừa đọc: `Non-Production` và `Production` in ra **sau** `Workloads`, trong khi Terraform sắp xếp khoá theo bảng chữ cái. `N` và `P` đứng trước `W`. Chúng chỉ có thể nằm sau nếu khoá thật là `Workloads/Non-Production` và `Workloads/Production` — tức cây **lồng nhau**, đúng như `ou_structure` mặc định.
+
+Một câu lệnh dứt điểm:
+
+```
+$ aws organizations list-policies-for-target --target-id ou-o5ci-75f3uqe6 \
+    --filter SERVICE_CONTROL_POLICY --query 'Policies[].Name' --output text
+FullAWSAccess   qh11-lz-prod-guard
 ```
 
-và giải tên như sau:
+Nó đang gắn, và vẫn gắn suốt từ đầu.
 
-```hcl
-target = t == "ROOT" ? local.root_id : try(local.ou_ids[t], null)
-...
-} : item.key => item if item.target != null
+### Ba thứ tôi làm hỏng vì tin vào chẩn đoán đó
+
+**1. Một check sai về nguyên lý.** Tôi thêm `check "moi_ou_deu_co_scp"`, kêu tên mọi OU không có SCP gắn **trực tiếp**. Nhưng **SCP di truyền xuống**: chính sách gắn ở `Workloads` áp dụng cho `Workloads/Production` và mọi account bên trong. Nên check đó kêu tên `Workloads/Non-Production` — một OU đang được `network_lock` phủ đầy đủ qua OU cha.
+
+Chiều ngược lại còn tệ hơn: `baseline` và `region_lock` gắn ở ROOT, nên **không OU nào** có thể "không được chính sách nào phủ". Câu hỏi vô nghĩa, và một phép kiểm luôn đúng không phải một phép kiểm.
+
+Repo này viết trong `wire-backends.sh` rằng *"một cảnh báo kêu mãi về thứ không sai là cách chắc chắn nhất để người ta thôi đọc cảnh báo"*. Tôi vi phạm đúng câu đó, cách vài giờ.
+
+**2. Một bảng tóm tắt đọc như hỏng.** Tôi đổi `scp_summary` thành hai danh sách song song — `targets` là ID, `targets_khai` là TÊN. Nhưng map trong HCL duyệt theo **khoá đã sắp xếp**, còn danh sách khai giữ **thứ tự đã viết**. Hai danh sách lệch nhau, và `terraform plan` ghép chúng theo **vị trí**:
+
+```
+~ "Workloads"      -> "ou-o5ci-lovqpj5y"     <- ID của Data Analytics
+~ "Data Analytics" -> "ou-o5ci-ivhzg9qe"     <- ID của Sandbox
+~ "Sandbox"        -> "ou-o5ci-fz0yuca3"     <- ID của Workloads
 ```
 
-Khoá không tồn tại → `null` → **mục bị loại khỏi map**. Không có attachment nào được tạo, và không có gì nói ra điều đó:
+Attachment hoàn toàn đúng; chỉ cách in là sai. Nhưng nó đọc y hệt một bảng ánh xạ hỏng — thứ tệ nhất mà một bảng tóm tắt về guardrail có thể làm. Giờ nó là **một map `tên → id`**, không phải hai danh sách cạnh nhau.
 
-| Nguồn | Nói gì |
+**3. Một chú thích khẳng định chuyện chưa xảy ra.** Tôi viết vào `scp.tf` rằng *"Đã xảy ra thật: ou_structure khai phẳng, prod_guard nhắm Workloads/Production…"*. Đúng loại chú thích mà cả tài liệu này tồn tại để chống lại — nói một điều mà code và thực tế đều không đúng.
+
+### Cái gì còn giữ lại
+
+Cơ chế im lặng **là có thật**: `try(local.ou_ids[t], null)` cộng với `if item.target != null` biến một target gõ sai thành zero attachment, không lỗi, không cảnh báo. Nó chưa nổ ở đây, nhưng `ou_structure` là một **biến** — đổi cây là mọi target viết theo đường dẫn đều trượt.
+
+Nên giữ ba thứ, bỏ một:
+
+| Giữ | |
 |---|---|
-| `terraform apply` | Xanh. Không resource nào thiếu — nó chưa bao giờ được yêu cầu |
-| Console AWS | Chính sách `prod_guard` tồn tại, nội dung đúng |
-| `terraform output scp_summary` | `targets = ["Workloads/Production"]` — vì nó in thứ **đã khai** |
+| Giải target theo đường dẫn đầy đủ rồi thử đoạn cuối | Cả hai hình dạng cây đều chạy |
+| Precondition: policy không còn target nào | Chặn plan thay vì biến mất |
+| Precondition: target không giải được thành ID | Kèm danh sách tên OU có thật |
+| ~~check "moi_ou_deu_co_scp"~~ | Bỏ — SCP di truyền, câu hỏi vô nghĩa |
 
-Ba nguồn cùng khẳng định một guardrail đang chạy. Nó không chạy. Và cách duy nhất phát hiện là hỏi thẳng AWS về chiều ngược lại — *OU này đang chịu chính sách nào* — một câu không ai nghĩ tới hỏi khi mọi thứ đều xanh:
-
-```bash
-aws organizations list-policies-for-target --target-id ou-o5ci-75f3uqe6 \
-  --filter SERVICE_CONTROL_POLICY --query 'Policies[].Name' --output text
-```
-
-Cùng lúc, `network_lock` nhắm `["Workloads", ...]`. Khoá đó **có** — nhưng OU đó **rỗng**, vì workload nằm ở hai OU ngang hàng. Chính sách gắn thành công vào một chỗ không có gì, và điều đó còn khó thấy hơn cả trường hợp gắn hụt.
-
-**Sửa:** target giải theo đường dẫn đầy đủ rồi thử đoạn cuối, nên cả hai hình dạng cây đều chạy. Một policy không còn target nào **chặn plan** bằng precondition. `scp_summary` đọc từ `scp_attachments` — thứ thật sự tồn tại — và giữ `targets_khai` bên cạnh để so. Thêm `check "moi_ou_deu_co_scp"` nêu tên mọi OU không có SCP nào gắn trực tiếp, tức là chỗ "Workloads rỗng, workload nằm ở tầng trên" hiện ra thành một dòng thay vì phải suy ra từ ba file.
+> **Bài học không nằm ở SCP.** Tôi có đủ dữ liệu để bác bỏ chẩn đoán của mình ngay trong khối đầu tiên — thứ tự sắp xếp của tám dòng — và tôi đã đọc lướt qua nó. Rồi viết ba thay đổi, một chú thích khẳng định, và một mục trong nhật ký này, tất cả đứng trên một suy luận chưa ai kiểm. Câu lệnh kiểm mất bốn giây, và **chính tôi đã viết nó ra** trong cùng tin nhắn với chẩn đoán sai — nhưng viết cho người khác chạy, chứ không chờ kết quả trước khi kết luận.
 
 ### Lỗi 92 — phép kiểm quay lưng lại với thực tế
 

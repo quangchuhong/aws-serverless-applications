@@ -360,6 +360,7 @@ locals {
         for t in def.targets : {
           key    = "${name}|${t}"
           policy = name
+          ten    = t
           target = local.scp_target_id[t]
         }
       ]
@@ -368,15 +369,20 @@ locals {
 
   # Chinh sach BAT nhung khong gan duoc vao dau.
   #
-  # Truoc day dieu nay xay ra IM LANG: `if item.target != null` loai
-  # muc do khoi map, khong con dau vet. aws_organizations_policy van
-  # duoc tao, console van thay chinh sach, va scp_summary van in ra
+  # Dieu nay xay ra IM LANG: `if item.target != null` loai muc do khoi
+  # map, khong con dau vet. aws_organizations_policy van duoc tao,
+  # console van thay chinh sach, va scp_summary truoc day van in ra
   # danh sach target NHU DA KHAI - trong khi khong co attachment nao.
   #
-  # Da xay ra that: ou_structure khai phang, prod_guard nham
-  # "Workloads/Production", va OU chua account production khong co
-  # guardrail nao. Khong loi, khong canh bao, khong resource nao thieu
-  # mot cach nhin thay duoc.
+  # CHUA XAY RA tren trien khai nay. Khoi chan nay duoc them sau mot
+  # chan doan SAI: doc nham mot ban in ou_ids thanh cay phang roi ket
+  # luan prod_guard khong gan vao dau. Hoi thang AWS thi no dang gan:
+  #
+  #   aws organizations list-policies-for-target --target-id <ou-id> \
+  #     --filter SERVICE_CONTROL_POLICY --query 'Policies[].Name'
+  #
+  # Giu lai vi co che im lang la co that, va vi ou_structure la mot
+  # bien: doi cay thi moi target viet theo duong dan deu truot.
   scp_policies_orphan = var.scp_dry_run ? [] : [
     for name, def in local.scp_enabled : name
     if length([for t in def.targets : t if local.scp_target_id[t] != null]) == 0
@@ -451,40 +457,28 @@ resource "terraform_data" "scp_guard" {
 }
 
 ########################################
-# OU KHONG DUOC SCP NAO GAN VAO
+# KHONG CO check "moi OU deu co SCP gan truc tiep"
 #
-# check chu khong phai precondition: co OU khong can SCP rieng that -
-# chung duoc phu boi SCP gan o ROOT. Nhung mot OU chua workload ma
-# khong co guardrail nao ngoai ROOT thi phai duoc NHIN THAY, khong
-# phai suy ra bang cach doc ba file.
+# Da tung co mot check nhu vay o day. No SAI VE NGUYEN LY va da bi go.
 #
-# Truong hop that: ou_structure khai phang, "Workloads" ton tai nhung
-# RONG, con Non-Production va Production - hai OU chua toan bo
-# workload - khong nam trong targets cua network_lock. SCP do la thu
-# chan tao IGW, tuc la thu giu cho moi duong ra Internet di qua
-# account network. Thieu no thi ca thiet ke egress tap trung chi con
-# la mot quy uoc.
+# SCP DI TRUYEN XUONG. Mot chinh sach gan o "Workloads" ap dung cho
+# "Workloads/Production" va moi account ben trong. Nen "khong co
+# attachment truc tiep" khong noi len dieu gi - va check do keu ten
+# Workloads/Non-Production, mot OU dang duoc network_lock phu day du
+# qua OU cha.
+#
+# Con chieu nguoc lai thi cau hoi vo nghia: baseline va region_lock
+# gan o ROOT, nen KHONG OU NAO co the "khong duoc chinh sach nao phu".
+# Mot phep kiem luon dung khong phai mot phep kiem.
+#
+# Thu dang kiem la HAI dieu cu the ben duoi - target khong giai duoc,
+# va chinh sach khong con target nao - ca hai deu la precondition va
+# ca hai deu noi ve mot loi that.
+#
+# Bai hoc rieng cua khoi nay: mot canh bao keu ten mot thu KHONG SAI
+# la cach chac chan nhat de nguoi ta thoi doc canh bao. Chinh repo nay
+# viet dieu do trong wire-backends.sh, roi lai vi pham no ngay day.
 ########################################
-check "moi_ou_deu_co_scp" {
-  assert {
-    condition = length([
-      for name, id in local.ou_ids : name
-      if !contains([for _, a in local.scp_attachments : a.target], id)
-    ]) == 0
-
-    error_message = join(" ", [
-      "OU khong duoc SCP nao gan truc tiep:",
-      join(", ", [
-        for name, id in local.ou_ids : name
-        if !contains([for _, a in local.scp_attachments : a.target], id)
-      ]),
-      ". Chung chi con SCP gan o ROOT (region_lock).",
-      "Kiem lai targets trong local.scp_definitions co khop cay OU that khong -",
-      "vi du network_lock nham \"Workloads\" trong khi account nam o",
-      "Non-Production va Production la hai OU ngang hang, khong phai con.",
-    ])
-  }
-}
 
 ########################################
 # KIEM TRA GIOI HAN

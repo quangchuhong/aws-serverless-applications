@@ -17,16 +17,31 @@ output "scp_summary" {
     # targets doc tu scp_attachments - tuc tu thu THAT SU duoc gan -
     # chu khong tu v.targets, la thu da KHAI.
     #
-    # Hai cai do tung lech nhau ma khong ai thay: mot target khong
+    # Hai cai do co the lech nhau ma khong ai thay: mot target khong
     # giai duoc thanh OU ID bi loai khoi scp_attachments im lang,
-    # trong khi output nay van in ten no ra. Bang tom tat khang dinh
-    # mot guardrail dang chay, con thuc te khong co attachment nao.
+    # trong khi output kieu cu van in ten no ra.
+    #
+    # MOT MAP ten -> id, khong phai hai danh sach song song.
+    #
+    # Ban dau khoi nay in `targets` la danh sach ID va `targets_khai`
+    # la danh sach TEN, canh nhau. Nhung map trong HCL duyet theo thu
+    # tu KHOA da sap xep, con danh sach khai giu thu tu da viet - nen
+    # hai danh sach lech thu tu, va terraform plan ghep chung theo VI
+    # TRI:
+    #
+    #   ~ "Workloads"      -> "ou-...-lovqpj5y"    <- ID cua Data Analytics
+    #   ~ "Data Analytics" -> "ou-...-ivhzg9qe"    <- ID cua Sandbox
+    #
+    # Attachment hoan toan dung; chi cach in la sai. Nhung no doc y
+    # het mot bang anh xa hong, va do la thu te nhat mot bang tom tat
+    # ve guardrail co the lam.
     for k, v in local.scp_enabled : k => {
       id = aws_organizations_policy.scp[k].id
-      targets = var.scp_dry_run ? ["(dry-run: chua gan)"] : [
-        for a in local.scp_attachments : "${a.target}" if a.policy == k
-      ]
-      targets_khai = v.targets
+      targets = var.scp_dry_run ? { "(dry-run)" = "chua gan" } : {
+        for a in local.scp_attachments : a.ten => a.target if a.policy == k
+      }
+      # Target da khai ma KHONG giai duoc - rong la binh thuong.
+      targets_hong = [for t in v.targets : t if local.scp_target_id[t] == null]
       bytes        = length(format("{\"Version\":\"2012-10-17\",\"Statement\":[%s]}", join(",", v.statements)))
       limit        = 5120
     }
