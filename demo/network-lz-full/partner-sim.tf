@@ -283,6 +283,13 @@ resource "aws_instance" "partner_sim" {
     # chung KHONG co dia chi co dinh - doan ".100" la doan. Ten DNS
     # phan giai duoc tu trong duong ham vi VPC bat enable_dns_support.
     nlb_dns = aws_lb.partner[0].dns_name
+
+    # Dia chi spoke that, de vpn-check CHAY duoc phep thu cach ly.
+    #
+    # Truoc day muc do trong vpn-check chi IN mot cau tuyen bo rang
+    # may nay khong goi duoc toi spoke - khong chay gi ca. Mot phep
+    # kiem khong nhin vao thu no noi la dang kiem, cung ho voi loi 73.
+    spoke_ip = local.partner_target_ip
   })
 
   tags = { Name = "${var.project}-partner-sim" }

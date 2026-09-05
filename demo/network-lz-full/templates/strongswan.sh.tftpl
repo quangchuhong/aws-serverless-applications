@@ -366,9 +366,22 @@ curl -s -m 5 -o /dev/null -w "  NLB tra ve %%{http_code}\n" "http://__NLB__:__PO
 echo
 echo "=== Lop cach ly - PHAI THAT BAI ==="
 echo "  May nay khong duoc phep goi thang toi spoke."
+# `curl -s` that bai thi KHONG IN GI. Im lang cua that bai doc y het
+# im lang cua thanh cong, nen phai hoi ma HTTP va ma thoat - khong
+# duoc doc bang mat.
+ISO=$(curl -sm 5 -o /dev/null -w '%%{http_code}' "http://__SPOKE__/" 2>/dev/null)
+RC=$?
+if [ "$ISO" = "000" ] || [ "$RC" -ne 0 ]; then
+  echo "  DAT: khong goi duoc __SPOKE__ (http=$ISO, ma thoat=$RC)"
+else
+  echo "  LOI: goi THANG duoc toi __SPOKE__ va nhan http=$ISO"
+  echo "  Lop kiem soat thu nhat thung. Kiem route tren may nay:"
+  echo "  chi duoc co dai NAT va dai NLB, khong duoc co dai spoke."
+fi
 CHK
 sed -i "s|__NLB__|${nlb_dns}|" /usr/local/bin/vpn-check
 sed -i "s|__PORT__|${service_port}|" /usr/local/bin/vpn-check
+sed -i "s|__SPOKE__|${spoke_ip}|g" /usr/local/bin/vpn-check
 chmod +x /usr/local/bin/vpn-check
 
 ########################################

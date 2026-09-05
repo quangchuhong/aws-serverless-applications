@@ -428,6 +428,24 @@ Phép đo cuối cùng, và là phép duy nhất chứng minh được điều g
 
 `200` nghĩa là một gói tin HTTP đã đi hết **IPsec → VGW → NLB → TGW → Network Firewall → spoke `10.10.0.10` ở một account khác** rồi về. Mọi thứ khác trong mục này chỉ nói rằng từng chặng *có vẻ* đúng.
 
+### 5.2c. Phép thử phải thất bại
+
+`200` mới chứng minh được một nửa. Nửa còn lại là đối tác **không** đi được xa hơn thứ bạn công bố:
+
+```
+$ curl -sm 5 -o /dev/null -w 'http=%{http_code}\n' http://10.10.0.10/ ; echo "exit=$?"
+http=000
+exit=28
+```
+
+**Đừng chạy `curl -s` trần cho phép thử này.** Thất bại thì nó không in gì — và im lặng của thất bại đọc y hệt im lặng của thành công. Phải hỏi mã HTTP và mã thoát.
+
+`exit=28` là *hết giờ*, không phải `7` (*không nối được*). Khác biệt đó đáng đọc: gói tin **có** rời máy, đi ra default route tới IGW của VPC giả lập, rồi chết ở đó. Lớp cách ly giữ được không phải vì có ai chặn, mà vì **máy đó không có route nào đưa `10.10.0.0/16` vào đường hầm** — chỉ có `10.9.10.0/24` và `10.9.100.0/23`.
+
+Đó là lớp kiểm soát **thứ nhất** trong ba lớp ở mục 1, và nó nằm ở phía đối tác. Với đối tác thật, điều tương đương đạt được bằng static route hoặc BGP filter trên thiết bị của **họ** — nên nó phải nằm trong hợp đồng kỹ thuật, không chỉ nói miệng. Hai lớp còn lại (`rtb-partner` và Network Firewall) là thứ bạn kiểm soát được, và chúng tồn tại chính vì lớp thứ nhất nằm ngoài tầm tay bạn.
+
+`vpn-check` giờ chạy phép thử này thay vì in một câu tuyên bố về nó.
+
 ### 5.3. Đường hầm `DOWN` — đọc theo thứ tự nào
 
 ```bash
