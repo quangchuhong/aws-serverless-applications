@@ -83,7 +83,7 @@ Ba cái bẫy, cả ba đều bị `lint.sh` và precondition chặn **trước*
 
 Hai cảnh báo CloudWatch trên `TunnelState`: `-DUT` (cả hai xuống) và `-mat-du-phong` (một xuống, vẫn chạy). Hai mức vì chúng đòi hai hành động khác nhau.
 
-Chúng chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì cảnh báo vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo, và `lint.sh` nhắc khi có dịch vụ mà danh sách rỗng.
+Chúng chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì cảnh báo vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo. `check "partner_alarms_reach_someone"` trong `vpn.tf` nhắc lúc plan; nó nằm ở đó chứ không ở `lint.sh` vì lint đọc catalog và không nhìn thấy biến Terraform.
 
 ---
 

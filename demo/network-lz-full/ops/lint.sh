@@ -480,10 +480,16 @@ for key, pn, sn, s, p in services:
             elif d <= soon:
                 warn(F, f"{key}: dich vu het han {d} (con {(d-today).days} ngay)")
 
-if services and not os.environ.get("OPS_ALARM_OK"):
-    warn("partners.yaml", f"co {len(services)} dich vu cong bo ra ngoai - kiem lai "
-         "bien alarm_actions da tro toi SNS topic that chua, neu khong thi canh bao "
-         "duong ham dut se khong goi ai (dat OPS_ALARM_OK=1 de tat nhac nay)")
+# KHONG kiem alarm_actions o day.
+#
+# lint.sh doc CATALOG. alarm_actions la mot bien Terraform - no khong
+# nam trong file YAML nao, nen lint khong the biet no da duoc dat hay
+# chua. Mot canh bao khong the tat duoc bang cach sua dung thu no noi
+# la mot canh bao se do mai trong CI, va sau vai lan thi khong ai doc
+# ca dong canh bao nua.
+#
+# Phep kiem do nam o check "partner_alarms_reach_someone" trong
+# vpn.tf, la cho DUY NHAT nhin thay ca hai thu cung luc.
 
 ########################################
 # firewall-rules.yaml

@@ -351,7 +351,9 @@ Hai mức vì chúng đòi hai hành động khác nhau. Gộp làm một thì h
 
 Mức "đứt" đặt `treat_missing_data = "breaching"`: một VPN connection **ngừng phát metric** là tin xấu, không phải tin trung tính. Mặc định của CloudWatch là im lặng trong trường hợp đó.
 
-Cảnh báo chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì chúng vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo. `lint.sh` nhắc khi có dịch vụ mà danh sách rỗng.
+Cảnh báo chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì chúng vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là không ai được báo, và người phát hiện ra đường hầm đứt sẽ là đối tác.
+
+Phép kiểm đó là một `check` trong `vpn.tf`, **không phải** trong `lint.sh`: lint đọc catalog, còn `alarm_actions` là một biến Terraform. Lint không thể biết nó đã được cắm hay chưa, nên nó sẽ cảnh báo cả khi bạn đã làm đúng — và một cảnh báo không tắt được bằng cách sửa đúng thứ nó nói là một cảnh báo sẽ đỏ mãi trong CI.
 
 ---
 

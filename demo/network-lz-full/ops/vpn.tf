@@ -377,3 +377,23 @@ resource "aws_cloudwatch_metric_alarm" "partner_vpn_degraded" {
 
   tags = { Name = "${local.hub.project}-partner-vpn-mat-du-phong" }
 }
+
+########################################
+# CANH BAO CO GOI DUOC AI KHONG
+#
+# Day la cho DUY NHAT nhin thay ca hai thu cung luc: co dich vu cong
+# bo ra ngoai chua (tu catalog), va alarm_actions co tro toi dau chua
+# (tu bien). lint.sh chi doc catalog nen no khong bao gio tra loi
+# duoc cau hoi nay - no chi doan duoc mot nua.
+#
+# check chu khong phai precondition: thieu SNS topic khong lam cau
+# hinh sai, no chi lam canh bao khong den tay ai. Chan apply vi ly do
+# do la chan nham nguoi - nhat la khi dang dung thu.
+########################################
+
+check "partner_alarms_reach_someone" {
+  assert {
+    condition     = length(local.partner_services) == 0 || length(var.alarm_actions) > 0
+    error_message = "Co ${length(local.partner_services)} dich vu cong bo cho doi tac nhung alarm_actions dang rong. Hai canh bao duong ham VAN duoc tao va van doi trang thai trong console - chi la khong ai duoc bao. Nguoi phat hien ra duong ham dut se la doi tac, va ho phat hien bang mot cuoc goi dien. Dat alarm_actions = [\"arn:aws:sns:...\"] trong terraform.tfvars."
+  }
+}
