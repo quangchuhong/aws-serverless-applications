@@ -373,7 +373,7 @@ resource "terraform_data" "catalog_guard" {
 
     precondition {
       condition     = length(local.partner_tg_name_long) == 0
-      error_message = "partners.yaml: ${join(", ", local.partner_tg_name_long)} co ten qua dai. Ten target group = '${try(local.hub.project, "?")}-p-<doi tac>-<dich vu>' va AWS gioi han 32 ky tu. Dat ten doi tac hoac dich vu ngan lai - cat bot tu dong se lam hai dich vu ten gan giong nhau cham ten nhau."
+      error_message = "partners.yaml: ${join(", ", local.partner_tg_name_long)} co ten qua dai. Ten target group = '${try(local.hub.project, "?")}-p-<doi tac>-<dich vu>-<target_port>' va AWS gioi han 32 ky tu. Dat ten doi tac hoac dich vu ngan lai - cat bot tu dong se lam hai dich vu ten gan giong nhau cham ten nhau."
     }
 
     precondition {

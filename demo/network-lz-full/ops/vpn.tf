@@ -189,9 +189,11 @@ locals {
 
   # Ten target group qua dai. AWS gioi han 32 ky tu, va cat bot thi hai
   # dich vu ten gan giong nhau se cham ten nhau - hong o giua apply.
+  #
+  # Tinh tren ten THAT, ke ca duoi cong - do la chuoi se gui len AWS.
   partner_tg_name_long = [
     for k, s in local.partner_services : k
-    if length("${local.hub.project}-p-${k}") > 32
+    if length("${local.hub.project}-p-${k}-${s.target_port}") > 32
   ]
 
   partner_service_expired = [
@@ -220,7 +222,32 @@ locals {
 resource "aws_lb_target_group" "partner_service" {
   for_each = local.partner_on ? local.partner_services : {}
 
-  name = "${local.hub.project}-p-${each.key}"
+  ########################################
+  # CONG NAM TRONG TEN, VA create_before_destroy
+  #
+  # Hai thu nay di voi nhau; thieu mot cai la be tac.
+  #
+  # `port` cua target group la thuoc tinh BAT TAO LAI. Voi thu tu mac
+  # dinh (xoa truoc, tao sau), Terraform xoa target group cu trong khi
+  # listener VAN dang tro vao no, va AWS tu choi:
+  #
+  #   ResourceInUse: Target group ... is currently in use by a listener
+  #
+  # Dao thu tu bang create_before_destroy thi vap vao rao thu hai: ten
+  # target group co dinh, nen cai moi trung ten cai cu va AWS cung tu
+  # choi.
+  #
+  # Nen ten phai DOI khi cong doi. Ghep target_port vao ten giai ca
+  # hai, va tien the lam ten tu noi no tro toi cong nao.
+  #
+  # Thu tu sau khi sua: tao cai moi -> listener tro sang -> xoa cai cu.
+  ########################################
+
+  name = "${local.hub.project}-p-${each.key}-${each.value.target_port}"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   # Cong UNG DUNG nghe, khong phai cong doi tac goi vao.
   port        = each.value.target_port
@@ -256,6 +283,12 @@ resource "aws_lb_target_group_attachment" "partner_service" {
   target_id         = each.value.target_ip
   port              = each.value.target_port
   availability_zone = "all"
+
+  # Theo target group. Thieu dong nay thi attachment cu bi xoa truoc
+  # khi target group moi co target - NLB co mot khoang khong dich.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 ########################################

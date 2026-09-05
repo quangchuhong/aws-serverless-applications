@@ -366,11 +366,12 @@ for i, p in enumerate(ptn_raw):
         if not sn:
             err(F, f"{n}: dich vu thu {j+1} thieu 'name'"); continue
         key = f"{n}-{sn}"
-        # Ten target group = "<project>-p-<key>", AWS gioi han 32 ky tu.
-        # Khong biet project o day nen chua mot khoang du rong.
-        if len(key) > 20:
+        # Ten target group = "<project>-p-<key>-<target_port>", AWS gioi
+        # han 32 ky tu. lint khong biet ten project nen day chi la phep
+        # uoc luong som; precondition trong main.tf tinh tren ten THAT.
+        if len(key) > 14:
             err(F, f"{key}: ten qua dai ({len(key)} ky tu). Ten target group ghep tu "
-                   "'<project>-p-<doi tac>-<dich vu>' va AWS gioi han 32 ky tu")
+                   "'<project>-p-<doi tac>-<dich vu>-<target_port>' va AWS gioi han 32 ky tu")
         services.append((key, n, sn, s, p))
 
     partners[n] = p

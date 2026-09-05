@@ -158,7 +158,9 @@ Xếp theo thứ tự gặp phải.
 | 79 | Dải NLB công bố cho đối tác chỉ phủ **một trong hai** subnet NLB | `partner_nlb_cidr = cidrsubnet(vpc, 8, 100)` — đúng subnet ở AZ đầu, bỏ `10.9.101.0/24` ở AZ thứ hai. Chú thích cách đó ba dòng đã ghi đủ **cả hai dải**. Tên DNS của NLB trả về cả hai địa chỉ, nên gọi được hay không **tuỳ vào địa chỉ nào được chọn** | **Lỗi code** | *(mục 7am)* |
 | 80 | Mục `=== IPsec SA ===` trong `vpn-check` in ra **rỗng** trong khi hai SA đang chạy | `strongswan statusall \|\| ipsec statusall`: trên Ubuntu lệnh thứ nhất tồn tại, **thoát 0**, và không in gì. `\|\|` không bao giờ chạy tới vế sau. Cùng hình dạng với lỗi 75 | **Lỗi code** | *(mục 7am)* |
 
-**70/80 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 81 | `ResourceInUse: Target group ... is currently in use by a listener` giữa `apply` | `port` của target group là thuộc tính **bắt tạo lại**. Thứ tự mặc định xoá cái cũ trước, trong khi listener vẫn trỏ vào nó. Đảo bằng `create_before_destroy` thì vấp rào thứ hai: tên target group cố định nên cái mới trùng tên cái cũ. Phải **cả hai**: ghép cổng vào tên *và* `create_before_destroy` | **Lỗi code** | *(mục 7am)* |
+
+**71/81 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -3011,6 +3013,23 @@ Sửa: `/23` phủ hết, cộng một `check` so từng subnet NLB với dải 
 Cùng hình dạng với lỗi 75, và cùng hậu quả: **một phép đo trả lời "không có gì" cho một hệ thống đang chạy đúng.** Sửa bằng cách kiểm output có rỗng không, chứ không kiểm mã thoát.
 
 Nhân tiện thêm vào `vpn-check` một mục in thẳng `ip route get` tới dải NLB — đúng một dòng, và nó hiển thị địa chỉ nguồn sẽ được dùng. Lỗi 78 lẽ ra mất ba mươi giây thay vì cả một vòng suy luận.
+
+### Lỗi 81 — đúng một nửa cách sửa là không sửa được gì
+
+Đổi `target_port` từ 8080 sang 80 làm `apply` dừng giữa chừng:
+
+```
+Error: deleting ELBv2 Target Group ...
+ResourceInUse: Target group ... is currently in use by a listener or a rule
+```
+
+`port` của target group là thuộc tính **bắt tạo lại**. Thứ tự mặc định của Terraform là xoá trước tạo sau, nên nó xoá target group cũ trong khi listener vẫn đang trỏ vào đó.
+
+Cách sửa hiển nhiên — `create_before_destroy` — **một mình nó không đủ**, và đây là chỗ đáng nhớ: tên target group cố định, nên cái mới trùng tên cái cũ và AWS từ chối ở đúng bước tạo. Đảo thứ tự chỉ đổi thông báo lỗi.
+
+Phải cả hai: ghép `target_port` vào tên **và** `create_before_destroy`. Tên đổi khi cổng đổi, nên hai cái tồn tại song song đủ lâu để listener trỏ sang. Tiện thể, cái tên giờ tự nói nó trỏ tới cổng nào.
+
+> Cùng một họ với lỗi 42 và 56: một ràng buộc của AWS mà `plan` không thể thấy, vì `plan` không biết thứ tự thật của các lời gọi API. Không có cách nào bắt được cái này trước khi chạy — chỉ có cách viết đúng ngay từ đầu, hoặc gặp nó một lần rồi nhớ.
 
 ### Kết quả
 
