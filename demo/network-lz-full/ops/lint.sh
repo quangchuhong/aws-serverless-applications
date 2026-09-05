@@ -439,13 +439,15 @@ for key, pn, sn, s, p in services:
     except Exception:
         err(F, f"{key}: 'target_port' khong hop le: {s.get('target_port')!r}"); tp = None
 
-    # Cong ngoai khac cong trong la binh thuong. Nhac mot lan de nguoi
-    # viet rule firewall biet phai mo cong NAO - day la cho de nham
-    # nhat trong ca file, vi ho vua go cong kia cach do ba dong.
-    if tp is not None and port is not None and tp != port:
-        warn(F, f"{key}: doi tac goi cong {port}, ung dung nghe cong {tp}. "
-                f"Rule firewall phai mo cong {tp} - firewall nhin thay ket noi "
-                "THU HAI, tu NLB toi ung dung, khong phai ket noi cua doi tac")
+    # KHONG canh bao chi vi hai cong khac nhau.
+    #
+    # Cong ngoai khac cong trong la truong hop BINH THUONG, nen mot
+    # canh bao o day se keu trong moi cau hinh dung - va khong co cach
+    # nao tat no bang cach sua cho dung. Do la kieu canh bao do mai
+    # trong CI cho toi khi khong ai doc dong canh bao nao nua.
+    #
+    # Rui ro that - rule firewall mo nham cong - duoc kiem chinh xac o
+    # khoi "DOI CHIEU" ben duoi, noi doc duoc ca hai file.
 
     tip, tgt = s.get("target_ip"), s.get("target")
     if tip:
@@ -494,6 +496,7 @@ for key, pn, sn, s, p in services:
 ########################################
 # firewall-rules.yaml
 ########################################
+# (kiem doi chieu dich vu <-> rule nam SAU khoi nay - can bang rule)
 F = "firewall-rules.yaml"
 ids, content_seen = set(), {}
 n_ports_total = 0
@@ -710,8 +713,47 @@ for i, r in enumerate(dns_raw):
 # Ket qua
 ########################################
 print()
+########################################
+# DOI CHIEU: DICH VU CO RULE FIREWALL KHONG, VA DUNG CONG KHONG
+#
+# Hai file, hai nguoi sua, hai thoi diem khac nhau - va khong co gi
+# buoc chung khop nhau. Ket qua hay gap nhat:
+#
+#   partners.yaml   cong bo dich vu, NLB chuyen toi ung dung:80
+#   firewall-rules  mo cong 8080 (cong doi tac goi vao)
+#
+# O che do alert thi CA HAI deu "chay": firewall cho qua tat ca, nen
+# khong ai phat hien. Ngay chuyen sang drop thi doi tac dut, va cho
+# nhin dau tien se la NLB chu khong phai mot rule go nham cong tu
+# nhieu tuan truoc.
+#
+# Kiem o day vi day la cho duy nhat doc ca hai file.
+########################################
+F = "partners.yaml"
+for key, pn, sn, s, p in services:
+    tp = s.get("target_port", s.get("port"))
+    tgt = s.get("target")
+    if tp is None or not tgt:
+        continue          # da bao o tren roi
+    src = f"partner-{pn}"
+    hit = [r for r in fw_raw if isinstance(r, dict)
+           and r.get("from") == src and r.get("to") == tgt]
+    if not hit:
+        warn(F, f"{key}: khong co rule firewall nao tu {src} toi {tgt}. "
+                "O che do alert thi van goi duoc; ngay chuyen sang drop la doi tac dut")
+        continue
+    ok = [r for r in hit
+          if any(str(x) == str(tp) for x in (r.get("ports") or []))]
+    if not ok:
+        got = sorted({str(x) for r in hit for x in (r.get("ports") or [])})
+        warn(F, f"{key}: co rule tu {src} toi {tgt} nhung mo cong {', '.join(got) or '(khong co)'} "
+                f"- can cong {tp}. NLB dung ket noi cua doi tac lai va mo ket noi MOI toi "
+                f"{tgt}:{tp}, va do la cai firewall nhin thay")
+
+
 print("  Catalog: %d app, %d rule firewall, %d route, %d endpoint, %d ban ghi DNS, %d doi tac"
-      % (len(apps), len(ids), len(rt_ids), len(ep_seen), len(dns_seen), len(partners)))
+    
+  % (len(apps), len(ids), len(rt_ids), len(ep_seen), len(dns_seen), len(partners)))
 if services:
     print("  Dich vu cong bo cho doi tac: %d" % len(services))
 # Network Firewall tinh capacity theo so to hop nguon x dich x port.

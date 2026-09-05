@@ -326,7 +326,11 @@ Sinh ra một target group + một listener trên NLB của đối tác. Bốn �
 
 Cổng ngoài khác cổng trong là chuyện **bình thường**, không phải ngoại lệ: công bố ở 8080 trong khi ứng dụng chạy ở 80 là cách đặt tên dịch vụ mà không phải sửa ứng dụng. Gộp làm một thì target group trỏ tới cổng không ai nghe — target `unhealthy`, NLB không có đích để chuyển, đối tác nhận một kết nối bị đóng, và **không resource nào báo lỗi**: AWS tạo đủ cả ba thứ.
 
-`lint.sh` nhắc mỗi khi hai cổng khác nhau, kèm số cổng phải mở trong rule.
+`lint.sh` **đối chiếu hai file**: với mỗi dịch vụ, nó tìm rule firewall từ `partner-<tên>` tới đúng app đó và kiểm rule ấy có mở `target_port` không. Thiếu rule, hoặc có rule mà mở nhầm cổng, đều ra cảnh báo kèm số cổng đúng.
+
+Phép đối chiếu này quan trọng vì ở chế độ `alert` **cả hai trạng thái đều "chạy"** — firewall cho qua tất cả, nên không ai phát hiện. Ngày chuyển sang `drop` thì đối tác đứt, và chỗ nhìn đầu tiên sẽ là NLB chứ không phải một rule gõ nhầm cổng từ nhiều tuần trước.
+
+Nó **không** cảnh báo chỉ vì hai cổng khác nhau — đó là trường hợp bình thường, và một cảnh báo kêu trong mọi cấu hình đúng là một cảnh báo sẽ đỏ mãi cho tới khi không ai đọc dòng cảnh báo nào nữa.
 
 Cắt một dịch vụ: xoá khối `services` đó. Listener biến mất ngay — **không** chờ rule firewall.
 
