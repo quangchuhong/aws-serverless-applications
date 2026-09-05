@@ -160,7 +160,9 @@ Xếp theo thứ tự gặp phải.
 
 | 81 | `ResourceInUse: Target group ... is currently in use by a listener` giữa `apply` | `port` của target group là thuộc tính **bắt tạo lại**. Thứ tự mặc định xoá cái cũ trước, trong khi listener vẫn trỏ vào nó. Đảo bằng `create_before_destroy` thì vấp rào thứ hai: tên target group cố định nên cái mới trùng tên cái cũ. Phải **cả hai**: ghép cổng vào tên *và* `create_before_destroy` | **Lỗi code** | *(mục 7am)* |
 
-**71/81 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 82 | Listener 8080 tạo xong, target `healthy`, `curl` **hết giờ** — cổng 80 vẫn `200` | **NLB có security group**, và nó lọc lưu lượng tới **từng listener**. SG của layer cha chỉ mở `partner_service_port`. Lớp ops sở hữu listener nhưng không sở hữu SG, nên mở cửa mà quên mở khoá. Gói tin bị vứt **trước** listener: không log, không lỗi, và mọi phép kiểm khác đều xanh | **Lỗi code** | *(mục 7am)* |
+
+**72/82 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -3030,6 +3032,41 @@ Cách sửa hiển nhiên — `create_before_destroy` — **một mình nó khô
 Phải cả hai: ghép `target_port` vào tên **và** `create_before_destroy`. Tên đổi khi cổng đổi, nên hai cái tồn tại song song đủ lâu để listener trỏ sang. Tiện thể, cái tên giờ tự nói nó trỏ tới cổng nào.
 
 > Cùng một họ với lỗi 42 và 56: một ràng buộc của AWS mà `plan` không thể thấy, vì `plan` không biết thứ tự thật của các lời gọi API. Không có cách nào bắt được cái này trước khi chạy — chỉ có cách viết đúng ngay từ đầu, hoặc gặp nó một lần rồi nhớ.
+
+### Lỗi 82 — mở cửa mà quên mở khoá
+
+Listener 8080 tạo xong. Target group `healthy` ở `10.10.0.10:80`. Đường hầm `UP`, route đúng, rule firewall đúng. Và:
+
+```
+http=000
+exit=28
+```
+
+Cổng 80 vẫn trả `200` cùng lúc đó. Nên hỏng nằm ở chỗ chỉ khác nhau giữa hai cổng — và đó là **security group của NLB**.
+
+NLB có security group, và nó lọc lưu lượng tới **từng listener**. SG do layer cha tạo chỉ mở đúng `partner_service_port`:
+
+```hcl
+ingress {
+  from_port   = var.partner_service_port   # 80
+  to_port     = var.partner_service_port
+  cidr_blocks = [var.partner_sim_cidr]
+}
+```
+
+Gói tin tới cổng 8080 bị vứt **trước khi tới listener**. Không log, không lỗi, và mọi phép kiểm khác đều xanh — vì mọi phép kiểm khác đo những thứ thật sự đúng.
+
+Nguyên nhân gốc là một **đường cắt sai giữa hai layer**: lớp ops sở hữu listener, layer cha sở hữu security group. Hai nửa của cùng một thay đổi nằm ở hai nơi, nên chúng lệch nhau. Ai sở hữu listener phải sở hữu cả rule mở cổng cho nó.
+
+Và cách sửa có một cái bẫy thứ hai, tệ hơn cái thứ nhất:
+
+> Một khối `ingress` **lồng trong** `aws_security_group` **sở hữu toàn bộ danh sách rule**. Mỗi lần apply layer cha, Terraform xoá sạch mọi rule nó không biết — kể cả rule lớp ops vừa thêm.
+
+Triệu chứng của việc đó là thứ tệ nhất trong cả bộ: đối tác kết nối được, rồi một hôm nào đó ai apply layer cha thì họ mất kết nối, rồi chạy lại apply ở lớp ops thì họ có lại. *"Chập chờn"* theo đúng nghĩa, và không có gì trong log nói tại sao.
+
+Nên layer cha đổi sang `aws_vpc_security_group_ingress_rule` — resource rời — cùng lúc. Hai layer cùng thêm rule vào một security group mà không ai xoá của ai.
+
+Tiện thể, rule của lớp ops lấy dải nguồn từ **chính đối tác sở hữu dịch vụ**, nên dịch vụ của Acme chỉ mở cho dải của Acme. Đó là lớp phân biệt **duy nhất** giữa hai đối tác ở tầng này — firewall không làm được, vì nó thấy mọi đối tác đều đến từ cùng dải NLB.
 
 ### Kết quả
 

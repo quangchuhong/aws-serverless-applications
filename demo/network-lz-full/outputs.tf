@@ -511,6 +511,11 @@ output "ops_handles" {
       nlb_arn           = try(aws_lb.partner[0].arn, null)
       vpc_id            = try(aws_vpc.partner[0].id, null)
       vpn_connection_id = try(aws_vpn_connection.partner[0].id, null)
+
+      # Security group cua NLB. Mo listener thoi CHUA DU: NLB loc luu
+      # luong toi tung listener, nen thieu rule o day thi goi tin bi
+      # vut truoc khi toi listener - het gio, khong log, khong loi.
+      nlb_security_group_id = try(aws_security_group.partner_nlb[0].id, null)
     }
 
     dns = {

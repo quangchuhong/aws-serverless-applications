@@ -154,6 +154,31 @@ locals {
   ])
 
   ########################################
+  # NGUON DUOC PHEP GOI VAO TUNG DICH VU
+  #
+  # Mot ban ghi cho moi cap (dich vu, dai cua doi tac so huu no).
+  #
+  # Dai lay tu CHINH doi tac do - remote_cidr cong extra_cidrs - chu
+  # khong phai tu mot danh sach chung. Nen dich vu cua Acme chi mo cho
+  # dai cua Acme; Globex di chung NLB nhung khong goi vao duoc.
+  #
+  # Do la lop phan biet DUY NHAT giua hai doi tac o tang nay. Firewall
+  # khong lam duoc: no thay moi doi tac deu den tu cung dai NLB.
+  ########################################
+
+  partner_service_sources = merge(concat([{}], [
+    for p in local.partners_raw : {
+      for pair in setproduct(
+        [for s in try(p.services, []) : "${try(p.name, "khong-ten")}-${try(s.name, "khong-ten")}"],
+        distinct(concat([try(p.remote_cidr, "")], try(p.extra_cidrs, []))),
+        ) : "${pair[0]}|${pair[1]}" => {
+        service = pair[0]
+        cidr    = pair[1]
+      } if pair[1] != ""
+    }
+  ])...)
+
+  ########################################
   # PHEP KIEM - tinh o day, khang dinh o main.tf
   ########################################
 
@@ -321,6 +346,43 @@ resource "aws_lb_listener" "partner_service" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.partner_service[each.key].arn
+  }
+}
+
+########################################
+# MO CONG TREN SECURITY GROUP CUA NLB
+#
+# LISTENER THOI CHUA DU.
+#
+# NLB co security group, va no loc luu luong toi TUNG listener. Tao
+# listener ma quen rule nay thi goi tin bi vut TRUOC khi toi listener:
+# khong log, khong loi, chi het gio. Va moi phep kiem khac deu xanh -
+# target group healthy, listener ton tai, duong ham UP, route dung.
+#
+# Day la ly do phan nay ton tai o lop ops chu khong o layer cha: ai so
+# huu listener thi phai so huu ca rule mo cong cho no, neu khong thi
+# hai nua cua cung mot thay doi nam o hai layer va se lech nhau.
+#
+# aws_vpc_security_group_ingress_rule (resource rieng), KHONG phai
+# khoi ingress long trong aws_security_group: mot khoi long nhau so
+# huu toan bo danh sach rule va se xoa sach rule cua layer khac moi
+# lan apply. Layer cha da doi sang cach nay cung luc.
+########################################
+
+resource "aws_vpc_security_group_ingress_rule" "partner_service" {
+  for_each = local.partner_on ? local.partner_service_sources : {}
+
+  security_group_id = local.hub.partner.nlb_security_group_id
+  description       = "${each.value.service} tu ${each.value.cidr}"
+
+  cidr_ipv4   = each.value.cidr
+  from_port   = local.partner_services[each.value.service].port
+  to_port     = local.partner_services[each.value.service].port
+  ip_protocol = "tcp"
+
+  tags = {
+    Name    = "${local.hub.project}-p-${each.value.service}"
+    Service = each.value.service
   }
 }
 

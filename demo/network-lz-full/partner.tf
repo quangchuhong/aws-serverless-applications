@@ -487,6 +487,29 @@ resource "aws_ec2_transit_gateway_route" "spokes_to_partner_direct" {
 # toi qua TGW. AWS ho tro dieu nay cho dai RFC1918.
 ########################################
 
+########################################
+# SECURITY GROUP CUA NLB DOI TAC
+#
+# KHONG co khoi ingress/egress LONG NHAU o day - co chu y.
+#
+# NLB co security group, va no loc luu luong toi TUNG LISTENER. Lop
+# ops mo them listener cho dich vu moi, nen no cung phai mo them rule
+# tuong ung - neu khong, goi tin bi vut TRUOC khi toi listener. Khong
+# log, khong loi, chi het gio.
+#
+# Ma mot khoi `ingress` long trong aws_security_group thi SO HUU TOAN
+# BO danh sach rule: moi lan apply layer cha, Terraform xoa sach moi
+# rule no khong biet - ke ca rule lop ops vua them.
+#
+# Trieu chung cua viec do la thu te nhat trong ca bo: doi tac ket noi
+# duoc, roi mot hom nao do ai apply layer cha thi ho mat ket noi, va
+# chay lai apply o lop ops thi ho co lai. "Chap chon" theo dung nghia,
+# va khong co gi trong log noi tai sao.
+#
+# Tach ra thanh resource rieng thi hai layer cung them rule vao mot
+# security group ma khong ai xoa cua ai.
+########################################
+
 resource "aws_security_group" "partner_nlb" {
   count = local.ptn
 
@@ -494,23 +517,33 @@ resource "aws_security_group" "partner_nlb" {
   description = "Chi doi tac goi vao duoc"
   vpc_id      = aws_vpc.partner[0].id
 
-  ingress {
-    description = "Chi tu dai cua doi tac, qua VPN"
-    from_port   = var.partner_service_port
-    to_port     = var.partner_service_port
-    protocol    = "tcp"
-    cidr_blocks = [var.partner_sim_cidr]
-  }
-
-  egress {
-    description = "Toi spoke qua TGW"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   tags = { Name = "${var.project}-partner-nlb-sg" }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "partner_nlb" {
+  count = local.ptn
+
+  security_group_id = aws_security_group.partner_nlb[0].id
+  description       = "Dich vu mac dinh - chi tu dai cua doi tac, qua VPN"
+
+  cidr_ipv4   = var.partner_sim_cidr
+  from_port   = var.partner_service_port
+  to_port     = var.partner_service_port
+  ip_protocol = "tcp"
+
+  tags = { Name = "${var.project}-partner-nlb-${var.partner_service_port}" }
+}
+
+resource "aws_vpc_security_group_egress_rule" "partner_nlb" {
+  count = local.ptn
+
+  security_group_id = aws_security_group.partner_nlb[0].id
+  description       = "Toi spoke qua TGW"
+
+  cidr_ipv4   = "0.0.0.0/0"
+  ip_protocol = "-1"
+
+  tags = { Name = "${var.project}-partner-nlb-egress" }
 }
 
 resource "aws_lb" "partner" {
