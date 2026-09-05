@@ -282,6 +282,41 @@ if [[ -n "$PROJECT" ]]; then
   check "Stack instance o account spoke" "$instances"
 fi
 
+########################################
+# THU CUA LOP OPS BI BO LAI
+#
+# Chot chan o dau file chi doc ops_rule_group_arns - dung khi lop ops
+# CHI tao mot rule group. Gio no con so huu target group, listener,
+# rule security group, route VPN va canh bao.
+#
+# Nghia la co mot ke ho: go ARN khoi tfvars roi chay thang teardown ma
+# QUEN `cd ops && terraform destroy`. Chot chan cho qua, layer cha xoa
+# NLB - va viec do xoa luon listener cua lop ops SAU LUNG Terraform,
+# de lai state tro vao nhung thu khong con ton tai.
+#
+# Ba dong duoi khong ngan duoc viec do, nhung chung NOI RA. Mot state
+# lech ma co nguoi biet thi sua duoc bang `terraform state rm`; mot
+# state lech khong ai biet thi lan apply sau moi phat hien - va luc do
+# khong ai nho da xoa gi.
+#
+# Dat SAU dong PROJECT= o tren: dat truoc thi bien rong, ba phep kiem
+# luon xanh, va chung tro thanh ba dau tich khong nhin vao dau ca.
+########################################
+
+if [[ -n "$PROJECT" ]]; then
+  check "Target group cua lop ops" "$(aws elbv2 describe-target-groups --region "$REGION" \
+    --query "TargetGroups[?starts_with(TargetGroupName, '$PROJECT-p-')].TargetGroupName" \
+    --output text 2>/dev/null)"
+
+  check "Canh bao duong ham VPN" "$(aws cloudwatch describe-alarms --region "$REGION" \
+    --alarm-name-prefix "$PROJECT-partner-vpn" \
+    --query 'MetricAlarms[].AlarmName' --output text 2>/dev/null)"
+
+  check "Rule group cua lop ops" "$(aws network-firewall list-rule-groups --region "$REGION" \
+    --query "RuleGroups[?starts_with(Name, '$PROJECT-ops-')].Name" \
+    --output text 2>/dev/null)"
+fi
+
 echo
 echo "── Quet theo tag Ephemeral=true ──"
 
