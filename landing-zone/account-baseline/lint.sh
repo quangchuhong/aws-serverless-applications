@@ -224,6 +224,19 @@ for i, a in enumerate(raw):
              "Khong co DNS tap trung, khong co VPC endpoint tap trung, va "
              "duong ra Internet phai tu lo")
 
+    dns = net.get("attach_dns", attach if isinstance(attach, bool) else True)
+    if not isinstance(dns, bool):
+        err(f"{n}: attach_dns phai la true hoac false")
+    elif dns and isinstance(attach, bool) and not attach:
+        # Cho phep, nhung phai noi ra: dung khi VPC duoc noi bang cach
+        # khac (peering). Sai thi moi ten dich vu AWS phan giai ra mot
+        # dia chi khong di toi duoc, va do la mot account hong hoan
+        # toan chu khong phai mot tinh nang thieu.
+        warn(f"{n}: attach_dns = true nhung attach_tgw = false. Route 53 Profile tro ten "
+             "dich vu AWS vao interface endpoint o security VPC (10.1.0.0/16), ma VPC nay "
+             "khong co duong toi do. Moi loi goi API se phan giai ra mot dia chi KHONG DI "
+             "TOI DUOC - te hon IP cong khai. Chi dat true khi VPC duoc noi bang cach khac")
+
 ########################################
 # In ket qua
 ########################################

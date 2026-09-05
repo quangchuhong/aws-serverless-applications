@@ -55,6 +55,14 @@
 #                            Sandbox    10.60.0.0 - 10.63.255.255
 #     attach_tgw           mac dinh true. false = tao VPC nhung khong
 #                          noi vao TGW - dung cho sandbox
+#     attach_dns           mac dinh BANG attach_tgw, khong phai true.
+#                          Route 53 Profile tro ten dich vu AWS vao
+#                          interface endpoint o security VPC
+#                          (10.1.0.0/16); VPC khong noi TGW khong co
+#                          duong toi do, nen gan profile o do la bien
+#                          moi loi goi API thanh mot dia chi khong di
+#                          toi duoc - te hon IP cong khai.
+#                          Chi dat true khi VPC duoc noi bang cach khac.
 #
 # --------------------------------------------------------------
 # VI SAO `ou` LA TEN CHU KHONG PHAI ID
@@ -68,7 +76,63 @@
 # chu khong phai CIDR o lop ops.
 # ==============================================================
 
-accounts: []
+accounts:
+  # ============================================================
+  # BUOC 1 cua nam buoc - xem README muc "Nam buoc, ba layer".
+  #
+  # Ba khoi duoi day CHUA CO khoi `network:`. Do la co y: TGW khong
+  # chia se duoc cho mot account chua ton tai, nen lan apply nay chi
+  # TAO ACCOUNT. CIDR da chon san, nam trong chu thich ngay duoi moi
+  # khoi, de buoc 4 chi la bo chu thich.
+  #
+  # Sau khi apply xong:
+  #   terraform output account_ids      -> lay ba ID
+  #   -> buoc 2: share_tgw_with_accounts o layer network
+  #   -> buoc 3: moi account tu nhan loi moi RAM
+  #   -> buoc 4: quay lai day, bo chu thich khoi network:
+  # ============================================================
+
+  - name: app-uat
+    email: quang.hong.0991+lz-app-uat@gmail.com
+    ou: NonProd
+    scope: nonprod
+    environment: staging
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-1042
+    ticket: ACC-2026-001
+    note: Moi truong UAT - account nonprod dau tien tao bang catalog
+    # BUOC 4 - bo chu thich sau khi account nay da nhan loi moi RAM:
+    # network:
+    #   vpc_cidr: 10.12.0.0/16
+
+  - name: app-payments-prod
+    email: quang.hong.0991+lz-app-payments-prod@gmail.com
+    ou: Prod
+    scope: prod
+    environment: prod
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-4021
+    ticket: ACC-2026-002
+    note: Workload thanh toan - prod. SCP prod_guard ap dung o OU nay
+    # BUOC 4:
+    # network:
+    #   vpc_cidr: 10.21.0.0/16
+
+  - name: sandbox-thu-nghiem
+    email: quang.hong.0991+lz-sandbox-01@gmail.com
+    ou: Sandbox
+    scope: nonprod
+    environment: sandbox
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-0000
+    ticket: ACC-2026-003
+    note: Sandbox - KHONG noi TGW, tu lo duong ra Internet
+    # BUOC 4 - sandbox khong noi TGW nen cung khong lay DNS tap trung
+    # (attach_dns mac dinh bang attach_tgw). Voi attach_tgw = false thi
+    # buoc 2 va 3 KHONG can cho account nay - no khong dung TGW.
+    # network:
+    #   vpc_cidr: 10.60.0.0/16
+    #   attach_tgw: false
 
 # --------------------------------------------------------------
 # Vi du (dang tat)

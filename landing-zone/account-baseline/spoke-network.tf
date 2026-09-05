@@ -35,10 +35,31 @@
 
 locals {
   # Account co yeu cau mang. Khoa trung voi khoa cua account.
+  #
+  # DNS TAP TRUNG DI THEO TGW, KHONG DOC LAP.
+  #
+  # attach_dns mac dinh bang attach_tgw chu khong phai true. Ly do la
+  # ky thuat, khong phai so thich: Route 53 Profile mang PHZ tro ten
+  # dich vu AWS vao INTERFACE ENDPOINT dat o security VPC, dai
+  # 10.1.0.0/16. Mot VPC khong noi TGW khong co duong nao toi dai do.
+  #
+  # Nen gan profile cho mot VPC khong attach nghia la moi loi goi API
+  # cua AWS trong do phan giai ra mot dia chi KHONG DI TOI DUOC - te
+  # hon han IP cong khai, vi it ra IP cong khai con di duoc. Trieu
+  # chung la "account moi hong hoan toan", va cho dau tien nguoi ta
+  # tim la endpoint, noi khong co gi sai.
+  #
+  # lint.sh da noi dieu nay voi nguoi dung tu truoc ("attach_tgw =
+  # false - khong co DNS tap trung"), con code thi van gan profile.
+  # Day la cho sua cho khop lai.
+  #
+  # Van de len duoc bang attach_dns cho truong hop hiem: VPC khong
+  # attach nhung duoc noi bang cach khac (peering chang han).
   spoke_requests = {
     for a in local.catalog_raw : a.name => {
       vpc_cidr   = a.network.vpc_cidr
       attach_tgw = try(a.network.attach_tgw, true)
+      attach_dns = try(a.network.attach_dns, try(a.network.attach_tgw, true))
       ou         = a.ou
     }
     if try(a.network, null) != null
@@ -60,9 +81,11 @@ locals {
     if v.attach_tgw && try(local.net.transit_gateway_id, "") == ""
   ]
 
+  # Chi tinh account CO XIN DNS tap trung. Account attach_dns = false
+  # khong thieu gi ca - no co y khong dung.
   spokes_without_dns = [
     for k, v in local.spoke_requests : k
-    if try(local.net.dns_profile_id, "") == ""
+    if v.attach_dns && try(local.net.dns_profile_id, "") == ""
   ]
 }
 
@@ -140,6 +163,13 @@ resource "aws_cloudformation_stack_set_instance" "spoke_network" {
     AccountName = each.key
     VpcCidr     = each.value.vpc_cidr
     AttachTgw   = tostring(each.value.attach_tgw)
+
+    # Rong = Condition DoDns sai = khong gan Profile.
+    #
+    # Phai de len o TUNG INSTANCE. Gia tri mac dinh cua stack set la
+    # dns_profile_id, nen khong co dong nay thi MOI account deu duoc
+    # gan profile, ke ca account khong noi TGW.
+    DnsProfileId = each.value.attach_dns ? try(local.net.dns_profile_id, "") : ""
   }
 
   operation_preferences {
