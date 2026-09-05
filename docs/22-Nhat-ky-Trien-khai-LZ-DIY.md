@@ -178,7 +178,13 @@ Xếp theo thứ tự gặp phải.
 
 | 90 | `terraform plan` ở lớp `ops` báo `ResourceNotFoundException: Requested resource not found` về **bảng khoá vẫn đang tồn tại** | Backend S3 địa chỉ bảng khoá bằng **tên**, và một tên luôn được giải trong account của **người gọi**. Resource policy trên bảng cho phép account khác gọi nhưng không giúp họ **gọi tên** được. Layer cha có `profile` trỏ về account chủ nên chạy bình thường; lớp `ops` thiếu dòng đó nên hỏng — và hỏng ở `plan`, không phải `init`, vì init không lấy khoá | **Lỗi thiết kế** | *(mục 7aq)* |
 
-**79/90 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 91 | `prod_guard` **được gắn vào không gì cả** — không lỗi, không cảnh báo | Target khai `"Workloads/Production"`, mà `ou_structure` đang chạy là cây **phẳng** nên khoá đó không tồn tại. `try(local.ou_ids[t], null)` trả `null`, rồi `if item.target != null` **loại mục đó khỏi map**. Policy vẫn được tạo, console vẫn thấy, và `scp_summary` vẫn in target **như đã khai**. Ba nguồn cùng nói "có" cho một guardrail không tồn tại | **Lỗi code** | *(mục 7ar)* |
+
+| 92 | `lint.sh` **từ chối tên OU có thật** và chấp nhận tên không tồn tại | `OUS` liệt kê `NonProd`, `Prod`, `Analytics` — không tên nào do `ou_structure` sinh ra (thật là `Non-Production`, `Production`, `Data Analytics`). Tệ hơn: `ALLOCATED` cũng keyed như vậy và tra bằng `if alloc:` không có nhánh `else`, nên đổi catalog sang tên thật làm **tắt hẳn** phép kiểm "CIDR nằm trong dải của OU" mà không in một chữ | **Lỗi code** | *(mục 7ar)* |
+
+| 93 | `unmapped_accounts` **rỗng ở đúng lần apply tạo account** | Nó tính từ `data.aws_organizations_organization`, mà data source được đọc **trước** khi account tồn tại. Lưới an toàn cho câu "có account nào chưa ai khai phạm vi không" trả lời "không" ở đúng lần chạy duy nhất mà câu đó quan trọng — và `paste_permission_sets` cùng lúc in ra danh sách thiếu ba account vừa tạo | **Lỗi thiết kế** | *(mục 7ar)* |
+
+**82/93 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2980,6 +2986,121 @@ Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối �
 ```bash
 terraform apply -replace='aws_instance.partner_sim[0]'
 ```
+
+---
+
+## 7ar. Lỗi 91–93 — ba lưới an toàn, cùng một cách hỏng
+
+Tạo ba account đầu tiên bằng catalog. Mọi thứ xanh: `lint.sh` sạch, `plan` sạch, `Apply complete! 4 added, 1 changed, 0 destroyed`. Ba lỗi lộ ra trong vòng mười phút sau đó, và cả ba đều **không phát ra tín hiệu nào**.
+
+### Lỗi 91 — một guardrail tồn tại trên giấy
+
+`terraform output ou_ids` ở layer organization:
+
+```
+"Non-Production" = "ou-o5ci-syf8rqi7"
+"Production"     = "ou-o5ci-75f3uqe6"
+"Workloads"      = "ou-o5ci-fz0yuca3"
+```
+
+Cây **phẳng**: `Production` là OU cấp 1, ngang hàng với `Workloads`, không phải con. Nhưng `scp.tf` khai:
+
+```hcl
+prod_guard = { targets = ["Workloads/Production"] }
+```
+
+và giải tên như sau:
+
+```hcl
+target = t == "ROOT" ? local.root_id : try(local.ou_ids[t], null)
+...
+} : item.key => item if item.target != null
+```
+
+Khoá không tồn tại → `null` → **mục bị loại khỏi map**. Không có attachment nào được tạo, và không có gì nói ra điều đó:
+
+| Nguồn | Nói gì |
+|---|---|
+| `terraform apply` | Xanh. Không resource nào thiếu — nó chưa bao giờ được yêu cầu |
+| Console AWS | Chính sách `prod_guard` tồn tại, nội dung đúng |
+| `terraform output scp_summary` | `targets = ["Workloads/Production"]` — vì nó in thứ **đã khai** |
+
+Ba nguồn cùng khẳng định một guardrail đang chạy. Nó không chạy. Và cách duy nhất phát hiện là hỏi thẳng AWS về chiều ngược lại — *OU này đang chịu chính sách nào* — một câu không ai nghĩ tới hỏi khi mọi thứ đều xanh:
+
+```bash
+aws organizations list-policies-for-target --target-id ou-o5ci-75f3uqe6 \
+  --filter SERVICE_CONTROL_POLICY --query 'Policies[].Name' --output text
+```
+
+Cùng lúc, `network_lock` nhắm `["Workloads", ...]`. Khoá đó **có** — nhưng OU đó **rỗng**, vì workload nằm ở hai OU ngang hàng. Chính sách gắn thành công vào một chỗ không có gì, và điều đó còn khó thấy hơn cả trường hợp gắn hụt.
+
+**Sửa:** target giải theo đường dẫn đầy đủ rồi thử đoạn cuối, nên cả hai hình dạng cây đều chạy. Một policy không còn target nào **chặn plan** bằng precondition. `scp_summary` đọc từ `scp_attachments` — thứ thật sự tồn tại — và giữ `targets_khai` bên cạnh để so. Thêm `check "moi_ou_deu_co_scp"` nêu tên mọi OU không có SCP nào gắn trực tiếp, tức là chỗ "Workloads rỗng, workload nằm ở tầng trên" hiện ra thành một dòng thay vì phải suy ra từ ba file.
+
+### Lỗi 92 — phép kiểm quay lưng lại với thực tế
+
+`lint.sh` giữ danh sách OU hợp lệ để chạy được offline. Danh sách đó là:
+
+```python
+OUS = {"Infrastructure", "Security", "Workloads", "NonProd", "Prod",
+       "Analytics", "Sandbox", "Suspended", "Root"}
+```
+
+**Không tên nào trong `NonProd`, `Prod`, `Analytics` được `ou_structure` sinh ra.** Mặc định của nó cho `Non-Production`, `Production`, `Data Analytics`. Nên phép kiểm chấp nhận ba tên không tồn tại ở đâu cả và từ chối ba tên có thật.
+
+Nó "chạy đúng" suốt vì bản đồ `ou_ids` được gõ tay bằng tên ngắn — hai cái sai bù nhau.
+
+Phần nguy hiểm nằm ở bảng thứ hai, keyed y hệt:
+
+```python
+alloc = ALLOCATED.get(a.get("ou"))
+if alloc:
+    ...kiem CIDR co nam trong dai cua OU khong...
+```
+
+Không có nhánh `else`. Nên **sửa catalog cho đúng thực tế** — đổi `NonProd` thành `Non-Production` — làm `ALLOCATED.get()` trả `None` và tắt hẳn phép kiểm cấp phát CIDR. `lint.sh` vẫn in **"Sạch. 0 cảnh báo"**. Một `/16` đặt sai dải sẽ chỉ lộ ra khi hai spoke trùng nhau, và lúc đó sửa nghĩa là **xoá VPC**.
+
+Đây là biến thể ác nhất của lỗi 27: không phải im lặng vì không có gì, mà im lặng vì **một hành động đúng** đã vô hiệu hoá phép kiểm.
+
+**Sửa:** cả hai bảng nhận mọi cách viết, và một OU không có dải cấp phát giờ là **lỗi** chứ không phải phép kiểm bị bỏ qua.
+
+### Lỗi 93 — lưới an toàn mù ở đúng lần chạy cần nó
+
+`unmapped_accounts` tồn tại để trả lời một câu: *có account nào chưa ai khai phạm vi không* — vì account không có phạm vi thì không nằm trong `accounts_by_scope`, và **không ai vào được nó qua Identity Center**.
+
+Sau lần apply tạo ba account:
+
+```
+unmapped_accounts = tolist([])
+```
+
+Chạy `terraform plan` lần nữa, không đổi một dòng nào:
+
+```
+~ unmapped_accounts = [
+    + "598122632665",
+    + "792207721718",
+    + "913051689123",
+  ]
+```
+
+Nó tính từ `data.aws_organizations_organization`, mà data source được đọc **trước** khi resource được tạo. Ở đúng lần chạy duy nhất mà câu hỏi đó quan trọng, câu trả lời là rỗng — và rỗng đọc y hệt "mọi thứ đều ổn".
+
+Cùng lúc, `paste_permission_sets` in ra khối để dán sang layer permission-sets:
+
+```
+accounts_by_scope = {
+  nonprod   = ["169873795883"]
+  prod      = ["761558631239"]
+}
+```
+
+Ba account vừa tạo **không có trong đó**. Ai dán khối này sang sẽ cấp quyền cho những account cũ và bỏ qua những account mới — và không có gì trong màn hình đó nói rằng danh sách bị thiếu.
+
+Nguyên nhân: `by_scope` chỉ đọc `var.account_scopes` (bản đồ gõ tay), trong khi catalog **đã có** trường `scope` bắt buộc mà `lint.sh` chặn nếu thiếu. Thông tin có sẵn, chỉ là không ai nối hai đầu.
+
+**Sửa:** gộp `scope` của catalog vào — nó lấy từ resource `aws_organizations_account`, nên đúng ngay ở lần apply đầu, không phụ thuộc thời điểm đọc data source. Và mô tả của output nói thẳng rằng "rỗng" ở lần apply tạo account **không phải bằng chứng**.
+
+> **Cả ba cùng một hình dạng.** Không cái nào làm `apply` đỏ. Mỗi cái đều có một màn hình khẳng định điều ngược lại với sự thật — `scp_summary` in target đã khai, `lint.sh` in "Sạch", `unmapped_accounts` in rỗng. Và cả ba đều chỉ lộ ra khi hỏi **một câu khác**: OU này đang chịu chính sách nào, phép kiểm kia có thật sự chạy không, chạy lại plan lần hai xem có gì đổi không.
 
 ---
 

@@ -19,26 +19,69 @@ locals {
 
   mgmt = data.aws_caller_identity.current.account_id
 
-  # Account ACTIVE chua co mat trong account_scopes. Management account
+  ########################################
+  # SCOPE: HAI NGUON, KHONG PHAI MOT
+  #
+  # var.account_scopes  go tay, cho account co TRUOC catalog
+  # catalog `scope:`    do nguoi mo request khai, BAT BUOC (lint chan)
+  #
+  # Truoc day chi doc nguon thu nhat. Hau qua o dung lan apply tao
+  # account: paste_permission_sets in ra danh sach KHONG CO account
+  # vua tao, nen ai dan no sang permission-sets se cap quyen cho
+  # nhung account cu va bo qua nhung account moi - tuc khong ai vao
+  # duoc account vua tao qua Identity Center.
+  #
+  # Va thu dang le bat duoc chuyen do lai im: xem unmapped ben duoi.
+  ########################################
+  catalog_scope_by_name = {
+    for a in local.catalog_raw : a.name => try(a.scope, "none")
+  }
+
+  catalog_scopes = {
+    for name, acct in aws_organizations_account.this :
+    acct.id => local.catalog_scope_by_name[name]
+    if try(local.catalog_scope_by_name[name], "none") != "none"
+  }
+
+  # Catalog di SAU: no la ban ghi cua yeu cau, con account_scopes la
+  # ban do go tay. Hai cho khai lech nhau thi lay cai o catalog.
+  scopes_all = merge(var.account_scopes, local.catalog_scopes)
+
+  # Account ACTIVE chua co mat trong scope nao. Management account
   # khong tinh - no khong thuoc pham vi workload nao.
+  #
+  # active_accounts DOC TU AWS, va o lan apply tao account no duoc doc
+  # TRUOC khi account ton tai. Nen o dung lan chay dang can canh bao
+  # nhat, danh sach nay RONG - va "rong" doc y het "moi thu deu on".
+  # Gop catalog_scopes vao la de con so khong con phu thuoc vao thoi
+  # diem doc data source.
   unmapped = sort([
     for id in local.active_accounts :
-    id if id != local.mgmt && !contains(keys(var.account_scopes), id)
+    id if id != local.mgmt && !contains(keys(local.scopes_all), id)
   ])
 
   by_scope = {
     for s in ["analytics", "nonprod", "prod"] :
-    s => sort([for id, sc in var.account_scopes : id if sc == s])
+    s => sort([for id, sc in local.scopes_all : id if sc == s])
   }
 }
 
 output "unmapped_accounts" {
   description = <<-EOT
-    Account ACTIVE chua khai trong account_scopes.
+    Account ACTIVE chua khai pham vi o dau ca - khong trong
+    var.account_scopes, khong trong truong `scope` cua catalog.
 
     KHONG rong = co account khong ai biet no thuoc pham vi nao, va
     gan nhu chac chan chua co trong accounts_by_scope ben
     permission-sets - tuc khong ai vao duoc no qua Identity Center.
+
+    RONG KHONG PHAI LA BANG CHUNG o lan apply VUA TAO account:
+    danh sach account ACTIVE doc tu AWS bang data source, ma data
+    source duoc doc TRUOC khi account ton tai. Account vua tao khong
+    nam trong do, nen no khong the bi diem danh la thieu.
+
+    Chay lai `terraform plan` mot lan nua sau khi apply thi con so moi
+    tinh tren thuc te.
   EOT
   value       = local.unmapped
 }
