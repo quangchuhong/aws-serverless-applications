@@ -97,6 +97,8 @@ Từ đó ARN không đổi nữa. Sửa catalog chỉ làm đổi `rules_string
 
 **Ưu tiên 150 là cố ý.** Rule group của layer cha ở 100 chứa hai luồng *hạ tầng*: NLB → app (sid 1800) và SSM → interface endpoint (sid 1810). Chúng phải được đọc trước. Lớp ops không được quyền làm mất SSM ở mọi spoke.
 
+Cách policy được đánh giá — ba engine, hành động kết thúc, capacity bất biến, và vì sao thứ tự 100 → 150 → 200 là load-bearing — ở [doc 15 mục 7.0](./15-Security-VPC-Network-Firewall.md). Firewall chặn được gì và **không** chặn được gì: [mục 7.5](./15-Security-VPC-Network-Firewall.md).
+
 ### Kiểm bootstrap
 
 ```bash

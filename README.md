@@ -50,7 +50,7 @@ Mục 0 của doc 17 có **bảng trạng thái**: phần nào đã có code ch�
 | [12](./docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | DNS và VPC endpoint tập trung – môi trường thuần AWS |
 | [13](./docs/13-Centralized-Ingress-Egress-Network.md) | Khoá Internet ở mọi account, tách ingress/egress VPC |
 | [14](./docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) | Ingress chain: CDN → Palo Alto → F5 WAF → App |
-| [15](./docs/15-Security-VPC-Network-Firewall.md) | Security VPC – mọi traffic qua AWS Network Firewall |
+| **[15](./docs/15-Security-VPC-Network-Firewall.md)** | **Security VPC** – mọi traffic qua AWS Network Firewall. Mục 7.0: ba engine và cách policy được đánh giá · mục 7.5: chặn được gì, **không** chặn được gì |
 | [16](./docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | Kết nối đối tác – 3rd-party VPC và Site-to-Site VPN |
 | [18](./docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) | Cấu hình F5 BIG-IP Advanced WAF – DO, AS3, WAF policy |
 
