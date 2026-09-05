@@ -190,6 +190,106 @@ Ba dòng: **100** (layer cha) → **150** (ops) → **200** (egress domains). Đ
 
 ---
 
+## 3c. Nối lại backend từ đầu — hai thứ hỏng im lặng
+
+Mục 3b giả định backend **đã sẵn**: object state còn đó, `backend_profiles` đã khai, `backend.hcl` còn trên đĩa. Đó là trường hợp `destroy` bình thường.
+
+Nhưng khi state của lớp ops **bị xoá thật** — teardown toàn bộ, dọn bucket, hoặc dựng lại landing zone trên một khoá khác — thì có hai thứ chặn đường, và **không cái nào nói ra nguyên nhân thật**.
+
+### Thứ nhất: dòng digest sống lâu hơn state
+
+```bash
+aws s3 rm s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate
+aws s3api put-object --bucket <bucket> --key 'demo-network-lz-full/ops/terraform.tfstate'
+terraform init -reconfigure -backend-config=backend.hcl
+```
+
+```
+Error: state data in S3 does not have the expected content.
+Calculated checksum:
+Stored checksum:     c92a3ed1fe4984129b73c4bdb0d26846
+
+This may be caused by unusually long delays in S3 processing a previous
+state update. Please wait for a minute or two and try again.
+```
+
+Bảng khoá giữ **hai** loại dòng cho mỗi key, không phải một:
+
+| `LockID` | Sống bao lâu |
+|---|---|
+| `<bucket>/<key>` | Chỉ trong lúc một lệnh đang chạy |
+| `<bucket>/<key>-md5` | **Vĩnh viễn**, tới khi có người xoá tay |
+
+`aws s3 rm` không đụng tới DynamoDB. Câu *"wait for a minute or two"* đổ lỗi cho độ trễ S3 — đợi bao lâu cũng không hết. Dấu hiệu thật là `Calculated checksum:` **bỏ trống**: object không có nội dung.
+
+```bash
+cd landing-zone/tf-backend
+TABLE=$(terraform output -raw lock_table)
+aws dynamodb delete-item --region <region> --table-name "$TABLE" \
+  --key '{"LockID":{"S":"<bucket>/demo-network-lz-full/ops/terraform.tfstate-md5"}}'
+aws s3 rm "s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate"
+```
+
+Xoá luôn object rỗng: `put-object` chỉ cần khi prefix **hoàn toàn mới**, mà `demo-network-lz-full/` đã có state của layer cha.
+
+### Thứ hai: thiếu `profile` thì `init` sạch, `plan` mới hỏng
+
+```
+Error: Error acquiring the state lock
+ResourceNotFoundException: Requested resource not found
+Unable to retrieve item from DynamoDB table "qh11-lz-tfstate-lock"
+```
+
+Bảng đó đang tồn tại. Backend S3 địa chỉ bảng khoá bằng **tên**, và một cái tên luôn được giải trong account của **người gọi**. Chạy lớp ops bằng credential của account mạng thì DynamoDB tra trong account mạng và không thấy gì.
+
+Resource policy trên bảng (`state_writer_accounts` trong `tf-backend`) cho phép account khác **gọi**, nhưng không giúp họ **gọi tên** được — muốn dùng thì phải địa chỉ bằng ARN, mà `dynamodb_table` chỉ nhận tên.
+
+Ba lớp im lặng chồng lên nhau:
+
+| | |
+|---|---|
+| **Nửa S3 vẫn chạy** | Bucket + key không có chuyện "giải trong account của mình", nên `ListBucket`/`GetObject` chéo hoạt động bình thường |
+| **`init` vẫn sạch** | `init` không lấy khoá. Lỗi để dành tới `plan`, sau khi người ta đã tin là xong |
+| **Thông báo nói "not found"** | Không phải "không phải của bạn". Chỗ đầu tiên ai cũng đi kiểm là bảng có tồn tại không — và nó tồn tại |
+
+Layer cha không gặp vì `backend.hcl` của nó **có** `profile = "default"`.
+
+```hcl
+# landing-zone/tf-backend/terraform.tfvars
+backend_profiles = {
+  "landing-zone/network"     = "default"
+  "landing-zone/network/ops" = "default"
+}
+```
+
+```bash
+cd landing-zone/tf-backend
+terraform apply                 # BẮT BUỘC — backend_hcl là output, output nằm trong state
+./wire-backends.sh              # phải thấy: ghi  landing-zone/network/ops/backend.hcl
+grep profile ../network/ops/backend.hcl
+```
+
+**`terraform.tfvars` thôi chưa đủ.** `wire-backends.sh` đọc `terraform output backend_hcl`, tức là đọc **state**. Sửa tfvars mà không apply thì script chạy xong báo `khong doi` và mọi thứ trông như đã làm rồi.
+
+> **Quy tắc:** với `lock_mode = "dynamodb"`, **mọi** layer có resource ở account khác đều bắt buộc có dòng `backend_profiles` trỏ về account chủ bảng khoá. Không phải tuỳ chọn cho gọn — không có nó thì `plan` không chạy được.
+
+### Ba danh tính, đừng trộn
+
+| Chạy ở | Bằng credential của | Vì |
+|---|---|---|
+| `landing-zone/tf-backend` | **management** | Bucket, bảng khoá và mọi resource của nó đều ở đó, và `backend.hcl` của nó không có `profile` |
+| `landing-zone/network` | **account mạng** | State đi qua `profile = "default"` trong `backend.hcl`, không qua token trong shell |
+| `landing-zone/network/ops` | **account mạng** | Như trên — sau khi đã có dòng `profile` |
+
+Biến môi trường `AWS_ACCESS_KEY_ID` đứng **trước** `profile` với những layer **không** khai `profile` trong `backend.hcl`. Nên `tf-backend` đang mang token của account mạng sẽ hỏng đúng kiểu trên — cùng một thông báo, khác layer.
+
+```bash
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE
+aws sts get-caller-identity --query Account --output text
+```
+
+---
+
 ## 4. Runbook
 
 ### 4.1. Mở một port giữa hai app
@@ -383,6 +483,9 @@ Bảng này là thứ đọc lúc 2 giờ sáng. Mọi dòng đều là kiểu h
 | `does not have an attribute named "ops_handles"` | Bỏ qua bước 0 — layer cha chưa apply lại sau khi kéo code mới | `./lint.sh` (bắt trước Terraform) |
 | `HeadObject ... 403` **trên cả key đã tồn tại** | `AWS_ACCESS_KEY_ID` trong shell đè lên `profile` của backend — biến môi trường đứng trước file cấu hình trong chuỗi giải credential. Cùng thư mục, hai shell, hai danh tính | `aws sts get-caller-identity` so với `--profile default`; `unset` rồi thử lại |
 | `HeadObject ... 403` **chỉ trên key chưa tồn tại** | `ListBucket` trong `tf-backend` bị điều kiện `s3:prefix`, mà khoá đó **chỉ có trong yêu cầu list** — HeadObject thì không. Nên key **đã tồn tại** đọc được, key **chưa tồn tại** trả 403: mọi layer mới hỏng ở lần init đầu, và chỉ lần đầu | `./backend-hint.sh` in phép đo A/B; sửa bằng `aws s3api put-object` tạo object rỗng một lần |
+| `state data in S3 does not have the expected content` — *"wait for a minute or two"* | Dòng digest `<bucket>/<key>-md5` trong bảng khoá **sống lâu hơn** object state. `aws s3 rm` không đụng tới DynamoDB. Đợi bao lâu cũng không hết | `Calculated checksum:` bỏ trống = object rỗng. Xoá dòng digest — mục 3c |
+| `ResourceNotFoundException` về bảng khoá **đang tồn tại**, ở `plan` chứ không ở `init` | `backend.hcl` thiếu `profile`. Bảng khoá được địa chỉ bằng **tên**, mà tên luôn giải trong account của người gọi. Nửa S3 vẫn chạy vì bucket+key không giải theo account | `grep profile ops/backend.hcl`; thêm `backend_profiles` rồi **apply `tf-backend`** — mục 3c |
+| `wire-backends.sh` báo `khong doi` sau khi vừa sửa `terraform.tfvars` | Script đọc `terraform output backend_hcl`, tức đọc **state**. Sửa tfvars mà chưa apply thì output vẫn là giá trị cũ | `terraform apply` ở `tf-backend` trước, rồi chạy lại script |
 | Đối tác báo *"gọi vào cổng X không có gì trả lời"* | Chưa có `services` khai cổng đó trong `partners.yaml` — không có listener thì NLB không lắng nghe cổng đó, và im lặng là hành vi đúng của TCP |
 | Đối tác gọi được cổng nhưng nhận `connection reset` | Có listener, thiếu rule firewall. Hai lớp khác nhau: listener mở cửa, firewall quyết định gói tin có đi tiếp không |
 | Thêm dịch vụ, `apply` hỏng giữa chừng ở target group | Trùng cổng với dịch vụ khác hoặc với `reserved_port` của layer cha. `lint.sh` và precondition bắt trước — chạy chúng thì không tới bước này |

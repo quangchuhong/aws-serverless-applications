@@ -165,7 +165,7 @@ CIDR lấy từ [doc 17 mục 3](./17-Network-LZ-Design-Guide.md#3-quy-hoạch-c
 
 ---
 
-## 4. Trình tự — bốn pha, không gộp được
+## 4. Trình tự — bốn pha dựng nền, không gộp được, rồi một pha nữa cho lớp vận hành
 
 ### Pha 1 — chỉ RAM share
 
@@ -252,6 +252,35 @@ terraform apply
 ```
 
 Phải tách pha vì data source tìm attachment lọc theo ID của TGW, mà TGW được tạo trong chính config này. Lần apply đầu, ID đó chưa biết nên `for_each` không dựng được bộ khoá và plan chết với `Invalid for_each argument`.
+
+### Pha 5 — lớp vận hành
+
+Bốn pha trên dựng xong **nền**: TGW, security VPC, firewall, egress, ingress, các VPC spoke. Nhưng lúc này `verify.sh` vẫn còn một mục chưa xanh:
+
+```
+9. Lop van hanh (ops/)
+  - Lop ops chua duoc cam vao policy (chua bootstrap, hoac da go ARN de teardown)
+```
+
+Firewall policy tham chiếu rule group của lớp ops bằng **ARN**, mà ARN chỉ tồn tại sau khi rule group được tạo. Vòng phụ thuộc đó phải cắt bằng tay đúng một lần:
+
+```bash
+cd ops
+terraform init -backend-config=backend.hcl
+./lint.sh && terraform apply
+terraform output -raw rule_group_arn
+
+cd ..
+#   SỬA terraform.tfvars (đừng `echo >>`):
+#     ops_rule_group_arns = ["arn:aws:network-firewall:...:stateful-rulegroup/..."]
+terraform apply && ./verify.sh
+```
+
+Từ đó ARN không đổi nữa — nó sinh từ region + account + tên rule group. Sửa catalog chỉ làm đổi `rules_string` **bên trong** rule group, không cần ai apply layer cha.
+
+Bỏ pha này thì mạng vẫn chạy và `verify.sh` vẫn gần như xanh hết — chỉ là **không rule east-west nào của bạn được đọc**. Ở chế độ `alert` điều đó không lộ ra ở đâu cả, vì mặc định là cho qua.
+
+**Ba cái bẫy của pha này nằm ở backend, không nằm ở Terraform** — dòng digest sống lâu hơn state đã xoá, `backend_profiles` thiếu `profile` làm `plan` báo `ResourceNotFoundException` về một bảng đang tồn tại, và `wire-backends.sh` báo `khong doi` vì nó đọc state chứ không đọc tfvars. Cả ba ở [doc 25 mục 3c](./25-Van-hanh-Network-Hang-Ngay.md).
 
 ---
 
@@ -476,4 +505,5 @@ Route table **đổi** khi bật firewall sau đó — `0.0.0.0/0` của spoke c
 | [17 – Design Guide](./17-Network-LZ-Design-Guide.md) | Kiến trúc, CIDR, bảng chân lý TGW. Mục 4b là bản tóm tắt cross-account |
 | [22 – Nhật ký lỗi](./22-Nhat-ky-Trien-khai-LZ-DIY.md) | Mục 7y–7ae: từng lỗi của phần này, và cách phát hiện |
 | [13](./13-Centralized-Ingress-Egress-Network.md) · [15](./15-Security-VPC-Network-Firewall.md) · [12](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | Chi tiết egress, firewall, DNS |
+| [25 – Vận hành network hằng ngày](./25-Van-hanh-Network-Hang-Ngay.md) | Lớp `ops` — pha 5 ở trên. Mục 3 bootstrap, **mục 3c** ba cái bẫy ở backend |
 | [RUNBOOK giai đoạn 10](../landing-zone/RUNBOOK.md) | Bản thường trực của layer network |
