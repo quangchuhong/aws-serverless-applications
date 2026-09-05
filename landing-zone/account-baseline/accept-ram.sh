@@ -126,9 +126,51 @@ me=$(aws sts get-caller-identity --query Arn --output text 2>&1) || {
   echo "  $me"
   exit 1
 }
+me_acct=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
+
 echo "Dang chay bang: $me"
+echo "Account:        $me_acct"
 echo "Region:         $REGION"
 echo "Role assume:    $ROLE"
+
+########################################
+# DANH TINH PHAI O MANAGEMENT ACCOUNT
+#
+# OrganizationAccountAccessRole trong mot account moi co DUY NHAT mot
+# principal duoc tin: management account cua to chuc. Do la trust
+# policy AWS tu dat khi tao account, va no khong lien quan gi toi
+# viec ban co quyen lon den dau o account khac.
+#
+# Kiem TRUOC khi thu, vi neu de assume-role tu bao loi thi thong bao
+# la "AccessDenied ... is not authorized to perform: sts:AssumeRole" -
+# mot cau doc nhu THIEU QUYEN, khien nguoi ta di cap them quyen cho
+# chinh cai principal khong bao gio dung duoc. Van de khong phai
+# quyen, ma la DUNG SAI ACCOUNT.
+########################################
+mgmt_acct=$(aws organizations describe-organization \
+  --query 'Organization.MasterAccountId' --output text 2>/dev/null || true)
+
+if [ -n "$mgmt_acct" ] && [ "$mgmt_acct" != "None" ]; then
+  echo "Management:     $mgmt_acct"
+  if [ "$me_acct" != "$mgmt_acct" ]; then
+    echo
+    red "SAI ACCOUNT. Dang o ${me_acct}, can ${mgmt_acct}."
+    echo
+    echo "  ${ROLE} trong account moi chi tin management account cua to chuc."
+    echo "  Mot danh tinh o account khac KHONG assume duoc no, va loi tra ve la"
+    echo "  'AccessDenied ... not authorized to perform: sts:AssumeRole' - doc nhu"
+    echo "  thieu quyen, nhung cap them quyen o day khong sua duoc gi."
+    echo
+    echo "  Doi sang danh tinh o ${mgmt_acct} roi chay lai:"
+    echo "    aws sso login   # hoac export credential cua management"
+    echo "    aws sts get-caller-identity --query Account --output text"
+    echo
+    echo "  Buoc nay CHI can lam mot lan moi account. Cach khac, neu ban vao"
+    echo "  duoc console cua tung account: RAM > Shared with me > Resource shares"
+    echo "  > chon loi moi > Accept."
+    exit 1
+  fi
+fi
 echo
 
 ########################################
@@ -151,11 +193,21 @@ for ID in "${ids[@]}"; do
     --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
     --output text 2>&1) || {
     red "assume-role that bai"
-    echo "   $creds"
-    echo "   Account moi tao co the chua san sang - doi vai phut roi chay lai."
-    echo "   Neu bao 'not authorized': account nay duoc tao ngoai Terraform"
-    echo "   va co the khong co role ${ROLE}. Kiem bang:"
-    echo "     aws organizations describe-account --account-id ${ID}"
+    printf '%s\n' "$creds" | sed 's/^/   /'
+    case "$creds" in
+      *AccessDenied*|*not\ authorized*)
+        echo "   'AccessDenied' o day gan nhu luon la SAI ACCOUNT chu khong phai thieu quyen:"
+        echo "   ${ROLE} chi tin management account. Xem dong 'Account:' o dau ra tren."
+        ;;
+      *NoSuchEntity*|*does\ not\ exist*)
+        echo "   Account nay co the duoc MOI VAO to chuc chu khong phai tao boi to chuc -"
+        echo "   truong hop do AWS khong tu tao ${ROLE}. Kiem:"
+        echo "     aws organizations describe-account --account-id ${ID}"
+        ;;
+      *)
+        echo "   Account vua tao co the chua san sang - doi vai phut roi chay lai."
+        ;;
+    esac
     n_loi=$((n_loi + 1))
     continue
   }
