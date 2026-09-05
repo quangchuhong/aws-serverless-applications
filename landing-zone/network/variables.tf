@@ -991,3 +991,32 @@ variable "pa_default_action" {
     error_message = "pa_default_action phai la allow, deny, drop hoac reset-both."
   }
 }
+
+variable "expected_account_id" {
+  description = <<-EOT
+    Account layer nay PHAI chay trong. De rong = khong kiem.
+
+    VI SAO CO BIEN NAY
+
+    Layer nay khong assume role - no dung thang credential trong moi
+    truong. Doi shell sang mot account khac roi chay lai la dung mot
+    lenh, va Terraform se lam dung viec no duoc bao:
+    khong tim thay TGW cu o account moi -> coi nhu da bi xoa ->
+    TAO MOI.
+
+    Ket qua la hai bo ha tang o hai account, mot bo nam trong state va
+    mot bo mo coi, va khong co gi bao. Da xay ra hai lan trong mot dem.
+
+    Bien moi truong DE LEN profile (loi 68), nen "toi da dat profile
+    dung roi" khong phai mot bao dam. Chi co so account la bao dam.
+
+    Lay: aws sts get-caller-identity --query Account --output text
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.expected_account_id == "" || can(regex("^[0-9]{12}$", var.expected_account_id))
+    error_message = "Phai la 12 chu so, hoac de rong de tat phep kiem."
+  }
+}
