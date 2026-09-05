@@ -16,6 +16,7 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
 | **Đã đo được cả tuyến** | Hai đường hầm `UP`, hai SA `ESTABLISHED`, và **`NLB tra ve 200`** từ máy đối tác giả lập: IPsec → VGW → NLB → TGW → firewall → `10.10.0.10` ở một **account khác**. Không phải suy ra từ trạng thái tài nguyên — là một gói tin HTTP đi hết đường và về |
+| **Vận hành** | Dịch vụ công bố qua catalog cũng đã đo: cổng 8080 do `partners.yaml` sinh ra trả `http=200` từ máy đối tác, qua listener → target group → `10.10.0.10:80` |
 | **Đường tới đó** | Bảy lỗi, bảy vòng dựng lại máy giả lập. Nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77) nên máy giả lập chạy Ubuntu; nguyên nhân cuối là route `vti` thiếu `src` (lỗi 78) — đường hầm lên, `curl` trả về `000`. Chi tiết ở **mục 5.3**, [doc 22 mục 7al và 7am](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 

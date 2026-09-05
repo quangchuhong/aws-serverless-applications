@@ -3101,6 +3101,15 @@ Tiện thể, rule của lớp ops lấy dải nguồn từ **chính đối tác
 
 Bảy lỗi, bảy vòng thay máy giả lập, cho một đường ống mà `terraform apply` báo thành công ngay từ vòng đầu.
 
+Và lớp vận hành, đo riêng ở cổng 8080 do catalog sinh ra:
+
+```
+http=200
+exit=0
+```
+
+Ba dòng YAML trong `partners.yaml` — tên dịch vụ, cổng ngoài, cổng trong — thành target group, listener, rule mở cổng và rule firewall, rồi thành một gói tin HTTP đi từ mạng đối tác tới ứng dụng ở một account khác. Mười lỗi (74–83) nằm giữa dòng YAML đầu tiên và con số đó.
+
 > **Điều đáng giữ lại từ cả bảy:** không lỗi nào trong số đó làm `apply` thất bại, và không lỗi nào bị `plan`, `validate`, `fmt` hay phép quét `.tftpl` bắt được. Sáu trong bảy chỉ lộ ra bằng **một gói tin thật đi hết đường**. Đó là lý do `verify.sh` tồn tại, và là lý do dòng cuối của một quy trình dựng hạ tầng không bao giờ nên là "apply xong".
 
 ---
