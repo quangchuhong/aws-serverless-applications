@@ -48,7 +48,7 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | **RAM share Transit Gateway** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ⚠️ chạy được, nhưng **phải đi đường vòng**² |
 | **3rd-party VPC + Site-to-Site VPN** | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | `partner.tf`, `partner-sim.tf` | ⏳ code xong, đối tác **giả lập** để đo được cả tuyến, chưa apply⁵ |
 | SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
-| **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `demo/network-lz-full/ops/` | ✅ apply thật, policy đọc rule group ở ưu tiên 150⁴ |
+| **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `landing-zone/network/ops/` | ✅ apply thật, policy đọc rule group ở ưu tiên 150⁴ |
 
 ¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
 
@@ -87,7 +87,7 @@ Bảng này từng nói *"chưa thành code"* cho gần như mọi dòng. Nó đ
 
 Cả ba script đều **dừng ngay** nếu credential trong shell không thuộc account đã tạo hạ tầng. Không có cổng đó thì `verify.sh` báo 8 lỗi hạ tầng cho một hệ thống chạy hoàn hảo, và `teardown.sh` in "đã sạch" cho một hạ tầng vẫn đang tính tiền — cả hai đã xảy ra thật, [doc 22 lỗi 58](./22-Nhat-ky-Trien-khai-LZ-DIY.md).
 
-Toàn bộ code ở [`demo/network-lz-full/`](../demo/network-lz-full/).
+Toàn bộ code ở [`landing-zone/network/`](../landing-zone/network/).
 
 ### Đọc bảng này thế nào
 
@@ -827,7 +827,7 @@ Mục tiêu: kiểm chứng **định tuyến** với chi phí tối thiểu, r�
 
 | Demo | Nội dung | Chi phí |
 |---|---|---|
-| **[`demo/network-lz-full`](../demo/network-lz-full/)** | **Giai đoạn 1 đầy đủ**: TGW 4 route table, security VPC + Network Firewall, egress VPC, ingress NLB, spoke, gateway endpoint | **~$0.34–0.77/giờ** |
+| **[`landing-zone/network`](../landing-zone/network/)** | **Giai đoạn 1 đầy đủ**: TGW 4 route table, security VPC + Network Firewall, egress VPC, ingress NLB, spoke, gateway endpoint | **~$0.34–0.77/giờ** |
 | [`demo/centralized-network`](../demo/centralized-network/) | Bản tối giản: TGW + egress + cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](../demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, cross-account PHZ | ~$0.22/giờ |
 
@@ -898,7 +898,7 @@ Trạng thái đầy đủ ở [mục 0](#0-trạng-thái-triển-khai). Phần 
 ```text
 1. CHAY DEMO GIAI DOAN 1                          ← lam truoc tien
    ./plan-check.sh   -> kiem chung code, khong tao gi
-   terraform apply   -> 6 buoc trong demo/network-lz-full/README.md
+   terraform apply   -> 6 buoc trong landing-zone/network/README.md
    ./verify.sh       -> phai xanh het
    ./teardown.sh
    Chi phi: ~$3 cho buoi 4 tieng
@@ -924,7 +924,7 @@ Trạng thái đầy đủ ở [mục 0](#0-trạng-thái-triển-khai). Phần 
 
 > **Cập nhật mục 3:** bốn layer nền tảng đã thành code chạy được trong [`landing-zone/`](../landing-zone/) — xem [doc 20](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) (state, quy trình thay đổi), [doc 19](./19-Permission-Set-cho-Landing-Zone.md) (permission set) và [doc 21](./21-Control-Tower-vs-DIY.md) (OU + SCP, cả hai hướng). Kiểm chứng cả 5 layer: `cd landing-zone && ./plan-all.sh`.
 >
-> Riêng **network vẫn chỉ có bản demo** — `demo/network-lz-full` gắn `Ephemeral = "true"` và được thiết kế để xoá. Nâng nó thành layer thường trực multi-account là việc còn lại lớn nhất của tài liệu này.
+> Riêng **network vẫn chỉ có bản demo** — `landing-zone/network` gắn `Ephemeral = "true"` và được thiết kế để xoá. Nâng nó thành layer thường trực multi-account là việc còn lại lớn nhất của tài liệu này.
 
 **Vì sao mục 1 trước tiên:** nó kiểm chứng bảng định tuyến ở [mục 4](#4-transit-gateway--bảng-chân-lý-duy-nhất) — chỗ mà một ô sai gây ra sự cố rất khó lần ra nguyên nhân khi đã lên môi trường thật. Phát hiện lúc demo tốn $3; phát hiện lúc production tốn nhiều hơn thế rất nhiều.
 

@@ -183,7 +183,7 @@ Khi LZ lên production thật, nâng ngưỡng theo chi phí thực tế (xem [d
 |---|---|
 | [Doc 11 – Tag policy và cost allocation](../../docs/11-Tag-Policy-va-Cost-Allocation.md) | Thiết kế đầy đủ. Layer này chỉ làm phần **phải làm sớm** |
 | [Doc 17 mục 7.5](../../docs/17-Network-LZ-Design-Guide.md) | Chi phí mô hình dựng–xoá, bốn cái bẫy |
-| [`demo/network-lz-full`](../../demo/network-lz-full/) | Mọi resource gắn `Ephemeral=true`; budget này bắt khi quên xoá |
+| [`landing-zone/network`](../../landing-zone/network/) | Mọi resource gắn `Ephemeral=true`; budget này bắt khi quên xoá |
 
 Phần còn lại của doc 11 — tag policy, SCP bắt buộc tag, Cost Categories, CUR + Athena — làm sau, khi đã có nhiều account và nhiều team thật.
 

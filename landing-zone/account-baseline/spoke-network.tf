@@ -26,7 +26,8 @@
 # account so huu TGW chu khong phai account workload. Layer nay
 # khong voi toi do duoc.
 #
-# Output `paste_spoke_attachments` sinh san khoi tfvars cho buoc do.
+# Output `paste_spokes` sinh san khoi tfvars cho buoc do, kem
+# manual_vpc = true - xem mo ta cua no.
 # Bo qua buoc 4 thi VPC ton tai, attachment ton tai, va KHONG CO GOI
 # TIN NAO DI DAU CA - attachment khong nam trong route table nao thi
 # no khong hoc duoc duong nao va khong ai hoc duoc duong toi no.

@@ -12,8 +12,8 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 
 | | |
 |---|---|
-| **Code** | [`demo/network-lz-full/partner.tf`](../demo/network-lz-full/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
-| **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
+| **Code** | [`landing-zone/network/partner.tf`](../landing-zone/network/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
+| **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../landing-zone/network/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
 | **Đã đo được cả tuyến** | Hai đường hầm `UP`, hai SA `ESTABLISHED`, và **`NLB tra ve 200`** từ máy đối tác giả lập: IPsec → VGW → NLB → TGW → firewall → `10.10.0.10` ở một **account khác**. Không phải suy ra từ trạng thái tài nguyên — là một gói tin HTTP đi hết đường và về |
 | **Đo cả lớp vận hành** | Dịch vụ công bố qua catalog cũng đã đo: cổng 8080 do `partners.yaml` sinh ra trả `http=200` từ máy đối tác, qua listener → target group → `10.10.0.10:80` |
@@ -719,7 +719,7 @@ Kết nối đối tác khác các phần khác của LZ ở chỗ **có một t
 
 | Thứ | Ở đâu | Đổi bao lâu một lần |
 |---|---|---|
-| VPC vùng đệm, VGW, VPN connection, customer gateway, private NAT | `demo/network-lz-full/partner.tf` | vài tháng |
+| VPC vùng đệm, VGW, VPN connection, customer gateway, private NAT | `landing-zone/network/partner.tf` | vài tháng |
 | Bản thân NLB và security group của nó | `partner.tf` | vài tháng |
 | **Target group, target, listener** | `ops/vpn.tf` ← `catalog/partners.yaml` | **hằng tuần** |
 | **Rule mở cổng trên security group** | `ops/vpn.tf` ← `catalog/partners.yaml` | **hằng tuần** |
@@ -755,7 +755,7 @@ partners:
 Cũng vì thế, thứ đưa cho đối tác **sinh ra từ chính cấu hình đang chạy**, không gõ tay:
 
 ```bash
-cd demo/network-lz-full/ops && terraform output -raw partner_handover
+cd landing-zone/network/ops && terraform output -raw partner_handover
 ```
 
 In ra dải hai bên, danh sách dịch vụ kèm cổng và hạn, và câu cuối nói rằng ngoài những dải đó **không có đường nào tồn tại** — không phải bị chặn, mà là không tồn tại.
@@ -767,7 +767,7 @@ In ra dải hai bên, danh sách dịch vụ kèm cổng và hạn, và câu cu�
 **Layer cha** (một lần cho mỗi đối tác):
 
 ```bash
-cd demo/network-lz-full
+cd landing-zone/network
 # terraform.tfvars: enable_partner_vpn = true
 # aws_customer_gateway.ip_address = IP thiết bị VPN của họ
 terraform apply

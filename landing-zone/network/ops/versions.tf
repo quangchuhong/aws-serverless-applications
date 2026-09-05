@@ -39,7 +39,7 @@ terraform {
   # Lop nay la mot layer nhu moi layer khac cua landing zone. Key cua
   # no khai o landing-zone/tf-backend/outputs.tf (local.layers):
   #
-  #   "demo/network-lz-full/ops" = "demo-network-lz-full/ops/terraform.tfstate"
+  #   "landing-zone/network/ops" = "demo-network-lz-full/ops/terraform.tfstate"
   #
   # CUNG PREFIX voi layer cha. Bat buoc, khong phai cho gon: bucket
   # policy cap quyen theo prefix, nen mot prefix moi la khong co dong
@@ -50,7 +50,7 @@ terraform {
   #   cd landing-zone/tf-backend
   #   terraform apply                 # 0 resource doi, chi Outputs
   #   ./wire-backends.sh              # ghi backend.tf + backend.hcl
-  #   cd demo/network-lz-full/ops
+  #   cd landing-zone/network/ops
   #   terraform init -backend-config=backend.hcl
   #
   # DUNG go tay mot khoi backend "s3" vao file nay: wire-backends.sh
@@ -60,8 +60,8 @@ terraform {
   # can them mot dong o landing-zone/tf-backend/terraform.tfvars:
   #
   #   backend_profiles = {
-  #     "demo/network-lz-full"     = "default"
-  #     "demo/network-lz-full/ops" = "default"
+  #     "landing-zone/network"     = "default"
+  #     "landing-zone/network/ops" = "default"
   #   }
   #
   # VI SAO PHAI CO BACKEND TU XA
@@ -116,7 +116,7 @@ provider "aws" {
     tags = {
       Project   = local.hub.project
       ManagedBy = "terraform"
-      Repo      = "aws-serverless-applications/demo/network-lz-full/ops"
+      Repo      = "aws-serverless-applications/landing-zone/network/ops"
 
       # Phan biet voi resource cua layer cha khi doc Cost Explorer hay
       # khi quet tag luc go bo.

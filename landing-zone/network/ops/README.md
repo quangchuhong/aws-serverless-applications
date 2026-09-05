@@ -128,7 +128,7 @@ Firewall policy tham chiếu rule group bằng ARN, mà ARN chỉ tồn tại sa
 #    0 to change". Nhưng thiếu bước này thì bước 1 hỏng ngay ở init
 #    với "This object does not have an attribute named ops_handles",
 #    và thông báo đó không nói là bạn quên apply layer cha.
-cd demo/network-lz-full
+cd landing-zone/network
 terraform apply
 
 # 1. Tạo rule group ở lớp ops
@@ -161,7 +161,7 @@ Từ đó về sau ARN không đổi nữa. Sửa catalog chỉ làm đổi `rul
 Nếu state của layer cha nằm chỗ khác, trỏ tới nó bằng **đường dẫn tuyệt đối**:
 
 ```hcl
-state_config = { path = "/Users/laptop/…/demo/network-lz-full/terraform.tfstate" }
+state_config = { path = "/Users/laptop/…/landing-zone/network/terraform.tfstate" }
 ```
 
 ### Khi layer cha dùng backend S3 — hai thứ khác nhau, cần cả hai
@@ -215,8 +215,8 @@ Lớp này giờ có tên trong `local.layers` (`landing-zone/tf-backend/outputs
 # 1. Khai profile cho lớp ops — cùng profile với layer cha
 #    landing-zone/tf-backend/terraform.tfvars
 #      backend_profiles = {
-#        "demo/network-lz-full"     = "default"
-#        "demo/network-lz-full/ops" = "default"
+#        "landing-zone/network"     = "default"
+#        "landing-zone/network/ops" = "default"
 #      }
 
 # 2. Apply tf-backend (0 resource đổi, chỉ Outputs) rồi sinh file
@@ -229,7 +229,7 @@ aws s3api put-object --bucket <bucket> \
   --key 'demo-network-lz-full/ops/terraform.tfstate'
 
 # 4. Nối
-cd demo/network-lz-full/ops
+cd landing-zone/network/ops
 terraform init -backend-config=backend.hcl
 ```
 
@@ -478,4 +478,4 @@ state_config = {
 }
 ```
 
-Layer đó cũng cần output `ops_handles` và biến `ops_rule_group_arns` — hiện chỉ `demo/network-lz-full` có. Và bản thân `landing-zone/network` **chưa từng được apply**, bước RAM share của nó đã đo là hỏng (xem `landing-zone/RUNBOOK.md` giai đoạn 10).
+Layer đó cũng cần output `ops_handles` và biến `ops_rule_group_arns` — hiện chỉ `landing-zone/network` có. Và bản thân `landing-zone/network` **chưa từng được apply**, bước RAM share của nó đã đo là hỏng (xem `landing-zone/RUNBOOK.md` giai đoạn 10).

@@ -221,7 +221,7 @@ n_missing=0
 # chac chan nhat de nguoi ta thoi doc canh bao.
 #
 # Bo mot dong khoi day khi demo do duoc giu lai lam ha tang thuong
-# tru (ephemeral = false), giong demo/network-lz-full.
+# tru (ephemeral = false), giong landing-zone/network.
 ########################################
 LOCAL_STATE_LAYERS="
 demo/centralized-network
@@ -231,11 +231,11 @@ demo/centralized-network-multiaccount
 # Quet CA landing-zone LAN demo, va them mot cap long ben trong demo.
 #
 # Truoc day vong lap nay chi nhin landing-zone/*/. Nghia la mot lop
-# nam trong demo - vi du demo/network-lz-full/ops - khong bao gio bi
+# nam trong demo - vi du landing-zone/network/ops - khong bao gio bi
 # hoi toi, va phep kiem "co tren dia ma khong co trong state" im lang
 # bo qua dung loai thu muc no sinh ra de bat.
 #
-# Chinh no da bo sot demo/network-lz-full/ops.
+# Chinh no da bo sot landing-zone/network/ops.
 for d in "$REPO_ROOT"/landing-zone/*/ "$REPO_ROOT"/demo/*/ "$REPO_ROOT"/demo/*/*/; do
   # Chi tinh thu muc that su co code Terraform
   ls "$d"*.tf >/dev/null 2>&1 || continue

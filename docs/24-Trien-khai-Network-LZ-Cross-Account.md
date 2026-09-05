@@ -7,7 +7,7 @@ Ghi lại **lần triển khai thật**: dựng hub mạng ở một account, sp
 | [17 – Design Guide](./17-Network-LZ-Design-Guide.md) | **Vì sao** — kiến trúc, CIDR, bảng chân lý TGW |
 | [22 – Nhật ký lỗi](./22-Nhat-ky-Trien-khai-LZ-DIY.md) | **Vấp ở đâu** — 65 lỗi, mục 7y–7aj là phần network |
 | **24 (tài liệu này)** | **Làm gì, theo thứ tự nào** — lệnh thật, kiểm chứng thật, chi phí thật |
-| [`demo/network-lz-full`](../demo/network-lz-full/) | Code |
+| [`landing-zone/network`](../landing-zone/network/) | Code |
 
 ---
 

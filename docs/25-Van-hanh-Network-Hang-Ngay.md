@@ -1,6 +1,6 @@
 # Vận hành network hằng ngày — route, port firewall, VPC endpoint, DNS
 
-Doc 17 là thiết kế. Doc 24 là trình tự dựng lần đầu. Tài liệu này là thứ đọc **sau khi mạng đã chạy**: một đội xin mở port, một đội xin thêm endpoint, một tên cần vào DNS chung. Code nằm ở [`demo/network-lz-full/ops/`](../demo/network-lz-full/ops/).
+Doc 17 là thiết kế. Doc 24 là trình tự dựng lần đầu. Tài liệu này là thứ đọc **sau khi mạng đã chạy**: một đội xin mở port, một đội xin thêm endpoint, một tên cần vào DNS chung. Code nằm ở [`landing-zone/network/ops/`](../landing-zone/network/ops/).
 
 ---
 
@@ -53,12 +53,12 @@ Cho nên yêu cầu "mở đường giữa hai VPC" luôn được giải bằng
 ## 2. Hai state, một điểm chạm
 
 ```
-demo/network-lz-full/            ~200 resource   đổi vài tháng một lần
+landing-zone/network/            ~200 resource   đổi vài tháng một lần
   TGW · security VPC · firewall · egress · ingress · spoke VPC · StackSet
         │
         │  var.ops_rule_group_arns   ← ĐIỂM CHẠM DUY NHẤT
         ▼
-demo/network-lz-full/ops/        4 loại resource · đổi hằng ngày
+landing-zone/network/ops/        4 loại resource · đổi hằng ngày
   rule group · route ngoại lệ · endpoint · bản ghi DNS
         ▲
         │  terraform_remote_state → output "ops_handles"  (chỉ ĐỌC)
@@ -78,7 +78,7 @@ Firewall policy tham chiếu rule group bằng ARN, mà ARN chỉ tồn tại sa
 
 ```bash
 # 0. Đưa output "ops_handles" vào state của layer cha
-cd demo/network-lz-full
+cd landing-zone/network
 terraform apply                    # 0 to add, 0 to change — chỉ thêm output
 
 # 1. Tạo rule group ở lớp ops
@@ -122,7 +122,7 @@ Hai lớp dính nhau ở một điểm, nên thứ tự xoá là **ngược hẳ
 
 ```bash
 # 1. Gỡ ARN khỏi layer cha TRƯỚC
-cd demo/network-lz-full
+cd landing-zone/network
 #    xoá dòng ops_rule_group_arns khỏi terraform.tfvars
 terraform apply          # chỉ firewall policy đổi: bỏ tham chiếu ưu tiên 150
 
@@ -151,7 +151,7 @@ Nếu clone lại repo thì chạy lại `wire-backends.sh` từ `landing-zone/t
 
 ```bash
 # 1. Layer cha — terraform.tfvars KHÔNG có ops_rule_group_arns
-cd demo/network-lz-full
+cd landing-zone/network
 terraform apply                                   # ~20-30 phút
 
 # 2. Lớp ops
@@ -435,7 +435,7 @@ Chỉ `endpoints.yaml` tốn tiền thật. Đổi lại nó bớt phí NAT ($0.
 ## 9. Còn thiếu
 
 - Lớp ops **đã chạy thật**: rule group ở ưu tiên 150, `verify.sh` 54 đạt 0 lỗi, và dịch vụ đối tác công bố qua catalog đo được `http=200` đầu-cuối. Bootstrap ở mục 3 đã chạy.
-- `landing-zone/network` chưa có `output "ops_handles"` và `var.ops_rule_group_arns` — hiện chỉ `demo/network-lz-full` có. Bản thân layer đó cũng chưa từng được apply, và bước RAM share của nó đã đo là hỏng (RUNBOOK giai đoạn 10).
+- `landing-zone/network` chưa có `output "ops_handles"` và `var.ops_rule_group_arns` — hiện chỉ `landing-zone/network` có. Bản thân layer đó cũng chưa từng được apply, và bước RAM share của nó đã đo là hỏng (RUNBOOK giai đoạn 10).
 - Chưa có job `apply` trong CI (mục 7).
 - Chưa đọc log `UNMATCHED east-west` để dựng catalog từ lưu lượng thật. Đó là việc phải làm **trước** khi chuyển `firewall_mode = "drop"` — catalog hiện tại là ví dụ, không phải bản đồ luồng thật.
 

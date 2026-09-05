@@ -43,7 +43,7 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 
 Giai đoạn **3 và 4 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
 
-> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Chín giai đoạn đầu tốn ~$0/ngày; giai đoạn 10 tốn **~$770/tháng** ở 2 AZ, trong đó $570 là Network Firewall endpoint chạy 24/7 dù có gói tin hay không. Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dùng [`demo/network-lz-full`](../demo/network-lz-full/) — dựng, xem, xoá.
+> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Chín giai đoạn đầu tốn ~$0/ngày; giai đoạn 10 tốn **~$770/tháng** ở 2 AZ, trong đó $570 là Network Firewall endpoint chạy 24/7 dù có gói tin hay không. Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dùng [`landing-zone/network`](../landing-zone/network/) — dựng, xem, xoá.
 
 ---
 
@@ -930,7 +930,7 @@ aws ram create-resource-share --region ap-southeast-1 \
 
 Mỗi account nhận lời mời một lần (`aws ram accept-resource-share-invitation`), và nhớ rằng `allow_external_principals = true` **nới rào chắn**: share về nguyên tắc nhận được principal ngoài tổ chức, nên danh sách account trở thành thứ duy nhất chặn.
 
-Hoặc dùng [`demo/network-lz-full`](../demo/network-lz-full/) — bộ đó đã chạy trọn đường cross-account với `ram_use_external_principals`, và có `verify.sh` kiểm được cả trạng thái lời mời lẫn route ở account khác.
+Hoặc dùng [`landing-zone/network`](../landing-zone/network/) — bộ đó đã chạy trọn đường cross-account với `ram_use_external_principals`, và có `verify.sh` kiểm được cả trạng thái lời mời lẫn route ở account khác.
 
 ```bash
 cd ../network

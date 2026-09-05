@@ -1,18 +1,16 @@
 ########################################
-# SECURITY VPC
+# SECURITY VPC - chi tao khi enable_firewall = true
 #
-# KHONG IGW, KHONG NAT. No khong phai noi den, chi la tram thanh
-# tra: nhan tu TGW -> firewall endpoint -> tra lai TGW.
-#
-# CIDR subnet lay dung theo bang o doc 17 muc 3:
-#   firewall  10.1.10.0/28  10.1.11.0/28
-#   tgw       10.1.20.0/28  10.1.21.0/28
-#   endpoints 10.1.30.0/24  10.1.31.0/24
+# KHONG IGW, KHONG NAT. Chi la tram trung chuyen:
+# nhan tu TGW -> firewall endpoint -> tra lai TGW.
 ########################################
 
+locals {
+  fw = var.enable_firewall ? 1 : 0
+}
+
 resource "aws_vpc" "security" {
-  count    = local.fw
-  provider = aws.network
+  count = local.fw
 
   cidr_block           = var.security_vpc_cidr
   enable_dns_support   = true
@@ -21,41 +19,37 @@ resource "aws_vpc" "security" {
   tags = { Name = "${var.project}-security-vpc" }
 }
 
+# CIDR theo bang o doc 17 muc 3:
+#   firewall  10.1.10.0/28  10.1.11.0/28  10.1.12.0/28
+#   tgw       10.1.20.0/28  10.1.21.0/28  10.1.22.0/28
+#   endpoints 10.1.30.0/24  10.1.31.0/24  10.1.32.0/24
+
 resource "aws_subnet" "security_firewall" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   vpc_id            = aws_vpc.security[0].id
   availability_zone = each.key
-
-  # 12 bit them -> /28. Chi so 160 = 10.1.10.0, moi AZ cach nhau 16.
-  cidr_block = cidrsubnet(var.security_vpc_cidr, 12, 160 + each.value * 16)
+  cidr_block        = cidrsubnet(var.security_vpc_cidr, 12, 160 + each.value * 16) # 10.1.1<i>.0/28
 
   tags = { Name = "${var.project}-security-firewall-${each.key}", Tier = "firewall" }
 }
 
 resource "aws_subnet" "security_tgw" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   vpc_id            = aws_vpc.security[0].id
   availability_zone = each.key
-
-  # Chi so 320 = 10.1.20.0/28
-  cidr_block = cidrsubnet(var.security_vpc_cidr, 12, 320 + each.value * 16)
+  cidr_block        = cidrsubnet(var.security_vpc_cidr, 12, 320 + each.value * 16) # 10.1.2<i>.0/28
 
   tags = { Name = "${var.project}-security-tgw-${each.key}", Tier = "tgw" }
 }
 
 resource "aws_subnet" "security_endpoints" {
-  for_each = local.vpce ? local.azs : {}
-  provider = aws.network
+  for_each = var.enable_firewall && var.enable_interface_endpoints ? local.azs : {}
 
   vpc_id            = aws_vpc.security[0].id
   availability_zone = each.key
-
-  # 8 bit them -> /24. Chi so 30 = 10.1.30.0/24
-  cidr_block = cidrsubnet(var.security_vpc_cidr, 8, 30 + each.value)
+  cidr_block        = cidrsubnet(var.security_vpc_cidr, 8, 30 + each.value) # 10.1.3<i>.0/24
 
   tags = { Name = "${var.project}-security-endpoints-${each.key}", Tier = "endpoints" }
 }
@@ -63,22 +57,20 @@ resource "aws_subnet" "security_endpoints" {
 ########################################
 # TGW attachment
 #
-# appliance_mode_support = "enable" LA BAT BUOC, va day la thu chi
-# lo ra khi chay tu hai AZ tro len.
+# appliance_mode_support = "enable" LA BAT BUOC.
+# Thieu no, luong east-west giua hai AZ khac nhau se di qua
+# hai firewall endpoint khac nhau -> firewall stateful chi thay
+# nua phien -> drop. Trieu chung: chap chon theo AZ.
 #
-# Khong bat: luong east-west giua hai AZ khac nhau di vao mot
-# firewall endpoint o chieu di va MOT ENDPOINT KHAC o chieu ve.
-# Firewall stateful chi thay nua phien -> drop.
-#
-# Trieu chung: ket noi chap chon, hong hay khong tuy vao AZ cua hai
-# dau. Rat de nham la loi ung dung.
+# Voi 2 AZ tro len, dong nay MOI THUC SU DUOC KIEM CHUNG: bo no ra
+# thi luong app-dev(AZ-a) -> app-prod(AZ-b) se dut. O mot AZ thi no
+# khong bao gio sai, nen ban mot-AZ khong chung minh duoc gi ve no.
 ########################################
 
 resource "aws_ec2_transit_gateway_vpc_attachment" "security" {
-  count    = local.fw
-  provider = aws.network
+  count = local.fw
 
-  transit_gateway_id = aws_ec2_transit_gateway.hub[0].id
+  transit_gateway_id = aws_ec2_transit_gateway.hub.id
   vpc_id             = aws_vpc.security[0].id
   subnet_ids         = [for z in var.availability_zones : aws_subnet.security_tgw[z].id]
 
@@ -91,18 +83,16 @@ resource "aws_ec2_transit_gateway_vpc_attachment" "security" {
 }
 
 ########################################
-# Route table - MOI AZ MOT BANG
-#
-# Day la khac biet quan trong so voi ban demo mot AZ. Goi tin vao
-# subnet tgw cua AZ-a phai di vao firewall endpoint CUA CHINH AZ-a.
-# Dung chung mot bang cho ca hai AZ thi mot nua luong di cheo AZ:
-# tra them tien truyen cheo AZ, va pha vo tinh doi xung ma firewall
-# stateful can.
+# Route table trong security VPC - chi hai bang, moi bang mot dong
 ########################################
 
+# tgw subnet: MOI AZ MOT BANG, tro vao firewall endpoint CUA CHINH AZ.
+#
+# Dung chung mot bang la ep mot nua luu luong di cheo AZ vao endpoint
+# cua AZ kia - vua ton phi truyen, vua pha tinh doi xung ma firewall
+# stateful can de thay du ca hai chieu cua phien.
 resource "aws_route_table" "security_tgw" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   vpc_id = aws_vpc.security[0].id
   tags   = { Name = "${var.project}-sec-tgw-rt-${each.key}" }
@@ -110,7 +100,6 @@ resource "aws_route_table" "security_tgw" {
 
 resource "aws_route" "sec_tgw_to_firewall" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   route_table_id         = aws_route_table.security_tgw[each.key].id
   destination_cidr_block = "0.0.0.0/0"
@@ -119,17 +108,15 @@ resource "aws_route" "sec_tgw_to_firewall" {
 
 resource "aws_route_table_association" "security_tgw" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   subnet_id      = aws_subnet.security_tgw[each.key].id
   route_table_id = aws_route_table.security_tgw[each.key].id
 }
 
-# Subnet firewall: thanh tra xong thi tra lai TGW. TGW moi la noi
-# quyet dinh di dau tiep - egress VPC, spoke khac, hay ingress VPC.
+# firewall subnet: thanh tra xong thi tra lai TGW.
+# TGW quyet dinh di dau tiep - egress VPC, spoke khac, hay ingress VPC.
 resource "aws_route_table" "security_firewall" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   vpc_id = aws_vpc.security[0].id
   tags   = { Name = "${var.project}-sec-fw-rt-${each.key}" }
@@ -137,44 +124,36 @@ resource "aws_route_table" "security_firewall" {
 
 resource "aws_route" "sec_fw_to_tgw" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   route_table_id         = aws_route_table.security_firewall[each.key].id
   destination_cidr_block = "0.0.0.0/0"
-  transit_gateway_id     = aws_ec2_transit_gateway.hub[0].id
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.security]
 }
 
 resource "aws_route_table_association" "security_firewall" {
   for_each = local.fw == 1 ? local.azs : {}
-  provider = aws.network
 
   subnet_id      = aws_subnet.security_firewall[each.key].id
   route_table_id = aws_route_table.security_firewall[each.key].id
 }
 
 ########################################
-# INTERFACE ENDPOINT
-#
-# Dat o security VPC, khong phai o tung spoke.
-#
-#   o tung spoke : nhan len theo so spoke, va luong KHONG qua firewall
-#   o day        : spoke -> TGW -> firewall -> local route -> endpoint
-#
+# Interface endpoint DAT TRONG security VPC.
+# Traffic tu spoke -> TGW -> firewall -> local route -> endpoint.
 # Duoc thanh tra ma khong ton them chang TGW nao.
 ########################################
 
 resource "aws_security_group" "endpoints" {
-  count    = local.vpce ? 1 : 0
-  provider = aws.network
+  count = var.enable_firewall && var.enable_interface_endpoints ? 1 : 0
 
   name        = "${var.project}-vpce"
-  description = "Cho phep VPC noi bo goi vao interface endpoint"
+  description = "Cho phep spoke goi vao interface endpoint"
   vpc_id      = aws_vpc.security[0].id
 
   ingress {
-    description = "HTTPS tu moi dai noi bo"
+    description = "HTTPS tu moi VPC noi bo"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -182,7 +161,6 @@ resource "aws_security_group" "endpoints" {
   }
 
   egress {
-    description = "Tra loi ve"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -193,50 +171,46 @@ resource "aws_security_group" "endpoints" {
 }
 
 resource "aws_route_table" "security_endpoints" {
-  count    = local.vpce ? 1 : 0
-  provider = aws.network
+  count = var.enable_firewall && var.enable_interface_endpoints ? 1 : 0
 
   vpc_id = aws_vpc.security[0].id
   tags   = { Name = "${var.project}-sec-vpce-rt" }
 }
 
-# Chi can duong VE cac dai noi bo. Endpoint khong tu goi ra Internet.
 resource "aws_route" "sec_vpce_to_tgw" {
-  count    = local.vpce ? 1 : 0
-  provider = aws.network
+  count = var.enable_firewall && var.enable_interface_endpoints ? 1 : 0
 
   route_table_id         = aws_route_table.security_endpoints[0].id
   destination_cidr_block = var.internal_supernet
-  transit_gateway_id     = aws_ec2_transit_gateway.hub[0].id
+  transit_gateway_id     = aws_ec2_transit_gateway.hub.id
 
   depends_on = [aws_ec2_transit_gateway_vpc_attachment.security]
 }
 
+# Bang nay dung chung duoc cho moi AZ: chi mot dong route toi TGW,
+# khong phu thuoc AZ nao. Khac voi bang tgw/firewall o tren.
 resource "aws_route_table_association" "security_endpoints" {
-  for_each = local.vpce ? local.azs : {}
-  provider = aws.network
+  for_each = var.enable_firewall && var.enable_interface_endpoints ? local.azs : {}
 
   subnet_id      = aws_subnet.security_endpoints[each.key].id
   route_table_id = aws_route_table.security_endpoints[0].id
 }
 
 resource "aws_vpc_endpoint" "interface" {
-  for_each = local.vpce ? toset(var.interface_endpoint_services) : []
-  provider = aws.network
+  for_each = var.enable_firewall && var.enable_interface_endpoints ? toset(var.interface_endpoint_services) : []
 
   vpc_id            = aws_vpc.security[0].id
   service_name      = "com.amazonaws.${var.region}.${each.value}"
   vpc_endpoint_type = "Interface"
 
+  # Mot ENI moi AZ. Dat mot AZ thi endpoint chet theo AZ do, va moi
+  # spoke mat SSM cung luc - ke ca spoke o AZ khac.
   subnet_ids         = [for z in var.availability_zones : aws_subnet.security_endpoints[z].id]
   security_group_ids = [aws_security_group.endpoints[0].id]
 
-  # TAT private DNS cua endpoint va tu quan PHZ - vi PHZ moi chia
-  # duoc cho spoke o ACCOUNT KHAC. Bat private_dns_enabled thi ten
-  # chi phan giai duoc trong chinh security VPC.
+  # Tu quan PHZ de share cho moi spoke
   private_dns_enabled = false
 
-  # Chi principal trong to chuc nay duoc dung endpoint.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -246,7 +220,7 @@ resource "aws_vpc_endpoint" "interface" {
       Resource  = "*"
       Condition = {
         StringEquals = {
-          "aws:PrincipalOrgID" = data.aws_organizations_organization.this.id
+          "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
         }
       }
     }]
@@ -255,37 +229,35 @@ resource "aws_vpc_endpoint" "interface" {
   tags = { Name = "${var.project}-vpce-${each.value}" }
 }
 
-########################################
-# PHZ cho endpoint
-#
-# Zone tao o account network. Spoke o account KHAC muon dung phai
-# duoc lien ket rieng - xem aws_route53_vpc_association_authorization
-# trong output next_steps. Terraform khong lam ho buoc do duoc vi
-# no can provider cua account spoke.
-########################################
-
 resource "aws_route53_zone" "endpoint" {
-  for_each = local.vpce ? toset(var.interface_endpoint_services) : []
-  provider = aws.network
+  for_each = var.enable_firewall && var.enable_interface_endpoints ? toset(var.interface_endpoint_services) : []
 
-  name    = "${each.value}.${var.region}.amazonaws.com"
-  comment = "${var.project} PHZ cho VPC endpoint ${each.value}"
+  name          = "${each.value}.${var.region}.amazonaws.com"
+  comment       = "${var.project} PHZ cho VPC endpoint ${each.value}"
+  force_destroy = var.ephemeral
 
   vpc {
     vpc_id = aws_vpc.security[0].id
   }
 
-  # Lien ket VPC tu account khac duoc them NGOAI Terraform (qua
-  # associate-vpc-with-hosted-zone). Khong bo qua thi moi lan apply
-  # Terraform se go chung ra.
+  # Gan thang vao spoke - CHI khi khong dung Route 53 Profile.
+  # Dung ca hai duong cho cung mot VPC la thua. Xem dns.tf.
+  dynamic "vpc" {
+    for_each = var.enable_dns_profile ? {} : local.local_spokes
+    content {
+      vpc_id = aws_vpc.spoke[vpc.key].id
+    }
+  }
+
+  # Association them qua Profile hoac tu account khac nam NGOAI state.
+  # Khong bo qua thi moi lan apply Terraform se go chung ra.
   lifecycle {
     ignore_changes = [vpc]
   }
 }
 
 resource "aws_route53_record" "endpoint_apex" {
-  for_each = local.vpce ? toset(var.interface_endpoint_services) : []
-  provider = aws.network
+  for_each = var.enable_firewall && var.enable_interface_endpoints ? toset(var.interface_endpoint_services) : []
 
   zone_id = aws_route53_zone.endpoint[each.value].zone_id
   name    = "${each.value}.${var.region}.amazonaws.com"

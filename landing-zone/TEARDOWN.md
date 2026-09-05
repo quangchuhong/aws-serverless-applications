@@ -33,7 +33,7 @@ cd landing-zone
 Ngược chiều dựng. Mỗi bước **phải xong** trước khi sang bước sau.
 
 ```
-11. demo/network-lz-full      ← neu dang chay
+11. landing-zone/network      ← neu dang chay
 10. landing-zone/network      ← neu da enable
  9. account-baseline
  8. org-trail
@@ -162,7 +162,7 @@ Bucket rỗng thật thì `list-object-versions` không in gì.
 Cùng một cơ chế, hai tên biến ngược chiều nhau:
 
 ```bash
-# demo/network-lz-full
+# landing-zone/network
 ephemeral = true     # trong terraform.tfvars
 terraform apply      # go bao ve - RIENG mot lan
 ./teardown.sh        # script tu choi chay khi ephemeral = false

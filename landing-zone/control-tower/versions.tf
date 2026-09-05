@@ -21,7 +21,7 @@ terraform {
 # MAC DINH TAT (enable_landing_zone = false).
 #
 # Muc dich: viet san va kiem chung bang terraform plan, giong cach
-# da lam voi Palo Alto / F5 trong demo/network-lz-full/appliances.tf.
+# da lam voi Palo Alto / F5 trong landing-zone/network/appliances.tf.
 #
 # Ban DUNG THAT cho lab la ../organization/ (DIY).
 #

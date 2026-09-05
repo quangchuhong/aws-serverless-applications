@@ -246,7 +246,7 @@ cd landing-zone
 ./plan-all.sh organization  # chi mot layer
 ```
 
-Bản Control Tower có `enable_landing_zone = false` nên `plan` ra **0 resource** — kiểm chứng được cú pháp mà không tạo gì, giống cách làm với Palo Alto/F5 ở `demo/network-lz-full/appliances.tf`.
+Bản Control Tower có `enable_landing_zone = false` nên `plan` ra **0 resource** — kiểm chứng được cú pháp mà không tạo gì, giống cách làm với Palo Alto/F5 ở `landing-zone/network/appliances.tf`.
 
 ### Kiểm chứng SCP sau khi apply — quan trọng hơn kiểm chứng phần cho phép
 

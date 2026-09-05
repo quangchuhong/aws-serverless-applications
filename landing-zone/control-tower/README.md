@@ -2,7 +2,7 @@
 
 Bản Control Tower của layer organization. **Mặc định TẮT** — `enable_landing_zone = false`.
 
-> **Bản dùng thật cho lab là [`../organization/`](../organization/) (DIY).** Layer này viết sẵn để so sánh và kiểm chứng bằng `terraform plan`, giống cách đã làm với Palo Alto / F5 trong `demo/network-lz-full/appliances.tf`.
+> **Bản dùng thật cho lab là [`../organization/`](../organization/) (DIY).** Layer này viết sẵn để so sánh và kiểm chứng bằng `terraform plan`, giống cách đã làm với Palo Alto / F5 trong `landing-zone/network/appliances.tf`.
 >
 > So sánh đầy đủ: [doc 21](../../docs/21-Control-Tower-vs-DIY.md).
 

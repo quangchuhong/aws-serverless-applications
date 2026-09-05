@@ -1,107 +1,84 @@
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.5.0"
 
   required_providers {
     aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+      source = "hashicorp/aws"
+      # >= 5.16 de NLB nhan security_groups (dung cho khoa origin o cdn.tf)
+      # >= 5.60 de co aws_route53profiles_* (dns.tf)
+      #
+      # Lock file cu hon 5.60 thi init bao loi ro rang. Chay:
+      #   terraform init -upgrade
+      version = ">= 5.60, < 6.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
     }
   }
-
-  # Backend nam trong backend.tf, do landing-zone/tf-backend/wire-backends.sh
-  # sinh ra va nam trong .gitignore. Khong co file do -> state local.
 }
 
 ########################################
-# NETWORK HUB - TGW + security VPC + egress VPC
+# TAG CHUAN
 #
-# MAC DINH TAT (enable = false).
+# Bon tag dau la tag BAT BUOC theo doc 11 muc 2, va cung la
+# nhung tag duoc bat cost allocation o landing-zone/billing-guard.
 #
-# ---------------------------------------------------------------
-# LAYER NAY TON TIEN THAT, VA TON NHIEU
-#
-# Moi layer khac trong landing-zone/ deu ~$0/ngay. Layer nay KHONG.
-# Doc bang chi phi trong README truoc khi doi enable = true.
-#
-# Khoan lon nhat la Network Firewall endpoint: ~$0.395/gio MOI AZ,
-# tuc ~$285/thang cho mot AZ va ~$570/thang cho hai. No chay 24/7
-# du co goi tin nao di qua hay khong.
-#
-# Vi vay: enable = false, va co check block canh bao khi bat
-# firewall o nhieu AZ.
-#
-# ---------------------------------------------------------------
-# PHAM VI - GIAI DOAN 1 THEO DOC 17 MUC 2.1
-#
-#   CO   TGW + 3 route table + RAM share cho ca to chuc
-#   CO   security VPC + AWS Network Firewall + interface endpoint
-#   CO   egress VPC + IGW + NAT Gateway
-#   CO   noi attachment cua spoke vao dung route table
-#
-#   CHUA ingress VPC (Palo Alto + F5 can license Marketplace)
-#   CHUA 3rd-party VPC + VPN
-#   CHUA Route 53 Profile
-#
-# Doc 17 muc 2.1 noi ro: phan dinh tuyen TGW/security/egress/spoke
-# GIU NGUYEN TUNG DONG khi them appliance. Nen lam giai doan 1
-# truoc la kiem chung duoc cho kho nhat ma khong phai cho license.
-#
-# ---------------------------------------------------------------
-# VI SAO SPOKE VPC KHONG NAM TRONG LAYER NAY
-#
-# Spoke VPC nam o account workload, moi account mot provider - ma
-# provider KHONG sinh dong duoc bang for_each. Sau account la sau
-# alias viet tay, va account thu bay la sua code.
-#
-# Nen phan chia la:
-#   layer nay      TGW (share qua RAM) + hub VPC + route table
-#   account workload  tu tao VPC va tu attach vao TGW da share
-#   layer nay      noi attachment do vao rtb-spokes + rtb-security
-#
-# Buoc cuoi bat buoc phai o day: chi CHU SO HUU TGW moi associate
-# va propagate duoc. Xem var.spoke_attachments.
+# Neu resource khong mang tag nay thi Cost Explorer khong group
+# theo chung duoc - bat cost allocation tag ma khong gan tag
+# la lam mot nua cong viec.
 ########################################
-
-provider "aws" {
-  region = var.region
-  default_tags { tags = local.common_tags }
-}
-
-# Account network - noi dat TGW va toan bo hub VPC.
-# Moi resource trong layer nay deu ghi provider = aws.network.
-provider "aws" {
-  alias  = "network"
-  region = var.region
-
-  assume_role {
-    role_arn = "arn:aws:iam::${var.network_account_id}:role/${var.cross_account_role}"
-  }
-
-  default_tags { tags = local.common_tags }
-}
 
 locals {
-  common_tags = {
-    CostCenter  = var.cost_center
-    Owner       = var.owner
-    Environment = "prod" # ha tang quan tri - "shared" bi tag policy tu choi
-    Project     = var.project
-    ManagedBy   = "terraform"
-    Repo        = "aws-serverless-applications/landing-zone/network"
-  }
+  common_tags = merge(
+    {
+      CostCenter  = var.cost_center
+      Owner       = var.owner
+      Environment = var.environment
+      Project     = var.project
 
-  enabled = var.enable
+      ManagedBy = "terraform"
+      Repo      = "aws-serverless-applications/landing-zone/network"
+    },
 
-  # AZ -> chi so. Dung de tinh CIDR subnet sao cho khop dung bang
-  # o doc 17 muc 3, va de gan NAT/firewall endpoint theo TUNG AZ.
+    # Danh dau resource se bi xoa. teardown.sh QUET THEO TAG NAY va
+    # xoa moi thu mang no - ke ca resource khong con trong state.
+    #
+    # Vi vay ephemeral = false BO HAN tag: neu ban giu bo nay lam mang
+    # that thi tag Ephemeral la mot lenh xoa dang cho nguoi bam.
+    var.ephemeral ? { Ephemeral = "true" } : {},
+  )
+
+  ########################################
+  # AZ - nen tang cua moi subnet trong bo nay
+  #
+  # azs: ten AZ -> chi so. Chi so dung de tinh CIDR sao cho khong AZ
+  # nao dam vao AZ nao, va khop bang o doc 17 muc 3.
+  ########################################
   azs = { for i, z in var.availability_zones : z => i }
 
-  fw = local.enabled && var.enable_firewall ? 1 : 0
+  # Resource DON CHIEC dat o day: NAT/firewall thi moi AZ mot cai,
+  # nhung appliance (Palo Alto, F5) trong demo nay chi co MOT.
+  primary_az = var.availability_zones[0]
 
-  vpce = local.enabled && var.enable_firewall && var.enable_interface_endpoints
+  # spoke x AZ. Khoa "app-dev-ap-southeast-1a" de doc duoc trong plan.
+  spoke_azs = {
+    for pair in setproduct(keys(local.local_spokes), var.availability_zones) :
+    "${pair[0]}-${pair[1]}" => {
+      spoke = pair[0]
+      az    = pair[1]
+      idx   = index(var.availability_zones, pair[1])
+      cidr  = local.local_spokes[pair[0]].cidr
+    }
+  }
 }
 
-# Chi khai data source dang DUNG. Ten bucket log lay tu
-# var.network_account_id chu khong tu caller identity - vi caller o
-# day la MANAGEMENT account, khong phai account network.
-data "aws_organizations_organization" "this" {}
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
+data "aws_caller_identity" "current" {}

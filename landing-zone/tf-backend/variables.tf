@@ -188,12 +188,12 @@ variable "backend_profiles" {
     account, noi dat bucket state, nen credential mac dinh doc duoc.
 
     Truong hop can: layer co BACKEND o mot account va RESOURCE o
-    account khac. Vi du demo/network-lz-full khi duoc giu lam mang
+    account khac. Vi du landing-zone/network khi duoc giu lam mang
     that - chay bang AWS_PROFILE=lz-network de resource roi vao
     account network, trong khi bucket state van o management:
 
       backend_profiles = {
-        "demo/network-lz-full" = "default"   # profile cua management
+        "landing-zone/network" = "default"   # profile cua management
       }
 
     Khong co dong nay thi terraform init bao:

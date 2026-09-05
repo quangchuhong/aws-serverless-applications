@@ -456,7 +456,7 @@ resource "aws_security_group" "palo_alto" {
 
 #### Bốn thứ mà thiếu một cái là bootstrap bị bỏ qua — im lặng
 
-Cài đặt thật ở [`demo/network-lz-full/appliances.tf`](../demo/network-lz-full/appliances.tf) cùng hai template `templates/pa-init-cfg.txt.tftpl` và `templates/pa-bootstrap.xml.tftpl`. Bốn điều dưới đây đều cho ra **cùng một triệu chứng**: thiết bị lên bình thường với cấu hình gốc, GWLB báo target `unhealthy` mãi mãi, không log, không lỗi.
+Cài đặt thật ở [`landing-zone/network/appliances.tf`](../landing-zone/network/appliances.tf) cùng hai template `templates/pa-init-cfg.txt.tftpl` và `templates/pa-bootstrap.xml.tftpl`. Bốn điều dưới đây đều cho ra **cùng một triệu chứng**: thiết bị lên bình thường với cấu hình gốc, GWLB báo target `unhealthy` mãi mãi, không log, không lỗi.
 
 | | |
 |---|---|

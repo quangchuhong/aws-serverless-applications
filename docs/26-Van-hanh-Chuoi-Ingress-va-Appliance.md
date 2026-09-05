@@ -12,7 +12,7 @@ Tương đương [25 – Vận hành network hằng ngày](./25-Van-hanh-Network
 
 | | |
 |---|---|
-| **Code** | [`demo/network-lz-full/`](../demo/network-lz-full/) — `vpc-ingress.tf`, `cdn.tf`, `appliances.tf` |
+| **Code** | [`landing-zone/network/`](../landing-zone/network/) — `vpc-ingress.tf`, `cdn.tf`, `appliances.tf` |
 | **Bật bằng** | `enable_ingress` · `enable_cdn` · `enable_appliances` — ba công tắc độc lập |
 | **Cấu hình appliance** | `templates/f5-runtime-init.yaml`, `templates/pa-init-cfg.txt.tftpl`, `templates/pa-bootstrap.xml.tftpl` |
 | **Đã kiểm** | `plan-check.sh` — **26 đạt, 0 lỗi** trên 9 tổ hợp biến, tổ hợp đầy đủ 179 resource |

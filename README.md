@@ -87,8 +87,8 @@ Terraform dựng lên xem rồi xoá. **Không tạo AWS account** — account k
 
 | Demo | Nội dung | Chi phí |
 |---|---|---|
-| **[`demo/network-lz-full`](./demo/network-lz-full/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, DNS + endpoint tập trung, và **spoke VPC ở account khác** (StackSet + RAM). Kịch bản 7 bước. Chưa có Palo Alto/F5 | ~$0.34–1.40/giờ |
-| **[`demo/network-lz-full/ops`](./demo/network-lz-full/ops/)** | **Lớp vận hành — đã apply thật** — state riêng cho bốn việc đổi hằng ngày: rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Catalog YAML khai bằng **tên app** thay vì CIDR, `lint.sh` chạy không cần AWS | $0 (trừ endpoint) |
+| **[`landing-zone/network`](./landing-zone/network/)** | **Bộ chính** — TGW 4 route table, security VPC + Network Firewall, egress + NAT, ingress NLB, DNS + endpoint tập trung, và **spoke VPC ở account khác** (StackSet + RAM). Kịch bản 7 bước. Chưa có Palo Alto/F5 | ~$0.34–1.40/giờ |
+| **[`landing-zone/network/ops`](./landing-zone/network/ops/)** | **Lớp vận hành — đã apply thật** — state riêng cho bốn việc đổi hằng ngày: rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Catalog YAML khai bằng **tên app** thay vì CIDR, `lint.sh` chạy không cần AWS | $0 (trừ endpoint) |
 | [`demo/centralized-network`](./demo/centralized-network/) | Bản tối giản: TGW, egress tập trung, cách ly spoke | ~$0.21/giờ |
 | [`demo/centralized-network-multiaccount`](./demo/centralized-network-multiaccount/) | Ba account: RAM share TGW, PHZ cross-account | ~$0.22/giờ |
 

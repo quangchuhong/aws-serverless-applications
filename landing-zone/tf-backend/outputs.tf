@@ -24,7 +24,22 @@ locals {
     # cai laptop la mat may = mat quyen quan ly mang cua ca to chuc.
     #
     # Doi ephemeral ve true (dung-xem-xoa) thi bo dong nay di.
-    "demo/network-lz-full" = "demo-network-lz-full/terraform.tfstate"
+    # KHOA KHONG KHOP DUONG DAN - CO CHU DICH.
+    #
+    # Layer nay truoc o demo/network-lz-full va da APPLY THAT. Khi no
+    # thay the landing-zone/network, duong dan doi nhung khoa state
+    # GIU NGUYEN.
+    #
+    # Doi khoa nghia la Terraform mo mot state RONG o duong dan moi:
+    # plan doi tao lai ca ~200 resource, va ha tang that thanh mo coi
+    # - van chay, van tinh tien, khong con ai quan. Con te hon:
+    # ./teardown.sh chay tren state rong se khong xoa gi va bao "da
+    # sach".
+    #
+    # Doi duoc khoa khi state RONG (sau mot lan destroy). Luc do:
+    #   aws s3 rm s3://<bucket>/demo-network-lz-full/terraform.tfstate
+    #   sua dong nay, chay ./wire-backends.sh, terraform init -reconfigure
+    "landing-zone/network" = "demo-network-lz-full/terraform.tfstate"
 
     # Lop van hanh cua layer tren - state RIENG, cung PREFIX.
     #
@@ -37,8 +52,8 @@ locals {
     #
     # State rieng vi hai lop doi voi nhip khac han nhau: layer tren
     # doi vai thang mot lan, lop nay doi hang ngay. Xem
-    # demo/network-lz-full/ops/versions.tf.
-    "demo/network-lz-full/ops" = "demo-network-lz-full/ops/terraform.tfstate"
+    # landing-zone/network/ops/versions.tf.
+    "landing-zone/network/ops" = "demo-network-lz-full/ops/terraform.tfstate"
 
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do

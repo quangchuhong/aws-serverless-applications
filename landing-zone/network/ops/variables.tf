@@ -10,7 +10,7 @@ variable "state_backend" {
   description = <<-EOT
     Backend cua state layer cha.
 
-      "local" - demo/network-lz-full chay state local (mac dinh)
+      "local" - landing-zone/network chay state local (mac dinh)
       "s3"    - landing-zone/network chay backend S3
 
     Doi mot chu nay la du de tro lop van hanh vao LZ that.

@@ -232,7 +232,7 @@ Rà lại thực trạng repo:
 | Budget, cost tag, cảnh báo | ✅ | `landing-zone/billing-guard` |
 | **State, khoá, lịch sử** | ✅ | `landing-zone/tf-backend` ← **mới** |
 | Cấp quyền cho account mới | ⚠️ Bán tự động | Sửa `accounts_by_scope` rồi apply |
-| Networking day-2 | ⚠️ Cơ chế đúng, nhưng nằm trong demo | `demo/network-lz-full` |
+| Networking day-2 | ⚠️ Cơ chế đúng, nhưng nằm trong demo | `landing-zone/network` |
 | Tạo/đóng account | ❌ | Doc 09 mới là thiết kế |
 | Sửa OU | ✅ | `landing-zone/organization` |
 | Sửa SCP | ✅ | `landing-zone/organization` — 4 SCP |
@@ -240,7 +240,7 @@ Rà lại thực trạng repo:
 
 ### Demo không phải layer vận hành
 
-`demo/network-lz-full` gắn `Ephemeral = "true"`, có `teardown.sh`, chạy trong **một account**. Nó được thiết kế để **xoá đi**.
+`landing-zone/network` gắn `Ephemeral = "true"`, có `teardown.sh`, chạy trong **một account**. Nó được thiết kế để **xoá đi**.
 
 Cơ chế day-2 trong đó thì đúng — `east_west_rules` là interface tốt: thêm một dòng = mở một luồng, không phải sửa route nào. Nhưng cần nâng thành layer thường trực multi-account mới dùng vận hành được.
 

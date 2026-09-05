@@ -23,17 +23,17 @@ name: network-ops
 on:
   pull_request:
     paths:
-      - "demo/network-lz-full/ops/**"
+      - "landing-zone/network/ops/**"
       # Template nam NGOAI ops/. Thieu dong nay thi phep quet noi suy
       # ben duoi khong bao gio chay cho dung file no sinh ra de kiem -
       # cung hinh dang voi loi 73.
-      - "demo/network-lz-full/templates/**"
+      - "landing-zone/network/templates/**"
       - ".github/workflows/network-ops.yml"
   push:
     branches: ["main"]
     paths:
-      - "demo/network-lz-full/ops/**"
-      - "demo/network-lz-full/templates/**"
+      - "landing-zone/network/ops/**"
+      - "landing-zone/network/templates/**"
   schedule:
     # 01:00 UTC = 08:00 gio Viet Nam, moi ngay
     - cron: "0 1 * * *"
@@ -44,7 +44,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: demo/network-lz-full/ops
+    working-directory: landing-zone/network/ops
 
 jobs:
   ########################################
@@ -200,7 +200,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const p = 'demo/network-lz-full/ops/plan.txt';
+            const p = 'landing-zone/network/ops/plan.txt';
             let body = 'Khong doc duoc ket qua plan.';
             if (fs.existsSync(p)) {
               let t = fs.readFileSync(p, 'utf8');

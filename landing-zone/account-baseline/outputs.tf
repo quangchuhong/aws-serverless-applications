@@ -176,17 +176,34 @@ output "next_steps" {
 # kia thay vi de nguoi ta tu di tim ID.
 ########################################
 
-output "paste_spoke_accounts" {
+output "paste_spokes" {
   description = <<-EOT
-    Dan vao terraform.tfvars cua landing-zone/network, roi apply ben
-    do. Thieu buoc nay thi VPC ton tai, attachment ton tai, va KHONG
-    CO GOI TIN NAO DI DAU CA.
+    Dan vao terraform.tfvars cua landing-zone/network, roi apply ben do.
+
+    manual_vpc = true la mau chot: no noi voi layer kia "VPC da co
+    nguoi tao roi - dung tao nua, nhung VAN share RAM cho account nay
+    va VAN noi attachment cua no vao rtb-spokes khi attachment xuat
+    hien".
+
+    Bo buoc nay thi VPC ton tai, attachment ton tai o trang thai
+    available, va KHONG CO GOI TIN NAO DI DAU CA. Attachment khong
+    nam trong route table nao thi no khong hoc duoc duong nao, va
+    khong ai hoc duoc duong toi no. Trieu chung doc nhu mot loi dinh
+    tuyen trong spoke - noi khong co gi sai ca.
   EOT
   value = length(local.spoke_requests) == 0 ? "(chua co account nao xin mang)" : join("\n", concat(
-    ["spoke_accounts = ["],
-    [for k in sort(keys(local.spoke_requests)) :
-    "  \"${try(aws_organizations_account.this[k].id, "chua-tao")}\",  # ${k}"],
-    ["]"],
+    ["spokes = {"],
+    flatten([
+      for k in sort(keys(local.spoke_requests)) : [
+        "  \"${k}\" = {",
+        "    cidr       = \"${local.spoke_requests[k].vpc_cidr}\"",
+        "    account_id = \"${try(aws_organizations_account.this[k].id, "chua-tao")}\"",
+        "    ou_id      = \"${try(var.ou_ids[local.spoke_requests[k].ou], "chua-biet")}\"",
+        "    manual_vpc = true",
+        "  }",
+      ]
+    ]),
+    ["}"],
   ))
 }
 

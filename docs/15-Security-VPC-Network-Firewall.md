@@ -698,7 +698,7 @@ gói tin → [100] → [150] → [200] → stateful_default_actions
 
 #### Ví dụ đang chạy thật
 
-`demo/network-lz-full` sau khi nối [lớp vận hành](./25-Van-hanh-Network-Hang-Ngay.md):
+`landing-zone/network` sau khi nối [lớp vận hành](./25-Van-hanh-Network-Hang-Ngay.md):
 
 | Ưu tiên | Rule group | Capacity | Nội dung |
 |---|---|---|---|
@@ -1059,7 +1059,7 @@ Chênh lệch ~**$436/tháng** ở mức 10 TB. Đây là cái giá của ranh g
 
 ### 8.3. Bộ đang chạy — tính từng khoản
 
-`demo/network-lz-full` với 5 spoke (1 local + 4 ở account khác), 2 AZ, firewall bật, ingress bật, 3 interface endpoint. `terraform output estimated_cost` cho **~$1.397/giờ**. Nó ra từ đâu:
+`landing-zone/network` với 5 spoke (1 local + 4 ở account khác), 2 AZ, firewall bật, ingress bật, 3 interface endpoint. `terraform output estimated_cost` cho **~$1.397/giờ**. Nó ra từ đâu:
 
 | Khoản | Cách tính | USD/giờ |
 |---|---|---|

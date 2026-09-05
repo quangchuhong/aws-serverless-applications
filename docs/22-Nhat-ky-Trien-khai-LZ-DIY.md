@@ -1850,7 +1850,7 @@ Nó mang theo `ignore_changes = [email, invite]` **theo phỏng đoán**: chưa 
 
 ### 7q. Lỗi 46 — `pipefail` biến "tìm thấy" thành "không thấy"
 
-`plan-check.sh` của `demo/network-lz-full` báo **19 lỗi**. Sau hai vòng vá, chín tổ hợp plan đều xanh với con số thật — 65, 91, 136, 139, 130, 175, 178 resource, gồm cả nhánh Palo Alto và F5 chưa từng được kiểm. Nhưng mục 3 vẫn trượt cả chín khẳng định:
+`plan-check.sh` của `landing-zone/network` báo **19 lỗi**. Sau hai vòng vá, chín tổ hợp plan đều xanh với con số thật — 65, 91, 136, 139, 130, 175, 178 resource, gồm cả nhánh Palo Alto và F5 chưa từng được kiểm. Nhưng mục 3 vẫn trượt cả chín khẳng định:
 
 ```
 ✓ Plan day du: 175 resource - chay 10 kiem tra hanh vi
@@ -2371,7 +2371,7 @@ Và `"external": true` cho `169873795883` — một account **đang ở trong** 
 
 #### Suýt viết code cho một phép đo ở account khác
 
-Bốn phép đo trên đều chạy từ **management account**. Tôi lấy kết quả đó và viết code cho `demo/network-lz-full` — bộ code chỉ có **một** provider và bắt buộc chạy bằng credential của `lz-network`, vì lỗi 51.
+Bốn phép đo trên đều chạy từ **management account**. Tôi lấy kết quả đó và viết code cho `landing-zone/network` — bộ code chỉ có **một** provider và bắt buộc chạy bằng credential của `lz-network`, vì lỗi 51.
 
 Người dùng hỏi *"chạy code terraform trên quyền account network ah"*, và câu hỏi đó lộ ra rằng đường external chưa từng được thử ở chính account sẽ chạy nó. RAM share phải do **chủ sở hữu resource** tạo, mà TGW thuộc `lz-network` — nên nếu account đó không tạo được external share thì toàn bộ commit `35ba554` là code cho một đường đi chưa ai đo.
 
@@ -2455,7 +2455,7 @@ Cùng lúc đó `./verify.sh` cho `7 dat 0 loi 3 bo qua`. Mọi mục của nó 
 
 Chốt lại phần cross-account, vì nó có một hình dạng lặp lại đáng nhớ hơn từng lỗi riêng lẻ.
 
-`demo/network-lz-full` chỉ có **một** provider, trỏ vào `lz-network`. Nhưng bốn việc dưới đây bắt buộc phải thực thi **trong account spoke** — không phải vì thiếu quyền, mà vì chúng thuộc về chủ sở hữu tài nguyên bên đó:
+`landing-zone/network` chỉ có **một** provider, trỏ vào `lz-network`. Nhưng bốn việc dưới đây bắt buộc phải thực thi **trong account spoke** — không phải vì thiếu quyền, mà vì chúng thuộc về chủ sở hữu tài nguyên bên đó:
 
 | Việc | Ai làm được | Cách giải |
 |---|---|---|
@@ -2862,7 +2862,7 @@ Cách sửa không phải né `null` mà là **loại nó khỏi phép tính**: 
 
 `terraform output bootstrap_done` báo `false` sau khi cấu hình đã đúng: `output` in giá trị **đã lưu trong state**, tính từ lần apply trước. Nó trả lời trung thực cho *"lần chạy trước thấy gì"*, không phải *"bây giờ thế nào"* — cùng họ với lỗi 65.
 
-`wire-backends.sh` có sẵn phép kiểm "layer trên đĩa mà không có trong state", đúng thứ lẽ ra phải cảnh báo rằng `demo/network-lz-full/ops` chưa được đăng ký. Nó không kêu, vì vòng lặp chỉ quét `landing-zone/*/`. **Một phép kiểm tồn tại, chạy, báo xanh, và không nhìn vào chỗ cần nhìn** — chủ đề lặp lại nhiều nhất trong cả tài liệu này.
+`wire-backends.sh` có sẵn phép kiểm "layer trên đĩa mà không có trong state", đúng thứ lẽ ra phải cảnh báo rằng `landing-zone/network/ops` chưa được đăng ký. Nó không kêu, vì vòng lặp chỉ quét `landing-zone/*/`. **Một phép kiểm tồn tại, chạy, báo xanh, và không nhìn vào chỗ cần nhìn** — chủ đề lặp lại nhiều nhất trong cả tài liệu này.
 
 > **Bài học chung của tám lỗi này:** năm trong tám không phát ra lỗi ở nơi có vấn đề. Chúng phát ở nơi *phát hiện ra* vấn đề — muộn hơn, và thường trong một layer không ai vừa sửa gì.
 
@@ -2989,7 +2989,7 @@ Một `/14` bắt đầu ở **bội số của 4** ở octet thứ hai. Nên n�
 
 Các dải khác đúng: `10.20.0.0/14` (20 chia hết cho 4) và `10.60.0.0/14` (60 cũng vậy). Chỉ dòng NonProd sai.
 
-Nó nằm ở **sáu file**: doc 06, doc 13, doc 17, `landing-zone/network/outputs.tf`, `demo/network-lz-full/variables.tf`, và bảng gốc. Sống sót nhiều tháng, đi qua mọi lần đọc lại, và không gây ra một sự cố nào.
+Nó nằm ở **sáu file**: doc 06, doc 13, doc 17, `landing-zone/network/outputs.tf`, `landing-zone/network/variables.tf`, và bảng gốc. Sống sót nhiều tháng, đi qua mọi lần đọc lại, và không gây ra một sự cố nào.
 
 Lý do nó sống lâu như vậy đáng ghi hơn bản thân lỗi:
 

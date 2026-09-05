@@ -139,7 +139,7 @@ Attachment xuất hiện ở **account network**, không phải account workload
 
 ```bash
 cd landing-zone/account-baseline && terraform apply   # VPC + attachment
-terraform output -raw paste_spoke_accounts            # dán sang layer network
+terraform output -raw paste_spokes            # dán sang layer network
 cd ../network && terraform apply                      # nối vào rtb-spokes
 ```
 
