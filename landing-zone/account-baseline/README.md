@@ -85,6 +85,81 @@ sweep_version = "2"   # doi de buoc quet lai
 
 ---
 
+## Yêu cầu tạo account — catalog YAML
+
+Mỗi account là một khối trong [`catalog/accounts.yaml`](./catalog/accounts.yaml). Thêm khối, mở PR, merge, apply.
+
+```yaml
+accounts:
+  - name: app-staging
+    email: ban+lz-app-staging@gmail.com
+    ou: NonProd              # TÊN OU, không phải ou-abc1-...
+    scope: nonprod
+    environment: staging
+    owner: platform@example.com
+    cost_center: CC-1042
+    ticket: ACC-2025-014
+    network:
+      vpc_cidr: 10.12.0.0/16
+```
+
+`./lint.sh` chạy offline — không cần AWS, không cần init. **Lớp này cần lint hơn mọi lớp khác**, vì ba sai lầm dưới đây đều không làm `apply` đỏ và không sửa được:
+
+| Sai | Hậu quả |
+|---|---|
+| Email sai một ký tự | Account tồn tại vĩnh viễn với email đó, và email đúng thì không ai dùng được nữa |
+| OU sai | Account chỉ còn SCP ở root — mất `network_lock` và `prod_guard`, mà vẫn chạy bình thường |
+| `vpc_cidr` trùng | Hai spoke trùng dải trong một lưới TGW; sửa thì phải xoá VPC |
+
+Bỏ khối `network` = account không nối vào lưới mạng. Dùng cho account hạ tầng không cần VPC.
+
+`var.create_accounts` (tfvars) vẫn chạy và **đè lên catalog**, để account tạo trước khi có catalog giữ nguyên địa chỉ trong state. Khai ở cả hai chỗ thì plan dừng.
+
+## Mạng nền cho account workload
+
+Account có khối `network` nhận một VPC dựng theo doc 17, qua StackSet riêng:
+
+| | |
+|---|---|
+| VPC `/16` + 4 subnet `/24` | 2 private cho ứng dụng, 2 riêng cho ENI của TGW attachment |
+| **Không** IGW, **không** NAT | Đường ra Internet đi qua egress VPC tập trung. Một IGW ở đây là đường vòng qua toàn bộ lớp thanh tra |
+| TGW attachment + route mặc định | `0.0.0.0/0` → TGW |
+| Route 53 Profile | DNS nội bộ + tên dịch vụ AWS trỏ vào interface endpoint tập trung |
+| Gateway endpoint S3 + DynamoDB | Miễn phí, phải nằm trong từng VPC — chúng làm việc ở tầng route table |
+
+Cần `network_handles` dán từ layer `network`:
+
+```bash
+cd ../network && terraform output -raw paste_network_handles
+```
+
+### Một bước không tự động hoá được
+
+Attachment xuất hiện ở **account network**, không phải account workload — nên layer này không với tới. Thứ tự thật là:
+
+```bash
+cd landing-zone/account-baseline && terraform apply   # VPC + attachment
+terraform output -raw paste_spoke_accounts            # dán sang layer network
+cd ../network && terraform apply                      # nối vào rtb-spokes
+```
+
+Bỏ bước cuối thì VPC tồn tại, attachment tồn tại ở trạng thái `available`, và **không có gói tin nào đi đâu cả** — attachment không nằm trong route table nào thì nó không học được đường nào và không ai học được đường tới nó. Triệu chứng đọc như lỗi định tuyến ở spoke, và người ta sẽ đi tìm trong VPC đó, nơi không có gì sai.
+
+Đọc `terraform output spokes_wired` ở layer `network` sau mỗi lần thêm account — số attachment đã nối lệch với số account là dấu hiệu duy nhất.
+
+## Hardening cấp account
+
+Bốn thứ AWS để mở sẵn khi mở một account, đi cùng Lambda của `vpc-sweep`:
+
+| | |
+|---|---|
+| Chính sách mật khẩu IAM | Mặc định của AWS là 6 ký tự, không hết hạn — từ 2011 và chưa bao giờ đổi |
+| S3 Block Public Access **cấp account** | Đè lên tất cả bucket, kể cả bucket tạo sau, kể cả bucket do đội khác tạo |
+| Mã hoá EBS mặc định | Theo **từng region** — bỏ sót một region là để lại đúng lỗ hổng đang bịt ở các region khác |
+| Xoá sạch rule của default security group | Nó **không xoá được**, luôn tồn tại trong mọi VPC, và mặc định cho phép mọi lưu lượng giữa các ENI dùng chung nó |
+
+Cả bốn miễn phí, và cả bốn đều không báo lỗi khi thiếu. Bật/tắt từng cái; quyền IAM cấp theo từng công tắc nên bật một mục không cho role quyền của ba mục kia.
+
 ## Vending account — mặc định tắt
 
 `create_accounts` để rỗng mặc định, và nên giữ vậy cho tới khi bạn chắc.

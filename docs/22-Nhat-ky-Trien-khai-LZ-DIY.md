@@ -170,7 +170,9 @@ Xếp theo thứ tự gặp phải.
 
 | 86 | `10.10.0.0/14` trong bảng cấp phát CIDR **không phải một CIDR hợp lệ** | Một `/14` bắt đầu ở bội số của 4 ở octet thứ hai, nên nó chỉ có thể là `10.8.0.0/14` hoặc `10.12.0.0/14`. Khoảng `10.10`–`10.13` mà bảng mô tả không viết được thành một `/14` nào. Sống sót nhiều tháng ở **sáu file** vì chưa có công cụ nào phân tích nó — con người đọc phần trong ngoặc và hiểu đúng ý | **Lỗi thiết kế** | *(mục 7ao)* |
 
-**75/86 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 87 | **Chín layer** gắn `Environment = "shared"`, trong khi tag policy do chính repo khai chỉ nhận `dev/staging/prod/sandbox` | Tag policy của AWS mặc định chỉ **báo** không tuân thủ, không chặn — nên chín layer gắn một giá trị mà chính tổ chức từ chối, và không apply nào đỏ. `billing-guard` là layer duy nhất đúng, kèm chú thích *"hạ tầng quản trị, không phải sandbox"* | **Lỗi code** | *(mục 7ao)* |
+
+**76/87 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2996,6 +2998,37 @@ Lý do nó sống lâu như vậy đáng ghi hơn bản thân lỗi:
 > Nó chỉ nổ khi có một phép kiểm **tự động** nạp đúng chuỗi đó vào `ipaddress.ip_network()`. Cùng họ với lỗi 69 và 77: một chuỗi hoàn toàn hợp lý trong ngữ cảnh của nó, đặt vào một ngữ cảnh khác thì thành cú pháp của thứ khác — và ở đây "ngữ cảnh khác" chỉ đơn giản là *có ai đó thật sự tính toán nó*.
 
 Sửa: giữ nguyên khoảng `10.10`–`10.13` — mọi địa chỉ đang dùng nằm trong đó — và viết đúng thành `10.10.0.0/15` + `10.12.0.0/15`. `lint.sh` không lưu dải dưới dạng CIDR nữa mà lưu **khoảng octet**, vì đó mới là thứ con người thoả thuận với nhau.
+
+### Lỗi 87 — chín layer vi phạm chính sách do chúng dựng ra
+
+Thêm `local.azs` vào `account-baseline` thì đọc phải khối tag mặc định của nó:
+
+```hcl
+common_tags = {
+  Environment = "shared"
+  ...
+}
+```
+
+Và trong `landing-zone/organization/variables.tf`:
+
+```hcl
+Environment = { allowed_values = ["dev", "staging", "prod", "sandbox"] }
+```
+
+**Chín layer** gắn `shared`. Tag policy do chính repo dựng ra không có giá trị đó.
+
+Lý do không ai phát hiện: **tag policy của AWS mặc định chỉ báo, không chặn.** Nó đánh dấu resource không tuân thủ trong Resource Groups và trong báo cáo, nhưng nó không làm `apply` đỏ trừ khi bật enforcement cho từng loại resource cụ thể. Nên chín layer chạy bình thường suốt, và hậu quả duy nhất là: nhóm theo tag `Environment` trong Cost Explorer có một giá trị không ai mong đợi, và bảng tuân thủ có một cột đỏ mà không ai đọc.
+
+`billing-guard` là layer **duy nhất** làm đúng, và nó còn kèm sẵn câu trả lời cho câu hỏi "vậy giá trị nào mới đúng":
+
+```hcl
+Environment = "prod" # ha tang quan tri, khong phai sandbox
+```
+
+Chín layer kia giờ theo tiền lệ đó.
+
+> Cùng họ với lỗi 86, và cùng một phiên: **một quy tắc được viết ra ở một chỗ, và không có gì đối chiếu nó với chỗ dùng.** Ở lỗi 86 là bảng CIDR chưa ai phân tích; ở đây là danh sách giá trị hợp lệ chưa ai so. Cả hai chỉ lộ ra khi có người viết một công cụ *đọc* thứ đã nằm đó từ lâu.
 
 ---
 
