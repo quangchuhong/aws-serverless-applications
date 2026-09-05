@@ -1,0 +1,95 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# `-n` co chu dich: neu file da ton tai thi DUNG de len no. Mot lan
+# cp de len tfvars cua mot layer da apply la mot plan doi xoa nhung
+# thu dang chay, va con so trong plan do khong noi ra nguyen nhan.
+#
+# LOP VAN HANH MANG. Chay o ACCOUNT MANG, khong phai management.
+#
+# Gan nhu moi thu nam trong catalog/*.yaml. File nay chi tra loi hai
+# cau: state cua layer cha o dau, va canh bao goi ai.
+########################################
+
+########################################
+# 1. DOC STATE CUA LAYER CHA
+#
+# HAI THU KHAC NHAU, CAN CA HAI:
+#
+#   state_config (o day)      DOC state layer cha  -> key CUA LAYER CHA
+#   backend.hcl  (file rieng) GHI state cua ops    -> key CUA OPS
+#
+# Thieu backend.hcl thi ops van chay, nhung state nam tren dia mot
+# nguoi. Thieu state_config thi "Unable to find remote state".
+#
+# KHONG go tay khoi nay. ./lint.sh doc ../.terraform/terraform.tfstate
+# va in ra khoi dan duoc ngay, dung voi backend that cua layer cha:
+#
+#   ./lint.sh
+########################################
+
+# Layer cha chay state local (mac dinh cua ban demo):
+state_backend = "local"
+state_config  = {}
+
+# Layer cha chay backend S3 - thay hai dong tren bang:
+#
+# state_backend = "s3"
+# state_config = {
+#   bucket  = "..."
+#   key     = "demo-network-lz-full/terraform.tfstate"   # KEY CUA LAYER CHA
+#   region  = "ap-southeast-1"
+#   profile = "default"
+# }
+#
+# state_config la map(string), nen bo cac gia tri khong phai chuoi
+# (encrypt = true chang han) - chung khong can de doc.
+
+########################################
+# 2. ACCOUNT TAO RESOURCE
+#
+# Khac voi profile trong backend.hcl: cai do noi STATE nam o dau (co
+# the la account management), dong nay noi RESOURCE duoc tao o dau
+# (account mang).
+#
+# De trong = chuoi giai credential mac dinh. Nho rang BIEN MOI TRUONG
+# AWS_ACCESS_KEY_ID / AWS_PROFILE dung TRUOC dong nay va khong co gi
+# bao - do la loi 68.
+#
+# Lech account thi plan dung lai o precondition trong main.tf kem ten
+# ca hai account, chu khong tao rule group nham cho.
+########################################
+
+aws_profile = ""
+
+########################################
+# 3. CANH BAO DUONG HAM DOI TAC
+#
+# De rong thi canh bao VAN duoc tao va van doi trang thai trong
+# console - chi la khong ai duoc bao. Hop ly khi dang dung thu, va la
+# mot cai bay khi len that: mot canh bao khong goi ai chi phat hien
+# ra su co SAU khi doi tac goi dien.
+########################################
+
+alarm_actions = []
+# alarm_actions = ["arn:aws:sns:ap-southeast-1:123456789012:netops"]
+
+########################################
+# 4. CAC NGUONG CON LAI - hiem khi phai doi
+########################################
+
+# DAT ROI THI DUNG DOI. capacity la thuoc tinh BAT BIEN: sua no la
+# Terraform xoa rule group va tao lai, trong khi firewall policy ben
+# layer cha van tro vao ARN cu. Capacity khong dung KHONG ton tien.
+rule_group_capacity = 1000
+
+# Goc danh so sid. 20000 de cach xa dai cua layer cha (1000-1999).
+sid_base = 20000
+
+# Cho apply khi catalog con rule DA QUA HAN. Rule qua han khong bi tu
+# dong go - go mot rule firewall luc nua dem vi khong ai gia han
+# ticket la mot su co san sang xay ra.
+allow_expired_rules = false
+
+# Thu muc catalog. Doi khi muon chay nhieu moi truong tu mot ban code.
+catalog_dir = "catalog"
