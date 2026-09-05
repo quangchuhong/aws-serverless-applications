@@ -12,7 +12,23 @@
 ########################################
 
 locals {
-  # Ham Lambda de INLINE trong template (gioi han 4096 ky tu).
+  # Ham Lambda de INLINE trong template, qua Code.ZipFile.
+  #
+  # Tai lieu cua CloudFormation ghi gioi han 4096 ky tu cho ZipFile.
+  # Con so do KHONG dung voi thuc te dang chay: doan nay dai ~6.8 KB
+  # va da trien khai thanh cong toi 8 account. Chu thich cu o day
+  # khang dinh 4096 nhu mot rang buoc that, va no lam nguoi doc ngai
+  # them mot dong - ke ca dong bien mot thong bao vo dung thanh mot
+  # thong bao dung duoc.
+  #
+  # Do dai that:
+  #   python3 -c "import re;s=open('vpc-sweep.tf').read();\
+  #     m=re.search(r'sweep_code = <<-PY\n(.*?)\n\s*PY\n',s,re.S);\
+  #     print(len(m.group(1)))"
+  #
+  # Rang buoc that su cham toi la kich thuoc TEMPLATE (51.200 byte khi
+  # gui truc tiep). Con xa, nhung khi toi thi cach sua la day code len
+  # S3 chu khong phai cat bot chu thich.
   #
   # ---------------------------------------------------------------
   # KHONG DUNG `import cfnresponse`.
@@ -50,6 +66,26 @@ locals {
             headers={'content-type': '', 'content-length': str(len(body))})
         urllib.request.urlopen(req)
 
+    def why(e):
+        # type(e).__name__ tra ve 'ClientError' cho MOI loi cua AWS.
+        #
+        # AccessDenied, SCP chan, tham so sai, dich vu chua bat - tat ca
+        # deu in ra dung mot chu, trong khi bon cach sua khac han nhau.
+        # Doc SweepResult xong van khong biet phai lam gi tiep.
+        #
+        # Ma loi that nam trong e.response['Error']['Code'].
+        #
+        # Dau phay bi thay bang dau cham phay: SweepResult noi chuoi
+        # bang ', ', nen mot thong bao co dau phay se tach thanh hai muc
+        # gia khi ai do doc bang mat.
+        try:
+            err = e.response['Error']
+            code = err.get('Code') or type(e).__name__
+            msg = (err.get('Message') or '')[:160].replace(',', ';')
+            return code + (' (' + msg + ')' if msg else '')
+        except Exception:
+            return type(e).__name__ + ': ' + str(e)[:160].replace(',', ';')
+
     def harden_account(h, acct, out):
         # Hai muc nay la CAP ACCOUNT, khong theo region. Goi mot lan.
         if h.get('PasswordPolicy') == 'yes':
@@ -64,7 +100,7 @@ locals {
                     PasswordReusePrevention=int(h['PasswordReuse']))
                 out.append('iam/password-policy')
             except Exception as e:
-                out.append('iam/password-policy:SKIP:' + type(e).__name__)
+                out.append('iam/password-policy:SKIP:' + why(e))
 
         if h.get('S3PublicAccessBlock') == 'yes':
             try:
@@ -75,7 +111,7 @@ locals {
                         'BlockPublicPolicy': True, 'RestrictPublicBuckets': True})
                 out.append('s3/public-access-block')
             except Exception as e:
-                out.append('s3/pab:SKIP:' + type(e).__name__)
+                out.append('s3/pab:SKIP:' + why(e))
 
     def harden_region(h, ec2, r, out):
         # Hai muc nay theo TUNG REGION. Bo sot mot region la de lai
@@ -85,7 +121,7 @@ locals {
                 ec2.enable_ebs_encryption_by_default()
                 out.append(r + '/ebs-encryption')
             except Exception as e:
-                out.append(r + '/ebs:SKIP:' + type(e).__name__)
+                out.append(r + '/ebs:SKIP:' + why(e))
 
         if h.get('LockDefaultSg') == 'yes':
             # Default security group KHONG XOA DUOC. No luon ton tai va
@@ -104,7 +140,7 @@ locals {
                             GroupId=gid, IpPermissions=g['IpPermissionsEgress'])
                     out.append(r + '/default-sg:' + gid)
             except Exception as e:
-                out.append(r + '/default-sg:SKIP:' + type(e).__name__)
+                out.append(r + '/default-sg:SKIP:' + why(e))
 
     def handler(event, ctx):
         out = []
@@ -138,7 +174,7 @@ locals {
                             out.append(r + '/' + vid)
                     except Exception as e:
                         # Ghi lai chu KHONG nuot. Xem trong stack output.
-                        out.append(r + '/SKIP:' + type(e).__name__)
+                        out.append(r + '/SKIP:' + why(e))
 
                     # try RIENG, khong dung chung voi khoi xoa VPC o
                     # tren. Mot default VPC khong xoa duoc - con ENI
@@ -148,7 +184,7 @@ locals {
                     try:
                         harden_region(h, boto3.client('ec2', region_name=r), r, out)
                     except Exception as e:
-                        out.append(r + '/harden:SKIP:' + type(e).__name__)
+                        out.append(r + '/harden:SKIP:' + why(e))
             send(event, ctx, 'SUCCESS',
                  {'Result': (', '.join(out) or 'khong co default VPC nao')[:900]})
         except Exception as e:
