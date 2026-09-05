@@ -38,7 +38,26 @@ locals {
     #
     # Doi duoc khoa khi state RONG (sau mot lan destroy). Luc do:
     #   aws s3 rm s3://<bucket>/demo-network-lz-full/terraform.tfstate
+    #   <XOA CA DONG DIGEST - xem duoi>
     #   sua dong nay, chay ./wire-backends.sh, terraform init -reconfigure
+    #
+    # XOA OBJECT S3 THOI LA CHUA DU khi lock_mode = "dynamodb".
+    #
+    # Bang khoa giu them mot dong DIGEST cho moi key:
+    #   LockID = "<bucket>/<key>-md5"
+    # Dong do KHONG bien mat khi object bi xoa. Lan init sau, Terraform
+    # so md5 cua object (rong, hoac moi) voi digest cu va dung lai:
+    #
+    #   Error: state data in S3 does not have the expected content.
+    #   Calculated checksum:            <- rong, vi object rong
+    #   Stored checksum:     c92a3ed1...
+    #
+    # Cau do doc nhu mot su co cua AWS ("unusually long delays in S3")
+    # va bao nguoi ta cho vai phut. Cho bao lau cung khong het.
+    #
+    #   TABLE=$(terraform output -raw dynamodb_table)
+    #   aws dynamodb delete-item --region <region> --table-name "$TABLE" \
+    #     --key '{"LockID":{"S":"<bucket>/<key>-md5"}}'
     "landing-zone/network" = "demo-network-lz-full/terraform.tfstate"
 
     # Lop van hanh cua layer tren - state RIENG, cung PREFIX.

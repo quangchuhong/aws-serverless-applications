@@ -225,6 +225,8 @@ terraform apply
 ./wire-backends.sh              # ghi backend.tf + backend.hcl vào ops/
 
 # 3. Tạo sẵn object rỗng cho key mới — bước không ai đoán được
+#    CHỈ khi key CHƯA TỪNG có state. Nếu key này từng được dùng rồi
+#    xoá, xem mục ngay dưới TRƯỚC khi chạy dòng này.
 aws s3api put-object --bucket <bucket> \
   --key 'demo-network-lz-full/ops/terraform.tfstate'
 
@@ -232,6 +234,30 @@ aws s3api put-object --bucket <bucket> \
 cd landing-zone/network/ops
 terraform init -backend-config=backend.hcl
 ```
+
+#### Nếu key này từng có state rồi bị xoá — lỗi 88
+
+```
+Error: state data in S3 does not have the expected content.
+Calculated checksum:
+Stored checksum:     c92a3ed1fe4984129b73c4bdb0d26846
+```
+
+Bảng khoá DynamoDB giữ **hai** dòng cho mỗi key: dòng khoá (`<bucket>/<key>`, mất khi lệnh chạy xong) và dòng **digest** (`<bucket>/<key>-md5`, **nằm mãi**). `aws s3 rm` không đụng tới DynamoDB, nên digest của state cũ sống sót qua teardown — rồi lệch với object rỗng vừa tạo ở bước 3.
+
+Thông báo bảo *"unusually long delays in S3 … wait for a minute or two"*. **Đợi bao lâu cũng không hết** — không có gì đang trên đường tới cả. Dấu hiệu thật nằm ở `Calculated checksum:` bỏ trống: object không có nội dung, chứ S3 không chậm.
+
+```bash
+cd landing-zone/tf-backend
+TABLE=$(terraform output -raw dynamodb_table)
+aws dynamodb delete-item --region ap-southeast-1 --table-name "$TABLE" \
+  --key '{"LockID":{"S":"<bucket>/demo-network-lz-full/ops/terraform.tfstate-md5"}}'
+aws s3 rm "s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate"
+
+cd ../network/ops && terraform init -reconfigure -backend-config=backend.hcl
+```
+
+Xoá luôn object rỗng: nó chỉ cần khi prefix hoàn toàn mới, mà `demo-network-lz-full/` đã có sẵn state của layer cha.
 
 **Đừng gõ tay khối `backend "s3"` vào `versions.tf`** — `wire-backends.sh` ghi `backend.tf` riêng, và hai khối `backend` trong một module là lỗi. Thêm dòng thẳng vào `backend.hcl` cũng vô ích: file đó bị ghi đè mỗi lần chạy script, nên sửa tay sẽ biến mất im lặng.
 

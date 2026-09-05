@@ -172,7 +172,11 @@ Xếp theo thứ tự gặp phải.
 
 | 87 | **Chín layer** gắn `Environment = "shared"`, trong khi tag policy do chính repo khai chỉ nhận `dev/staging/prod/sandbox` | Tag policy của AWS mặc định chỉ **báo** không tuân thủ, không chặn — nên chín layer gắn một giá trị mà chính tổ chức từ chối, và không apply nào đỏ. `billing-guard` là layer duy nhất đúng, kèm chú thích *"hạ tầng quản trị, không phải sandbox"* | **Lỗi code** | *(mục 7ao)* |
 
-**76/87 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 88 | `terraform init` báo `state data in S3 does not have the expected content` — *"Calculated checksum:"* để trống | Bảng khoá DynamoDB giữ thêm một dòng **digest** (`LockID = "<bucket>/<key>-md5"`) cho mỗi key, và dòng đó **không biến mất khi object S3 bị xoá**. Xoá state rồi tạo lại một object rỗng thì md5 tính ra khác digest cũ. Thông báo đổ lỗi cho **độ trễ của S3** và bảo đợi vài phút — đợi bao lâu cũng không hết. Chính chú thích trong `tf-backend/outputs.tf` đã dặn `aws s3 rm` mà không nhắc tới dòng digest | **Lỗi thiết kế** | *(mục 7ap)* |
+
+| 89 | `wire-backends.sh` báo `CO 1 LAYER TREN DIA` rồi in **11 dòng** | Danh sách gom bằng dấu cách rồi in bằng `for m in $missing`. Một thư mục rác có dấu cách trong tên bị tách vụn: **con số đúng, danh sách sai** — và danh sách là thứ người ta đọc | **Lỗi code** | `07dd751` |
+
+**78/89 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2974,6 +2978,74 @@ Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối �
 ```bash
 terraform apply -replace='aws_instance.partner_sim[0]'
 ```
+
+---
+
+## 7ap. Lỗi 88 — dấu vết của một state đã xoá, và một thông báo đổ lỗi cho AWS
+
+Nối lớp `ops` vào backend S3 sau khi dựng lại toàn bộ layer `network`. Object state cũ đã bị xoá trong lần teardown, key vẫn giữ nguyên như thiết kế. Tạo sẵn một object rỗng theo đúng hướng dẫn trong README, rồi `terraform init -reconfigure`:
+
+```
+Error: Error refreshing state: state data in S3 does not have the expected content.
+
+The checksum calculated for the state stored in S3 does not match the checksum
+stored in DynamoDB.
+
+Calculated checksum:
+Stored checksum:     c92a3ed1fe4984129b73c4bdb0d26846
+
+This may be caused by unusually long delays in S3 processing a previous state
+update. Please wait for a minute or two and try again.
+```
+
+Câu cuối là chỗ đáng nói. Nó **đổ lỗi cho độ trễ của S3** và bảo đợi — một lời khuyên vô hại, dễ tin, và sai hoàn toàn. Đợi bao lâu cũng không hết, vì không có gì đang trên đường tới cả.
+
+### Bảng khoá giữ hai loại dòng, không phải một
+
+Khi `lock_mode = "dynamodb"`, bảng khoá giữ **hai** loại bản ghi cho mỗi key:
+
+| `LockID` | Sống bao lâu |
+|---|---|
+| `<bucket>/<key>` | Chỉ trong lúc một lệnh đang chạy — `apply` xong là mất |
+| `<bucket>/<key>-md5` | **Vĩnh viễn**, cho tới khi có người xoá tay |
+
+Dòng thứ hai là digest của state gần nhất, dùng để phát hiện S3 trả về bản cũ. Nó **không** bị xoá khi object S3 bị xoá — `aws s3 rm` không biết gì về DynamoDB.
+
+Nên trình tự đã xảy ra là:
+
+1. Teardown xoá object state → digest `c92a3ed1…` nằm lại
+2. `put-object` tạo một object **rỗng** → md5 của nó là chuỗi rỗng
+3. `init` so chuỗi rỗng với `c92a3ed1…` → lệch
+
+`Calculated checksum:` để trống ngay trong thông báo — dấu hiệu rõ nhất rằng object không có nội dung, chứ không phải S3 chậm. Nhưng một trường bỏ trống đọc như một trường chưa được điền, không như một câu trả lời.
+
+### Sửa
+
+```bash
+cd landing-zone/tf-backend
+TABLE=$(terraform output -raw dynamodb_table)
+
+aws dynamodb delete-item --region ap-southeast-1 --table-name "$TABLE" \
+  --key '{"LockID":{"S":"<bucket>/demo-network-lz-full/ops/terraform.tfstate-md5"}}'
+
+aws s3 rm "s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate"
+cd ../network/ops && terraform init -reconfigure -backend-config=backend.hcl
+```
+
+Xoá cả object rỗng vì nó không còn tác dụng gì: bước `put-object` trong README có mặt để thoả điều kiện `s3:prefix` của `ListBucket` khi prefix hoàn toàn mới — mà prefix `demo-network-lz-full/` đã có sẵn state của layer cha.
+
+### Điều đáng giữ lại
+
+Chú thích **trong chính repo này** (`tf-backend/outputs.tf`) dặn cách đổi khoá state, và nó viết:
+
+```
+#   aws s3 rm s3://<bucket>/demo-network-lz-full/terraform.tfstate
+#   sua dong nay, chay ./wire-backends.sh, terraform init -reconfigure
+```
+
+Ba bước, thiếu một. Người làm theo đúng từng chữ vẫn hỏng — và hỏng ở một thông báo nói về S3, cách xa chỗ sai ba bước. Cùng họ với lỗi 32: một câu dặn nghe hợp lý, trong tài liệu do chính mình viết.
+
+Đã bổ sung bước xoá digest vào đúng chỗ đó, kèm nguyên văn thông báo lỗi để lần sau tìm bằng `grep` là ra.
 
 ---
 
