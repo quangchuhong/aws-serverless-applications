@@ -79,9 +79,22 @@ locals {
 
         # Ke thua tu ho so doi tac khi dich vu khong khai rieng. Mot
         # dich vu cua doi tac khong the song lau hon hop dong.
-        ticket  = try(s.ticket, try(p.ticket, "chua khai"))
-        expires = try(s.expires, try(p.expires, null))
-        note    = try(s.note, "")
+        ticket = try(s.ticket, try(p.ticket, "chua khai"))
+        note   = try(s.note, "")
+
+        # substr(..., 0, 10) - CAT VE DUNG NGAY, giong firewall.tf:53.
+        #
+        # yamldecode doc `expires: 2026-12-31` khong ra chuoi ma ra mot
+        # moc thoi gian, va tostring() cua no la
+        # "2026-12-31T00:00:00Z". Phep so sanh van dung vi no cat 10 ky
+        # tu dau, nhung phan HIEN THI thi khong: the tag cua target
+        # group va ban van dua cho doi tac deu in ca duoi "T00:00:00Z".
+        #
+        # Cai thu hai moi la van de - do la thu dan vao email gui ra
+        # ngoai cong ty.
+        expires = try(s.expires, try(p.expires, null)) == null ? null : substr(
+          tostring(try(s.expires, p.expires)), 0, 10
+        )
       }
     }
   ])...)
