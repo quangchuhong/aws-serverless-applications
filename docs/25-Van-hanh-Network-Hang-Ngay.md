@@ -86,7 +86,8 @@ terraform output -raw rule_group_arn
 
 # 2. Cắm ARN vào layer cha
 cd ..
-echo 'ops_rule_group_arns = ["arn:aws:network-firewall:ap-southeast-1:...:stateful-rulegroup/lz-net-ops-east-west"]' >> terraform.tfvars
+#    THÊM (không phải append) dòng này vào terraform.tfvars:
+#      ops_rule_group_arns = ["arn:aws:network-firewall:...:stateful-rulegroup/lz-net-ops-east-west"]
 terraform apply                    # policy giờ đọc rule group ở ưu tiên 150
 ```
 
@@ -157,7 +158,9 @@ terraform output -raw rule_group_arn
 
 # 3. Cắm ARN vào layer cha
 cd ..
-echo 'ops_rule_group_arns = ["<ARN vừa in>"]' >> terraform.tfvars
+#    Sửa dòng ops_rule_group_arns trong terraform.tfvars - ĐỪNG dùng
+#    `echo >>`: dựng lại lần hai sẽ có hai dòng, và Terraform từ chối
+#    với "Attribute redefined" chứ không lấy dòng cuối.
 terraform apply
 
 # 4. Xác nhận

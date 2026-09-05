@@ -67,7 +67,9 @@ terraform output -raw rule_group_arn
 
 # 2. Cắm ARN đó vào layer cha, apply một lần nữa
 cd ..
-echo 'ops_rule_group_arns = ["arn:aws:network-firewall:..."]' >> terraform.tfvars
+#    THÊM dòng sau vào terraform.tfvars (sửa, đừng `echo >>` - dựng
+#    lại lần hai sẽ thành hai dòng và Terraform báo Attribute redefined):
+#      ops_rule_group_arns = ["arn:aws:network-firewall:..."]
 terraform apply
 ```
 

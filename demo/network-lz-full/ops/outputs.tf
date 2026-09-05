@@ -4,10 +4,19 @@
 
 output "rule_group_arn" {
   description = <<-EOT
-    ARN can dan sang layer cha MOT LAN, luc bootstrap:
+    ARN can dan sang layer cha MOT LAN, luc bootstrap. SUA dong
+    ops_rule_group_arns trong ../terraform.tfvars roi:
 
-      cd .. && echo 'ops_rule_group_arns = ["<arn>"]' >> terraform.tfvars
-      terraform apply
+      cd .. && terraform apply
+
+    DUNG dung `echo >> terraform.tfvars`. Lan dung dau tien thi chay,
+    nhung lan dung lai thu hai dong do da co san - va append cho ra
+    HAI dong. Terraform tu choi:
+
+      Error: Attribute redefined
+      The argument "ops_rule_group_arns" was already set at ...
+
+    No khong lay dong cuoi, khong canh bao rong: no dung han.
 
     Sau do khong dung toi nua: sua catalog chi doi rules_string ben
     trong, ARN giu nguyen.
