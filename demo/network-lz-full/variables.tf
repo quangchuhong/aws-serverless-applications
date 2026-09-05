@@ -110,7 +110,7 @@ variable "spokes" {
     TGW thi route table khong phan biet duoc hai spoke, va sua thi
     phai xoa VPC. Bang cap phat o doc 17 muc 3:
 
-      NonProd  10.10.0.0/14   (10.10 - 10.13)
+      NonProd  10.10.0.0/15 + 10.12.0.0/15   (10.10 - 10.13)
       Prod     10.20.0.0/14   (10.20 - 10.23)
       Sandbox  10.60.0.0/14   (khong attach TGW)
   EOT

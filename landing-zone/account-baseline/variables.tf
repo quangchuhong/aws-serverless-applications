@@ -211,3 +211,37 @@ variable "account_scopes" {
     error_message = "Chi chap nhan: analytics, nonprod, prod, none."
   }
 }
+
+########################################
+# 4. Catalog yeu cau tao account
+########################################
+
+variable "catalog_dir" {
+  description = "Thu muc chua accounts.yaml, tuong doi voi layer nay"
+  type        = string
+  default     = "catalog"
+}
+
+variable "ou_ids" {
+  description = <<-EOT
+    TEN OU -> OU ID. Catalog khai bang ten, layer nay giai thanh ID.
+
+    VI SAO KHONG KHAI ID THANG TRONG CATALOG
+
+    ou-abc1-x9y8z7w6 go nham mot ky tu van la mot chuoi hop le. No
+    tro vao mot OU khac - hoac khong OU nao - va Terraform bao mot
+    loi API khong nhac gi toi viec ban go nham.
+
+    Ten thi doi chieu duoc, va plan dung lai kem danh sach ten hop le.
+
+    Lay bang:
+      cd ../organization && terraform output ou_ids
+  EOT
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for _, id in var.ou_ids : can(regex("^ou-", id))])
+    error_message = "Moi gia tri phai la OU ID bat dau bang 'ou-'. Root ID (r-...) khong duoc - account dat thang vao root chi con SCP o root."
+  }
+}

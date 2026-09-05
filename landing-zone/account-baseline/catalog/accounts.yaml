@@ -1,0 +1,101 @@
+# ==============================================================
+# YEU CAU TAO ACCOUNT - doc 09
+#
+# Mot khoi = mot account. Them khoi, mo PR, merge, apply.
+#
+# --------------------------------------------------------------
+# GAN NHU KHONG HOAN TAC DUOC. Doc het truoc khi them mot khoi.
+#
+#   - Account KHONG XOA duoc, chi DONG duoc, va dong xong phai cho
+#     90 ngay moi bien mat khoi to chuc.
+#   - Email la DUY NHAT VINH VIEN o pham vi AWS toan cau. Dong
+#     account roi cung KHONG dung lai duoc email do.
+#   - Go mot khoi khoi file nay KHONG dong account: layer nay dat
+#     close_accounts_on_destroy = false, nen destroy chi go khoi
+#     state. Do la hanh vi co chu dich.
+#
+# Nghia la: mot chu so go nham trong `email` khong sua duoc. Do la
+# ly do lint.sh doi ticket va doi email theo dung mot khuon.
+# --------------------------------------------------------------
+# TRUONG
+#
+#   name         BAT BUOC  ten account. Chu thuong, so, gach ngang.
+#                          Cung la khoa trong state - DOI TEN LA
+#                          TAO ACCOUNT MOI, khong phai doi ten cai cu
+#   email        BAT BUOC  hop thu goc cua account. Dung plus-address
+#                          de khong can nhieu hop thu that:
+#                            ban+lz-app-staging@gmail.com
+#   ou           BAT BUOC  TEN OU, khong phai ID. Giai thanh parent_id
+#                          qua var.ou_ids - lay tu layer organization
+#   scope        BAT BUOC  analytics | nonprod | prod | none
+#                          "none" = account ha tang (network, security,
+#                          log archive), chi nhan permission set "all"
+#   environment  BAT BUOC  dev | staging | prod | sandbox (doc 11)
+#   owner        BAT BUOC  email doi chiu trach nhiem
+#   cost_center  BAT BUOC  ma phong ban chiu chi phi. MA, khong phai ten
+#   ticket       BAT BUOC  phe duyet. Mot account la cam ket dai han
+#   note                   mot cau tieng nguoi
+#
+#   network                Bo trong = account KHONG noi vao luoi mang.
+#                          Dung cho account ha tang khong can VPC.
+#     vpc_cidr   BAT BUOC  theo bang cap phat o doc 17 muc 3:
+#                            NonProd    10.10.0.0 - 10.13.255.255
+#                            Prod       10.20.0.0 - 10.23.255.255
+#                            Analytics  10.30.0.0 - 10.33.255.255
+#                            Sandbox    10.60.0.0 - 10.63.255.255
+#     attach_tgw           mac dinh true. false = tao VPC nhung khong
+#                          noi vao TGW - dung cho sandbox
+#
+# --------------------------------------------------------------
+# VI SAO `ou` LA TEN CHU KHONG PHAI ID
+#
+# ou-abc1-x9y8z7w6 go nham mot ky tu van la mot chuoi hop le. Nhung
+# no tro vao mot OU khac - hoac khong OU nao - va Terraform bao mot
+# loi API khong nhac gi toi viec ban go nham.
+#
+# Ten thi lint.sh doi chieu duoc voi danh sach OU that va dung lai
+# kem danh sach ten hop le. Cung ly do voi viec khai app bang ten
+# chu khong phai CIDR o lop ops.
+# ==============================================================
+
+accounts: []
+
+# --------------------------------------------------------------
+# Vi du (dang tat)
+#
+# accounts:
+#   - name: app-staging
+#     email: ban+lz-app-staging@gmail.com
+#     ou: NonProd
+#     scope: nonprod
+#     environment: staging
+#     owner: platform@example.com
+#     cost_center: CC-1042
+#     ticket: ACC-2025-014
+#     note: Moi truong staging cho doi don hang
+#     network:
+#       vpc_cidr: 10.12.0.0/16
+#
+#   - name: sandbox-thu-nghiem
+#     email: ban+lz-sandbox-01@gmail.com
+#     ou: Sandbox
+#     scope: nonprod
+#     environment: sandbox
+#     owner: platform@example.com
+#     cost_center: CC-0000
+#     ticket: ACC-2025-016
+#     note: Khong noi TGW - sandbox tu lo duong ra Internet
+#     network:
+#       vpc_cidr: 10.60.0.0/16
+#       attach_tgw: false
+#
+#   - name: security-tooling
+#     email: ban+lz-security@gmail.com
+#     ou: Security
+#     scope: none
+#     environment: prod
+#     owner: security@example.com
+#     cost_center: CC-3001
+#     ticket: ACC-2025-017
+#     note: Account ha tang - khong can VPC
+# --------------------------------------------------------------

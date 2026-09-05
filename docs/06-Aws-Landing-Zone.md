@@ -1343,7 +1343,7 @@ output "transit_gateway_id" {
 | Vùng | CIDR | Ghi chú |
 |---|---|---|
 | Egress / shared services | `10.0.0.0/16` | network account |
-| NonProd | `10.10.0.0/14` | dev, staging, … |
+| NonProd | `10.10.0.0/15` + `10.12.0.0/15` | dev, staging, … |
 | Prod | `10.20.0.0/14` | |
 | Sandbox | `10.60.0.0/14` | không attach TGW |
 | Dự phòng | `10.100.0.0/12` | mở rộng sau |

@@ -94,7 +94,7 @@ Quy hoạch CIDR — **bảng chuẩn ở [17 – Design Guide mục 3](./17-Net
 | Security VPC (doc 15) | `10.1.0.0/16` |
 | Egress VPC | `10.2.0.0/16` |
 | 3rd-party VPC (doc 16) | `10.9.0.0/16` |
-| NonProd | `10.10.0.0/14` |
+| NonProd | `10.10.0.0/15` + `10.12.0.0/15` |
 | Prod | `10.20.0.0/14` |
 | Sandbox | `10.60.0.0/14` |
 

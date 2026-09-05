@@ -168,7 +168,9 @@ Xếp theo thứ tự gặp phải.
 
 | 85 | `plan-check.sh` báo **7 lỗi** cho một code hoàn toàn bình thường | Mọi khẳng định của nó có dạng *"plan trên state rỗng phải tạo resource X"*. Chạy trên máy **đã apply thật**, `plan` so với hạ tầng đang chạy và trả `No changes` — đúng, nhưng không trả lời câu hỏi đang được hỏi. Bảy dòng lỗi nói về bảy resource khác nhau, đọc như bảy vấn đề độc lập | **Lỗi code** | *(mục 7an)* |
 
-**74/85 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 86 | `10.10.0.0/14` trong bảng cấp phát CIDR **không phải một CIDR hợp lệ** | Một `/14` bắt đầu ở bội số của 4 ở octet thứ hai, nên nó chỉ có thể là `10.8.0.0/14` hoặc `10.12.0.0/14`. Khoảng `10.10`–`10.13` mà bảng mô tả không viết được thành một `/14` nào. Sống sót nhiều tháng ở **sáu file** vì chưa có công cụ nào phân tích nó — con người đọc phần trong ngoặc và hiểu đúng ý | **Lỗi thiết kế** | *(mục 7ao)* |
+
+**75/86 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2970,6 +2972,30 @@ Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối �
 ```bash
 terraform apply -replace='aws_instance.partner_sim[0]'
 ```
+
+---
+
+## 7ao. Lỗi 86 — một dòng sai suốt nhiều tháng vì chưa ai chạy nó
+
+Viết `lint.sh` cho catalog yêu cầu tạo account, thêm phép kiểm "CIDR phải nằm trong dải cấp phát của OU", nạp bảng ở doc 17 vào, và Python từ chối ngay dòng đầu:
+
+```
+ValueError: 10.10.0.0/14 has host bits set
+```
+
+Một `/14` bắt đầu ở **bội số của 4** ở octet thứ hai. Nên nó chỉ có thể là `10.8.0.0/14` (phủ `10.8`–`10.11`) hoặc `10.12.0.0/14` (`10.12`–`10.15`). Khoảng `10.10`–`10.13` mà bảng cấp phát mô tả **không viết được thành một `/14` nào** — phải là hai `/15`.
+
+Các dải khác đúng: `10.20.0.0/14` (20 chia hết cho 4) và `10.60.0.0/14` (60 cũng vậy). Chỉ dòng NonProd sai.
+
+Nó nằm ở **sáu file**: doc 06, doc 13, doc 17, `landing-zone/network/outputs.tf`, `demo/network-lz-full/variables.tf`, và bảng gốc. Sống sót nhiều tháng, đi qua mọi lần đọc lại, và không gây ra một sự cố nào.
+
+Lý do nó sống lâu như vậy đáng ghi hơn bản thân lỗi:
+
+> **Chưa có công cụ nào phân tích chuỗi đó.** Bảng ghi cả hai dạng — `10.10.0.0/14 (10.10 - 10.13)` — và con người đọc phần trong ngoặc. Phần trong ngoặc đúng, nên ý định được truyền đạt đúng, nên không ai phát hiện phần CIDR là một phép tính không tồn tại. Terraform không đọc bảng đó; nó chỉ đọc CIDR `/16` của từng spoke, và tất cả đều hợp lệ.
+>
+> Nó chỉ nổ khi có một phép kiểm **tự động** nạp đúng chuỗi đó vào `ipaddress.ip_network()`. Cùng họ với lỗi 69 và 77: một chuỗi hoàn toàn hợp lý trong ngữ cảnh của nó, đặt vào một ngữ cảnh khác thì thành cú pháp của thứ khác — và ở đây "ngữ cảnh khác" chỉ đơn giản là *có ai đó thật sự tính toán nó*.
+
+Sửa: giữ nguyên khoảng `10.10`–`10.13` — mọi địa chỉ đang dùng nằm trong đó — và viết đúng thành `10.10.0.0/15` + `10.12.0.0/15`. `lint.sh` không lưu dải dưới dạng CIDR nữa mà lưu **khoảng octet**, vì đó mới là thứ con người thoả thuận với nhau.
 
 ---
 

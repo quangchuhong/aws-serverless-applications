@@ -95,7 +95,7 @@ output "paste_spoke_vpc" {
 
     Chay o account do, KHONG phai o day. Doi ten va CIDR truoc khi
     dung - dai spoke lay theo bang o doc 17 muc 3:
-      NonProd  10.10.0.0/14
+      NonProd  10.10.0.0/15 + 10.12.0.0/15   (10.10 - 10.13)
       Prod     10.20.0.0/14
   EOT
   value       = <<-EOT

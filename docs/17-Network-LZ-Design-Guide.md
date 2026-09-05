@@ -286,12 +286,17 @@ Ghi lại quyết định này thành ADR, kèm ngày dự kiến có license. K
 | Dự phòng hub | `10.3.0.0/16` – `10.7.0.0/16` | DR, region thứ hai |
 | `security-account-vpc` | `10.8.0.0/16` | Account `lz-security` — công cụ chạy *trong* VPC: scanner, SIEM collector, bastion |
 | `3rd-party-vpc` | `10.9.0.0/16` | |
-| **NonProd spokes** | `10.10.0.0/14` | `10.10` – `10.13` |
+| **NonProd spokes** | `10.10.0.0/15` + `10.12.0.0/15` | `10.10` – `10.13` |
+<!-- Hai /15, khong phai mot /14: xem ghi chu ngay sau bang -->
 | **Prod spokes** | `10.20.0.0/14` | `10.20` – `10.23` |
 | **Sandbox** | `10.60.0.0/14` | Không attach TGW |
 | `logarchive-account-vpc` | `10.100.0.0/16` | Account `lz-logarchive` |
 | `management-account-vpc` | `10.101.0.0/16` | Account management — **xem cảnh báo bên dưới** |
 | Dự phòng mở rộng | `10.102.0.0/15` trở đi | Phần còn lại của `10.100.0.0/12` |
+
+> **`10.10.0.0/14` không phải một CIDR hợp lệ.** Một `/14` bắt đầu ở bội số của 4 ở octet thứ hai, nên nó chỉ có thể là `10.8.0.0/14` (phủ `10.8`–`10.11`) hoặc `10.12.0.0/14` (`10.12`–`10.15`). Khoảng `10.10`–`10.13` mà bảng này cấp phát **không viết được thành một `/14` nào** — phải là hai `/15`.
+>
+> Bảng cũ ghi `10.10.0.0/14`, và nó sống sót nhiều tháng vì **chưa có công cụ nào phân tích nó**: con người đọc phần trong ngoặc và hiểu đúng ý, còn phần CIDR chưa ai chạy. Nó chỉ nổ khi `landing-zone/account-baseline/lint.sh` gọi `ipaddress.ip_network()` lên chính chuỗi đó. Các dải khác (`10.20.0.0/14`, `10.60.0.0/14`) hợp lệ — chỉ dòng này sai.
 
 **Ba dải cuối là account nền tảng, không phải workload.** Chúng không nằm trong bảng gốc vì thiết kế ban đầu không hình dung security/logarchive/management là spoke — GuardDuty, Security Hub, Config đều là dịch vụ quản lý, và logarchive chỉ chứa S3, thứ không sống trong VPC. Cấp phát ở đây để tránh ai đó sáu tháng sau cấp trùng `10.8`.
 
