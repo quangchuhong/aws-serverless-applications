@@ -56,6 +56,11 @@ apps:
     spoke: logarchive
     owner: team-security
 
+  - name: app-dev-web
+    spoke: app-dev
+    cidr: 10.10.0.10/32
+    owner: netops
+
   # ------------------------------------------------------------
   # THU HEP xuong mot phan cua spoke.
   #

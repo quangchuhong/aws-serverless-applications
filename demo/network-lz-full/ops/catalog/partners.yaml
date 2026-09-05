@@ -97,7 +97,18 @@
 # hai cho la hai cho co the lech nhau.
 # ==============================================================
 
-partners: []
+#partners: []
+
+partners:
+  - name: sim
+    remote_cidr: 172.16.0.0/16
+    contact: netops@noi-bo
+    ticket: DEMO-1
+    expires: 2026-12-31
+    services:
+      - name: api
+        port: 8080          # KHÁC 80 — cổng 80 layer cha đã chiếm
+        target: app-dev-web
 
 # --------------------------------------------------------------
 # Vi du (dang tat)
