@@ -74,13 +74,89 @@ else
   exit 1
 fi
 
-terraform init -input=false -upgrade >/dev/null 2>&1 \
-  && ok "terraform init" \
-  || { bad "terraform init that bai"; exit 1; }
+########################################
+# CHAY TRONG THU MUC TAM, STATE RIENG
+#
+# VI SAO KHONG CHAY THANG O DAY
+#
+# Moi khang dinh ben duoi co dang "plan tren state RONG phai tao
+# resource X". Tren mot may DA APPLY that, plan so voi ha tang dang
+# chay va tra ve "No changes" - dung, nhung no khong tra loi cau hoi
+# dang duoc hoi.
+#
+# Truoc day script khong biet dieu do. Chay tren may co ha tang that,
+# no bao BAY loi cho mot code hoan toan binh thuong, va moi dong loi
+# noi ve mot resource khac nhau - doc nhu bay van de doc lap.
+#
+# Chep code sang thu muc tam, bo khoi backend, plan tren state cuc bo
+# rong. Khong dung vao state that, khong dung vao ha tang that.
+########################################
 
-terraform fmt -check -recursive >/dev/null 2>&1 \
+ORIG_DIR="$PWD"
+WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+cp "$ORIG_DIR"/*.tf "$WORK_DIR"/ 2>/dev/null
+[[ -d "$ORIG_DIR/templates" ]] && cp -R "$ORIG_DIR/templates" "$WORK_DIR"/
+[[ -f "$ORIG_DIR/.terraform.lock.hcl" ]] && cp "$ORIG_DIR/.terraform.lock.hcl" "$WORK_DIR"/
+
+# Bo khoi backend khoi ban sao.
+#
+# Khong xoa thi terraform init trong thu muc tam se noi vao DUNG cai
+# state that ta dang tranh - va mot script kiem tra doc state that la
+# mot script co the sua state that.
+python3 - "$WORK_DIR" <<'PYBK'
+import sys, os, re, glob
+
+for path in glob.glob(os.path.join(sys.argv[1], "*.tf")):
+    src = open(path, encoding="utf-8").read()
+    out, i, changed = [], 0, False
+    while True:
+        m = re.compile(r'^\s*backend\s+"[^"]+"\s*\{', re.M).search(src, i)
+        if not m:
+            out.append(src[i:])
+            break
+        out.append(src[i:m.start()])
+        # Dem ngoac de tim dung dau dong cua khoi, ke ca khi long nhau
+        depth, j = 0, m.end() - 1
+        while j < len(src):
+            if src[j] == "{":
+                depth += 1
+            elif src[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        i, changed = j + 1, True
+    if changed:
+        open(path, "w", encoding="utf-8").write("".join(out))
+PYBK
+
+# Dung lai provider da tai o thu muc goc - khong tai lai vai tram MB.
+if [[ -d "$ORIG_DIR/.terraform/providers" ]]; then
+  export TF_PLUGIN_CACHE_DIR="$ORIG_DIR/.terraform/providers"
+fi
+
+cd "$WORK_DIR"
+
+# fmt kiem THU MUC GOC, khong kiem ban sao: ban sao da bi sua (bo khoi
+# backend) nen no luon dung dinh dang, va mot phep kiem luon dat la
+# mot phep kiem khong kiem gi.
+terraform -chdir="$ORIG_DIR" fmt -check -recursive >/dev/null 2>&1 \
   && ok "terraform fmt" \
   || bad "terraform fmt - chay 'terraform fmt -recursive' de sua"
+
+terraform init -input=false >/dev/null 2>&1 \
+  && ok "terraform init (thu muc tam, state rong)" \
+  || { bad "terraform init that bai:"; terraform init -input=false 2>&1 | tail -20; exit 1; }
+
+# Chan chong: state phai RONG. Neu khong thi moi khang dinh ben duoi
+# doi nghia, va chung se sai theo kieu im lang.
+if [[ -n "$(terraform state list 2>/dev/null)" ]]; then
+  bad "State trong thu muc tam KHONG rong - khoi backend chua bi go het"
+  exit 1
+fi
+ok "State rong - moi plan deu tinh tu con so khong"
 
 terraform validate >/dev/null 2>&1 \
   && ok "terraform validate" \

@@ -166,7 +166,9 @@ Xếp theo thứ tự gặp phải.
 
 | 84 | `plan-check.sh` báo `Khong lay duoc AMI gia` — không nói vì sao | `2>/dev/null` nuốt stderr của `aws ssm get-parameter`. Hết token, sai region và thiếu `ssm:GetParameter` cho ra **cùng một dòng**, trong khi ba cách sửa khác hẳn nhau. Lần thứ ba của cùng khuyết điểm trong một phiên (75, 80) | **Lỗi code** | *(mục 7an)* |
 
-**73/84 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 85 | `plan-check.sh` báo **7 lỗi** cho một code hoàn toàn bình thường | Mọi khẳng định của nó có dạng *"plan trên state rỗng phải tạo resource X"*. Chạy trên máy **đã apply thật**, `plan` so với hạ tầng đang chạy và trả `No changes` — đúng, nhưng không trả lời câu hỏi đang được hỏi. Bảy dòng lỗi nói về bảy resource khác nhau, đọc như bảy vấn đề độc lập | **Lỗi code** | *(mục 7an)* |
+
+**74/85 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -3033,6 +3035,32 @@ Nên `plan-check.sh` mở chính file template, thay nội suy bằng giá trị
 | Bỏ một thẻ đóng | `bootstrap.xml SAI CU PHAP: mismatched tag: line 114` |
 | Bỏ khối `<profiles>` | `THIEU: profile quan tri interface - health check cua GWLB khong bao gio dat` |
 | Bỏ `plugin-op-commands` | `init-cfg.txt thieu khoa: plugin-op-commands` |
+
+### Lỗi 85 — công cụ kiểm chứng báo sai
+
+Chạy `plan-check.sh` trên máy đang có hạ tầng thật:
+
+```
+✓ DAY DU: appliance + firewall + CDN  (61 resource se duoc tao)
+✗ Firewall che do alert  (plan khong tao resource nao)
+      No changes. Your infrastructure matches the configuration.
+✗ TGW attachment cua security VPC  (khong thay ... trong plan)
+✗ Network Firewall  (khong thay ... trong plan)
+```
+
+**17 đạt, 8 lỗi** — cho một code không có gì sai.
+
+Mọi khẳng định của script có dạng *"plan trên state rỗng phải tạo resource X"*. Trên một máy đã apply, `plan` so với hạ tầng đang chạy và trả về `No changes`. Câu trả lời đúng, cho một câu hỏi khác.
+
+Điều làm nó tệ hơn một lỗi thường: **bảy dòng lỗi nói về bảy resource khác nhau**, nên nó đọc như bảy vấn đề độc lập. Người đọc sẽ đi tìm bảy nguyên nhân, và không cái nào tồn tại.
+
+Sửa: chép code sang thư mục tạm, **gỡ khối `backend`**, plan trên state cục bộ rỗng. Không đụng vào state thật, không đụng vào hạ tầng thật, và chạy được mọi lúc.
+
+Việc gỡ `backend` là phần bắt buộc chứ không phải tiện tay: giữ lại thì `terraform init` trong thư mục tạm nối vào **đúng cái state thật đang cố tránh** — và một script kiểm tra đọc được state thật là một script có thể sửa state thật.
+
+Thêm một chốt chặn: sau `init`, nếu `terraform state list` không rỗng thì dừng ngay. Thiếu nó thì một khối `backend` sót lại sẽ làm mọi khẳng định đổi nghĩa mà không báo gì.
+
+> Cùng họ với lỗi 27, 46 và 73: **một công cụ kiểm chứng sai còn đắt hơn không có công cụ nào**, vì nó tiêu thời gian của người đọc theo hướng ngược hẳn với sự thật.
 
 ### Lỗi 84 — cùng một khuyết điểm, lần thứ ba trong một phiên
 
