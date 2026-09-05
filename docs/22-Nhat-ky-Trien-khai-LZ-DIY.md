@@ -154,7 +154,11 @@ Xếp theo thứ tự gặp phải.
 
 | 77 | `dnf install strongswan` → `Unable to find a match` trên Amazon Linux 2023 | **AL2023 không có gói `strongswan`** — không phải tên khác, không phải phiên bản khác, không có. AWS cắt phần lớn gói mạng khỏi repo AL2023. Đây là nguyên nhân **đầu tiên** của hai đường hầm `DOWN`; lỗi 74–76 nằm sau chỗ này và chưa bao giờ chạy tới | **Giới hạn nền tảng** | *(mục 7al)* |
 
-**67/77 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 78 | Đường hầm `UP`, hai SA `ESTABLISHED`, `curl` tới NLB trả về `000` | Route đặt lên interface `vti` **thiếu `src`**. Nhân chọn địa chỉ nguồn = địa chỉ đầu tiên của chính interface đó — `169.254.100.2`, **địa chỉ trong đường hầm**. NLB nhận được kết nối và trả lời về địa chỉ đó, nhưng route tĩnh của VPN chỉ công bố `172.16.0.0/16` nên gói trả lời không có đường về. Chiều đi hoàn hảo, chiều về không tồn tại | **Lỗi code** | *(mục 7am)* |
+| 79 | Dải NLB công bố cho đối tác chỉ phủ **một trong hai** subnet NLB | `partner_nlb_cidr = cidrsubnet(vpc, 8, 100)` — đúng subnet ở AZ đầu, bỏ `10.9.101.0/24` ở AZ thứ hai. Chú thích cách đó ba dòng đã ghi đủ **cả hai dải**. Tên DNS của NLB trả về cả hai địa chỉ, nên gọi được hay không **tuỳ vào địa chỉ nào được chọn** | **Lỗi code** | *(mục 7am)* |
+| 80 | Mục `=== IPsec SA ===` trong `vpn-check` in ra **rỗng** trong khi hai SA đang chạy | `strongswan statusall \|\| ipsec statusall`: trên Ubuntu lệnh thứ nhất tồn tại, **thoát 0**, và không in gì. `\|\|` không bao giờ chạy tới vế sau. Cùng hình dạng với lỗi 75 | **Lỗi code** | *(mục 7am)* |
+
+**70/80 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2959,10 +2963,61 @@ terraform apply -replace='aws_instance.partner_sim[0]'
 
 ---
 
+## 7am. Lỗi 78–80 — đường hầm lên rồi, và không gói tin nào về
+
+Đường hầm `UP`, hai SA `ESTABLISHED`. Rồi:
+
+```
+=== Goi dich vu ban cong bo ===
+  NLB tra ve 000
+```
+
+`000` của `curl` nghĩa là **không có kết nối nào được thiết lập** — không phải 4xx, không phải 5xx. Ở tầng dưới IPsec thì mọi thứ đều xanh.
+
+### Lỗi 78 — địa chỉ nguồn, thứ không ai nghĩ tới
+
+```
+10.9.100.0/24 dev vti1 scope link metric 100
+```
+
+Route này thiếu `src`. Với một route đặt thẳng lên interface point-to-point, nhân **tự chọn** địa chỉ nguồn, và nó chọn địa chỉ đầu tiên của chính interface đó: `169.254.100.2` — địa chỉ **trong** đường hầm.
+
+Gói tin đi ra bình thường. AWS giải mã bình thường. NLB nhận được kết nối và trả lời — **về `169.254.100.2`**. Bảng route của VPC không có đường nào tới dải đó: route tĩnh của VPN chỉ công bố `172.16.0.0/16`. Gói trả lời bị vứt.
+
+> Chiều đi hoàn hảo, chiều về không tồn tại. Và mọi phép đo ở chiều đi — SA, interface, route, trạng thái đường hầm phía AWS — đều báo đúng.
+
+Đây là biến thể thứ ba của cùng một chủ đề trong doc 16 mục 4b: **mỗi chiều là một bài toán riêng.** Ở đó là VGW và TGW không nối bắc cầu, cần hai điểm tái khởi tạo. Ở đây là địa chỉ nguồn — cũng chỉ đúng ở một chiều.
+
+Sửa: `ip route replace <dai> dev vti1 src <ip rieng cua may> metric 100`.
+
+### Lỗi 79 — code và chú thích của chính nó nói khác nhau
+
+```hcl
+partner_nlb_cidr = cidrsubnet(var.partner_vpc_cidr, 8, 100) # 10.9.100.0/24
+...
+#   nlb   10.9.100.0/24  10.9.101.0/24   dia chi ao doi tac goi toi
+```
+
+Hai dòng cách nhau **mười một dòng** trong cùng một file. Chú thích đúng; code chỉ công bố một nửa.
+
+NLB nội bộ lấy một địa chỉ ở **mỗi** AZ, và tên DNS trả về **cả hai**. Nên gọi được hay không tuỳ vào địa chỉ nào được chọn — một phép thử thành công không chứng minh được gì, và một phép thử thất bại đọc như lỗi ngẫu nhiên.
+
+Sửa: `/23` phủ hết, cộng một `check` so từng subnet NLB với dải công bố. Thêm AZ thứ ba là plan dừng, không phải là một nửa lưu lượng im lặng.
+
+### Lỗi 80 — `A || B` khi A thành công mà không làm gì
+
+`vpn-check` in mục `=== IPsec SA ===` **rỗng** trong khi hai SA đang chạy. Nguyên nhân: `strongswan statusall 2>/dev/null || ipsec statusall`. Trên Ubuntu lệnh thứ nhất tồn tại, **thoát 0**, và không in gì — nên `||` không bao giờ chạy tới vế sau.
+
+Cùng hình dạng với lỗi 75, và cùng hậu quả: **một phép đo trả lời "không có gì" cho một hệ thống đang chạy đúng.** Sửa bằng cách kiểm output có rỗng không, chứ không kiểm mã thoát.
+
+Nhân tiện thêm vào `vpn-check` một mục in thẳng `ip route get` tới dải NLB — đúng một dòng, và nó hiển thị địa chỉ nguồn sẽ được dùng. Lỗi 78 lẽ ra mất ba mươi giây thay vì cả một vòng suy luận.
+
+---
+
 ## Liên quan
 | | |
 |---|---|
-| [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | 3rd-party VPC và VPN — bối cảnh của lỗi 74–76 |
+| [16 – Kết nối đối tác](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | 3rd-party VPC và VPN — bối cảnh của lỗi 74–80 |
 | [25 – Vận hành network hằng ngày](./25-Van-hanh-Network-Hang-Ngay.md) | Lớp `ops/` — bối cảnh của lỗi 66–73 |
 | [23 – Lớp phát hiện](./23-Lop-Phat-Hien-GuardDuty-SecurityHub-Log-Archive.md) | Cơ chế GuardDuty / Security Hub / log archive — kết quả của mục 7h–7p |
 | [TEARDOWN](../landing-zone/TEARDOWN.md) | Chiều ngược lại — hai cổng khoá, parking account |

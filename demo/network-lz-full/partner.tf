@@ -54,8 +54,24 @@ locals {
   # Tach ra thanh local vi chung xuat hien o SAU cho: route VPN, rule
   # firewall, security group, va tai lieu ban dua cho doi tac. Go tay
   # o sau cho la sau co hoi go sai mot chu so.
-  partner_nat_cidr = cidrsubnet(var.partner_vpc_cidr, 8, 10)  # 10.9.10.0/24
-  partner_nlb_cidr = cidrsubnet(var.partner_vpc_cidr, 8, 100) # 10.9.100.0/24
+  partner_nat_cidr = cidrsubnet(var.partner_vpc_cidr, 8, 10) # 10.9.10.0/24
+
+  # Dai NLB: MOT prefix phu HET moi subnet nlb, khong phai rieng cai o
+  # AZ dau.
+  #
+  # NLB noi bo lay mot dia chi o MOI AZ - o day la 10.9.100.0/24 va
+  # 10.9.101.0/24. Truoc day cho nay ghi cidrsubnet(..., 8, 100), tuc
+  # chi AZ dau, va chinh chu thich o muc "3RD-PARTY VPC" ben duoi da
+  # noi dung ca hai dai - code va chu thich lech nhau.
+  #
+  # Hong theo kieu te nhat: ten DNS cua NLB tra ve CA HAI dia chi, nen
+  # doi tac goi duoc hay khong TUY VAO dia chi nao duoc chon. Mot phep
+  # thu thanh cong khong chung minh duoc gi, va mot phep thu that bai
+  # doc nhu loi ngau nhien.
+  #
+  # /23 phu 10.9.100.0/24 + 10.9.101.0/24. Them AZ thu ba thi khong du
+  # nua - check "partner_nlb_span_covers_all_azs" ben duoi chan viec do.
+  partner_nlb_cidr = cidrsubnet(var.partner_vpc_cidr, 7, 50) # 10.9.100.0/23
 
   # Dai ban CONG BO cho doi tac. Chi hai cai tren, khong bao gio la
   # 10.0.0.0/8. Xem doc 16 muc 6 - bang thoa thuan CIDR.
@@ -605,6 +621,27 @@ check "partner_cidr_does_not_overlap_lz" {
       false,
     )
     error_message = "partner_sim_cidr (${var.partner_sim_cidr}) nam TRONG internal_supernet (${var.internal_supernet}). Route tinh toi dai doi tac se giam len propagation cua spoke trong rtb-security, va TGW khong phan biet duoc hai ben. Doi dai cua doi tac sang mot dai khac han - 172.16.0.0/16 hoac 192.168.0.0/16."
+  }
+}
+
+# Dai NLB cong bo phai phu HET moi subnet nlb.
+#
+# Thieu mot dai thi ten DNS cua NLB van tra ve dia chi trong dai do,
+# va doi tac goi duoc hay khong tuy vao dia chi nao duoc chon. Mot
+# phep thu thanh cong khong chung minh duoc gi.
+#
+# partner_nlb_cidr dang la /23 - du cho hai AZ. Them AZ thu ba thi
+# phai noi rong thanh /22, va day la cho bao.
+check "partner_nlb_span_covers_all_azs" {
+  assert {
+    condition = !var.enable_partner_vpn || alltrue([
+      for az, i in local.azs : try(
+        cidrhost(cidrsubnet(local.partner_nlb_cidr, 1, i), 0)
+        == cidrhost(cidrsubnet(var.partner_vpc_cidr, 8, 100 + i), 0),
+        false,
+      )
+    ])
+    error_message = "partner_nlb_cidr (${local.partner_nlb_cidr}) khong phu het ${length(local.azs)} subnet nlb. Moi AZ mot dia chi NLB, va ten DNS tra ve TAT CA - dai nao khong duoc cong bo thi doi tac goi vao do se im lang. Noi rong prefix trong local.partner_nlb_cidr."
   }
 }
 

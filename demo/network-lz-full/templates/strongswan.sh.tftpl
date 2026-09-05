@@ -205,9 +205,23 @@ setup_vti vti2 200 "$PRIVATE_IP" "${tunnel2_address}" "${tunnel2_cgw_inside}" "$
 # metric khac nhau: vti1 uu tien, vti2 du phong. AWS chi bao dam mot
 # tunnel UP tai mot thoi diem trong che do static.
 ########################################
+#
+# `src` LA BAT BUOC, khong phai trang tri.
+#
+# Route dat len mot interface point-to-point ma khong khai src thi
+# nhan tu chon dia chi nguon = dia chi dau tien cua chinh interface do
+# - o day la 169.254.100.2, dia chi TRONG duong ham.
+#
+# Duong ham van len, goi tin van di, NLB van nhan duoc ket noi. Nhung
+# no tra loi ve 169.254.100.2, va bang route cua VPC khong co duong
+# nao toi dai do: route tinh cua VPN chi cong bo 172.16.0.0/16. Goi
+# tra loi bi vut, curl treo roi tra ve 000.
+#
+# Trieu chung doc y het "khong co duong" trong khi moi route deu dung.
+# Chieu di hoan hao, chieu ve khong ton tai.
 %{ for cidr in remote_cidrs ~}
-ip route replace ${cidr} dev vti1 metric 100
-ip route append ${cidr} dev vti2 metric 200
+ip route replace ${cidr} dev vti1 src "$PRIVATE_IP" metric 100
+ip route append ${cidr} dev vti2 src "$PRIVATE_IP" metric 200
 %{ endfor ~}
 
 ########################################
@@ -328,7 +342,16 @@ systemctl enable vpn-vti.service || true
 cat > /usr/local/bin/vpn-check <<'CHK'
 #!/bin/bash
 echo "=== IPsec SA ==="
-strongswan statusall 2>/dev/null || ipsec statusall
+# Tren Ubuntu lenh `strongswan` co the ton tai, THOAT 0, va khong in gi.
+# Nen `A || B` khong bao gio chay toi B, va muc nay hien ra RONG - doc
+# nhu "khong co SA nao" trong khi ca hai dang chay.
+SA=$(strongswan statusall 2>/dev/null)
+[ -n "$SA" ] || SA=$(ipsec statusall 2>&1)
+echo "$SA"
+echo
+echo "=== Dia chi nguon di ra duong ham ==="
+echo "  (PHAI la dia chi rieng cua may, KHONG phai 169.254.x trong duong ham)"
+ip route get 10.9.100.1 2>/dev/null | head -1 || true
 echo
 echo "=== Interface VTI ==="
 ip -brief addr show type vti

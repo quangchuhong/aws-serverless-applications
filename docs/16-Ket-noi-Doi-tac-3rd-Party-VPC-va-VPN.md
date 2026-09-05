@@ -16,7 +16,8 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
 | **Đã chạy thật** | **Cả hai đường hầm `UP`**, hai IPsec SA `ESTABLISHED`. `rtb-partner` sạch, đường về có, NLB target healthy |
-| **Đường tới đó** | Bốn lỗi, mất bốn vòng dựng lại máy giả lập — trong đó nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77). Máy giả lập chạy Ubuntu. Chi tiết ở **mục 5.3** và [doc 22 mục 7al](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
+| **Đang sửa** | `curl` tới NLB trả về `000` dù đường hầm lên: route trên `vti` thiếu `src` nên địa chỉ nguồn là `169.254.100.2` — gói trả lời không có đường về (lỗi 78). Kèm dải NLB công bố chỉ phủ một trong hai AZ (lỗi 79) |
+| **Đường tới đó** | Bảy lỗi — nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77), nên máy giả lập chạy Ubuntu. Chi tiết ở **mục 5.3**, [doc 22 mục 7al và 7am](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 
 Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
