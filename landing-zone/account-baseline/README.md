@@ -164,11 +164,9 @@ cd ../network
 #      share_tgw_with_accounts = ["<id vừa lấy>"]
 terraform apply                         # RAM gửi lời mời
 
-# 3. Account MỚI chấp nhận lời mời — chạy bằng credential của chính nó
-#    (assume OrganizationAccountAccessRole từ management)
-ARN=$(aws ram get-resource-share-invitations --region <region> \
-  --query "resourceShareInvitations[?status=='PENDING'].resourceShareInvitationArn" --output text)
-aws ram accept-resource-share-invitation --region <region> --resource-share-invitation-arn "$ARN"
+# 3. Account MỚI chấp nhận lời mời — chạy từ management, script tự assume role
+cd ../account-baseline
+./accept-ram.sh --tu-catalog            # hoặc: ./accept-ram.sh <id> <id>
 
 # 4. Giờ mới thêm khối `network:` vào catalog và apply lại
 cd ../account-baseline
@@ -183,6 +181,13 @@ terraform apply
 **Vì sao không rút ngắn được.** Bước 1 và 4 đều là `account-baseline`, nhưng không gộp được: ở lần apply đầu, account chưa tồn tại nên chưa có ID để chia sẻ TGW; mà không chia sẻ thì CloudFormation ở bước 4 hỏng với một lỗi nói về **ID TGW không hợp lệ** — một câu nói về ID trong khi vấn đề là quyền nhìn thấy.
 
 Bước 3 không bỏ được vì `allow_external_principals = true` (xem doc 24 mục 5) khiến mọi share đều đi qua lời mời. Đây là cùng một bước mà `verify.sh` mục 6d kiểm cho các spoke cũ.
+
+`accept-ram.sh` tồn tại cho ba dòng lệnh vì **cách lấy credential vào account khác là chỗ dễ sai nhất trong cả quy trình**, và cả hai kiểu sai đều im lặng:
+
+- `"arn:aws:iam::$ID:role/..."` trong **zsh** cho ra `arn:aws:iam::123456789012ole/...` — zsh đọc `:r` là *modifier* của phép khai triển biến. Bash không làm vậy, nên đoạn lệnh chạy được trên máy này và hỏng trên máy kia. Script có shebang `bash` và dùng `${ID}` có ngoặc ở mọi chỗ.
+- `export AWS_ACCESS_KEY_ID=...` mà quên `unset` thì lệnh `terraform` kế tiếp chạy bằng danh tính của một account workload — và nó sẽ dựng hạ tầng ở đúng chỗ đó. Đã xảy ra thật trong dự án này: một Transit Gateway thứ hai mọc lên ở account management. Script **không export gì cả** — mỗi lệnh AWS chạy với biến môi trường đặt ngay trước nó, nên shell của bạn không đổi.
+
+Nó cũng phân biệt hai trường hợp mà `get-resource-share-invitations` trả về giống nhau: **chưa có lời mời** (bước 2 chưa chạy) và **đã nhận rồi** (chạy lại lần hai) — bằng cách hỏi thêm `get-resource-shares --resource-owner OTHER-ACCOUNTS`.
 
 Bước 5 không bỏ được vì attachment xuất hiện ở **account network**, không phải account workload — layer này không với tới. Bỏ nó thì VPC tồn tại, attachment tồn tại ở trạng thái `available`, và **không có gói tin nào đi đâu cả**: attachment không nằm trong route table nào thì nó không học được đường nào và không ai học được đường tới nó. Triệu chứng đọc như lỗi định tuyến ở spoke, và người ta sẽ đi tìm trong VPC đó, nơi không có gì sai.
 
