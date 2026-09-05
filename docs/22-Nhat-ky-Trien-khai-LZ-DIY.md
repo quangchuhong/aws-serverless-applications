@@ -3012,6 +3012,24 @@ Cùng hình dạng với lỗi 75, và cùng hậu quả: **một phép đo tr�
 
 Nhân tiện thêm vào `vpn-check` một mục in thẳng `ip route get` tới dải NLB — đúng một dòng, và nó hiển thị địa chỉ nguồn sẽ được dùng. Lỗi 78 lẽ ra mất ba mươi giây thay vì cả một vòng suy luận.
 
+### Kết quả
+
+```
+=== Dia chi nguon di ra duong ham ===
+10.9.100.1 dev vti1 src 172.16.0.136 uid 0
+
+10.9.100.0/23 dev vti1 scope link src 172.16.0.136 metric 100
+
+=== Goi dich vu ban cong bo ===
+  NLB tra ve 200
+```
+
+`200` — một gói tin HTTP đi hết **IPsec → VGW → NLB → TGW → Network Firewall → spoke `10.10.0.10` ở account khác** rồi về.
+
+Bảy lỗi, bảy vòng thay máy giả lập, cho một đường ống mà `terraform apply` báo thành công ngay từ vòng đầu.
+
+> **Điều đáng giữ lại từ cả bảy:** không lỗi nào trong số đó làm `apply` thất bại, và không lỗi nào bị `plan`, `validate`, `fmt` hay phép quét `.tftpl` bắt được. Sáu trong bảy chỉ lộ ra bằng **một gói tin thật đi hết đường**. Đó là lý do `verify.sh` tồn tại, và là lý do dòng cuối của một quy trình dựng hạ tầng không bao giờ nên là "apply xong".
+
 ---
 
 ## Liên quan

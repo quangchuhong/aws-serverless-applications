@@ -15,9 +15,8 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 | **Code** | [`demo/network-lz-full/partner.tf`](../demo/network-lz-full/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
 | **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
 | **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
-| **Đã chạy thật** | **Cả hai đường hầm `UP`**, hai IPsec SA `ESTABLISHED`. `rtb-partner` sạch, đường về có, NLB target healthy |
-| **Đang sửa** | `curl` tới NLB trả về `000` dù đường hầm lên: route trên `vti` thiếu `src` nên địa chỉ nguồn là `169.254.100.2` — gói trả lời không có đường về (lỗi 78). Kèm dải NLB công bố chỉ phủ một trong hai AZ (lỗi 79) |
-| **Đường tới đó** | Bảy lỗi — nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77), nên máy giả lập chạy Ubuntu. Chi tiết ở **mục 5.3**, [doc 22 mục 7al và 7am](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
+| **Đã đo được cả tuyến** | Hai đường hầm `UP`, hai SA `ESTABLISHED`, và **`NLB tra ve 200`** từ máy đối tác giả lập: IPsec → VGW → NLB → TGW → firewall → `10.10.0.10` ở một **account khác**. Không phải suy ra từ trạng thái tài nguyên — là một gói tin HTTP đi hết đường và về |
+| **Đường tới đó** | Bảy lỗi, bảy vòng dựng lại máy giả lập. Nguyên nhân đầu tiên là **AL2023 không có gói `strongswan`** (lỗi 77) nên máy giả lập chạy Ubuntu; nguyên nhân cuối là route `vti` thiếu `src` (lỗi 78) — đường hầm lên, `curl` trả về `000`. Chi tiết ở **mục 5.3**, [doc 22 mục 7al và 7am](./22-Nhat-ky-Trien-khai-LZ-DIY.md) |
 | **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
 
 Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
@@ -404,6 +403,30 @@ Ba chi tiết đáng đọc kỹ, vì mỗi cái xác nhận một quyết đị
 | `0.0.0.0/0 === 0.0.0.0/0` | Traffic selector mở hoàn toàn — **đúng thiết kế**. Việc chọn dải nào đi đường hầm nào là của route gắn vào `vti`, không phải của traffic selector. Đây là điểm khác nhau giữa route-based và policy-based, và ghép nhầm hai kiểu cho ra lỗi tệ nhất: SA có mà không gói tin nào qua |
 
 Trên Ubuntu, unit là **`strongswan-starter`**, không phải `strongswan` — vòng dò tên unit ở mục 4c của script tồn tại vì lý do này.
+
+Và bảng route — đọc kỹ hai chi tiết:
+
+```
+10.9.100.0/23 dev vti1 scope link src 172.16.0.136 metric 100
+10.9.100.0/23 dev vti2 scope link src 172.16.0.136 metric 200
+
+=== Dia chi nguon di ra duong ham ===
+10.9.100.1 dev vti1 src 172.16.0.136 uid 0
+```
+
+| Chi tiết | Vì sao quan trọng |
+|---|---|
+| `/23`, không phải `/24` | Phủ cả `10.9.100.0/24` (AZ-a) và `10.9.101.0/24` (AZ-b). NLB nội bộ lấy một địa chỉ ở **mỗi** AZ và tên DNS trả về cả hai — thiếu một dải thì gọi được hay không tuỳ vào địa chỉ nào được chọn |
+| `src 172.16.0.136` | Địa chỉ **thật** của máy, không phải `169.254.100.2` trong đường hầm. Thiếu `src` thì nhân tự chọn địa chỉ của interface `vti`, NLB trả lời về đó, và VPC không có đường nào tới dải đó — xem lỗi 78 |
+
+Phép đo cuối cùng, và là phép duy nhất chứng minh được điều gì:
+
+```
+=== Goi dich vu ban cong bo ===
+  NLB tra ve 200
+```
+
+`200` nghĩa là một gói tin HTTP đã đi hết **IPsec → VGW → NLB → TGW → Network Firewall → spoke `10.10.0.10` ở một account khác** rồi về. Mọi thứ khác trong mục này chỉ nói rằng từng chặng *có vẻ* đúng.
 
 ### 5.3. Đường hầm `DOWN` — đọc theo thứ tự nào
 
