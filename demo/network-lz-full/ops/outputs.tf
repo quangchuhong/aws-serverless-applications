@@ -133,9 +133,13 @@ output "partner_services" {
       partner  = s.partner
       service  = s.service
       endpoint = "${try(local.hub.partner.nlb_dns, "?")}:${s.port}"
-      target   = "${s.target} (${s.target_ip})"
-      ticket   = s.ticket
-      expires  = s.expires == null ? "khong han" : tostring(s.expires)
+      target   = "${s.target} (${s.target_ip}:${s.target_port})"
+
+      # Cong rule firewall phai mo la target_port, khong phai port -
+      # firewall nhin thay ket noi thu hai, tu NLB toi ung dung.
+      firewall_port = s.target_port
+      ticket        = s.ticket
+      expires       = s.expires == null ? "khong han" : tostring(s.expires)
     }
   }
 }

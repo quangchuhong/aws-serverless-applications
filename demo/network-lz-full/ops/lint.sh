@@ -432,6 +432,21 @@ for key, pn, sn, s, p in services:
         else:
             port_owner[port] = key
 
+    tp = s.get("target_port", s.get("port"))
+    try:
+        tp = int(tp)
+        if not (1 <= tp <= 65535): raise ValueError
+    except Exception:
+        err(F, f"{key}: 'target_port' khong hop le: {s.get('target_port')!r}"); tp = None
+
+    # Cong ngoai khac cong trong la binh thuong. Nhac mot lan de nguoi
+    # viet rule firewall biet phai mo cong NAO - day la cho de nham
+    # nhat trong ca file, vi ho vua go cong kia cach do ba dong.
+    if tp is not None and port is not None and tp != port:
+        warn(F, f"{key}: doi tac goi cong {port}, ung dung nghe cong {tp}. "
+                f"Rule firewall phai mo cong {tp} - firewall nhin thay ket noi "
+                "THU HAI, tu NLB toi ung dung, khong phai ket noi cua doi tac")
+
     tip, tgt = s.get("target_ip"), s.get("target")
     if tip:
         if not re.fullmatch(r"\d+\.\d+\.\d+\.\d+", str(tip)):

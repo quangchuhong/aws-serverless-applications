@@ -309,18 +309,24 @@ partners:
     expires: 2026-12-31
     services:
       - name: order
-        port: 8080
+        port: 8080               # đối tác gọi vào cổng này
+        target_port: 80          # ứng dụng thật sự nghe cổng này
         target: app-dev-web      # app trong apps.yaml, cidr PHẢI là /32
         expires: 2026-06-30      # dịch vụ có thể hết hạn trước hợp đồng
 ```
 
-Sinh ra một target group + một listener trên NLB của đối tác. Ba điều đáng nhớ:
+Sinh ra một target group + một listener trên NLB của đối tác. Bốn điều đáng nhớ:
 
 | | |
 |---|---|
 | **Cổng là tài nguyên dùng chung** | Một NLB cho **mọi** đối tác, và NLB chỉ cho một listener trên một cổng. Nên Acme và Globex vẫn chạm cổng nhau được — `lint.sh` bắt, kèm tên dịch vụ kia |
 | **`target` phải giải ra một địa chỉ** | NLB cần một IP, không phải một dải. App khai cả spoke `/16` thì không dùng làm target được: khai thêm `cidr: 10.10.0.10/32` trong `apps.yaml`, hoặc `target_ip` thẳng |
 | **Listener và rule firewall là hai lớp** | Listener trả lời *"đối tác gọi được tới đâu"*; rule firewall trả lời *"gói tin có đi tiếp tới spoke không"*. Gỡ một trong hai là đủ để cắt — giữ cả hai để một sai sót ở một lớp không tự nó mở đường |
+| **Hai cổng, và rule firewall mở cái thứ hai** | Đối tác gọi vào `port`. NLB **dừng kết nối đó lại** và mở một kết nối **mới** tới ứng dụng ở `target_port`. Firewall nằm trên đường thứ hai — nên rule phải mở `target_port`, không phải `port` |
+
+Cổng ngoài khác cổng trong là chuyện **bình thường**, không phải ngoại lệ: công bố ở 8080 trong khi ứng dụng chạy ở 80 là cách đặt tên dịch vụ mà không phải sửa ứng dụng. Gộp làm một thì target group trỏ tới cổng không ai nghe — target `unhealthy`, NLB không có đích để chuyển, đối tác nhận một kết nối bị đóng, và **không resource nào báo lỗi**: AWS tạo đủ cả ba thứ.
+
+`lint.sh` nhắc mỗi khi hai cổng khác nhau, kèm số cổng phải mở trong rule.
 
 Cắt một dịch vụ: xoá khối `services` đó. Listener biến mất ngay — **không** chờ rule firewall.
 

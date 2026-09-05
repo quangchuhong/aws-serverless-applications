@@ -54,10 +54,13 @@ Khối `services` là thứ đối tác **thật sự cham vào**. Mỗi mục s
   extra_cidrs: [10.240.0.0/16]   # dải phụ họ công bố thêm → route VPN
   services:
     - name: order
-      port: 8080
+      port: 8080                 # đối tác gọi vào cổng này
+      target_port: 80            # ứng dụng thật sự nghe cổng này
       target: app-dev-web        # app trong apps.yaml, cidr PHẢI là /32
       expires: 2026-06-30
 ```
+
+**Rule firewall mở `target_port`, không phải `port`.** NLB dừng kết nối của đối tác lại và mở một kết nối mới tới ứng dụng; firewall nằm trên đường thứ hai. Gõ nhầm thì rule apply thành công và không khớp gói tin nào.
 
 Hai lớp trả lời hai câu hỏi khác nhau, và cần cả hai:
 

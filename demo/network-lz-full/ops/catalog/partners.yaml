@@ -69,9 +69,12 @@
 #   name       BAT BUOC  ten ngan. Ghep thanh "<doi tac>-<name>", va
 #                        chuoi do di vao ten target group (AWS gioi
 #                        han 32 ky tu ca tien to project)
-#   port       BAT BUOC  cong tren NLB. DUY NHAT trong CA file nay -
-#                        mot NLB chi cho mot listener moi cong, ke ca
-#                        giua hai doi tac khac nhau
+#   port       BAT BUOC  cong DOI TAC GOI VAO tren NLB. DUY NHAT trong
+#                        CA file nay - mot NLB chi cho mot listener moi
+#                        cong, ke ca giua hai doi tac khac nhau
+#   target_port          cong UNG DUNG THAT SU NGHE. Mac dinh = port.
+#                        KHONG can duy nhat - hai dich vu tro toi cung
+#                        mot ung dung la binh thuong
 #   target     BAT BUOC  ten app trong apps.yaml. App do phai giai ra
 #                        MOT dia chi (cidr dang x.x.x.x/32) vi NLB can
 #                        mot dia chi, khong phai mot dai
@@ -82,6 +85,22 @@
 # CONG NAO DUOC DUNG: bat cu cong nao TRU cong layer cha da chiem
 # (ops_handles.partner.reserved_port, mac dinh 80). Cham vao no thi
 # plan dung - chu khong phai apply hong o giua.
+#
+# --------------------------------------------------------------
+# HAI CONG, VA RULE FIREWALL MO CAI THU HAI
+#
+# Doi tac goi vao NLB o `port`. NLB dung ket noi do lai va mo mot ket
+# noi MOI toi ung dung o `target_port`. Firewall nam tren duong thu
+# hai, nen:
+#
+#     rule firewall phai mo target_port, KHONG PHAI port
+#
+# Go nham thi rule apply thanh cong va khong khop goi tin nao - dung
+# kieu im lang ma ca lop nay sinh ra de tranh. lint.sh nhac khi hai
+# cong khac nhau.
+#
+# Cung ly do do, `from` la partner-<ten> (dai NLB) chu khong phai dai
+# that cua doi tac.
 #
 # --------------------------------------------------------------
 # HAI LOP, HAI CAU HOI
@@ -123,7 +142,8 @@ partners:
 #
 #     services:
 #       - name: order
-#         port: 8080
+#         port: 8080               # doi tac goi vao cong nay
+#         target_port: 80          # ung dung that su nghe cong nay
 #         target: order-api        # app trong apps.yaml, cidr phai la /32
 #         expires: 2026-12-31
 #

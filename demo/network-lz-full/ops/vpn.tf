@@ -60,8 +60,28 @@ locals {
       "${try(p.name, "khong-ten")}-${try(s.name, "khong-ten")}" => {
         partner = try(p.name, "khong-ten")
         service = try(s.name, "khong-ten")
-        port    = try(tonumber(s.port), 0)
         target  = try(s.target, "(thieu target)")
+
+        # HAI CONG, KHONG PHAI MOT.
+        #
+        #   port         cong doi tac GOI VAO tren NLB
+        #   target_port  cong ung dung THAT SU nghe
+        #
+        # Chung khac nhau la truong hop binh thuong, khong phai ngoai
+        # le: cong bo ra ngoai o 8080 trong khi ung dung chay o 80 la
+        # cach dat ten dich vu ma khong phai sua ung dung.
+        #
+        # Gop lam mot thi target group tro toi cong ma khong ai nghe:
+        # target UNHEALTHY, NLB khong co dich de chuyen, va doi tac
+        # nhan mot ket noi bi dong. Khong resource nao bao loi - AWS
+        # tao du ca ba thu.
+        #
+        # QUAN TRONG CHO RULE FIREWALL: firewall nhin thay ket noi
+        # THU HAI, tu NLB toi ung dung. Nen rule phai mo target_port,
+        # KHONG PHAI port. Mo nham cong 8080 se apply thanh cong va
+        # khong khop goi tin nao.
+        port        = try(tonumber(s.port), 0)
+        target_port = try(tonumber(s.target_port), try(tonumber(s.port), 0))
 
         # Dia chi that cua ung dung, giai theo thu tu:
         #
@@ -149,9 +169,11 @@ locals {
     if length([for k2, s2 in local.partner_services : k2 if s2.port == s.port]) > 1
   ]
 
+  # Chi CONG LISTENER phai duy nhat. target_port thi khong: hai dich
+  # vu tro toi cung mot ung dung o cung mot cong la binh thuong.
   partner_port_bad = [
     for k, s in local.partner_services : k
-    if s.port < 1 || s.port > 65535
+    if s.port < 1 || s.port > 65535 || s.target_port < 1 || s.target_port > 65535
   ]
 
   # Target khong giai duoc thanh MOT dia chi
@@ -198,8 +220,10 @@ locals {
 resource "aws_lb_target_group" "partner_service" {
   for_each = local.partner_on ? local.partner_services : {}
 
-  name        = "${local.hub.project}-p-${each.key}"
-  port        = each.value.port
+  name = "${local.hub.project}-p-${each.key}"
+
+  # Cong UNG DUNG nghe, khong phai cong doi tac goi vao.
+  port        = each.value.target_port
   protocol    = "TCP"
   target_type = "ip"
   vpc_id      = local.hub.partner.vpc_id
@@ -230,7 +254,7 @@ resource "aws_lb_target_group_attachment" "partner_service" {
 
   target_group_arn  = aws_lb_target_group.partner_service[each.key].arn
   target_id         = each.value.target_ip
-  port              = each.value.port
+  port              = each.value.target_port
   availability_zone = "all"
 }
 
