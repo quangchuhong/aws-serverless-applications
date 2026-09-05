@@ -50,11 +50,74 @@ locals {
             headers={'content-type': '', 'content-length': str(len(body))})
         urllib.request.urlopen(req)
 
+    def harden_account(h, acct, out):
+        # Hai muc nay la CAP ACCOUNT, khong theo region. Goi mot lan.
+        if h.get('PasswordPolicy') == 'yes':
+            try:
+                boto3.client('iam').update_account_password_policy(
+                    MinimumPasswordLength=int(h['MinPasswordLength']),
+                    RequireSymbols=True, RequireNumbers=True,
+                    RequireUppercaseCharacters=True,
+                    RequireLowercaseCharacters=True,
+                    AllowUsersToChangePassword=True,
+                    MaxPasswordAge=int(h['MaxPasswordAge']),
+                    PasswordReusePrevention=int(h['PasswordReuse']))
+                out.append('iam/password-policy')
+            except Exception as e:
+                out.append('iam/password-policy:SKIP:' + type(e).__name__)
+
+        if h.get('S3PublicAccessBlock') == 'yes':
+            try:
+                boto3.client('s3control').put_public_access_block(
+                    AccountId=acct,
+                    PublicAccessBlockConfiguration={
+                        'BlockPublicAcls': True, 'IgnorePublicAcls': True,
+                        'BlockPublicPolicy': True, 'RestrictPublicBuckets': True})
+                out.append('s3/public-access-block')
+            except Exception as e:
+                out.append('s3/pab:SKIP:' + type(e).__name__)
+
+    def harden_region(h, ec2, r, out):
+        # Hai muc nay theo TUNG REGION. Bo sot mot region la de lai
+        # dung cai lo hong dang bit o cac region khac.
+        if h.get('EbsEncryption') == 'yes':
+            try:
+                ec2.enable_ebs_encryption_by_default()
+                out.append(r + '/ebs-encryption')
+            except Exception as e:
+                out.append(r + '/ebs:SKIP:' + type(e).__name__)
+
+        if h.get('LockDefaultSg') == 'yes':
+            # Default security group KHONG XOA DUOC. No luon ton tai va
+            # mac dinh cho phep moi luu luong giua cac ENI dung chung no
+            # - tuc mot mang phang an trong moi VPC, ke ca VPC do minh
+            # tu tao. Cach duy nhat la go sach rule cua no.
+            try:
+                f = [{'Name': 'group-name', 'Values': ['default']}]
+                for g in ec2.describe_security_groups(Filters=f)['SecurityGroups']:
+                    gid = g['GroupId']
+                    if g.get('IpPermissions'):
+                        ec2.revoke_security_group_ingress(
+                            GroupId=gid, IpPermissions=g['IpPermissions'])
+                    if g.get('IpPermissionsEgress'):
+                        ec2.revoke_security_group_egress(
+                            GroupId=gid, IpPermissions=g['IpPermissionsEgress'])
+                    out.append(r + '/default-sg:' + gid)
+            except Exception as e:
+                out.append(r + '/default-sg:SKIP:' + type(e).__name__)
+
     def handler(event, ctx):
         out = []
         try:
             if event['RequestType'] != 'Delete':
-                for r in event['ResourceProperties']['Regions']:
+                props = event['ResourceProperties']
+                h = props.get('Harden') or {}
+                # Account ID lay tu ARN cua chinh ham - khong can quyen
+                # sts:GetCallerIdentity cho mot thu da nam san trong ctx.
+                acct = ctx.invoked_function_arn.split(':')[4]
+                harden_account(h, acct, out)
+
+                for r in props['Regions']:
                     # Bat loi TUNG REGION. region_lock SCP tu choi moi
                     # hanh dong ngoai allowed_regions, va mot region bi
                     # chan khong duoc lam hong ca stack.
@@ -76,6 +139,16 @@ locals {
                     except Exception as e:
                         # Ghi lai chu KHONG nuot. Xem trong stack output.
                         out.append(r + '/SKIP:' + type(e).__name__)
+
+                    # try RIENG, khong dung chung voi khoi xoa VPC o
+                    # tren. Mot default VPC khong xoa duoc - con ENI
+                    # gan vao chang han - se nem loi, va neu hai viec
+                    # dung chung mot try thi hardening cua CA REGION do
+                    # bi bo qua vi mot ly do khong lien quan gi toi no.
+                    try:
+                        harden_region(h, boto3.client('ec2', region_name=r), r, out)
+                    except Exception as e:
+                        out.append(r + '/harden:SKIP:' + type(e).__name__)
             send(event, ctx, 'SUCCESS',
                  {'Result': (', '.join(out) or 'khong co default VPC nao')[:900]})
         except Exception as e:
@@ -117,7 +190,7 @@ locals {
                 # CHI Describe va Delete. Khong co Create nao - ham nay
                 # khong duoc phep dung them thu gi, va network_lock SCP
                 # cung se chan neu no thu.
-                Action = [
+                Action = concat([
                   "ec2:DescribeVpcs",
                   "ec2:DescribeSubnets",
                   "ec2:DescribeInternetGateways",
@@ -125,7 +198,29 @@ locals {
                   "ec2:DeleteInternetGateway",
                   "ec2:DeleteSubnet",
                   "ec2:DeleteVpc",
-                ]
+                  ],
+                  # Quyen hardening chi cap khi thuc su bat. Bat mot
+                  # muc rieng le thi role khong nhan quyen cua ba muc
+                  # con lai - va no khong the lam nhung viec do ke ca
+                  # khi ai do sua code Lambda.
+                  var.harden_password_policy ? [
+                    "iam:GetAccountPasswordPolicy",
+                    "iam:UpdateAccountPasswordPolicy",
+                  ] : [],
+                  var.harden_s3_public_access_block ? [
+                    "s3:GetAccountPublicAccessBlock",
+                    "s3:PutAccountPublicAccessBlock",
+                  ] : [],
+                  var.harden_ebs_encryption ? [
+                    "ec2:GetEbsEncryptionByDefault",
+                    "ec2:EnableEbsEncryptionByDefault",
+                  ] : [],
+                  var.harden_default_security_group ? [
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:RevokeSecurityGroupIngress",
+                    "ec2:RevokeSecurityGroupEgress",
+                  ] : [],
+                )
                 Resource = "*"
               }]
             }
@@ -156,6 +251,21 @@ locals {
           ServiceToken = { "Fn::GetAtt" = ["SweepFn", "Arn"] }
           Regions      = var.sweep_regions
           Version      = var.sweep_version
+
+          # Cau hinh nam TRONG thuoc tinh custom resource, khong phai
+          # trong code Lambda: CloudFormation chi goi lai ham khi
+          # THUOC TINH doi. Doi mot bien hardening ma khong doi thuoc
+          # tinh nao thi stack khong lam gi ca - va do la kieu hong im
+          # lang, cung ho voi Version o tren.
+          Harden = {
+            PasswordPolicy      = var.harden_password_policy ? "yes" : "no"
+            S3PublicAccessBlock = var.harden_s3_public_access_block ? "yes" : "no"
+            EbsEncryption       = var.harden_ebs_encryption ? "yes" : "no"
+            LockDefaultSg       = var.harden_default_security_group ? "yes" : "no"
+            MinPasswordLength   = tostring(var.password_min_length)
+            MaxPasswordAge      = tostring(var.password_max_age_days)
+            PasswordReuse       = tostring(var.password_reuse_prevention)
+          }
         }
       }
     }
@@ -173,7 +283,7 @@ resource "aws_cloudformation_stack_set" "baseline" {
   count = local.enabled ? 1 : 0
 
   name        = "${var.project}-account-baseline"
-  description = "Xoa default VPC o moi account trong OU dich"
+  description = "Baseline moi account: xoa default VPC + hardening cap account"
 
   permission_model = "SERVICE_MANAGED"
 

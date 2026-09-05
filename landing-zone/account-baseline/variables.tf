@@ -245,3 +245,100 @@ variable "ou_ids" {
     error_message = "Moi gia tri phai la OU ID bat dau bang 'ou-'. Root ID (r-...) khong duoc - account dat thang vao root chi con SCP o root."
   }
 }
+
+########################################
+# 5. Hardening cap account
+#
+# Bon thu AWS de MO SAN khi mo mot account moi. Khong cai nao co
+# resource CloudFormation goc, nen ca bon di cung Lambda cua
+# vpc-sweep - mot stack instance moi account, khong phai bon.
+#
+# Tat ca deu MIEN PHI va deu KHONG the hien ra o bat cu bang gia nao.
+# Chung cung khong bao loi khi thieu: mot account khong co cai nao
+# trong so nay van chay hoan toan binh thuong.
+########################################
+
+variable "harden_password_policy" {
+  description = <<-EOT
+    Dat chinh sach mat khau IAM cho account moi.
+
+    Mac dinh cua AWS: dai toi thieu 6 ky tu, khong doi ky tu dac biet,
+    khong het han, dung lai mat khau cu duoc. Do la mac dinh tu 2011
+    va no chua bao gio doi.
+
+    Chi anh huong IAM user - Identity Center co chinh sach rieng. Nen
+    trong mot LZ dung Identity Center thi day la lop bao ve cho DUNG
+    nhung IAM user le ra khong nen ton tai.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "password_min_length" {
+  type    = number
+  default = 14
+
+  validation {
+    condition     = var.password_min_length >= 8 && var.password_min_length <= 128
+    error_message = "AWS chi nhan 8-128."
+  }
+}
+
+variable "password_max_age_days" {
+  description = "0 = khong het han. AWS nhan 1-1095."
+  type        = number
+  default     = 90
+}
+
+variable "password_reuse_prevention" {
+  description = "So mat khau cu khong duoc dung lai. AWS nhan 1-24."
+  type        = number
+  default     = 24
+}
+
+variable "harden_s3_public_access_block" {
+  description = <<-EOT
+    Bat Block Public Access o CAP ACCOUNT cho S3.
+
+    Khac han voi cai dat tren tung bucket: cap account de len TAT CA
+    bucket, ke ca bucket tao sau, ke ca bucket do mot template hay
+    mot doi khac tao.
+
+    Day la mot trong vai cai nut hiem hoi trong AWS ma bat len la bit
+    duoc CA MOT LOAI su co, khong phai mot su co.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "harden_ebs_encryption" {
+  description = <<-EOT
+    Bat ma hoa EBS mac dinh, o MOI region trong sweep_regions.
+
+    Theo region, khong theo account - nen bo sot mot region la de lai
+    dung cai lo hong dang bit o cac region khac.
+
+    Dung khoa mac dinh cua AWS (aws/ebs). Muon khoa rieng thi phai
+    dat them, va viec do nen lam co y chu khong nen mac dinh: mat
+    khoa CMK la mat du lieu.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "harden_default_security_group" {
+  description = <<-EOT
+    Go sach rule cua default security group o moi region.
+
+    Default security group KHONG XOA DUOC. No luon ton tai trong moi
+    VPC va mac dinh cho phep MOI luu luong giua cac ENI dung chung no
+    - tuc mot mang phang an trong moi VPC, ke ca VPC do chinh doi ban
+    tao. Ai quen khai security group thi ENI roi vao no.
+
+    Cach duy nhat la go sach rule. AWS Config co rule
+    vpc-default-security-group-closed cho dung viec nay, nhung Config
+    chi BAO; cai nay SUA.
+  EOT
+  type        = bool
+  default     = true
+}
