@@ -46,7 +46,33 @@ sweep_regions = ["ap-southeast-1", "us-east-1"]
 sweep_version = "1"
 
 ########################################
-# 2. Vending account moi - MAC DINH TAT
+# 1b. Hardening cap account
+#
+# Bon thu AWS de MO SAN khi mo mot account moi. Di cung Lambda
+# cua vpc-sweep - mot stack instance moi account, khong phai bon.
+#
+# Tat ca MIEN PHI, va tat ca deu KHONG bao loi khi thieu: mot
+# account khong co cai nao trong so nay van chay hoan toan
+# binh thuong.
+########################################
+
+harden_password_policy        = true
+harden_s3_public_access_block = true
+harden_ebs_encryption         = true
+harden_default_security_group = true
+
+password_min_length       = 14
+password_max_age_days     = 90
+password_reuse_prevention = 24
+
+########################################
+# 2. YEU CAU TAO ACCOUNT
+#
+# Account KHONG khai o day nua - chung nam trong
+# catalog/accounts.yaml, mot khoi moi account, di qua PR.
+#
+#   ./lint.sh          <- chay TRUOC, khong can AWS
+#   terraform plan
 #
 # =====================================================
 # GAN NHU KHONG HOAN TAC DUOC.
@@ -54,20 +80,50 @@ sweep_version = "1"
 # Account khong xoa duoc, chi dong duoc, va dong xong
 # phai cho 90 ngay. Email la DUY NHAT VINH VIEN - dong
 # account roi cung khong dung lai duoc email do.
-#
-# De RONG neu chua chac. Tao tay bang create-account cung
-# duoc, chi mat them buoc move-account.
 # =====================================================
+#
+# TEN OU -> OU ID. Catalog khai bang TEN; day la cho giai
+# ten thanh ID.
+#
+# Lay: cd ../organization && terraform output ou_ids
 ########################################
 
+ou_ids = {
+  # Infrastructure = "ou-xxxx-infrastructure"
+  # Security       = "ou-xxxx-security"
+  # NonProd        = "ou-xxxx-non-production"
+  # Prod           = "ou-xxxx-production"
+  # Analytics      = "ou-xxxx-analytics"
+  # Sandbox        = "ou-xxxx-sandbox"
+}
+
+# Duong CU, giu lai cho account tao TRUOC khi co catalog.
+# No DE LEN catalog; khai o ca hai cho thi plan dung lai.
 create_accounts = {}
 
-# create_accounts = {
-#   "lz-app-uat" = {
-#     email     = "ban+lz-app-uat-01@gmail.com"
-#     parent_id = "ou-xxxx-non-production"
-#   }
-# }
+########################################
+# 2b. Mang nen cho account workload
+#
+# Account co khoi `network` trong catalog nhan mot VPC dung
+# theo doc 17: 4 subnet, TGW attachment, DNS tap trung,
+# gateway endpoint S3/DynamoDB.
+#
+# Lay handle:
+#   cd ../network && terraform output -raw paste_network_handles
+#
+# De RONG thi VPC van duoc tao nhung KHONG noi vao luoi -
+# khong TGW, khong DNS tap trung. check khi plan noi ra
+# truong hop do, chu khong de no im lang.
+########################################
+
+network_handles = {
+  # transit_gateway_id = "tgw-xxxxxxxxxxxxxxxxx"
+  # dns_profile_id     = "rp-xxxxxxxxxxxxxxxx"
+  # internal_supernet  = "10.0.0.0/8"
+}
+
+# De rong = lay hai AZ dau cua region.
+availability_zones = []
 
 # false = terraform destroy chi go khoi state, KHONG dong account.
 # Giu false tru khi that su co y do.
