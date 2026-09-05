@@ -508,6 +508,32 @@ resource "aws_ec2_transit_gateway_route" "spokes_to_partner_direct" {
 #
 # Tach ra thanh resource rieng thi hai layer cung them rule vao mot
 # security group ma khong ai xoa cua ai.
+#
+# --------------------------------------------------------------
+# DI TRU TU BAN CU: PHAI GO RULE CU BANG TAY MOT LAN
+#
+# Bo khoi `ingress` long nhau KHONG xoa rule khoi AWS. Trong provider
+# AWS, ingress/egress la Optional+Computed: bo han khoi di co nghia
+# "thoi khong quan nua", KHONG phai "xoa het rule". Nen khong sinh
+# diff, rule cu nam nguyen, va resource moi dung do:
+#
+#   InvalidPermission.Duplicate: the specified rule ... already exists
+#
+# Build moi tu dau khong gap - security group duoc tao rong roi rule
+# duoc them vao. Chi ban da apply ban cu moi phai chay mot lan:
+#
+#   SG=$(aws ec2 describe-security-groups --region <region> \
+#     --filters Name=group-name,Values=<project>-partner-nlb \
+#     --query 'SecurityGroups[0].GroupId' --output text)
+#
+#   aws ec2 revoke-security-group-ingress --region <region> \
+#     --group-id "$SG" --protocol tcp --port <cong> --cidr <dai doi tac>
+#
+#   aws ec2 revoke-security-group-egress --region <region> \
+#     --group-id "$SG" \
+#     --ip-permissions 'IpProtocol=-1,IpRanges=[{CidrIp=0.0.0.0/0}]'
+#
+# Roi terraform apply. Co vai giay dich vu doi tac gian doan.
 ########################################
 
 resource "aws_security_group" "partner_nlb" {
