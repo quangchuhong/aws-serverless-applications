@@ -216,7 +216,7 @@ Lớp này giờ có tên trong `local.layers` (`landing-zone/tf-backend/outputs
 #    landing-zone/tf-backend/terraform.tfvars
 #      backend_profiles = {
 #        "landing-zone/network"     = "default"
-#        "landing-zone/network/ops" = "default"
+#        "landing-zone/network/ops" = "default"   # BẮT BUỘC, xem dưới
 #      }
 
 # 2. Apply tf-backend (0 resource đổi, chỉ Outputs) rồi sinh file
@@ -258,6 +258,22 @@ cd ../network/ops && terraform init -reconfigure -backend-config=backend.hcl
 ```
 
 Xoá luôn object rỗng: nó chỉ cần khi prefix hoàn toàn mới, mà `demo-network-lz-full/` đã có sẵn state của layer cha.
+
+#### Vì sao dòng `backend_profiles` ở bước 1 là bắt buộc, không phải cho gọn — lỗi 90
+
+Bỏ nó thì `init` vẫn sạch và `lint.sh` vẫn sạch. Đến `terraform plan` mới hỏng:
+
+```
+Error: Error acquiring the state lock
+ResourceNotFoundException: Requested resource not found
+Unable to retrieve item from DynamoDB table "qh11-lz-tfstate-lock"
+```
+
+Bảng đó **đang tồn tại**. Backend S3 địa chỉ bảng khoá bằng **tên**, mà một tên luôn được giải trong account của **người gọi** — chạy lớp ops bằng credential của account mạng thì DynamoDB tra trong account mạng và không thấy gì. Resource policy trên bảng (`state_writer_accounts`) cho phép account khác *gọi*, nhưng không giúp họ *gọi tên* được.
+
+Nửa S3 vẫn chạy, vì bucket + key không có chuyện "giải trong account của mình". Nên hỏng đúng một nửa, và nửa hỏng để dành tới `plan` — `init` không lấy khoá.
+
+Quy tắc: với `lock_mode = "dynamodb"`, **mọi** layer có resource ở account khác đều phải có dòng `backend_profiles` trỏ về account chủ bảng khoá.
 
 **Đừng gõ tay khối `backend "s3"` vào `versions.tf`** — `wire-backends.sh` ghi `backend.tf` riêng, và hai khối `backend` trong một module là lỗi. Thêm dòng thẳng vào `backend.hcl` cũng vô ích: file đó bị ghi đè mỗi lần chạy script, nên sửa tay sẽ biến mất im lặng.
 

@@ -87,7 +87,21 @@ backend_profiles = {
   #                                      # nhung state van o management
 
   # Lop van hanh cua layer tren - CUNG profile, khac key.
-  # Bo sot dong nay thi rieng no bao 403 con layer cha van chay,
-  # va khac biet do rat kho nhin ra.
-  # "demo/network-lz-full/ops" = "default"
+  #
+  # Bo sot dong nay thi RIENG no hong con layer cha van chay, va khac
+  # biet do rat kho nhin ra. Hai kieu hong, tuy lock_mode:
+  #
+  #   lock_mode = "s3"        HeadObject ... 403
+  #   lock_mode = "dynamodb"  ResourceNotFoundException: Requested
+  #                           resource not found
+  #
+  # Cai thu hai la cai bay: bang khoa duoc dia chi bang TEN, ma mot
+  # ten thi luon giai trong account CUA NGUOI GOI. Resource policy
+  # tren bang (var.state_writer_accounts) khong voi toi duoc, va
+  # DynamoDB tra ve "not found" chu khong phai "khong phai cua ban".
+  #
+  # KHOA PHAI KHOP CHINH XAC mot dong trong local.layers. Sai duong
+  # dan thi no bi bo qua LANG LE - khong loi, khong canh bao, va
+  # backend.hcl sinh ra thieu dong profile y het nhu khi quen khai.
+  # "landing-zone/network/ops" = "default"
 }

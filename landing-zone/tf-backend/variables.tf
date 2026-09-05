@@ -196,12 +196,33 @@ variable "backend_profiles" {
         "landing-zone/network" = "default"   # profile cua management
       }
 
-    Khong co dong nay thi terraform init bao:
-      Error refreshing state: ... HeadObject ... StatusCode: 403
+    Khong co dong nay thi hong theo HAI kieu khac nhau, tuy lock_mode:
+
+      s3        Error refreshing state: ... HeadObject ... 403
+
+      dynamodb  Error acquiring the state lock
+                ResourceNotFoundException: Requested resource not found
+
+    Kieu thu hai xay ra o `plan`, khong phai `init` - init khong lay
+    khoa nen no chay qua binh thuong, va nguoi ta tuong da xong.
+
+    Va no noi "not found" ve mot bang VAN DANG TON TAI. Ly do: backend
+    S3 dia chi bang khoa bang TEN, ma mot ten luon duoc giai trong
+    account cua NGUOI GOI. Resource policy tren bang (xem
+    var.state_writer_accounts) cho phep account khac goi, nhung khong
+    giup ho GOI TEN duoc - nen quyen do coi nhu khong dung toi khi
+    layer chay bang credential cua account khac.
+
+    Nghia la: lock_mode = "dynamodb" thi MOI layer co resource o
+    account khac deu PHAI co dong nay tro ve account chu cua bang.
 
     Them tay vao backend.hcl cung chay, NHUNG wire-backends.sh ghi de
     file do moi lan chay - dong them tay se bien mat im lang. Khai o
     day thi no duoc sinh lai moi lan.
+
+    KHOA PHAI KHOP CHINH XAC mot duong dan trong local.layers
+    (outputs.tf). Sai duong dan thi bi bo qua LANG LE - backend.hcl
+    sinh ra thieu dong profile y het nhu khi quen khai.
   EOT
   type        = map(string)
   default     = {}

@@ -176,7 +176,9 @@ Xếp theo thứ tự gặp phải.
 
 | 89 | `wire-backends.sh` báo `CO 1 LAYER TREN DIA` rồi in **11 dòng** | Danh sách gom bằng dấu cách rồi in bằng `for m in $missing`. Một thư mục rác có dấu cách trong tên bị tách vụn: **con số đúng, danh sách sai** — và danh sách là thứ người ta đọc | **Lỗi code** | `07dd751` |
 
-**78/89 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
+| 90 | `terraform plan` ở lớp `ops` báo `ResourceNotFoundException: Requested resource not found` về **bảng khoá vẫn đang tồn tại** | Backend S3 địa chỉ bảng khoá bằng **tên**, và một tên luôn được giải trong account của **người gọi**. Resource policy trên bảng cho phép account khác gọi nhưng không giúp họ **gọi tên** được. Layer cha có `profile` trỏ về account chủ nên chạy bình thường; lớp `ops` thiếu dòng đó nên hỏng — và hỏng ở `plan`, không phải `init`, vì init không lấy khoá | **Lỗi thiết kế** | *(mục 7aq)* |
+
+**79/90 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2978,6 +2980,73 @@ Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối �
 ```bash
 terraform apply -replace='aws_instance.partner_sim[0]'
 ```
+
+---
+
+## 7aq. Lỗi 90 — "not found" về một cái bàn đang nằm giữa phòng
+
+Nối xong backend, `init` sạch, `lint.sh` sạch. `terraform plan`:
+
+```
+Error: Error acquiring the state lock
+
+ResourceNotFoundException: Requested resource not found
+Unable to retrieve item from DynamoDB table "qh11-lz-tfstate-lock"
+```
+
+Bảng đó tồn tại. Ba phút trước chính tay tôi `delete-item` trên nó và nó nhận lệnh. `terraform output -raw lock_table` in ra đúng cái tên ấy.
+
+### Một cái tên luôn được giải trong account của người gọi
+
+Backend S3 khai bảng khoá bằng **tên**, không phải ARN. DynamoDB nhận `TableName` và tra trong account của người gọi — không có bước nào hỏi "có phải bảng này thuộc account khác không". Không tìm thấy thì trả `ResourceNotFoundException`.
+
+`tf-backend` có cấp quyền chéo cho `state_writer_accounts`:
+
+```hcl
+Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"]
+Resource = aws_dynamodb_table.lock[0].arn
+```
+
+Quyền đó **đúng và vô dụng cùng lúc**: nó cho phép account khác gọi, nhưng không giúp họ gọi được tên. Muốn dùng thì phải địa chỉ bằng ARN, mà `dynamodb_table` của backend chỉ nhận tên.
+
+Vì sao layer cha không gặp: `backend.hcl` của nó có `profile = "default"` — mọi thao tác state chạy bằng account chủ bảng. `backend.hcl` của `ops` **không có dòng đó**, vì `backend_profiles` chưa khai lớp này.
+
+### Ba lớp im lặng chồng lên nhau
+
+| | |
+|---|---|
+| **S3 vẫn chạy** | Bucket policy cấp quyền theo prefix cho account khác, và S3 địa chỉ bằng bucket + key — không có chuyện "tên giải trong account của mình". Nên nửa S3 hoạt động, nửa DynamoDB không |
+| **`init` vẫn sạch** | `init` không lấy khoá. Lỗi để dành tới `plan`, sau khi người ta đã tin là xong |
+| **Thông báo nói "not found"** | Không phải "không phải của bạn". Chỗ đầu tiên ai cũng đi kiểm là bảng có tồn tại không — và nó tồn tại |
+
+### Và cái bẫy thứ tư, nằm sẵn trong repo
+
+`terraform.tfvars.example` đã để sẵn dòng cần thiết:
+
+```hcl
+# "demo/network-lz-full/ops" = "default"
+```
+
+Đường dẫn cũ, từ trước khi lớp đó chuyển sang `landing-zone/network/ops`. `backend_configs` tra cứu bằng `try(var.backend_profiles[dir], "")` — khoá không khớp layer nào thì **không bao giờ được đọc**. Ai bỏ chú thích dòng đó ra sẽ khai một profile không có tác dụng, và `backend.hcl` sinh ra thiếu dòng `profile` **y hệt như khi quên khai hẳn**.
+
+Đã sửa đường dẫn, và thêm `check "backend_profiles_tro_dung_layer"` so khoá với `local.layers` để lần sau gõ sai là plan nói ngay, kèm danh sách khoá hợp lệ.
+
+### Sửa
+
+```hcl
+# landing-zone/tf-backend/terraform.tfvars
+backend_profiles = {
+  "landing-zone/network"     = "default"
+  "landing-zone/network/ops" = "default"
+}
+```
+
+```bash
+cd landing-zone/tf-backend && terraform apply && ./wire-backends.sh
+cd ../network/ops && terraform init -reconfigure -backend-config=backend.hcl
+```
+
+> **Quy tắc rút ra:** với `lock_mode = "dynamodb"`, **mọi** layer có resource ở account khác đều bắt buộc có dòng `backend_profiles` trỏ về account chủ bảng khoá. Không phải tuỳ chọn cho gọn — không có nó thì `plan` không chạy được.
 
 ---
 

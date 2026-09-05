@@ -114,6 +114,31 @@ locals {
   }
 }
 
+########################################
+# Khoa cua backend_profiles phai la mot layer co that.
+#
+# backend_configs tra cuu bang try(var.backend_profiles[dir], "") -
+# tra cuu theo dir, nen mot khoa KHONG khop layer nao chi don gian
+# khong bao gio duoc doc. Khong loi, khong canh bao, va backend.hcl
+# sinh ra thieu dong profile y het nhu khi quen khai han.
+#
+# Da xay ra that: terraform.tfvars.example de san
+# "demo/network-lz-full/ops" tu truoc khi lop do chuyen sang
+# landing-zone/network/ops. Ai chep dong do ra se khai mot profile
+# khong bao gio co tac dung.
+########################################
+check "backend_profiles_tro_dung_layer" {
+  assert {
+    condition = length(setsubtract(keys(var.backend_profiles), keys(local.layers))) == 0
+    error_message = join(" ", [
+      "backend_profiles co khoa khong khop layer nao:",
+      join(", ", setsubtract(keys(var.backend_profiles), keys(local.layers))),
+      "- chung se bi BO QUA lang le.",
+      "Khoa hop le:", join(", ", sort(keys(local.layers))),
+    ])
+  }
+}
+
 output "bucket" {
   description = "Ten bucket chua state"
   value       = aws_s3_bucket.state.id
