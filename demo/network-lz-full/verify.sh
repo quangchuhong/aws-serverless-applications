@@ -658,6 +658,70 @@ else
 fi
 
 ########################################
+hdr "9. Lop van hanh (ops/)"
+########################################
+#
+# Kiem MOT thu: firewall policy co THAT SU doc rule group cua lop ops
+# khong.
+#
+# Vi sao dang mot muc rieng: trang thai "rule group ton tai nhung
+# khong policy nao doc no" doc nhu thanh cong tu MOI phia. Apply xanh,
+# rule group hien trong console, rules_string dung y nguyen catalog.
+# Chi thieu mot thu - khong ai doc no - va moi rule trong catalog
+# khong lam gi ca.
+#
+# `terraform output bootstrap_done` ben ops/ tra loi cau nay, NHUNG no
+# in gia tri DA LUU TRONG STATE, tinh tu lan apply truoc (loi 72).
+# Doc thang tu AWS thi khong co do tre do.
+#
+# Chua trien khai lop ops thi BO QUA, khong bao loi: layer nay chay
+# doc lap hoan toan.
+
+if [[ "$FW_ENABLED" == "yes" ]]; then
+  pol_refs=$(aws network-firewall describe-firewall-policy \
+    --firewall-policy-name "${PROJECT}-policy" --region "$REGION" \
+    --query 'FirewallPolicy.StatefulRuleGroupReferences[].[Priority,ResourceArn]' \
+    --output text 2>/dev/null)
+
+  ops_line=$(echo "$pol_refs" | grep -- "-ops-east-west" || true)
+
+  if [[ -z "$ops_line" ]]; then
+    if [[ -d ops ]]; then
+      skip "Lop ops chua duoc cam vao policy (chua bootstrap, hoac da go ARN de teardown)"
+    else
+      skip "Khong co thu muc ops/"
+    fi
+  else
+    ops_prio=$(echo "$ops_line" | awk '{print $1}')
+    ok "Policy doc rule group cua ops o uu tien $ops_prio"
+
+    # Uu tien PHAI lon hon rule group ha tang cua layer cha.
+    #
+    # Rule group o 100 chua hai luong HA TANG: NLB -> app (sid 1800)
+    # va SSM -> interface endpoint (sid 1810). O STRICT_ORDER, pass la
+    # hanh dong ket thuc danh gia - nen neu lop ops duoc doc TRUOC,
+    # mot rule trong catalog co the chan mat SSM o moi spoke, va cach
+    # duy nhat vao instance de sua chinh la SSM.
+    base_prio=$(echo "$pol_refs" | grep -- "-east-west" | grep -v -- "-ops-" | awk '{print $1}')
+    if [[ -n "$base_prio" ]]; then
+      [[ "$ops_prio" -gt "$base_prio" ]] \
+        && ok "  Doc SAU rule ha tang cua layer cha ($base_prio) - dung thu tu" \
+        || bad "  Doc TRUOC rule ha tang ($base_prio): mot rule trong catalog co the lam mat SSM o moi spoke"
+    fi
+
+    # So rule that su duoc nap, doc tu AWS chu khong tu catalog
+    ops_arn=$(echo "$ops_line" | awk '{print $2}')
+    n_rules=$(aws network-firewall describe-rule-group --region "$REGION" \
+      --rule-group-arn "$ops_arn" --type STATEFUL \
+      --query 'RuleGroup.RulesSource.RulesString' --output text 2>/dev/null |
+      grep -c "^pass" || echo 0)
+    [[ "$n_rules" -gt 0 ]] \
+      && ok "  $n_rules rule dang duoc nap tu catalog" \
+      || skip "  Catalog rong (rule group chi co mot dong alert)"
+  fi
+fi
+
+########################################
 echo
 echo "════════════════════════════════════════════"
 printf " \033[32m%d dat\033[0m  \033[31m%d loi\033[0m  \033[33m%d bo qua\033[0m\n" "$PASS" "$FAIL" "$SKIP"

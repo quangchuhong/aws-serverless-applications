@@ -378,7 +378,7 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | `plan-check.sh` | Chạy `terraform plan` cho 9 tổ hợp biến, không apply |
 | `vpc-spokes.tf` | Spoke VPC, route một dòng, gateway endpoint |
 | `instances.tf` | EC2 nginx, vào bằng SSM |
-| `verify.sh` | 12 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM |
+| `verify.sh` | 13 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM và kiểm lớp `ops/` đọc từ AWS |
 | `teardown.sh` | Destroy + xác nhận sạch |
 | `ops/` | **Lớp vận hành, state riêng** — catalog YAML cho rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Chạm vào layer này đúng một điểm: `var.ops_rule_group_arns` |
 
