@@ -54,18 +54,60 @@ if [ "${1:-}" = "--tu-catalog" ]; then
     exit 2
   fi
   # created_accounts la map ten -> { id, parent_id }
-  raw=$(terraform output -json created_accounts 2>/dev/null) || {
-    red "Khong doc duoc output created_accounts."
-    echo "  Chay trong thu muc landing-zone/account-baseline, sau khi da apply."
+  #
+  # GIU STDERR. Truoc day dong nay co 2>/dev/null, va moi nguyen nhan
+  # deu cho ra CUNG MOT cau "Khong doc duoc output" - trong khi ba
+  # nguyen nhan hay gap can ba cach sua khac han nhau. Do la loi 84
+  # cua doc 22, lap lai lan thu tu.
+  raw=$(terraform output -json created_accounts 2>&1) || {
+    red "Khong doc duoc output created_accounts. Terraform noi:"
+    printf '%s\n' "$raw" | sed 's/^/    /'
+    echo
+    echo "  Ba nguyen nhan hay gap:"
+    echo
+    echo "  1. Shell dang mang credential cua account KHAC."
+    echo "     Layer nay doc state o bucket cua management. Vua chay lenh"
+    echo "     o thu muc network xong thi rat de con AWS_* cua account mang."
+    echo "       aws sts get-caller-identity --query Account --output text"
+    echo "       unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN"
+    echo
+    echo "  2. Chua init trong ban sao nay:"
+    echo "       terraform init -backend-config=backend.hcl"
+    echo
+    echo "  3. Chua apply, hoac apply o thu muc khac."
+    echo "     Dua thang account ID vao thay vi doc output:"
+    echo "       $0 <account-id> <account-id>"
     exit 2
   }
+
+  parsed=$(printf '%s' "$raw" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception as e:
+    sys.exit(f"khong phai JSON: {e}")
+if not isinstance(d, dict):
+    sys.exit(f"created_accounts khong phai mot map (nhan duoc {type(d).__name__})")
+for name, a in d.items():
+    if isinstance(a, dict) and a.get("id"):
+        print(a["id"])
+' 2>&1) || {
+    red "Khong doc duoc noi dung created_accounts:"
+    printf '%s\n' "$parsed" | sed 's/^/    /'
+    exit 2
+  }
+
   while IFS= read -r line; do
     [ -n "$line" ] && ids+=("$line")
   done <<EOF
-$(printf '%s' "$raw" | python3 -c 'import json,sys
-for name, a in json.load(sys.stdin).items():
-    print(a["id"])')
+$parsed
 EOF
+
+  if [ "${#ids[@]}" -eq 0 ]; then
+    amber "created_accounts doc duoc nhung RONG - layer nay chua tao account nao."
+    echo "  Dua thang account ID vao: $0 <account-id> ..."
+    exit 2
+  fi
   echo "Lay tu created_accounts: ${#ids[@]} account"
 else
   if [ $# -eq 0 ]; then
