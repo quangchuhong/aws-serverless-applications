@@ -913,13 +913,21 @@ Mọi dòng đều là kiểu hỏng **không phát ra lỗi**.
 | TGW attachment (3rd-party VPC) | ~$0.05/giờ | ~$36.50 |
 | Private NAT Gateway | ~$0.045/giờ + $0.045/GB | ~$33 + traffic |
 | Firewall data (đã có ở doc 15) | ~$0.065/GB | Theo lưu lượng |
-| **Ba đối tác** | | **~$180/tháng** + traffic |
+| NLB nội bộ (vùng đệm) | ~$0.0225/giờ mỗi AZ | ~$33 (2 AZ) |
+| Cảnh báo CloudWatch | $0.10/cảnh báo | $0.20 |
+| **Ba đối tác** | | **~$215/tháng** + traffic |
+
+**Cái gì miễn phí:** target group, listener, rule security group, route VPN tĩnh, và bản thân **số lượng dịch vụ** công bố. Công bố dịch vụ thứ mười cho một đối tác không tốn thêm gì — tiền nằm ở đường ống, không ở số cửa mở trên nó.
+
+Ba khoản đắt nhất đều tính theo **giờ, không theo lưu lượng**: VPN connection, TGW attachment và private NAT chạy $0.145/giờ ngay cả khi không một gói tin nào đi qua. Và VPN tính tiền **từ lúc tạo, không từ lúc đường hầm lên** — một kết nối đối tác bị quên là ~$105/tháng cho không có gì. Đó là lý do `expires` tồn tại.
 
 So sánh: **PrivateLink** cho một service khoảng $7.30/tháng mỗi AZ cộng $0.01/GB — rẻ hơn nhiều và cách ly tốt hơn. Đây là lý do thực tế, ngoài lý do bảo mật, để ưu tiên PrivateLink khi có thể.
 
 ---
 
-## 12. Bẫy hay gặp
+## 12. Bẫy hay gặp — tầng đường hầm và định tuyến
+
+Bảng này là bẫy ở tầng IPsec và định tuyến. Bẫy ở **tầng vận hành** — listener, cổng, security group, rule firewall — nằm ở **mục 10.8**.
 
 | Triệu chứng | Nguyên nhân |
 |---|---|
@@ -931,7 +939,7 @@ So sánh: **PrivateLink** cho một service khoảng $7.30/tháng mỗi AZ cộn
 | Tunnel đứt định kỳ ~mỗi giờ | Thiết bị đối tác cấu hình rekey khác AWS; thống nhất lại lifetime |
 | Chỉ một tunnel hoạt động | Bình thường — AWS chỉ active một tunnel tại một thời điểm |
 | Đối tác thấy IP thật của spoke | Thiếu private NAT, hoặc rule NAT chưa đúng chiều |
-| Không ai biết kết nối này còn dùng không | Thiếu hồ sơ và `review_date` |
+| Không ai biết kết nối này còn dùng không | Thiếu `expires` trong hồ sơ — `lint.sh` cảnh báo khi thiếu, và job `expiry` trong CI đỏ mỗi ngày khi quá hạn |
 | Đối tác A gọi được đối tác B | Thiếu rule drop chéo giữa các đối tác |
 
 ---

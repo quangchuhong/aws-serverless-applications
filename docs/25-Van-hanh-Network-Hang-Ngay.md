@@ -332,7 +332,9 @@ Phép đối chiếu này quan trọng vì ở chế độ `alert` **cả hai tr
 
 Nó **không** cảnh báo chỉ vì hai cổng khác nhau — đó là trường hợp bình thường, và một cảnh báo kêu trong mọi cấu hình đúng là một cảnh báo sẽ đỏ mãi cho tới khi không ai đọc dòng cảnh báo nào nữa.
 
-Cắt một dịch vụ: xoá khối `services` đó. Listener biến mất ngay — **không** chờ rule firewall.
+Cắt một dịch vụ: xoá khối `services` đó. Listener và rule mở cổng biến mất ngay — **không** chờ rule firewall.
+
+> Runbook đầy đủ cho phần đối tác — thêm đối tác, công bố dịch vụ, cắt dịch vụ, cắt đối tác, danh sách kiểm tra bàn giao, bảng triệu chứng riêng — ở [doc 16 mục 10](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md). Mục này chỉ là thao tác hằng ngày.
 
 Đưa cho đối tác:
 
