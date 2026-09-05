@@ -184,7 +184,11 @@ Xếp theo thứ tự gặp phải.
 
 | 93 | `unmapped_accounts` **rỗng ở đúng lần apply tạo account** | Nó tính từ `data.aws_organizations_organization`, mà data source được đọc **trước** khi account tồn tại. Lưới an toàn cho câu "có account nào chưa ai khai phạm vi không" trả lời "không" ở đúng lần chạy duy nhất mà câu đó quan trọng — và `paste_permission_sets` cùng lúc in ra danh sách thiếu ba account vừa tạo | **Lỗi thiết kế** | *(mục 7ar)* |
 
-**81/93 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại. Mục 91 là ngoại lệ theo chiều khác: không phải lỗi của repo mà là **một chẩn đoán sai của tôi**, giữ lại nguyên vẹn vì ba thay đổi nó kéo theo đã kịp vào repo trước khi bị bác bỏ.
+| 94 | SCP `baseline` cấm `s3:PutAccountPublicAccessBlock` cho **mọi** principal — nên **không ai bật được** account-level public access block, kể cả lớp hardening viết ra để bật nó | Đó là **một API cho cả bật lẫn tắt**: nó đặt cả bốn cờ dù true hay false, và không có condition key nào đọc được giá trị bên trong request. Chú thích ghi *"không ai được mở"* với nghĩa "không ai được tắt bảo vệ"; kết quả thật là **bảo vệ chưa bao giờ được đặt**. SCP canh một căn phòng trống, và triệu chứng duy nhất là chữ `SKIP` trong `SweepResult` của từng account | **Lỗi thiết kế** | *(mục 7as)* |
+
+| 95 | `SweepResult` báo `SKIP:ClientError` — không nói lỗi gì | `type(e).__name__` trả về `ClientError` cho **mọi** lời từ chối của AWS. AccessDenied, SCP chặn, tham số sai, dịch vụ chưa bật — bốn nguyên nhân, bốn cách sửa, một chữ. Lần thứ **năm** của cùng khuyết điểm (75, 80, 84, và một lần của chính tôi trong cùng phiên) | **Lỗi code** | *(mục 7as)* |
+
+**83/95 là lỗi trong code hoặc thiết kế của repo**, không phải người dùng làm sai. Đó là lý do file này tồn tại. Mục 91 là ngoại lệ theo chiều khác: không phải lỗi của repo mà là **một chẩn đoán sai của tôi**, giữ lại nguyên vẹn vì ba thay đổi nó kéo theo đã kịp vào repo trước khi bị bác bỏ.
 
 > Mười ba lỗi cuối đến từ **vòng xoá–dựng lại và phần rà lại guardrail** (mục 7), không phải lần dựng đầu. Chúng chỉ lộ ra khi đi ngược chiều — và lỗi 32 là loại đáng sợ nhất: một câu dặn nghe hợp lý, trong tài liệu do chính tôi viết, mà làm theo thì mất tổ chức.
 
@@ -2986,6 +2990,96 @@ Sửa xong, script tự trả lời ở cuối `user-data.log`: chờ SA tối �
 ```bash
 terraform apply -replace='aws_instance.partner_sim[0]'
 ```
+
+---
+
+## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ
+
+Ba account mới quét xong, `check-sweep.sh` in ra kết quả của từng account:
+
+```
+SweepResult: iam/password-policy, s3/pab:SKIP:ClientError,
+             ap-southeast-1/vpc-016aa31d2867c0b53, ap-southeast-1/ebs-encryption,
+             us-east-1/vpc-0f38bd69ee5f6f50a, us-east-1/ebs-encryption
+```
+
+Ba trên bốn mục hardening chạy được. Mục thứ tư trượt, **giống hệt nhau ở cả ba account** — nên là nguyên nhân hệ thống. Và `ClientError` không nói nó là gì.
+
+### Lỗi 95 trước, vì không có nó thì không tìm ra lỗi 94
+
+```python
+except Exception as e:
+    out.append('s3/pab:SKIP:' + type(e).__name__)
+```
+
+Mọi lời từ chối của AWS trong boto3 đều là `botocore.exceptions.ClientError`. AccessDenied, SCP chặn, tham số sai, dịch vụ chưa bật — **bốn nguyên nhân, bốn cách sửa, một chữ**. Đọc `SweepResult` xong vẫn không biết làm gì tiếp.
+
+Mã lỗi thật nằm ở `e.response['Error']['Code']`, cách đó một dòng.
+
+Đây là lần **thứ năm** của cùng khuyết điểm trong dự án này — lỗi 75 (`|| true` nuốt trường hợp thứ ba), lỗi 80 (`A || B` khi A thành công mà không làm gì), lỗi 84 (`2>/dev/null` nuốt stderr), và một lần nữa của chính tôi trong cùng phiên này, ở `accept-ram.sh`. Nó không phải một lỗi ngẫu nhiên; nó là một **thói quen**: bắt lỗi để chương trình chạy tiếp, rồi vứt đi thứ duy nhất giải thích được vì sao.
+
+### Lỗi 94 — cái mà mã lỗi thật chỉ ra
+
+Gọi thẳng API đó bằng tay trong một account:
+
+```
+An error occurred (AccessDenied) when calling the PutPublicAccessBlock operation:
+User: arn:aws:sts::913051689123:assumed-role/OrganizationAccountAccessRole/thu-pab
+is not authorized to perform: s3:PutAccountPublicAccessBlock
+with an explicit deny in a service control policy: ... p-2oni53yp
+```
+
+`p-2oni53yp` là SCP `baseline` — **do chính repo này dựng ra**:
+
+```hcl
+# Khong ai duoc mo public access block o muc account
+jsonencode({
+  Sid      = "ProtectS3PublicAccessBlock"
+  Effect   = "Deny"
+  Action   = ["s3:PutAccountPublicAccessBlock"]
+  Resource = "*"
+}),
+```
+
+Không có `Condition` — statement **duy nhất** trong SCP đó thiếu, trong khi mọi statement khác đều mang `local.exempt_condition`.
+
+`PutAccountPublicAccessBlock` là **một API cho cả bật lẫn tắt**. Nó đặt cả bốn cờ, dù `true` hay `false`. SCP không đọc được nội dung request và không có condition key nào cho giá trị bên trong `PublicAccessBlockConfiguration`. Nên cấm cả cụm nghĩa là:
+
+> Account-level public access block **không bao giờ bật được** ở bất kỳ account nào trong tổ chức.
+
+Chú thích ghi *"không ai được mở"* — ý là chặn ai đó **tắt** bảo vệ. Kết quả thật là bảo vệ **chưa bao giờ được đặt**.
+
+### Vì sao nó sống sót lâu
+
+| Nhìn từ đâu | Thấy gì |
+|---|---|
+| `scp_summary` | `baseline` tồn tại, gắn ở ROOT, 1682 byte |
+| Console AWS | Chính sách có, nội dung đúng, tên nghe đúng |
+| `terraform apply` của account-baseline | Xanh — Lambda bắt lỗi và ghi `SKIP`, cố ý, để một lần bị từ chối không làm hỏng cả đợt |
+| Danh sách hardening trong README | Bốn mục, tất cả `true` |
+
+Không nguồn nào nói dối. Tất cả cùng mô tả một cấu hình **có** bảo vệ. Thứ duy nhất mâu thuẫn là bảy ký tự nằm giữa một chuỗi sáu mục, trong một output của CloudFormation mà không ai đọc trừ khi đi tìm.
+
+Và trạng thái đó **trông an toàn hơn** cả hai lựa chọn thay thế — SCP tồn tại, tên đúng, tóm tắt đầy đủ — trong khi nó là lựa chọn duy nhất không bảo vệ gì.
+
+### Sửa, và cái giá của nó
+
+`s3_pab_automation_roles` — một đường miễn trừ **riêng cho một API**, không dùng chung `scp_exempt_role_names` vốn miễn trừ cả SCP baseline. Không có giá trị mặc định, có chủ đích: tên role tuỳ bản triển khai (ở đây layer `organization` dùng project `qh11-lz` còn `account-baseline` dùng `quh11-lz` — **khác nhau**), và một tên đoán bừa sẽ tạo ra một Deny không áp dụng cho ai, tức một lỗ hổng im lặng thay vì một lỗi.
+
+`check "s3_pab_co_the_bat_duoc"` kêu khi statement bật mà danh sách rỗng.
+
+Đánh đổi, nói thẳng trong mô tả biến: **ai tạo được một role trùng tên trong một account thì tắt được public access block của account đó.** `baseline` cấm tạo IAM *user*, nhưng không cấm tạo *role*.
+
+Đo lại sau khi vá, cùng một lệnh:
+
+```
+SweepResult: iam/password-policy, s3/public-access-block,
+             ap-southeast-1/ebs-encryption,
+             ap-southeast-1/default-sg:sg-03aeaedba63e2d244,
+             us-east-1/ebs-encryption
+```
+
+> **Điều đáng giữ lại:** lỗi 94 không tìm ra được nếu không sửa lỗi 95 trước. Một guardrail sai nằm sau một thông báo lỗi vô dụng, và thông báo đó là thứ rẻ hơn nhiều để sửa. Chi phí thật của việc nuốt lý do không phải mười phút chẩn đoán — mà là những thứ **không bao giờ được chẩn đoán**.
 
 ---
 
