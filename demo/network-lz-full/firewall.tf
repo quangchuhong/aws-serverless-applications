@@ -191,6 +191,22 @@ resource "aws_networkfirewall_rule_group" "east_west" {
           "pass tcp ${var.internal_supernet} any -> ${var.security_vpc_cidr} 443 (msg:\"INFRA ssm to interface endpoint\"; sid:1810; rev:1;)",
         ] : [],
 
+        # LUONG HA TANG THU BA - health check cua NLB doi tac.
+        #
+        # NLB trong 3rd-party VPC do suc khoe target nam o spoke, va
+        # luong do di qua chinh firewall nay. Thieu rule: target group
+        # bao unhealthy, NLB tra ve loi, va doi tac bao "dich vu cua
+        # ban hong" - trong khi dich vu hoan toan binh thuong.
+        #
+        # CHI health check va CHI cong dich vu. Con AI duoc goi CAI GI
+        # thi khai trong catalog cua lop ops - xem ops/catalog/partners.yaml.
+        var.enable_partner_vpn ? [
+          format(
+            "pass tcp %s any -> %s %d (msg:\"INFRA partner nlb healthcheck\"; sid:1820; rev:1;)",
+            var.partner_vpc_cidr, var.internal_supernet, var.partner_service_port,
+          ),
+        ] : [],
+
         # MESH THU NGHIEM - sinh tu east_west_mesh_ports.
         #
         # Mo mot port giua MOI cap spoke de do duong di. Khac

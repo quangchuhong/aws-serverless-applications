@@ -296,12 +296,68 @@ fw_raw   = load("firewall-rules.yaml", "rules")
 rt_raw   = load("routes.yaml", "routes")
 ep_raw   = load("endpoints.yaml", "endpoints")
 dns_raw  = load("dns-records.yaml", "records")
+ptn_raw  = load("partners.yaml", "partners")
+
+# Moc thoi gian dung chung cho partners.yaml va firewall-rules.yaml.
+# Khai o day vi khoi partner chay TRUOC khoi rule.
+today = datetime.date.today()
+soon = today + datetime.timedelta(days=30)
+
+########################################
+# partners.yaml
+#
+# Kiem TRUOC apps.yaml: moi doi tac sinh ra mot ten "partner-<name>"
+# dung duoc trong firewall-rules.yaml, nen bang apps phai co chung
+# truoc khi kiem rule.
+########################################
+F = "partners.yaml"
+partners = {}
+for i, p in enumerate(ptn_raw):
+    if not isinstance(p, dict):
+        err(F, f"muc thu {i+1} khong phai mot khoi khoa/gia tri"); continue
+    n = p.get("name")
+    if not n:
+        err(F, f"muc thu {i+1} thieu 'name'"); continue
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", str(n)):
+        err(F, f"ten khong hop le: {n!r} - chi chu thuong, so va gach ngang "
+               "(ten nay ghep thanh 'partner-<name>')")
+    if n in partners:
+        err(F, f"ten doi tac trung: {n}")
+    if not p.get("remote_cidr"):
+        err(F, f"{n}: thieu 'remote_cidr' - dai doi tac cong bo cho ban")
+    elif not is_cidr(p["remote_cidr"]):
+        err(F, f"{n}: remote_cidr khong hop le: {p['remote_cidr']}")
+    if not p.get("contact"):
+        warn(F, f"{n}: chua khai 'contact' - luc duong ham dut thi khong biet goi ai")
+    if not p.get("ticket"):
+        warn(F, f"{n}: chua khai 'ticket' - ket noi doi tac khong co hop dong ghi lai thi khong ai dam cat")
+
+    exp = p.get("expires")
+    if exp is not None:
+        try:
+            d = exp if isinstance(exp, datetime.date) else datetime.date.fromisoformat(str(exp))
+        except Exception:
+            err(F, f"{n}: expires phai la YYYY-MM-DD, dang co {exp!r}"); d = None
+        if d:
+            if d < today:
+                err(F, f"{n}: HOP DONG DA HET HAN {d} - gia han, hoac go doi tac va cac rule cua ho")
+            elif d <= soon:
+                warn(F, f"{n}: hop dong het han {d} (con {(d-today).days} ngay)")
+    else:
+        warn(F, f"{n}: khong co 'expires' - ket noi doi tac vinh vien la thu khong ai ra soat lai bao gio")
+
+    partners[n] = p
 
 ########################################
 # apps.yaml
 ########################################
 F = "apps.yaml"
 apps = {}
+# Doi tac tro thanh app dung duoc trong firewall-rules.yaml.
+# spoke = None vi chung khong thuoc spoke nao - kiem "cung spoke" ben
+# duoi bo qua chung.
+for n in partners:
+    apps[f"partner-{n}"] = {"name": f"partner-{n}", "spoke": None, "partner": True}
 seen = set()
 for i, a in enumerate(apps_raw):
     if not isinstance(a, dict):
@@ -325,8 +381,6 @@ for i, a in enumerate(apps_raw):
 ########################################
 F = "firewall-rules.yaml"
 ids, content_seen = set(), {}
-today = datetime.date.today()
-soon = today + datetime.timedelta(days=30)
 n_ports_total = 0
 
 for i, r in enumerate(fw_raw):
@@ -401,10 +455,26 @@ for i, r in enumerate(fw_raw):
     else:
         content_seen[key] = rid
 
+    # Rule tro TOI mot doi tac la sai chieu.
+    #
+    # "partner-x" giai ra dai NLB trong vung dem - do la NGUON cua
+    # luu luong doi tac gui vao, sau khi NLB mo ket noi moi. No khong
+    # bao gio la DICH.
+    #
+    # Chieu ban goi doi tac di qua private NAT toi dai that cua ho
+    # (172.16.x), khong qua NLB. Khai "to: partner-x" se apply thanh
+    # cong va khong khop mot goi tin nao.
+    ta_name = r.get("to")
+    if ta_name and apps.get(ta_name, {}).get("partner"):
+        err(F, f"{rid}: to={ta_name} - dai NLB la NGUON cua luu luong doi tac, "
+               "khong phai dich. Chieu ban goi doi tac di qua private NAT toi dai "
+               "that cua ho, khong qua NLB.")
+
     # from == to: luong trong cung mot VPC khong di qua TGW nen khong
     # bao gio toi firewall. Rule apply xong va khong khop gi.
     fa, ta = apps.get(r.get("from")), apps.get(r.get("to"))
-    if fa and ta and fa.get("spoke") == ta.get("spoke") \
+    if fa and ta and fa.get("spoke") is not None \
+       and fa.get("spoke") == ta.get("spoke") \
        and fa.get("cidr") is None and ta.get("cidr") is None:
         err(F, f"{rid}: from va to cung mot spoke ({fa.get('spoke')}). "
                "Luu luong trong cung VPC khong qua TGW nen khong toi firewall - "
@@ -525,8 +595,8 @@ for i, r in enumerate(dns_raw):
 # Ket qua
 ########################################
 print()
-print("  Catalog: %d app, %d rule firewall, %d route, %d endpoint, %d ban ghi DNS"
-      % (len(apps), len(ids), len(rt_ids), len(ep_seen), len(dns_seen)))
+print("  Catalog: %d app, %d rule firewall, %d route, %d endpoint, %d ban ghi DNS, %d doi tac"
+      % (len(apps), len(ids), len(rt_ids), len(ep_seen), len(dns_seen), len(partners)))
 # Network Firewall tinh capacity theo so to hop nguon x dich x port.
 # Rule cua ta luon 1 nguon x 1 dich, nen chi phi la so port. +10% du.
 print("  Capacity uoc tinh: ~%d (mac dinh rule group: 1000)" % (int(n_ports_total * 1.1) + 1))

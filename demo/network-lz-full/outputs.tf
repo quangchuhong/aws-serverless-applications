@@ -98,6 +98,10 @@ locals {
   # Appliance: EC2 + license Marketplace tinh theo gio.
   # Gia license dao dong RAT LON theo bundle - day chi la uoc tinh tho,
   # kiem tra gia that tren trang Marketplace cho dung bundle ban dung.
+  # VPN connection tinh theo gio ke ca khi duong ham DOWN - AWS tinh
+  # tu luc tao, khong tu luc len.
+  c_vpn = 0.05
+
   c_gwlb      = 0.0125
   c_gwlbe     = 0.01
   c_palo_alto = 1.50 # EC2 m5.xlarge (~$0.24) + license (~$1.3)
@@ -106,7 +110,7 @@ locals {
   # MOT attachment moi VPC, khong phu thuoc so AZ - them AZ chi them
   # subnet vao attachment da co.
   # Dem CA spoke noi bo lan remote: moi attachment deu tinh tien nhu nhau.
-  n_attach = length(var.spokes) + 1 + local.fw + local.ing
+  n_attach = length(var.spokes) + 1 + local.fw + local.ing + local.ptn
 
   # Nhung thu NHAN LEN theo so AZ. Bo qua he so nay la bao gia bang
   # mot nua su that khi chay 2 AZ.
@@ -136,6 +140,12 @@ locals {
 
     # Appliance don chiec, dat o AZ dau - khong nhan len
     + (local.app_on > 0 ? local.c_gwlb + local.c_gwlbe + local.c_palo_alto + local.c_f5 : 0)
+
+    # Doi tac: VPN + private NAT + EC2 don chiec, NLB theo AZ.
+    # Attachment cua 3rd-party VPC da tinh trong n_attach.
+    + (local.ptn > 0
+      ? local.c_vpn + local.c_nat + local.c_ec2 + local.n_az * local.c_nlb
+    : 0)
   )
 }
 
@@ -467,6 +477,22 @@ output "ops_handles" {
       var.enable_ingress ? { ingress = aws_ec2_transit_gateway_vpc_attachment.ingress[0].id } : {},
     )
 
+    # DOI TAC - lop ops giai ten "partner-*" tu day.
+    #
+    # Chi hai dai duoc cong bo, dung hai dai doi tac biet. KHONG dua
+    # partner_sim_cidr vao cho de lop ops mo rule tro thang toi dai
+    # cua doi tac: chieu do phai qua private NAT, va rule tro thang se
+    # khong khop gi vi nguon da bi doi dia chi.
+    partner = {
+      enabled      = var.enable_partner_vpn
+      vpc_cidr     = var.enable_partner_vpn ? var.partner_vpc_cidr : null
+      nat_cidr     = var.enable_partner_vpn ? local.partner_nat_cidr : null
+      nlb_cidr     = var.enable_partner_vpn ? local.partner_nlb_cidr : null
+      remote_cidr  = var.enable_partner_vpn ? var.partner_sim_cidr : null
+      service_port = var.partner_service_port
+      nlb_dns      = try(aws_lb.partner[0].dns_name, null)
+    }
+
     dns = {
       enabled   = var.enable_internal_dns
       zone_id   = try(aws_route53_zone.internal[0].zone_id, null)
@@ -497,4 +523,74 @@ output "ops_handles" {
       managed_services = var.enable_interface_endpoints ? sort(var.interface_endpoint_services) : []
     }
   }
+}
+
+########################################
+# DOI TAC
+########################################
+
+output "partner" {
+  description = <<-EOT
+    3rd-party VPC + VPN. null khi enable_partner_vpn = false.
+
+    "advertised" la thu DUY NHAT doi tac duoc biet. Dua dung hai dai
+    do vao hop dong ky thuat - khong bao gio dua 10.0.0.0/8.
+  EOT
+
+  value = !var.enable_partner_vpn ? null : {
+    vpn_connection_id = aws_vpn_connection.partner[0].id
+    customer_gateway  = aws_eip.partner_sim[0].public_ip
+    sim_instance_id   = aws_instance.partner_sim[0].id
+
+    # Dia chi doi tac goi toi, va spoke that dang tra loi phia sau no
+    service_endpoint = "${aws_lb.partner[0].dns_name}:${var.partner_service_port}"
+    real_target      = local.partner_target_ip
+
+    advertised = local.partner_advertised
+    remote     = var.partner_sim_cidr
+
+    # Doc tu AWS chu khong tu state - tunnel len hay khong la chuyen
+    # cua thoi diem, state khong biet.
+    tunnel_status = join(" ", [
+      "aws ec2 describe-vpn-connections --region ${var.region}",
+      "--vpn-connection-ids ${aws_vpn_connection.partner[0].id}",
+      "--query 'VpnConnections[0].VgwTelemetry[].[OutsideIpAddress,Status,StatusMessage]'",
+      "--output table",
+    ])
+  }
+}
+
+output "partner_check" {
+  description = "Lenh kiem chung tuyen doi tac - chay TU MAY GIA LAP, khong phai tu day"
+
+  value = !var.enable_partner_vpn ? "" : join("\n", [
+    "",
+    "1. Duong ham co len khong (doc tu AWS, khong tu state):",
+    "   aws ec2 describe-vpn-connections --region ${var.region} \\",
+    "     --vpn-connection-ids ${aws_vpn_connection.partner[0].id} \\",
+    "     --query 'VpnConnections[0].VgwTelemetry[].[OutsideIpAddress,Status]' --output table",
+    "",
+    "   AWS chi bao dam MOT trong hai tunnel UP o che do static.",
+    "   Ca hai DOWN sau ~5 phut thi vao may gia lap doc log.",
+    "",
+    "2. Vao may cua doi tac gia lap:",
+    "   aws ssm start-session --target ${aws_instance.partner_sim[0].id} --region ${var.region}",
+    "",
+    "3. Trong session:",
+    "   sudo vpn-check                 # SA, interface vti, route",
+    "   sudo cat /var/log/user-data.log  # khi vpn-check khong co gi",
+    "",
+    "4. Goi dich vu ban cong bo - day la phep do that:",
+    "   curl -s -o /dev/null -w '%%{http_code}\\n' http://${aws_lb.partner[0].dns_name}/",
+    "",
+    "   200 nghia la ca tuyen thong: IPsec -> VGW -> NLB -> TGW ->",
+    "   firewall -> spoke ${local.partner_target_ip} (account khac).",
+    "",
+    "5. Kiem lop cach ly - PHAI THAT BAI:",
+    "   curl -sm 5 http://${local.partner_target_ip}/",
+    "",
+    "   Doi tac KHONG duoc goi thang toi spoke. May nay khong co route",
+    "   toi dai do, va do la lop kiem soat thu nhat trong ba lop.",
+    "",
+  ])
 }

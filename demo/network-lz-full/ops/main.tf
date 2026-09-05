@@ -84,6 +84,7 @@ locals {
   routes_raw    = try(yamldecode(file("${path.module}/${var.catalog_dir}/routes.yaml")).routes, [])
   endpoints_raw = try(yamldecode(file("${path.module}/${var.catalog_dir}/endpoints.yaml")).endpoints, [])
   dns_raw       = try(yamldecode(file("${path.module}/${var.catalog_dir}/dns-records.yaml")).records, [])
+  partners_raw  = try(yamldecode(file("${path.module}/${var.catalog_dir}/partners.yaml")).partners, [])
 }
 
 ########################################
@@ -118,7 +119,44 @@ locals {
   # nguoc han: mot rule pass toi 0.0.0.0/0 la mo het.
   unresolvable = "0.0.0.0/32"
 
-  apps = {
+  ########################################
+  # DOI TAC THANH APP
+  #
+  # Moi doi tac trong partners.yaml sinh ra mot app ten
+  # "partner-<name>", CIDR la dai NLB cua 3rd-party VPC.
+  #
+  # VI SAO LA DAI NLB, KHONG PHAI DAI CUA DOI TAC
+  #
+  # Goi tin cua doi tac DUNG LAI o NLB trong vung dem - VPC khong dinh
+  # tuyen bac cau, nen luu luong vao qua VGW khong the di tiep ra TGW
+  # attachment. NLB mo mot ket noi MOI toi spoke.
+  #
+  # Nghia la firewall nhin thay nguon la 10.9.100.x, khong bao gio
+  # thay 172.16.x. Mot rule khai tu dai that cua doi tac se apply
+  # thanh cong va khong khop mot goi tin nao tron doi - dung kieu im
+  # lang ma ca lop nay sinh ra de tranh. lint.sh chan truong hop do.
+  #
+  # He qua ve KIEM SOAT: moi doi tac deu ra CUNG mot CIDR nguon, nen
+  # firewall khong phan biet duoc Acme voi Globex. Phan biet o tang
+  # nay doi mot NLB rieng cho moi doi tac - hoac chap nhan rang tang
+  # phan biet la VPN va route, con firewall chi noi "tu vung dem".
+  ########################################
+
+  partner_apps = !try(local.hub.partner.enabled, false) ? {} : {
+    for p in local.partners_raw : "partner-${try(p.name, "khong-ten")}" => {
+      name  = "partner-${try(p.name, "khong-ten")}"
+      spoke = "(doi tac)"
+      owner = try(p.contact, "chua khai")
+      note  = try(p.note, "")
+
+      spoke_known = true
+      cidr        = local.hub.partner.nlb_cidr
+      narrowed    = false
+      account     = null
+    }
+  }
+
+  apps = merge(local.partner_apps, {
     for a in local.apps_raw : a.name => {
       name  = a.name
       spoke = try(a.spoke, null)
@@ -138,12 +176,38 @@ locals {
       narrowed = try(a.cidr, null) != null
       account  = try(local.hub.spokes[a.spoke].account_id, null)
     }
-  }
+  })
 
   app_names = sort(keys(local.apps))
 
   # App khai spoke khong ton tai. Guard ben duoi doc bang nay.
   apps_bad_spoke = [for k, v in local.apps : k if !v.spoke_known]
+
+  ########################################
+  # KIEM TRA HO SO DOI TAC
+  ########################################
+
+  partner_bad_name = [
+    for p in local.partners_raw : tostring(try(p.name, "(thieu name)"))
+    if !can(regex("^[a-z0-9][a-z0-9-]*$", try(p.name, "")))
+  ]
+
+  # remote_cidr trong ho so PHAI khop dai layer cha thuc su dinh tuyen.
+  #
+  # Lech thi khong co gi bao: ho so noi mot dang, VPN dinh tuyen mot
+  # dang khac, va nguoi doc ho so tin vao dang sai. Day la tai lieu
+  # ban dua cho doi tac - sai o day la sai trong hop dong ky thuat.
+  partner_cidr_mismatch = [
+    for p in local.partners_raw : try(p.name, "?")
+    if try(local.hub.partner.enabled, false)
+    && try(p.remote_cidr, "") != try(local.hub.partner.remote_cidr, "")
+  ]
+
+  partner_expired = [
+    for p in local.partners_raw : try(p.name, "?")
+    if try(p.expires, null) != null
+    && local.today_num > tonumber(replace(substr(tostring(p.expires), 0, 10), "-", ""))
+  ]
 
   # App khai cidr rieng NHUNG cidr do khong nam trong spoke cua no.
   #
@@ -205,6 +269,7 @@ resource "terraform_data" "catalog_guard" {
     routes    = length(local.routes_raw)
     endpoints = length(local.endpoints_raw)
     records   = length(local.dns_raw)
+    partners  = length(local.partners_raw)
   }
 
   ########################################
@@ -238,6 +303,35 @@ resource "terraform_data" "catalog_guard" {
     precondition {
       condition     = length(local.apps_raw) == length(distinct([for a in local.apps_raw : a.name]))
       error_message = "apps.yaml: co ten app trung. Ten la khoa - trung thi mot dinh nghia am tham de len cai kia va rule tro toi ten do khong con doan duoc no lay CIDR nao."
+    }
+
+    ########################################
+    # partners.yaml
+    ########################################
+
+    precondition {
+      condition     = length(local.partners_raw) == 0 || try(local.hub.partner.enabled, false)
+      error_message = "partners.yaml co ${length(local.partners_raw)} doi tac nhung layer cha dang tat enable_partner_vpn. Chua co 3rd-party VPC, chua co NLB, chua co duong ham - khong co gi de mo rule toi."
+    }
+
+    precondition {
+      condition     = length(local.partner_bad_name) == 0
+      error_message = "partners.yaml: ten khong hop le: ${join(", ", local.partner_bad_name)}. Chi chu thuong, so va gach ngang - ten nay ghep thanh 'partner-<name>' de dung trong firewall-rules.yaml."
+    }
+
+    precondition {
+      condition     = length(local.partners_raw) == length(distinct([for p in local.partners_raw : try(p.name, "")]))
+      error_message = "partners.yaml: ten doi tac trung nhau."
+    }
+
+    precondition {
+      condition     = length(local.partner_cidr_mismatch) == 0
+      error_message = "partners.yaml: ${join(", ", local.partner_cidr_mismatch)} khai remote_cidr khac dai layer cha thuc su dinh tuyen (${try(local.hub.partner.remote_cidr, "?")}). Ho so nay la thu ban dua cho doi tac - sai o day la sai trong hop dong ky thuat, va khong co gi khac bao."
+    }
+
+    precondition {
+      condition     = var.allow_expired_rules || length(local.partner_expired) == 0
+      error_message = "partners.yaml: hop dong DA HET HAN: ${join(", ", local.partner_expired)}. Gia han truong expires, hoac go doi tac va cac rule cua ho. Muon apply tam thi dat allow_expired_rules = true."
     }
 
     precondition {

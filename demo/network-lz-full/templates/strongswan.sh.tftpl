@@ -1,0 +1,201 @@
+#!/bin/bash
+# strongSwan gia lap thiet bi VPN cua doi tac.
+#
+# Sinh tu partner-sim.tf. DUNG sua tren may - lan thay instance ke
+# tiep se ghi de.
+#
+# Moi thu ghi vao /var/log/user-data.log. Khi tunnel khong len, day la
+# file doc dau tien:
+#   aws ssm start-session --target <id> ; sudo cat /var/log/user-data.log
+exec > >(tee -a /var/log/user-data.log) 2>&1
+set -x
+
+########################################
+# 1. Nhan goi tin khong phai cua minh
+#
+# Ba dong nay hay bi quen, va thieu chung thi duong ham LEN BINH
+# THUONG con goi tin thi bien mat. Trieu chung doc nhu loi dinh tuyen
+# o phia AWS.
+########################################
+cat > /etc/sysctl.d/99-vpn.conf <<'SYSCTL'
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.accept_redirects = 0
+net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.rp_filter = 0
+SYSCTL
+sysctl -p /etc/sysctl.d/99-vpn.conf
+
+dnf install -y strongswan nmap-ncat bind-utils tcpdump || {
+  echo "KHONG CAI DUOC strongswan tu repo mac dinh."
+  echo "Kiem: dnf search strongswan"
+  exit 1
+}
+
+# Duong dan khac nhau theo ban dong goi. AL2023 dung /etc/strongswan.
+CONF_DIR=/etc/strongswan
+[ -d "$CONF_DIR" ] || CONF_DIR=/etc
+
+########################################
+# 2. Cau hinh duong ham
+#
+# VTI (route-based), khong phai policy-based.
+#
+# AWS luon chay route-based o phia ho. Ghep mot dau policy-based vao
+# thi IKE len duoc nhung traffic selector khong khop, va ket qua la
+# SA co ma khong goi tin nao qua - kieu hong te nhat vi moi trang thai
+# deu bao "established".
+#
+# mark=100/200: danh dau goi tin de gan vao dung interface vti.
+# install_routes=no: khong de strongSwan tu them route, ta tu them o
+# muc 4 - neu khong thi hai ben tranh nhau va route bien mat moi lan
+# SA rekey.
+########################################
+cat > "$CONF_DIR/ipsec.conf" <<'IPSEC'
+config setup
+    charondebug="ike 1, knl 1, cfg 0"
+    uniqueids=no
+
+conn %default
+    type=tunnel
+    keyexchange=ikev2
+    authby=psk
+    # Bo thuat toan AWS chap nhan cho ca hai pha
+    ike=aes128-sha1-modp1024,aes256-sha256-modp2048!
+    esp=aes128-sha1-modp1024,aes256-sha256-modp2048!
+    ikelifetime=8h
+    lifetime=1h
+    # AWS gui DPD; khong tra loi thi ho ha tunnel xuong sau ~30s
+    dpddelay=10s
+    dpdtimeout=30s
+    dpdaction=restart
+    keyingtries=%forever
+    # Toan bo luu luong duoc phep vao SA; viec chon dai nao di duong
+    # ham nao la cua ROUTE o muc 4, khong phai cua traffic selector
+    leftsubnet=0.0.0.0/0
+    rightsubnet=0.0.0.0/0
+    left=%defaultroute
+    leftid=${local_id}
+    auto=start
+    installpolicy=yes
+
+conn Tunnel1
+    right=${tunnel1_address}
+    rightid=${tunnel1_address}
+    mark=100
+
+conn Tunnel2
+    right=${tunnel2_address}
+    rightid=${tunnel2_address}
+    mark=200
+IPSEC
+
+cat > "$CONF_DIR/ipsec.secrets" <<'SECRETS'
+${local_id} ${tunnel1_address} : PSK "${tunnel1_psk}"
+${local_id} ${tunnel2_address} : PSK "${tunnel2_psk}"
+SECRETS
+chmod 600 "$CONF_DIR/ipsec.secrets"
+
+########################################
+# 3. Interface VTI
+#
+# Mot cai moi duong ham. key/mark phai khop voi mark= trong ipsec.conf,
+# neu khong thi goi tin ra khoi vti se khong duoc ma hoa - di ra
+# Internet dang tho va bien mat.
+########################################
+setup_vti() {
+  local name=$1 mark=$2 local_ip=$3 remote_ip=$4 inside_local=$5 inside_remote=$6
+
+  ip link del "$name" 2>/dev/null || true
+  ip tunnel add "$name" mode vti local "$local_ip" remote "$remote_ip" key "$mark"
+  ip addr add "$inside_local" remote "$inside_remote" dev "$name"
+  ip link set "$name" up mtu 1436
+
+  # Tat policy tren chinh vti - neu khong, goi tin bi kiem tra hai lan
+  sysctl -w "net.ipv4.conf.$name.disable_policy=1"
+  sysctl -w "net.ipv4.conf.$name.rp_filter=0"
+}
+
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $(curl -s -X PUT \
+  -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' \
+  http://169.254.169.254/latest/api/token)" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
+
+setup_vti vti1 100 "$PRIVATE_IP" "${tunnel1_address}" "${tunnel1_cgw_inside}" "${tunnel1_vgw_inside}"
+setup_vti vti2 200 "$PRIVATE_IP" "${tunnel2_address}" "${tunnel2_cgw_inside}" "${tunnel2_vgw_inside}"
+
+########################################
+# 4. Route - CHI hai dai duoc cong bo
+#
+# Day la lop kiem soat THU NHAT trong ba lop cua doc 16, va no nam o
+# phia doi tac chu khong phai phia ban. May nay khong co route toi
+# 10.10.0.0/16 hay 10.20.0.0/16, nen no khong the goi toi spoke ke ca
+# khi moi route table ben AWS deu cho phep.
+#
+# Voi doi tac that, dieu tuong duong dat duoc bang static route hoac
+# BGP filter tren thiet bi cua HO - va do la ly do phai ghi vao hop
+# dong ky thuat, khong chi noi mieng.
+#
+# metric khac nhau: vti1 uu tien, vti2 du phong. AWS chi bao dam mot
+# tunnel UP tai mot thoi diem trong che do static.
+########################################
+%{ for cidr in remote_cidrs ~}
+ip route replace ${cidr} dev vti1 metric 100
+ip route append ${cidr} dev vti2 metric 200
+%{ endfor ~}
+
+systemctl enable strongswan 2>/dev/null || systemctl enable strongswan-starter 2>/dev/null || true
+systemctl restart strongswan 2>/dev/null || systemctl restart strongswan-starter 2>/dev/null || true
+
+########################################
+# 5. Dung lai VTI sau khi khoi dong lai
+#
+# ip tunnel khong ton tai qua reboot. Khong co unit nay thi tunnel len
+# nhung khong co interface de gan route - va trang thai do doc y het
+# nhu "VPN hong" trong khi IPsec hoan toan binh thuong.
+########################################
+cp /var/lib/cloud/instance/user-data.txt /usr/local/bin/setup-vpn.sh 2>/dev/null || true
+chmod +x /usr/local/bin/setup-vpn.sh 2>/dev/null || true
+
+cat > /etc/systemd/system/vpn-vti.service <<'UNIT'
+[Unit]
+Description=Dung lai interface VTI va route sau khi khoi dong
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/setup-vpn.sh
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable vpn-vti.service || true
+
+########################################
+# 6. Lenh kiem chung, de san tren may
+#
+# Dat thanh script de nguoi vao qua SSM go mot chu la xong, thay vi
+# nho sau lenh khac nhau luc 2 gio sang.
+########################################
+cat > /usr/local/bin/vpn-check <<'CHK'
+#!/bin/bash
+echo "=== IPsec SA ==="
+strongswan statusall 2>/dev/null || ipsec statusall
+echo
+echo "=== Interface VTI ==="
+ip -brief addr show type vti
+echo
+echo "=== Route qua duong ham ==="
+ip route show | grep -E 'vti' || echo "(khong co route nao gan vao vti)"
+echo
+echo "=== Goi dich vu ban cong bo ==="
+for ip in $(ip route show | grep -oE '^[0-9.]+/[0-9]+' | head -5); do :; done
+curl -s -m 5 -o /dev/null -w "  NLB %{http_code}\n" "http://__NLB__:__PORT__/" \
+  || echo "  NLB khong tra loi"
+CHK
+sed -i "s|__NLB__|$(echo ${nlb_cidr} | cut -d/ -f1 | awk -F. '{print $1"."$2"."$3".100"}')|" /usr/local/bin/vpn-check
+sed -i "s|__PORT__|${service_port}|" /usr/local/bin/vpn-check
+chmod +x /usr/local/bin/vpn-check
+
+echo "=== xong, chay vpn-check de xem trang thai ==="

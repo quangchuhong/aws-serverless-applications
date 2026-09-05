@@ -1,0 +1,90 @@
+# ==============================================================
+# HO SO DOI TAC - doc 16 muc 10.1
+#
+# File nay KHONG dung duong ham. Ha tang VPN nam o layer cha
+# (../../partner.tf) va doi vai thang mot lan.
+#
+# Cai doi HANG NGAY la: doi tac nao duoc goi app nao, cong nao, den
+# bao gio. Do la thu file nay quan.
+#
+# --------------------------------------------------------------
+# NO SINH RA CAI GI
+#
+# Moi doi tac o day thanh mot APP giai duoc trong firewall-rules.yaml,
+# ten dat theo dang "partner-<ten>":
+#
+#     partners:
+#       - name: acme
+#         ...
+#
+#     # roi trong firewall-rules.yaml:
+#     - id: fw-0020
+#       from: partner-acme          <- giai thanh dai NLB cua 3rd-party VPC
+#       to: app-prod
+#       ports: [80]
+#
+# Vi sao "from" la dai NLB chu khong phai dai cua doi tac: goi tin cua
+# doi tac DUNG LAI o NLB trong 3rd-party VPC, va NLB mo mot ket noi
+# MOI toi spoke. Firewall nhin thay nguon la NLB, khong phai 172.16.x.
+#
+# Khai rule tro tu dai that cua doi tac se apply thanh cong va khong
+# khop mot goi tin nao - dung kieu im lang ma ca lop nay sinh ra de
+# tranh. lint.sh chan truong hop do.
+#
+# --------------------------------------------------------------
+# expires LA HOP DONG, KHONG PHAI GHI CHU
+#
+# Ket noi doi tac gan nhu luon co ngay ket thuc - het hop dong, het du
+# an, doi tac doi thiet bi. Truong nay lam ngay do hien ra:
+#
+#   - lint.sh thoat khac 0 khi qua han
+#   - job expiry trong CI do moi ngay, ke ca khi khong ai sua gi
+#
+# Rule KHONG tu bien mat. Go la mot commit co nguoi duyet - vi cat
+# duong cua doi tac luc nua dem la mot cuoc goi dien luc nua dem.
+#
+# --------------------------------------------------------------
+# TRUONG
+#
+#   name       BAT BUOC  chu thuong, so, gach ngang. Thanh "partner-<name>"
+#   remote_cidr BAT BUOC dai doi tac cong bo cho ban. Khop voi
+#                        partner_sim_cidr (hoac CGW that) o layer cha
+#   contact    NEN CO    email/kenh lien he ky thuat phia doi tac
+#   ticket     NEN CO    hop dong hoac ticket phe duyet
+#   expires              YYYY-MM-DD - ngay het hop dong
+#   note                 mot cau tieng nguoi
+#
+# CIDR ban cong bo cho ho KHONG khai o day - no do layer cha quyet
+# dinh (dai NLB + dai NAT) va lop nay doc tu ops_handles. Khai lai o
+# hai cho la hai cho co the lech nhau.
+# ==============================================================
+
+partners: []
+
+# --------------------------------------------------------------
+# Vi du (dang tat)
+#
+# partners:
+#   - name: acme
+#     remote_cidr: 172.16.0.0/16
+#     contact: netops@acme.example
+#     ticket: PARTNER-2024-11
+#     expires: 2026-12-31
+#     note: Doi soat don hang hang dem, chi goi vao order-api
+#
+#   - name: globex
+#     remote_cidr: 192.168.50.0/24
+#     contact: infra@globex.example
+#     ticket: PARTNER-2025-03
+#     note: Khong co ngay het han - hop dong khung
+#
+# Roi trong firewall-rules.yaml:
+#
+#   - id: fw-0020
+#     from: partner-acme
+#     to: app-prod
+#     ports: [80]
+#     ticket: PARTNER-2024-11
+#     expires: 2026-12-31        # NEN khop voi ngay trong ho so
+#     note: Acme goi order-api de doi soat
+# --------------------------------------------------------------

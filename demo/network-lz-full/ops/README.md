@@ -11,7 +11,38 @@ Thư mục này quản **bốn thứ đổi hằng ngày**, trong một state ri
 | Thêm/bớt VPC endpoint tập trung | `catalog/endpoints.yaml` | endpoint + PHZ + bản ghi + Profile association |
 | Bản ghi DNS trong PHZ tập trung | `catalog/dns-records.yaml` | `aws_route53_record` |
 
+| Hồ sơ đối tác + rule cho họ | `catalog/partners.yaml` | không resource — sinh ra **app giải được** cho `firewall-rules.yaml` |
+
 `catalog/apps.yaml` không tạo resource nào — nó là bảng tra cứu **tên app → dải địa chỉ**, để ba file kia khai bằng tên.
+
+### Đối tác
+
+Mỗi đối tác trong `partners.yaml` thành một app tên `partner-<name>`, dùng ngay được:
+
+```yaml
+# partners.yaml
+- name: acme
+  remote_cidr: 172.16.0.0/16
+  contact: netops@acme.example
+  ticket: PARTNER-2024-11
+  expires: 2026-12-31
+```
+
+```yaml
+# firewall-rules.yaml
+- id: fw-0020
+  from: partner-acme        # giải thành dải NLB của vùng đệm
+  to: app-prod
+  ports: [80]
+  ticket: PARTNER-2024-11
+  expires: 2026-12-31
+```
+
+`partner-acme` giải ra dải **NLB**, không phải dải của đối tác. Gói tin của họ dừng lại ở NLB trong vùng đệm và NLB mở kết nối **mới** tới spoke — nên firewall thấy nguồn là `10.9.100.x`, không bao giờ thấy `172.16.x`. Rule khai từ dải thật của đối tác sẽ apply thành công và không khớp gì; `lint.sh` chặn.
+
+Cùng lý do, `to: partner-*` là **sai chiều** — dải NLB là nguồn, không phải đích. Chiều bạn gọi đối tác đi qua private NAT tới dải thật của họ. `lint.sh` cũng chặn cái này.
+
+`expires` ở đây là **ngày hết hợp đồng**, và nó làm job `expiry` trong CI đỏ mỗi ngày khi quá hạn. Kết nối đối tác không tự cắt — cắt đường của đối tác lúc nửa đêm là một cuộc gọi điện lúc nửa đêm.
 
 ---
 

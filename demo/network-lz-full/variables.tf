@@ -421,6 +421,93 @@ variable "firewall_mode" {
   }
 }
 
+########################################
+# DOI TAC - 3rd-party VPC + Site-to-Site VPN (doc 16)
+########################################
+
+variable "enable_partner_vpn" {
+  description = <<-EOT
+    Dung 3rd-party VPC + VPN toi mot doi tac GIA LAP.
+
+    Sinh ra:
+      - 3rd-party VPC (vung dem) + VGW + private NAT + NLB noi bo
+      - rtb-partner: bang route table thu NAM cua TGW
+      - partner-sim VPC + EC2 strongSwan lam dau kia duong ham
+
+    Duong ham LEN THAT, nen do duoc ca tuyen. Xem partner.tf.
+
+    Them ~$0.21/gio: VPN connection $0.05, private NAT $0.045,
+    NLB $0.045 (2 AZ), TGW attachment $0.05, EC2 $0.012.
+
+    CAN enable_firewall = true. Khong co thanh tra thi luu luong doi
+    tac di thang toi spoke, va lop kiem soat thu ba - lop duy nhat
+    nhin duoc tung cap IP/port - khong ton tai.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "partner_vpc_cidr" {
+  description = "3rd-party VPC (vung dem). Nam TRONG internal_supernet."
+  type        = string
+  default     = "10.9.0.0/16"
+}
+
+variable "partner_sim_cidr" {
+  description = <<-EOT
+    Dai mang cua doi tac gia lap.
+
+    PHAI NGOAI internal_supernet. Trung thi route tinh toi dai doi tac
+    se giam len propagation cua spoke trong rtb-security, va TGW khong
+    phan biet duoc hai ben - xem check "partner_cidr_does_not_overlap_lz".
+
+    Day chinh la bai toan "CIDR trung nhau" cua doc 16 muc 6, nhung o
+    mot cho ma private NAT KHONG giai duoc: NAT doi dia chi phia ben
+    kia duong ham, no khong lam hai dai het giam nhau trong bang route
+    cua ban.
+  EOT
+  type        = string
+  default     = "172.16.0.0/16"
+}
+
+variable "partner_service_port" {
+  description = "Cong doi tac goi vao NLB. Ghi ro tung cong trong hop dong ky thuat - doc 16 muc 6."
+  type        = number
+  default     = 80
+}
+
+variable "partner_bgp_asn" {
+  description = "ASN phia doi tac. Dai rieng 64512-65534. Khong dung BGP nhung AWS van doi khai."
+  type        = number
+  default     = 65010
+}
+
+variable "partner_amazon_asn" {
+  description = "ASN phia AWS cua VGW. Khai ro de tai lieu dua cho doi tac khop voi thuc te."
+  type        = number
+  default     = 64512
+}
+
+variable "partner_tunnel_inside_cidrs" {
+  description = <<-EOT
+    Dia chi trong hai duong ham, dai 169.254.0.0/16 va PHAI la /30.
+
+    Khai tuong minh chu khong de AWS tu chon: cau hinh strongSwan nhung
+    nhung dia chi nay vao user_data, nen moi lan AWS chon lai la mot
+    lan cau hinh lech ma khong ai doi gi.
+
+    AWS gio rieng vai dai trong 169.254.0.0/16 (vi du 169.254.169.252/30),
+    khai trung se bi tu choi luc tao VPN connection.
+  EOT
+  type        = list(string)
+  default     = ["169.254.100.0/30", "169.254.100.4/30"]
+
+  validation {
+    condition     = length(var.partner_tunnel_inside_cidrs) == 2
+    error_message = "Phai dung HAI dai - AWS luon tao hai duong ham, khong bat duoc mot."
+  }
+}
+
 variable "ops_rule_group_arns" {
   description = <<-EOT
     CHO CAM cho lop van hanh (thu muc ops/).

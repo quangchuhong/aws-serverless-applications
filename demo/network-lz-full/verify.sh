@@ -722,6 +722,93 @@ if [[ "$FW_ENABLED" == "yes" ]]; then
 fi
 
 ########################################
+hdr "10. Doi tac - 3rd-party VPC va VPN"
+########################################
+#
+# Doc TRANG THAI DUONG HAM tu AWS.
+#
+# Khong suy tu viec ping thong hay khong: tunnel DOWN va rule firewall
+# sai cho ra cung mot trieu chung - "khong thong" - va hai thu do sua
+# o hai noi hoan toan khac nhau. Mot dong Status o day cat doi khong
+# gian tim kiem lam hai.
+
+VPN_ID=$(terraform output -json partner 2>/dev/null | jq -r '.vpn_connection_id // empty')
+
+if [[ -z "$VPN_ID" ]]; then
+  skip "enable_partner_vpn dang tat"
+else
+  # AWS chi bao dam MOT tunnel UP o che do static. Hai cai cung UP la
+  # tot, mot cai la binh thuong, khong cai nao moi la van de.
+  up=$(aws ec2 describe-vpn-connections --region "$REGION" --vpn-connection-ids "$VPN_ID" \
+    --query "length(VpnConnections[0].VgwTelemetry[?Status=='UP'])" --output text 2>/dev/null || echo 0)
+
+  if [[ "${up:-0}" -ge 1 ]]; then
+    ok "VPN: $up/2 duong ham UP (AWS chi bao dam mot o che do static)"
+  else
+    bad "VPN: khong duong ham nao UP - vao may gia lap doc /var/log/user-data.log"
+    aws ec2 describe-vpn-connections --region "$REGION" --vpn-connection-ids "$VPN_ID" \
+      --query 'VpnConnections[0].VgwTelemetry[].[OutsideIpAddress,Status,StatusMessage]' \
+      --output text 2>/dev/null | sed 's/^/      /'
+  fi
+
+  # rtb-partner KHONG duoc hoc dia chi cua spoke nao.
+  #
+  # Day la lop kiem soat thu hai cua doc 16. No de trong CO TINH: mot
+  # dong propagation lot vao day la 3rd-party VPC di thang toi spoke,
+  # khong qua thanh tra - va khong co gi bao vi luu luong VAN THONG.
+  PTN_RTB=$(aws ec2 describe-transit-gateway-route-tables --region "$REGION" \
+    --filters "Name=tag:Name,Values=${PROJECT}-rtb-partner" \
+    --query 'TransitGatewayRouteTables[0].TransitGatewayRouteTableId' --output text 2>/dev/null)
+
+  if [[ -n "$PTN_RTB" && "$PTN_RTB" != "None" ]]; then
+    n_prop=$(aws ec2 get-transit-gateway-route-table-propagations --region "$REGION" \
+      --transit-gateway-route-table-id "$PTN_RTB" \
+      --query 'length(TransitGatewayRouteTablePropagations)' --output text 2>/dev/null || echo 0)
+    [[ "${n_prop:-0}" -eq 0 ]] \
+      && ok "  rtb-partner khong hoc dia chi spoke nao (dung thiet ke)" \
+      || bad "  rtb-partner co $n_prop propagation - doi tac dang co duong tat toi spoke"
+
+    ptn_routes=$(aws ec2 search-transit-gateway-routes --region "$REGION" \
+      --transit-gateway-route-table-id "$PTN_RTB" \
+      --filters "Name=state,Values=active" \
+      --query 'Routes[].DestinationCidrBlock' --output text 2>/dev/null)
+    [[ "$ptn_routes" == "0.0.0.0/0" ]] \
+      && ok "  rtb-partner chi co mot duong: 0.0.0.0/0 vao thanh tra" \
+      || bad "  rtb-partner co route ngoai du kien: $ptn_routes"
+  fi
+
+  # Duong ve. Thieu la request toi noi, xu ly xong, khong ai nhan
+  # duoc phan hoi - dung kieu hong da gap voi ingress VPC.
+  if [[ "$FW_ENABLED" == "yes" ]]; then
+    SEC_RTB=$(aws ec2 describe-transit-gateway-route-tables --region "$REGION" \
+      --filters "Name=tag:Name,Values=${PROJECT}-rtb-security" \
+      --query 'TransitGatewayRouteTables[0].TransitGatewayRouteTableId' --output text 2>/dev/null)
+    PTN_CIDR=$(terraform output -json partner 2>/dev/null | jq -r '.advertised[0] // empty' | cut -d. -f1-2)
+    back=$(aws ec2 search-transit-gateway-routes --region "$REGION" \
+      --transit-gateway-route-table-id "$SEC_RTB" \
+      --filters "Name=state,Values=active" \
+      --query 'Routes[].DestinationCidrBlock' --output text 2>/dev/null | tr '\t' '\n' | grep -c "^${PTN_CIDR}\." || echo 0)
+    [[ "${back:-0}" -ge 1 ]] \
+      && ok "  rtb-security co duong ve 3rd-party VPC" \
+      || bad "  rtb-security THIEU duong ve - doi tac se khong nhan duoc phan hoi"
+  fi
+
+  # Target cua NLB co song khong. Unhealthy o day gan nhu luon la
+  # thieu rule firewall cho health check (sid 1820), khong phai loi NLB.
+  TG=$(aws elbv2 describe-target-groups --region "$REGION" \
+    --names "${PROJECT}-partner-tg" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+  if [[ -n "$TG" && "$TG" != "None" ]]; then
+    health=$(aws elbv2 describe-target-health --region "$REGION" --target-group-arn "$TG" \
+      --query 'TargetHealthDescriptions[0].TargetHealth.State' --output text 2>/dev/null)
+    [[ "$health" == "healthy" ]] \
+      && ok "  NLB doi tac: target healthy" \
+      || bad "  NLB doi tac: target $health - kiem rule sid 1820 cho health check"
+  fi
+
+  skip "  Phep do that phai chay TU MAY GIA LAP: terraform output partner_check"
+fi
+
+########################################
 echo
 echo "════════════════════════════════════════════"
 printf " \033[32m%d dat\033[0m  \033[31m%d loi\033[0m  \033[33m%d bo qua\033[0m\n" "$PASS" "$FAIL" "$SKIP"

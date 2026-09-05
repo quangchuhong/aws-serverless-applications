@@ -30,7 +30,7 @@ Chênh lệch gần như toàn bộ là **Network Firewall endpoint** (~$285/th�
 | **DNS profile share cross-account** | ✅ | [12 mục 4](../../docs/12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) |
 | **Palo Alto (GWLB)** | ⏸ **code sẵn, mặc định tắt** | [14 mục 6](../../docs/14-Ingress-Chain-CDN-PaloAlto-F5-WAF.md) |
 | **F5 BIG-IP WAF** | ⏸ **code sẵn, mặc định tắt** | [18](../../docs/18-Cau-hinh-F5-BIG-IP-Advanced-WAF.md) |
-| 3rd-party VPC + VPN | ❌ chưa | [16](../../docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) |
+| **3rd-party VPC + Site-to-Site VPN** | ⏳ **code xong, đối tác giả lập, chưa apply** | [16](../../docs/16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) |
 
 Demo cũng **không tạo AWS account** và **không attach SCP** — cả hai đều làm `terraform destroy` không chạy được.
 
@@ -380,6 +380,8 @@ aws resourcegroupstaggingapi get-resources --region ap-southeast-1 \
 | `instances.tf` | EC2 nginx, vào bằng SSM |
 | `verify.sh` | 13 nhóm kiểm chứng, gồm chạy lệnh thật trên EC2 qua SSM và kiểm lớp `ops/` đọc từ AWS |
 | `teardown.sh` | Destroy + xác nhận sạch |
+| `partner.tf` | **3rd-party VPC** — vùng đệm, VGW, VPN, private NAT, NLB, `rtb-partner` |
+| `partner-sim.tf` + `templates/strongswan.sh.tftpl` | Đối tác **giả lập**: VPC riêng + EC2 strongSwan làm customer gateway. Đường hầm lên thật |
 | `ops/` | **Lớp vận hành, state riêng** — catalog YAML cho rule firewall, route ngoại lệ, VPC endpoint, bản ghi DNS. Chạm vào layer này đúng một điểm: `var.ops_rule_group_arns` |
 
 ---

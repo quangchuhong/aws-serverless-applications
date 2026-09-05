@@ -8,6 +8,20 @@ Tiếp nối [13 – Centralized Ingress/Egress](./13-Centralized-Ingress-Egress
 
 ---
 
+## 0. Trạng thái
+
+| | |
+|---|---|
+| **Code** | [`demo/network-lz-full/partner.tf`](../demo/network-lz-full/partner.tf) + `partner-sim.tf` — bật bằng `enable_partner_vpn = true` |
+| **Vận hành** | Hồ sơ đối tác là catalog YAML ở lớp ops: [`ops/catalog/partners.yaml`](../demo/network-lz-full/ops/catalog/partners.yaml) |
+| **Kiểm chứng** | `verify.sh` mục 10 — trạng thái đường hầm, `rtb-partner` không học địa chỉ spoke, đường về, sức khoẻ target |
+| **Chưa apply** | Phần cấu hình strongSwan trong `templates/strongswan.sh.tftpl` chưa chạy thật lần nào — xem mục 5.2 |
+| **Chi phí** | +~$0.21/giờ: VPN $0.05, private NAT $0.045, NLB $0.045, TGW attachment $0.05, EC2 $0.012 |
+
+Đối tác **giả lập**: một VPC riêng với EC2 chạy strongSwan làm customer gateway. Đường hầm lên thật, nên đo được cả tuyến. Cắm đối tác thật chỉ đổi `aws_customer_gateway.ip_address`.
+
+---
+
 ## 1. Nguyên tắc: đối tác không bao giờ chạm vào spoke
 
 Sai lầm phổ biến nhất là dựng VPN thẳng từ đối tác vào TGW rồi mở route tới VPC ứng dụng. Làm vậy nghĩa là:
@@ -152,6 +166,27 @@ Hai cách kết cuối VPN, khác nhau đáng kể về mức cách ly:
 | **Khuyến nghị** | Đối tác tin cậy, CIDR không trùng | **Mặc định cho enterprise** |
 
 Bài này dùng **VGW trong 3rd-party VPC**, vì nó cho phép xử lý CIDR trùng và giữ traffic đối tác trong một ranh giới rõ ràng trước khi cho vào TGW.
+
+---
+
+## 4b. VPC không định tuyến bắc cầu — và hai điểm tái khởi tạo
+
+Đây là ràng buộc quyết định toàn bộ hình dạng của thiết kế, và nó không hiện ra trong bất kỳ sơ đồ nào.
+
+**Gói tin vào VPC qua VGW không thể đi tiếp ra TGW attachment của chính VPC đó.** AWS chặn thẳng — không có route table nào sửa được. Nên "đối tác → 3rd-party VPC → TGW → spoke" không phải một đường liền; nó đứt ở giữa.
+
+Mỗi chiều cần một thứ **dừng luồng lại rồi phát lại**:
+
+| Chiều | Điểm tái khởi tạo | Vì sao nó qua được |
+|---|---|---|
+| Đối tác → bạn | **NLB nội bộ** ở `10.9.100.0/24` | Đối tác gọi địa chỉ NLB, mà địa chỉ đó **nằm trong VPC** nên VGW giao được. NLB mở một kết nối **mới** tới spoke, và kết nối mới đi ra bằng TGW attachment bình thường |
+| Bạn → đối tác | **Private NAT Gateway** ở `10.9.10.0/24` | Gói từ spoke vào VPC qua TGW attachment (chiều này không vướng), route trỏ vào NAT, NAT đổi nguồn rồi đẩy ra VGW |
+
+Hai hệ quả đáng nhớ:
+
+**Firewall không bao giờ thấy `172.16.x`.** Nguồn của lưu lượng đối tác, tính từ góc nhìn của firewall, là dải NLB. Rule khai từ dải thật của đối tác sẽ apply thành công và không khớp một gói tin nào — `ops/lint.sh` chặn trường hợp này.
+
+**Mọi đối tác ra cùng một CIDR nguồn.** Firewall không phân biệt được Acme với Globex. Muốn phân biệt ở tầng đó thì mỗi đối tác một NLB riêng; hoặc chấp nhận rằng tầng phân biệt là VPN và route, còn firewall chỉ nói "từ vùng đệm".
 
 ---
 

@@ -46,11 +46,13 @@ Bảng này trả lời: *cái gì đã có code chạy được, cái gì mới
 | **Spoke VPC ở account khác** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ✅ |
 | **Route 53 Profile share cross-account** | [12 mục 4](./12-DNS-va-VPC-Endpoint-Tap-Trung-AWS-Only.md) | `dns.tf` + template StackSet | ✅ |
 | **RAM share Transit Gateway** | [mục 4b](#4b-spoke-vpc-ở-account-khác) | `vpc-spokes-remote.tf` | ⚠️ chạy được, nhưng **phải đi đường vòng**² |
-| 3rd-party VPC + Site-to-Site VPN | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | — | ⬜ |
+| **3rd-party VPC + Site-to-Site VPN** | [16](./16-Ket-noi-Doi-tac-3rd-Party-VPC-va-VPN.md) | `partner.tf`, `partner-sim.tf` | ⏳ code xong, đối tác **giả lập** để đo được cả tuyến, chưa apply⁵ |
 | SCP khoá Internet | [13 mục 4](./13-Centralized-Ingress-Egress-Network.md) | — | ⬜ cố ý không đưa vào demo¹ |
 | **Lớp vận hành (route/port/endpoint/DNS)** | [25](./25-Van-hanh-Network-Hang-Ngay.md) | `demo/network-lz-full/ops/` | ✅ apply thật, policy đọc rule group ở ưu tiên 150⁴ |
 
 ¹ SCP chặn IGW/NAT làm `terraform destroy` kẹt giữa chừng. Chỉ áp ở môi trường thật, sau khi đã dọn NAT/IGW cũ.
+
+⁵ Phần dễ hỏng nhất là cấu hình strongSwan trong `templates/strongswan.sh.tftpl` — nó không được `terraform validate` hay `plan` kiểm chứng, chỉ đường hầm lên hay không mới trả lời. `verify.sh` mục 10 đọc trạng thái tunnel từ AWS nên nó nói ngay, không phải đoán từ việc ping không thông.
 
 ⁴ State riêng trong S3 qua `tf-backend`, chạm vào layer chính đúng một điểm (`var.ops_rule_group_arns`). Catalog YAML khai bằng **tên app** chứ không phải CIDR: gõ nhầm một chữ số trong CIDR thì apply vẫn xanh và rule không khớp gì trọn đời — cùng loại im lặng với lỗi 62. `lint.sh` chạy không cần AWS.
 
