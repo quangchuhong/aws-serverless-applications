@@ -262,7 +262,13 @@ resource "aws_instance" "partner_sim" {
 
     local_cidr   = var.partner_sim_cidr
     service_port = var.partner_service_port
-    nlb_cidr     = local.partner_nlb_cidr
+
+    # TEN DNS cua NLB, khong phai mot IP doan tu dai subnet.
+    #
+    # NLB nhan IP tu AWS trong dai 10.9.100.0/24 va 10.9.101.0/24, va
+    # chung KHONG co dia chi co dinh - doan ".100" la doan. Ten DNS
+    # phan giai duoc tu trong duong ham vi VPC bat enable_dns_support.
+    nlb_dns = aws_lb.partner[0].dns_name
   })
 
   tags = { Name = "${var.project}-partner-sim" }

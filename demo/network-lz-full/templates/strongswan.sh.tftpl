@@ -178,6 +178,15 @@ systemctl enable vpn-vti.service || true
 # Dat thanh script de nguoi vao qua SSM go mot chu la xong, thay vi
 # nho sau lenh khac nhau luc 2 gio sang.
 ########################################
+# %%{http_code} PHAI viet hai dau phan tram.
+#
+# Terraform doc %%{ la mo mot directive cua template - giong ${ }. Viet
+# mot dau phan tram thi templatefile() hong ngay o PLAN, truoc khi co
+# resource nao duoc tao, va thong bao noi ve "Invalid template
+# directive" chu khong noi day la mot chuoi dinh dang cua curl.
+#
+# Cung ho voi loi 69: mot chuoi hoan toan hop le trong ngu canh cua no,
+# dat vao mot ngu canh khac thi thanh cu phap cua ngon ngu khac.
 cat > /usr/local/bin/vpn-check <<'CHK'
 #!/bin/bash
 echo "=== IPsec SA ==="
@@ -190,11 +199,14 @@ echo "=== Route qua duong ham ==="
 ip route show | grep -E 'vti' || echo "(khong co route nao gan vao vti)"
 echo
 echo "=== Goi dich vu ban cong bo ==="
-for ip in $(ip route show | grep -oE '^[0-9.]+/[0-9]+' | head -5); do :; done
-curl -s -m 5 -o /dev/null -w "  NLB %{http_code}\n" "http://__NLB__:__PORT__/" \
-  || echo "  NLB khong tra loi"
+echo "  (200 = ca tuyen thong: IPsec -> VGW -> NLB -> TGW -> firewall -> spoke)"
+curl -s -m 5 -o /dev/null -w "  NLB tra ve %%{http_code}\n" "http://__NLB__:__PORT__/" \
+  || echo "  NLB khong tra loi - xem IPsec SA o tren truoc"
+echo
+echo "=== Lop cach ly - PHAI THAT BAI ==="
+echo "  May nay khong duoc phep goi thang toi spoke."
 CHK
-sed -i "s|__NLB__|$(echo ${nlb_cidr} | cut -d/ -f1 | awk -F. '{print $1"."$2"."$3".100"}')|" /usr/local/bin/vpn-check
+sed -i "s|__NLB__|${nlb_dns}|" /usr/local/bin/vpn-check
 sed -i "s|__PORT__|${service_port}|" /usr/local/bin/vpn-check
 chmod +x /usr/local/bin/vpn-check
 
