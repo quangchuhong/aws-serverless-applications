@@ -619,3 +619,41 @@ output "partner_check" {
     "",
   ])
 }
+
+########################################
+# HANDLE CHO LAYER account-baseline
+#
+# Ba chuoi, va chi ba chuoi. Day la TOAN BO be mat tiep xuc giua
+# layer nay va viec tao account moi - cung khuon voi ops_handles
+# giua layer nay va lop ops cua no.
+#
+# Giu no nho co chu dich: moi truong them vao day la mot thu layer
+# kia co the phu thuoc vao, va moi phu thuoc la mot ly do hai layer
+# phai apply cung nhau.
+########################################
+
+output "network_handles" {
+  description = <<-EOT
+    Dan vao terraform.tfvars cua landing-zone/account-baseline.
+
+    Chuoi rong nghia la thu do chua duoc bat o day - va account moi
+    se nhan mot VPC KHONG noi vao luoi. check o layer kia noi ra
+    truong hop do luc plan, chu khong de no im lang.
+  EOT
+  value = {
+    transit_gateway_id = aws_ec2_transit_gateway.hub.id
+    dns_profile_id     = try(aws_route53profiles_profile.shared[0].id, "")
+    internal_supernet  = var.internal_supernet
+  }
+}
+
+output "paste_network_handles" {
+  description = "Khoi tfvars san sang dan sang account-baseline"
+  value = join("\n", [
+    "network_handles = {",
+    "  transit_gateway_id = \"${aws_ec2_transit_gateway.hub.id}\"",
+    "  dns_profile_id     = \"${try(aws_route53profiles_profile.shared[0].id, "")}\"",
+    "  internal_supernet  = \"${var.internal_supernet}\"",
+    "}",
+  ])
+}
