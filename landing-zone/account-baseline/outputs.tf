@@ -167,3 +167,37 @@ output "next_steps" {
 
   EOT
 }
+
+########################################
+# BUOC KHONG TU DONG HOA DUOC
+#
+# Attachment cua account workload xuat hien o ACCOUNT NETWORK, va
+# layer nay khong voi toi do duoc. Sinh san khoi tfvars cho layer
+# kia thay vi de nguoi ta tu di tim ID.
+########################################
+
+output "paste_spoke_accounts" {
+  description = <<-EOT
+    Dan vao terraform.tfvars cua landing-zone/network, roi apply ben
+    do. Thieu buoc nay thi VPC ton tai, attachment ton tai, va KHONG
+    CO GOI TIN NAO DI DAU CA.
+  EOT
+  value = length(local.spoke_requests) == 0 ? "(chua co account nao xin mang)" : join("\n", concat(
+    ["spoke_accounts = ["],
+    [for k in sort(keys(local.spoke_requests)) :
+    "  \"${try(aws_organizations_account.this[k].id, "chua-tao")}\",  # ${k}"],
+    ["]"],
+  ))
+}
+
+output "spoke_networks" {
+  description = "Account nao nhan VPC nao, va no co noi vao luoi khong"
+  value = {
+    for k, v in local.spoke_requests : k => {
+      account_id    = try(aws_organizations_account.this[k].id, "chua-tao")
+      vpc_cidr      = v.vpc_cidr
+      noi_tgw       = v.attach_tgw && try(local.net.transit_gateway_id, "") != ""
+      dns_tap_trung = try(local.net.dns_profile_id, "") != ""
+    }
+  }
+}

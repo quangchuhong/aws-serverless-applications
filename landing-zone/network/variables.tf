@@ -403,3 +403,49 @@ variable "allow_destroy" {
   type        = bool
   default     = false
 }
+
+variable "enable_dns_profile" {
+  description = <<-EOT
+    Dung Route 53 Profile de mang PHZ sang account khac.
+
+    Khong bat thi moi cap (zone, VPC) can hai lenh o hai account, va
+    con so nhan len theo so account - xem output paste_endpoint_dns.
+
+    Bat thi gan zone vao profile MOT LAN, share profile qua RAM mot
+    lan, roi moi VPC gan vao bang mot resource nam trong chinh
+    template CloudFormation cua spoke. Do la duong duy nhat tu dong
+    hoa duoc, vi buoc cuoi chay o account so huu VPC.
+
+    Can share_tgw_with_org = true: profile khong share thi account
+    workload khong nhin thay no.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "spoke_accounts" {
+  description = <<-EOT
+    Account ID cua cac account workload. Layer nay TU TIM attachment
+    cua chung va noi vao route table.
+
+    Thay cho viec khai tay tung attachment ID trong spoke_attachments.
+    Hai duong dung chung mot dich va gop lai; khai ca hai cho cung
+    mot attachment thi khong sao - trung bi bo.
+
+    THU TU QUAN TRONG. data source doc luc PLAN, nen:
+
+      1. landing-zone/account-baseline apply  -> VPC + attachment
+      2. layer nay apply                      -> noi vao route table
+
+    Chay nguoc lai thi buoc 2 khong lam gi va KHONG BAO GI. Doc
+    output spokes_wired sau moi lan them account - so attachment da
+    noi lech voi so account la dau hieu duy nhat.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for a in var.spoke_accounts : can(regex("^[0-9]{12}$", a))])
+    error_message = "Account ID phai dung 12 chu so."
+  }
+}

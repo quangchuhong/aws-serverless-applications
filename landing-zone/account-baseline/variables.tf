@@ -342,3 +342,50 @@ variable "harden_default_security_group" {
   type        = bool
   default     = true
 }
+
+variable "availability_zones" {
+  description = <<-EOT
+    AZ dat subnet cho VPC cua account workload. TOI THIEU 2.
+
+    De rong = lay hai AZ dau cua region (<region>a, <region>b).
+
+    Day la TEN AZ. Ten "ap-southeast-1a" tro vao mot AZ VAT LY khac
+    nhau o moi account - AWS xao tron co chu dich de tai khong don ve
+    mot AZ. Voi mot VPC nen thi khong sao. Voi thu can dat cung AZ vat
+    ly voi account khac (vi du de tranh phi cross-AZ) thi phai dung
+    AZ ID, va luc do khong khai o day duoc nua.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = length(var.availability_zones) == 0 || length(var.availability_zones) >= 2
+    error_message = "Toi thieu 2 AZ, hoac de rong de lay mac dinh."
+  }
+}
+
+variable "network_handles" {
+  description = <<-EOT
+    Handle tu layer `network`. Dan tu output cua no.
+
+      cd ../network && terraform output network_handles
+
+    De RONG thi VPC van duoc tao nhung KHONG noi vao luoi: khong TGW,
+    khong DNS tap trung. check "spokes_have_a_transit_gateway" noi ra
+    truong hop do luc plan.
+
+    VI SAO DAN TAY CHU KHONG DOC REMOTE STATE
+
+    Layer nay chay o MANAGEMENT, layer network chay o account network.
+    Doc state cua nhau doi mot duong quyen giua hai account chi de
+    lay ba chuoi khong bao gio doi. Dan tay thi ranh gioi ro rang, va
+    ba chuoi do di qua mot lan review.
+  EOT
+
+  type = object({
+    transit_gateway_id = optional(string, "")
+    dns_profile_id     = optional(string, "")
+    internal_supernet  = optional(string, "10.0.0.0/8")
+  })
+  default = {}
+}

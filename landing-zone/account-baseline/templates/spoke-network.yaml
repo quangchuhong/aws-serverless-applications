@@ -1,0 +1,284 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# ==============================================================
+# MANG NEN CHO MOT ACCOUNT WORKLOAD
+#
+# Trien khai qua StackSet tu management account, mot stack instance
+# cho moi account co khoi `network` trong catalog.
+#
+# VI SAO LA CLOUDFORMATION CHU KHONG PHAI TERRAFORM
+#
+# Terraform can MOT PROVIDER ALIAS cho moi account, va provider
+# KHONG SINH DONG DUOC bang for_each. 20 account la 20 alias viet
+# tay, va account thu 21 la mot lan sua code.
+#
+# StackSet thi nhan danh sach account nhu du lieu. Do la ly do duy
+# nhat, va no du lon.
+#
+# --------------------------------------------------------------
+# CHIA SUBNET - doc 17 muc 3
+#
+# VPC /16 chia thanh 4 dai /24 bang Fn::Cidr:
+#
+#   0  private-a   ung dung
+#   1  private-b   ung dung
+#   2  tgw-a       CHI cho ENI cua TGW attachment
+#   3  tgw-b
+#
+# Subnet TGW rieng, KHONG dung chung voi subnet ung dung: ENI cua
+# attachment nam trong subnet nao thi luu luong vao/ra VPC di qua AZ
+# do. Tron chung thi mot ACL hay mot route sua cho ung dung se doi
+# ca duong cua TGW - va trieu chung la mot AZ mat ket noi trong khi
+# AZ kia binh thuong.
+#
+# Con /16 nguyen ven cho viec mo rong: 4 dai dau dung het 10.x.0-3,
+# con lai 10.x.4 den 10.x.255.
+# ==============================================================
+
+Description: LZ account baseline - mang nen cho account workload
+
+Parameters:
+  ProjectName:
+    Type: String
+  AccountName:
+    Type: String
+  VpcCidr:
+    Type: String
+    AllowedPattern: '^10\.\d{1,3}\.0\.0/16$'
+    ConstraintDescription: Phai la mot dai 10.x.0.0/16 theo bang cap phat o doc 17
+  AzA:
+    Type: AWS::EC2::AvailabilityZone::Name
+  AzB:
+    Type: AWS::EC2::AvailabilityZone::Name
+  TransitGatewayId:
+    Type: String
+    Default: ""
+  DnsProfileId:
+    Type: String
+    Default: ""
+  InternalSupernet:
+    Type: String
+    Default: 10.0.0.0/8
+  AttachTgw:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+
+Conditions:
+  # Noi TGW can CA hai: nguoi ta muon noi, VA co TGW de noi. Thieu ve
+  # thu hai ma van tao attachment thi stack hong o giua voi mot loi
+  # noi ve mot ID rong.
+  DoAttach: !And
+    - !Equals [!Ref AttachTgw, "true"]
+    - !Not [!Equals [!Ref TransitGatewayId, ""]]
+
+  # DNS tap trung chi gan duoc khi profile da duoc share sang account
+  # nay. Chua share thi bo qua - VPC van dung duoc, chi la khong phan
+  # giai duoc ten noi bo.
+  DoDns: !Not [!Equals [!Ref DnsProfileId, ""]]
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-vpc"
+
+  PrivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Ref AzA
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-private-a"
+        - Key: Tier
+          Value: private
+
+  PrivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Ref AzB
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-private-b"
+        - Key: Tier
+          Value: private
+
+  TgwA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Ref AzA
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-tgw-a"
+        - Key: Tier
+          Value: tgw
+
+  TgwB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Ref AzB
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-tgw-b"
+        - Key: Tier
+          Value: tgw
+
+  PrivateRt:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-private-rt"
+
+  AssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRt
+      SubnetId: !Ref PrivateA
+
+  AssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRt
+      SubnetId: !Ref PrivateB
+
+  # ------------------------------------------------------------
+  # KHONG CO INTERNET GATEWAY, KHONG CO NAT
+  #
+  # Khong phai quen. Duong ra Internet di qua egress VPC tap trung:
+  # spoke -> TGW -> security VPC (thanh tra) -> egress VPC -> NAT.
+  #
+  # Mot IGW o day la mot duong vong qua toan bo lop thanh tra, va no
+  # se khong bao gio hien ra trong log cua firewall - vi goi tin
+  # khong bao gio di qua do.
+  #
+  # network_lock SCP chan viec tao IGW trong account workload.
+  # ------------------------------------------------------------
+
+  Attachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Condition: DoAttach
+    Properties:
+      TransitGatewayId: !Ref TransitGatewayId
+      VpcId: !Ref Vpc
+      SubnetIds:
+        - !Ref TgwA
+        - !Ref TgwB
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-tgwa-${AccountName}"
+
+  # Route mac dinh vao TGW. DependsOn Attachment, khong phai vi thu
+  # tu dep ma vi route tro toi mot attachment chua ton tai thi
+  # CloudFormation bao "invalid transit gateway ID" - mot thong bao
+  # noi ve ID trong khi van de la thoi diem.
+  DefaultToTgw:
+    Type: AWS::EC2::Route
+    Condition: DoAttach
+    DependsOn: Attachment
+    Properties:
+      RouteTableId: !Ref PrivateRt
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayId: !Ref TransitGatewayId
+
+  # ------------------------------------------------------------
+  # VPC ENDPOINT
+  #
+  # Gateway endpoint (S3, DynamoDB) phai nam TRONG tung VPC - chung
+  # lam viec o tang route table, khong phai tang DNS, nen khong the
+  # dung chung. Bu lai chung MIEN PHI va bo duoc phi NAT cho luu
+  # luong S3.
+  #
+  # Interface endpoint thi NGUOC LAI: dat tap trung o security VPC,
+  # spoke goi toi qua TGW va phan giai bang DNS profile ben duoi.
+  # Mot ENI moi AZ moi dich vu la ~$0.01/gio - nhan len theo so
+  # account thi khong ai tra noi.
+  # ------------------------------------------------------------
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRt
+
+  DynamoDbEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.dynamodb"
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRt
+
+  # DNS tap trung.
+  #
+  # Profile mang theo CA PHZ noi bo LAN cac PHZ cua interface
+  # endpoint. Gan mot lan la VPC nay phan giai duoc ten cua spoke
+  # khac VA tro duoc ten AWS vao endpoint noi bo.
+  #
+  # Khong co no thi ssm.<region>.amazonaws.com phan giai ra IP cong
+  # khai, luu luong di vong ra Internet, va endpoint tap trung van
+  # tinh tien ma khong ai dung.
+  DnsProfile:
+    Type: AWS::Route53Profiles::ProfileAssociation
+    Condition: DoDns
+    Properties:
+      Name: !Sub "${ProjectName}-${AccountName}"
+      ProfileId: !Ref DnsProfileId
+      ResourceId: !Ref Vpc
+
+  # Security group nen. KHONG mo gi ra Internet - dai duy nhat duoc
+  # phep goi vao la mang noi bo, va luu luong do da di qua firewall
+  # truoc khi toi day.
+  BaselineSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Baseline cho ${AccountName} - chi tu mang noi bo"
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - Description: HTTP tu mang noi bo
+          CidrIp: !Ref InternalSupernet
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - Description: HTTPS tu mang noi bo
+          CidrIp: !Ref InternalSupernet
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+      SecurityGroupEgress:
+        - Description: Ra ngoai qua TGW
+          CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${AccountName}-baseline"
+
+Outputs:
+  VpcId:
+    Value: !Ref Vpc
+  PrivateSubnets:
+    Value: !Sub "${PrivateA},${PrivateB}"
+  BaselineSecurityGroup:
+    Value: !GetAtt BaselineSg.GroupId
+  AttachmentId:
+    Condition: DoAttach
+    Value: !Ref Attachment
+    Description: Dan ID nay vao spoke_attachments cua layer network

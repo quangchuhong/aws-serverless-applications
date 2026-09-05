@@ -78,8 +78,18 @@ output "firewall_log_bucket" {
 }
 
 output "spokes_wired" {
-  description = "Attachment da duoc noi vao route table"
-  value       = keys(var.spoke_attachments)
+  description = <<-EOT
+    Attachment DA duoc noi vao route table, tu ca hai duong.
+
+    So nay lech voi so account workload la dau hieu DUY NHAT cua
+    truong hop hong im lang: attachment ton tai, VPC ton tai, va
+    khong co goi tin nao di dau ca. Doc no sau moi lan them account.
+  EOT
+  value = {
+    khai_tay = keys(var.spoke_attachments)
+    tu_tim   = sort(tolist(local.discovered_attachments))
+    tong     = length(local.all_spoke_attachments)
+  }
 }
 
 ########################################
@@ -271,4 +281,48 @@ output "next_steps" {
 output "endpoint_zone_ids" {
   description = "Dich vu -> zone ID cua PHZ. Dung cho buoc 6 o tren."
   value       = { for k, z in aws_route53_zone.endpoint : k => z.zone_id }
+}
+
+########################################
+# HANDLE CHO LAYER account-baseline
+#
+# Ba chuoi, va chi ba chuoi. Day la TOAN BO be mat tiep xuc giua
+# layer nay va viec tao account moi - giong ops_handles giua
+# demo/network-lz-full va lop ops cua no.
+#
+# Giu no nho co chu dich: moi truong them vao day la mot thu layer
+# kia co the phu thuoc vao, va moi phu thuoc la mot ly do hai layer
+# phai apply cung nhau.
+########################################
+
+output "network_handles" {
+  description = <<-EOT
+    Dan vao terraform.tfvars cua landing-zone/account-baseline:
+
+      network_handles = {
+        transit_gateway_id = "..."
+        dns_profile_id     = "..."
+        internal_supernet  = "..."
+      }
+
+    Chuoi rong nghia la thu do chua duoc bat o day - va account moi
+    se nhan mot VPC khong noi vao luoi. check o layer kia noi ra
+    truong hop do luc plan.
+  EOT
+  value = {
+    transit_gateway_id = try(aws_ec2_transit_gateway.hub[0].id, "")
+    dns_profile_id     = try(aws_route53profiles_profile.shared[0].id, "")
+    internal_supernet  = var.internal_supernet
+  }
+}
+
+output "paste_network_handles" {
+  description = "Khoi tfvars san sang dan sang account-baseline"
+  value = join("\n", [
+    "network_handles = {",
+    "  transit_gateway_id = \"${try(aws_ec2_transit_gateway.hub[0].id, "")}\"",
+    "  dns_profile_id     = \"${try(aws_route53profiles_profile.shared[0].id, "")}\"",
+    "  internal_supernet  = \"${var.internal_supernet}\"",
+    "}",
+  ])
 }

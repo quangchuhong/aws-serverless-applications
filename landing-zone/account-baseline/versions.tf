@@ -67,13 +67,24 @@ locals {
   common_tags = {
     CostCenter  = var.cost_center
     Owner       = var.owner
-    Environment = "shared"
+    Environment = "prod" # ha tang quan tri - "shared" bi tag policy tu choi
     Project     = var.project
     ManagedBy   = "terraform"
     Repo        = "aws-serverless-applications/landing-zone/account-baseline"
   }
 
   enabled = var.enable
+
+  # AZ cho VPC cua account workload.
+  #
+  # TEN AZ, khong phai AZ ID. Ten "ap-southeast-1a" tro vao mot AZ
+  # VAT LY khac nhau o moi account - AWS xao tron co chu dich de tai
+  # khong don ve mot AZ. Voi mot VPC nen thi khong sao; voi thu can
+  # dat cung AZ vat ly voi mot account khac thi phai dung AZ ID, va
+  # luc do khong khai o day duoc nua.
+  azs = length(var.availability_zones) > 0 ? var.availability_zones : [
+    "${var.region}a", "${var.region}b",
+  ]
 }
 
 data "aws_caller_identity" "current" {}

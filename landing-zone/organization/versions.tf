@@ -33,7 +33,7 @@ locals {
   common_tags = {
     CostCenter  = var.cost_center
     Owner       = var.owner
-    Environment = "shared"
+    Environment = "prod" # ha tang quan tri - "shared" bi tag policy tu choi
     Project     = var.project
     ManagedBy   = "terraform"
     Repo        = "aws-serverless-applications/landing-zone/organization"
