@@ -15,8 +15,15 @@ locals {
     "landing-zone/permission-sets"  = "permission-sets/terraform.tfstate"
     "landing-zone/org-trail"        = "org-trail/terraform.tfstate"
     "landing-zone/account-baseline" = "account-baseline/terraform.tfstate"
-    "landing-zone/network"          = "network/terraform.tfstate"
     "landing-zone/service-catalog"  = "service-catalog/terraform.tfstate"
+
+    # "landing-zone/network" KHONG khai o day - xem khoi ben duoi.
+    #
+    # Truoc day no duoc khai o CA HAI cho, "network/terraform.tfstate"
+    # o dong nay va "demo-network-lz-full/..." o duoi. HCL khong bao
+    # khoa trung trong mot object literal: cai SAU de len cai truoc, im
+    # lang. Nen dong o day chua bao gio co tac dung - va ai xoa khoi
+    # ben duoi di se lang le tro layer network vao mot state RONG.
 
     # Demo, NHUNG dang duoc giu lai lam mang that (ephemeral = false).
     # Demo binh thuong dung state local la du - dung len xem roi xoa.
@@ -55,7 +62,7 @@ locals {
     # Cau do doc nhu mot su co cua AWS ("unusually long delays in S3")
     # va bao nguoi ta cho vai phut. Cho bao lau cung khong het.
     #
-    #   TABLE=$(terraform output -raw dynamodb_table)
+    #   TABLE=$(terraform output -raw lock_table)
     #   aws dynamodb delete-item --region <region> --table-name "$TABLE" \
     #     --key '{"LockID":{"S":"<bucket>/<key>-md5"}}'
     "landing-zone/network" = "demo-network-lz-full/terraform.tfstate"

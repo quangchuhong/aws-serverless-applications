@@ -249,7 +249,7 @@ Thông báo bảo *"unusually long delays in S3 … wait for a minute or two"*. 
 
 ```bash
 cd landing-zone/tf-backend
-TABLE=$(terraform output -raw dynamodb_table)
+TABLE=$(terraform output -raw lock_table)
 aws dynamodb delete-item --region ap-southeast-1 --table-name "$TABLE" \
   --key '{"LockID":{"S":"<bucket>/demo-network-lz-full/ops/terraform.tfstate-md5"}}'
 aws s3 rm "s3://<bucket>/demo-network-lz-full/ops/terraform.tfstate"

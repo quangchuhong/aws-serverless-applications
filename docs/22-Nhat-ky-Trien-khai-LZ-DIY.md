@@ -3023,7 +3023,7 @@ Nên trình tự đã xảy ra là:
 
 ```bash
 cd landing-zone/tf-backend
-TABLE=$(terraform output -raw dynamodb_table)
+TABLE=$(terraform output -raw lock_table)
 
 aws dynamodb delete-item --region ap-southeast-1 --table-name "$TABLE" \
   --key '{"LockID":{"S":"<bucket>/demo-network-lz-full/ops/terraform.tfstate-md5"}}'
