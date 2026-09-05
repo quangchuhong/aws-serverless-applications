@@ -709,54 +709,151 @@ Nhớ `treat_missing_data = "breaching"` — VPN chưa từng lên thì không c
 
 ---
 
-## 10. Vận hành – phần con người
+## 10. Vận hành
 
-Kết nối đối tác khác các phần khác của LZ ở chỗ **có một tổ chức khác cùng tham gia**. Phần lớn sự cố đến từ phối hợp, không phải kỹ thuật.
+Kết nối đối tác khác các phần khác của LZ ở chỗ **có một tổ chức khác cùng tham gia**. Phần lớn sự cố đến từ phối hợp, không phải kỹ thuật — nhưng phần kỹ thuật phải tự động đủ để phần phối hợp có chỗ mà đứng.
 
-### 10.1. Hồ sơ mỗi đối tác
+### 10.1. Hai layer, và ranh giới giữa chúng
 
-Mỗi kết nối cần một tài liệu, để trong Git cạnh Terraform:
+Đây là điều cần nắm trước mọi thứ khác. Hạ tầng đối tác nằm ở hai nơi, và biết cái nào ở đâu quyết định bạn sửa file nào:
+
+| Thứ | Ở đâu | Đổi bao lâu một lần |
+|---|---|---|
+| VPC vùng đệm, VGW, VPN connection, customer gateway, private NAT | `demo/network-lz-full/partner.tf` | vài tháng |
+| Bản thân NLB và security group của nó | `partner.tf` | vài tháng |
+| **Target group, target, listener** | `ops/vpn.tf` ← `catalog/partners.yaml` | **hằng tuần** |
+| **Rule mở cổng trên security group** | `ops/vpn.tf` ← `catalog/partners.yaml` | **hằng tuần** |
+| **Route VPN cho dải phụ** | `ops/vpn.tf` ← `catalog/partners.yaml` | hằng tháng |
+| **Rule firewall** | `ops/firewall.tf` ← `catalog/firewall-rules.yaml` | **hằng tuần** |
+| Cảnh báo đường hầm | `ops/vpn.tf` | tự động |
+
+Nguyên tắc chia: **ai sở hữu listener thì sở hữu cả rule mở cổng cho nó.** Cắt sai chỗ này là lỗi 82 — listener ở một layer, security group ở layer kia, hai nửa của cùng một thay đổi lệch nhau, và triệu chứng là hết giờ không log.
+
+### 10.2. Hồ sơ đối tác — một file, không phải hai
 
 ```yaml
-# partners/partner-a.yaml
-partner:
-  name: "Công ty A"
-  business_owner: "nguyenvb@acme.com"
-  technical_contact: "noc@partner-a.com"
-  escalation_phone: "+84..."
-  contract_expiry: "2027-06-30"
+# ops/catalog/partners.yaml
+partners:
+  - name: acme
+    remote_cidr: 172.16.0.0/16        # dải họ công bố cho bạn
+    extra_cidrs: [10.240.0.0/16]      # dải phụ, thành route VPN tĩnh
+    contact: noc@acme.example
+    ticket: PARTNER-2024-11
+    expires: 2026-12-31               # ngày hết hợp đồng
+    note: Đối soát đơn hàng hằng đêm
 
-connectivity:
-  type: "site-to-site-vpn"
-  customer_gateway_ip: "203.0.113.10"
-  bgp_asn: 65010
-
-cidr:
-  they_advertise: ["172.16.0.0/16"]
-  we_advertise: ["10.9.10.0/24"]
-  service_addresses: ["10.9.100.50"]
-
-allowed_flows:
-  - direction: "inbound"
-    source: "172.16.0.0/16"
-    destination: "10.9.100.50"
-    port: 443
-    purpose: "Doi tac goi API don hang"
-    approved_by: "security-team"
-    review_date: "2027-01-15"
-
-  - direction: "outbound"
-    source: "10.9.10.0/24"
-    destination: "172.16.5.10"
-    port: 443
-    purpose: "Truy van ton kho"
-    approved_by: "security-team"
-    review_date: "2027-01-15"
+    services:
+      - name: order
+        port: 8080                    # đối tác gọi vào cổng này
+        target_port: 80               # ứng dụng thật sự nghe cổng này
+        target: order-api             # app trong apps.yaml, cidr phải là /32
+        expires: 2026-06-30           # dịch vụ có thể hết trước hợp đồng
 ```
 
-Trường `review_date` là thứ hay bị bỏ qua nhất: kết nối đối tác có xu hướng **sống lâu hơn lý do tạo ra nó**. Rà soát định kỳ, và đóng những kết nối không còn ai dùng.
+**Dải bạn công bố cho họ không khai ở đây.** Nó do layer cha quyết định (dải NAT + dải NLB) và lớp ops đọc từ `ops_handles`. Khai lại là hai chỗ có thể lệch nhau — và tài liệu bạn đưa cho đối tác sẽ là chỗ sai.
 
-### 10.2. Danh sách kiểm tra khi thêm đối tác mới
+Cũng vì thế, thứ đưa cho đối tác **sinh ra từ chính cấu hình đang chạy**, không gõ tay:
+
+```bash
+cd demo/network-lz-full/ops && terraform output -raw partner_handover
+```
+
+In ra dải hai bên, danh sách dịch vụ kèm cổng và hạn, và câu cuối nói rằng ngoài những dải đó **không có đường nào tồn tại** — không phải bị chặn, mà là không tồn tại.
+
+> Bản trước của tài liệu này mô tả một `partners/partner-a.yaml` viết tay chép lại CIDR, cổng và ngày rà soát. Nó đã bị bỏ: mọi trường trong đó hoặc suy ra được từ state, hoặc là thứ sẽ lệch với thực tế sau lần sửa Terraform đầu tiên mà không ai cập nhật lại tài liệu.
+
+### 10.3. Runbook — thêm một đối tác mới
+
+**Layer cha** (một lần cho mỗi đối tác):
+
+```bash
+cd demo/network-lz-full
+# terraform.tfvars: enable_partner_vpn = true
+# aws_customer_gateway.ip_address = IP thiết bị VPN của họ
+terraform apply
+```
+
+Chuyển PSK qua kênh riêng — **không email, không chat**. Xem mục 5.1.
+
+**Lớp ops** (hồ sơ và dịch vụ):
+
+```bash
+cd ops
+# catalog/partners.yaml: thêm khối partner
+./lint.sh && terraform plan && terraform apply
+```
+
+`lint.sh` chặn trước khi apply: tên sai định dạng, `remote_cidr` lệch dải layer cha thật sự định tuyến, trùng tên đối tác, hợp đồng đã hết hạn.
+
+### 10.4. Runbook — công bố một dịch vụ
+
+Thao tác hay xin nhất, và nó **không** động tới đường hầm.
+
+**Bước 1** — thêm khối `services` vào hồ sơ đối tác (schema ở 10.2).
+
+**Bước 2** — mở đường qua firewall. Cổng ở đây là **`target_port`**, không phải `port`:
+
+```yaml
+# ops/catalog/firewall-rules.yaml
+- id: fw-0020
+  from: partner-acme        # dải NLB, KHÔNG phải dải của đối tác
+  to: order-api
+  ports: [80]               # target_port
+  ticket: PARTNER-2024-11
+  expires: 2026-12-31
+```
+
+**Bước 3**:
+
+```bash
+./lint.sh && terraform plan && terraform apply
+```
+
+Sinh ra bốn thứ: target group, target, listener, và rule mở cổng trên security group của NLB.
+
+Ba chỗ dễ sai, cả ba đều bị chặn **trước** khi apply:
+
+| Sai | Vì sao nó im lặng nếu không chặn |
+|---|---|
+| `from` là dải thật của đối tác thay vì `partner-<tên>` | NLB dừng kết nối của họ lại và mở kết nối **mới** tới ứng dụng, nên firewall thấy nguồn là dải NLB. Rule khai dải đối tác apply thành công và không khớp gói tin nào |
+| `ports` là `port` thay vì `target_port` | Firewall nằm trên kết nối **thứ hai**, từ NLB tới ứng dụng. Rule mở cổng ngoài mô tả một kết nối không bao giờ xảy ra |
+| Trùng cổng với dịch vụ khác hoặc với `reserved_port` | Một NLB cho **mọi** đối tác, và NLB chỉ cho một listener trên một cổng — nên Acme và Globex chạm cổng nhau được |
+
+`lint.sh` **đối chiếu hai file**: với mỗi dịch vụ nó tìm rule từ `partner-<tên>` tới đúng app đó và kiểm rule ấy có mở `target_port` không. Phép đối chiếu này quan trọng vì ở chế độ `alert` cả hai trạng thái đều "chạy" — ngày chuyển sang `drop` mới đứt.
+
+### 10.5. Runbook — cắt một dịch vụ, hoặc một đối tác
+
+**Cắt một dịch vụ:** xoá khối `services` đó, `apply`. Listener và rule mở cổng biến mất **ngay** — không chờ rule firewall.
+
+Hai lớp trả lời hai câu hỏi khác nhau, và gỡ **một trong hai** là đủ để cắt:
+
+| Lớp | Câu hỏi |
+|---|---|
+| Listener + rule SG | Đối tác **gọi được** tới đâu |
+| Rule firewall | Gói tin có **đi tiếp** tới spoke không |
+
+Giữ cả hai để một sai sót ở một lớp không tự nó mở đường.
+
+**Cắt một đối tác:** xoá cả khối partner. Điều đó cũng bỏ app `partner-<tên>`, nên mọi rule firewall trỏ tới nó sẽ **làm `lint.sh` đỏ** — đúng ý đồ: nó bắt bạn dọn nốt thay vì để lại rule trỏ vào hư không.
+
+**Hết hạn không tự cắt.** `expires` chỉ làm `lint.sh` thoát khác 0 và job `expiry` trong CI đỏ mỗi ngày. Gỡ vẫn là một commit có người duyệt — cắt đường của đối tác lúc nửa đêm là một cuộc gọi điện lúc nửa đêm.
+
+### 10.6. Cảnh báo đường hầm
+
+`ops/vpn.tf` tạo hai cảnh báo CloudWatch trên `TunnelState`:
+
+| Cảnh báo | Ngưỡng | Nghĩa |
+|---|---|---|
+| `-DUT` | Average < 0.5, 2 phút | Cả hai đường hầm xuống — đứt hẳn |
+| `-mat-du-phong` | Average < 1, 15 phút | Một đường hầm xuống — **vẫn chạy**, hết dự phòng |
+
+Hai mức vì chúng đòi hai hành động khác nhau. Gộp làm một thì hoặc bỏ qua trạng thái mất dự phòng, hoặc kêu mỗi lần AWS bảo trì một đường hầm — và kiểu thứ hai thì sau vài lần không ai đọc nữa.
+
+Mức "đứt" đặt `treat_missing_data = "breaching"`: một VPN connection **ngừng phát metric** là tin xấu, không phải tin trung tính. Mặc định của CloudWatch là im lặng trong trường hợp đó.
+
+Chúng chỉ gọi được ai khi `alarm_actions` trỏ tới SNS topic thật. Để rỗng thì cảnh báo vẫn được tạo và vẫn đổi trạng thái trong console — chỉ là **không ai được báo**, và người phát hiện ra sẽ là đối tác. `check "partner_alarms_reach_someone"` nhắc lúc plan.
+
+### 10.7. Danh sách kiểm tra khi thêm đối tác mới
 
 ```text
 TRUOC khi cau hinh
@@ -765,29 +862,45 @@ TRUOC khi cau hinh
   □ Da thong nhat thuat toan IPsec (phase 1/2)
   □ Da xac nhan dai CIDR ho cong bo KHONG trung dai noi bo cua ban
   □ Da quyet dinh: PrivateLink duoc khong? (uu tien hon VPN)
+  □ alarm_actions da tro toi SNS topic that
 
 Cau hinh
-  □ Customer gateway + VPN connection
+  □ Layer cha: customer gateway + VPN connection, apply
   □ Chuyen PSK qua kenh an toan (KHONG email/chat)
-  □ Route: chi cong bo dai NAT, khong bao gio cong bo 10.0.0.0/8
-  □ rtb-partner: khong propagate gi
-  □ Rule firewall: pass tuong minh + drop tuong minh + alert
-  □ Alarm tunnel
+  □ Lop ops: ho so trong partners.yaml
+  □ Lop ops: services cho tung dich vu, dung target_port
+  □ Rule firewall mo target_port, from la partner-<ten>
+  □ ./lint.sh sach truoc khi plan
 
-Kiem thu
+Kiem thu - CHAY THAT, DUNG GIA DINH
   □ Tunnel len ca hai
-  □ Luong duoc phep: thong
-  □ Luong KHONG duoc phep: bi chan (test that, dung gia dinh)
-  □ Doi tac KHONG ping duoc bat ky IP spoke nao
+  □ curl toi tung cong da cong bo -> 200
+  □ curl thang toi mot IP spoke -> PHAI that bai
   □ Failover: tat tunnel 1, luu luong chuyen sang tunnel 2
+  □ verify.sh muc 10 sach
 
 Ban giao
-  □ Ho so partners/<ten>.yaml da commit
+  □ terraform output -raw partner_handover -> gui doi tac
   □ Runbook xu ly su co
-  □ Dat review_date
+  □ expires da dat trong ca ho so lan tung dich vu
 ```
 
-Dòng "test thật, đừng giả định" đáng nhấn mạnh: rất nhiều tổ chức chỉ kiểm tra luồng **được phép** chạy tốt, mà không bao giờ kiểm tra luồng **bị cấm** thật sự bị chặn.
+Dòng "chạy thật, đừng giả định" đáng nhấn mạnh: rất nhiều tổ chức chỉ kiểm tra luồng **được phép** chạy tốt, mà không bao giờ kiểm tra luồng **bị cấm** thật sự bị chặn. `vpn-check` trên máy giả lập chạy cả hai và báo `DAT`/`LOI` — trước đây mục đó chỉ **in một câu tuyên bố** mà không kiểm gì.
+
+### 10.8. Triệu chứng → nguyên nhân
+
+Mọi dòng đều là kiểu hỏng **không phát ra lỗi**.
+
+| Triệu chứng | Nguyên nhân |
+|---|---|
+| Cổng mới `http=000 exit=28`, cổng cũ vẫn `200` | Thiếu rule mở cổng trên security group của NLB — gói tin bị vứt **trước** listener. Thường là chưa `apply` ở lớp ops (lỗi 82) |
+| Đối tác nhận `connection reset` | Có listener, firewall chặn. Chỉ xảy ra ở chế độ `drop`; rule mở nhầm `port` thay vì `target_port` |
+| `000` ngay sau khi apply, vài chục giây sau thì `200` | Target group vừa tạo chưa qua đủ chu kỳ health check (10s × 2) |
+| Gọi được, rồi mất sau một lần apply layer cha, rồi có lại sau khi apply lớp ops | Security group của layer cha quay về dùng khối `ingress` **lồng nhau** — nó sở hữu toàn bộ danh sách rule và xoá sạch rule của lớp ops (lỗi 82) |
+| Một lần gọi được, lần sau không | Dải NLB công bố không phủ hết subnet NLB của mọi AZ. Tên DNS trả về cả hai địa chỉ, gọi được hay không tuỳ địa chỉ nào được chọn (lỗi 79) |
+| Target `unhealthy` ngay từ đầu | `target_port` trỏ tới cổng ứng dụng không nghe |
+| Đường hầm `UP` mà `curl` hết giờ | Route trên `vti` thiếu `src`, nên nguồn là địa chỉ trong đường hầm và gói trả lời không có đường về (lỗi 78) |
+| Đường hầm `DOWN`, `StatusMessage` rỗng | Chưa có gói IKE nào tới nơi — xem **mục 5.3** |
 
 ---
 
