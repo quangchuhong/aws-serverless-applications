@@ -134,6 +134,43 @@ resource "terraform_data" "catalog_guard" {
   }
 
   lifecycle {
+    ########################################
+    # ACCOUNT - kiem TRUOC moi thu khac
+    #
+    # Layer nay KHONG assume role. No dung thang credential trong moi
+    # truong, va ba thu no lam chi MANAGEMENT ACCOUNT lam duoc:
+    # aws_organizations_account, StackSet SERVICE_MANAGED, va uy quyen
+    # trien khai theo cay to chuc.
+    #
+    # Chay bang credential cua account khac thi hong THEO KIEU TE NHAT:
+    #
+    #   - DescribeOrganization VAN chay - account thanh vien goi duoc,
+    #     nen data source khong bao gi
+    #   - plan VAN xanh, va in ra day du ke hoach
+    #   - apply chet o GIUA, sau khi mot phan StackSet da duoc tao
+    #
+    # Nghia la khong co dau hieu nao truoc luc apply. Phep so sanh nay
+    # mien phi - master_account_id nam san trong data source da doc -
+    # va no bien mot that bai o giua apply thanh mot dong o plan.
+    ########################################
+    precondition {
+      condition = (
+        data.aws_caller_identity.current.account_id
+        == data.aws_organizations_organization.this.master_account_id
+      )
+      error_message = join(" ", [
+        "SAI ACCOUNT.",
+        "Layer nay phai chay bang credential cua MANAGEMENT ACCOUNT",
+        "(${data.aws_organizations_organization.this.master_account_id}),",
+        "nhung credential dang dung thuoc account",
+        "${data.aws_caller_identity.current.account_id}.",
+        "Layer nay khong assume role - no dung thang credential trong",
+        "moi truong. Luu y bien moi truong DE LEN profile: dung",
+        "`env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY",
+        "-u AWS_SESSION_TOKEN terraform plan` neu ban dung profile.",
+      ])
+    }
+
     precondition {
       condition     = length(local.catalog_bad_ou) == 0
       error_message = "catalog/accounts.yaml: ${join(", ", local.catalog_bad_ou)} - ten OU khong giai duoc thanh ID. Ten hop le: ${join(", ", sort(keys(var.ou_ids)))}. Lay day du bang: cd ../organization && terraform output ou_ids"

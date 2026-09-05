@@ -4,6 +4,12 @@ Thay cho **AFT** ở bản DIY. Chạy ở **management account**.
 
 **Mặc định TẮT** (`enable = false`) — `terraform plan` ra 0 resource.
 
+> **Phải chạy bằng credential của MANAGEMENT ACCOUNT.** Layer này **không** `assume_role` như layer `network` — nó dùng thẳng credential trong môi trường, vì ba thứ nó làm chỉ management account làm được: tạo account, StackSet `SERVICE_MANAGED`, và uỷ quyền triển khai theo cây tổ chức.
+>
+> Chạy nhầm account thì `DescribeOrganization` **vẫn chạy** (account thành viên gọi được), `plan` **vẫn xanh**, và `apply` chết ở giữa sau khi một phần StackSet đã tạo. Precondition đầu tiên trong `terraform_data.catalog_guard` so `caller_identity` với `master_account_id` để biến thất bại đó thành một dòng ở `plan`.
+>
+> Nhớ rằng **biến môi trường đè lên `profile`**. Dùng profile thì chạy `env -u AWS_PROFILE -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN terraform plan` để chắc.
+
 ---
 
 ## Vì sao có layer này
