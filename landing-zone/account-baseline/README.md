@@ -245,6 +245,8 @@ terraform apply
 
 ---
 
+> **Vận hành** — năm bước theo thứ tự, code chạy ra sao, và bảng triệu chứng → nguyên nhân: [doc 27](../../docs/27-Van-hanh-Account-Vending.md). File này nói về **từng biến và từng quyết định**; doc kia nói về **làm gì theo thứ tự nào**.
+
 ## Đã chạy thật một lần — số đo
 
 Ba account vending qua catalog, đủ năm bước, `verify.sh` ở layer `network` ra **60 đạt / 0 lỗi**:
