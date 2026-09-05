@@ -139,19 +139,56 @@ Cần `network_handles` dán từ layer `network`:
 cd ../network && terraform output -raw paste_network_handles
 ```
 
-### Một bước không tự động hoá được
+### Năm bước, ba layer, và không gộp được
 
-Attachment xuất hiện ở **account network**, không phải account workload — nên layer này không với tới. Thứ tự thật là:
+Một account **hoàn toàn mới** không thể nhận VPC có TGW attachment trong cùng một `apply` với chính lệnh tạo ra nó. Ba ranh giới cắt ngang việc này, mỗi cái chỉ một phía làm được:
+
+| Việc | Chỉ ai làm được |
+|---|---|
+| Chia sẻ TGW cho account mới | Account **network** (chủ TGW) |
+| Chấp nhận lời mời RAM | **Chính account mới** |
+| Tạo VPC + attachment | Account mới, qua StackSet |
+| Nối attachment vào `rtb-spokes` | Account **network** |
+
+Nên thứ tự thật là:
 
 ```bash
-cd landing-zone/account-baseline && terraform apply   # VPC + attachment
-terraform output -raw paste_spokes            # dán sang layer network
-cd ../network && terraform apply                      # nối vào rtb-spokes
+# 1. Tạo account — KHỐI network CHƯA CÓ trong catalog
+cd landing-zone/account-baseline
+./lint.sh && terraform apply
+terraform output account_ids            # lấy ID của account vừa tạo
+
+# 2. Chia sẻ TGW cho nó — layer network
+cd ../network
+#    THÊM vào terraform.tfvars:
+#      share_tgw_with_accounts = ["<id vừa lấy>"]
+terraform apply                         # RAM gửi lời mời
+
+# 3. Account MỚI chấp nhận lời mời — chạy bằng credential của chính nó
+#    (assume OrganizationAccountAccessRole từ management)
+ARN=$(aws ram get-resource-share-invitations --region <region> \
+  --query "resourceShareInvitations[?status=='PENDING'].resourceShareInvitationArn" --output text)
+aws ram accept-resource-share-invitation --region <region> --resource-share-invitation-arn "$ARN"
+
+# 4. Giờ mới thêm khối `network:` vào catalog và apply lại
+cd ../account-baseline
+./lint.sh && terraform apply            # StackSet dựng VPC + attachment + DNS
+
+# 5. Nối attachment vào route table — layer network
+cd ../network
+terraform apply
+./verify.sh                             # mục 6c phải liệt kê attachment mới
 ```
 
-Bỏ bước cuối thì VPC tồn tại, attachment tồn tại ở trạng thái `available`, và **không có gói tin nào đi đâu cả** — attachment không nằm trong route table nào thì nó không học được đường nào và không ai học được đường tới nó. Triệu chứng đọc như lỗi định tuyến ở spoke, và người ta sẽ đi tìm trong VPC đó, nơi không có gì sai.
+**Vì sao không rút ngắn được.** Bước 1 và 4 đều là `account-baseline`, nhưng không gộp được: ở lần apply đầu, account chưa tồn tại nên chưa có ID để chia sẻ TGW; mà không chia sẻ thì CloudFormation ở bước 4 hỏng với một lỗi nói về **ID TGW không hợp lệ** — một câu nói về ID trong khi vấn đề là quyền nhìn thấy.
+
+Bước 3 không bỏ được vì `allow_external_principals = true` (xem doc 24 mục 5) khiến mọi share đều đi qua lời mời. Đây là cùng một bước mà `verify.sh` mục 6d kiểm cho các spoke cũ.
+
+Bước 5 không bỏ được vì attachment xuất hiện ở **account network**, không phải account workload — layer này không với tới. Bỏ nó thì VPC tồn tại, attachment tồn tại ở trạng thái `available`, và **không có gói tin nào đi đâu cả**: attachment không nằm trong route table nào thì nó không học được đường nào và không ai học được đường tới nó. Triệu chứng đọc như lỗi định tuyến ở spoke, và người ta sẽ đi tìm trong VPC đó, nơi không có gì sai.
 
 Đọc `terraform output spokes_wired` ở layer `network` sau mỗi lần thêm account — số attachment đã nối lệch với số account là dấu hiệu duy nhất.
+
+> Account **hạ tầng** (không có khối `network:`) chỉ cần bước 1. Bốn bước còn lại là giá của việc nối một account vào lưới mạng, và nó giống hệt Pha 1–4 của [doc 24](../../docs/24-Trien-khai-Network-LZ-Cross-Account.md) thu nhỏ về một account.
 
 ## Hardening cấp account
 

@@ -38,6 +38,16 @@
 #
 #   network                Bo trong = account KHONG noi vao luoi mang.
 #                          Dung cho account ha tang khong can VPC.
+#
+#                          VOI ACCOUNT HOAN TOAN MOI: DE TRONG O LAN
+#                          APPLY DAU TIEN. TGW chua duoc chia se cho
+#                          mot account chua ton tai, va CloudFormation
+#                          se hong voi mot loi noi ve "ID TGW khong hop
+#                          le" - mot cau noi ve ID trong khi van de la
+#                          quyen nhin thay. Them khoi nay o lan apply
+#                          THU HAI, sau khi account da nhan loi moi RAM.
+#                          Nam buoc day du: xem README muc "Nam buoc,
+#                          ba layer, va khong gop duoc".
 #     vpc_cidr   BAT BUOC  theo bang cap phat o doc 17 muc 3:
 #                            NonProd    10.10.0.0 - 10.13.255.255
 #                            Prod       10.20.0.0 - 10.23.255.255

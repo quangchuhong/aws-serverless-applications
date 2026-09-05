@@ -176,6 +176,8 @@ jira_ticket: "OPS-1234"
 
 Vì sao YAML mà không phải HCL: người tạo request (team lead, PM) không cần biết Terraform. File này đủ đơn giản để review trong PR mà không cần đọc code.
 
+> **Bản đã chạy thật** nằm ở [`landing-zone/account-baseline`](../landing-zone/account-baseline/README.md) — một file `catalog/accounts.yaml` cho mọi request thay vì một file mỗi account, và tên trường ngắn hơn khối ở trên. Khác biệt đáng kể nhất không nằm ở schema: **khối `network` không dùng được ở lần apply đầu tiên của một account mới.** TGW không chia sẻ được cho một account chưa tồn tại, và lời mời RAM phải do chính account đó chấp nhận — nên việc nối một account vào lưới mạng là **năm bước qua ba layer**, không phải một `apply`. Trình tự đầy đủ ở README của layer đó, mục *"Năm bước, ba layer, và không gộp được"*.
+
 ### 4.2. Terraform đọc thư mục request
 
 ```hcl
