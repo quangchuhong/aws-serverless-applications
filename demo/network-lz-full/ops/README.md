@@ -10,7 +10,6 @@ Thư mục này quản **bốn thứ đổi hằng ngày**, trong một state ri
 | Route ngoại lệ trong TGW | `catalog/routes.yaml` | `aws_ec2_transit_gateway_route` |
 | Thêm/bớt VPC endpoint tập trung | `catalog/endpoints.yaml` | endpoint + PHZ + bản ghi + Profile association |
 | Bản ghi DNS trong PHZ tập trung | `catalog/dns-records.yaml` | `aws_route53_record` |
-
 | Hồ sơ đối tác + rule cho họ | `catalog/partners.yaml` | không resource — sinh ra **app giải được** cho `firewall-rules.yaml` |
 
 `catalog/apps.yaml` không tạo resource nào — nó là bảng tra cứu **tên app → dải địa chỉ**, để ba file kia khai bằng tên.
