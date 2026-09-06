@@ -73,7 +73,23 @@ locals {
   stages = [for s in local.stages_all : s if local.network_on || !s.assume]
 
   # Khoa state cua tung layer, tra san de buildspec khong phai doan.
-  stage_keys = { for s in local.stages_all : s.layer => var.layer_keys[s.layer] }
+  #
+  # distinct() la BAT BUOC: stages_all co account-baseline HAI LAN
+  # (stage A va C) va network HAI LAN (B va D) - do la ca thiet ke,
+  # khong phai nham. Gom truc tiep theo s.layer thi hai stage cung
+  # layer sinh trung khoa va Terraform tu choi ca file:
+  #
+  #   Error: Duplicate object key
+  #   Two different items produced the key "landing-zone/network"
+  #
+  # Tra cuu var.layer_keys[l] chu khong try(): mot layer nam trong
+  # stages_all ma thieu o layer_keys phai hong NGAY o day, kem ten
+  # khoa - chu khong lang le thanh chuoi rong roi di toi tan
+  # `terraform init` voi mot backend khong co key.
+  stage_keys = {
+    for l in distinct([for s in local.stages_all : s.layer]) :
+    l => var.layer_keys[l]
+  }
 
   name = "${var.project}-vending"
 
