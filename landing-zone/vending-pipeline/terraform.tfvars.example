@@ -29,8 +29,17 @@ owner       = "platform@example.com"
 #   aws codecommit list-repositories --region ap-southeast-1
 ########################################
 
+# LUU Y: repo nay phai chua CA BO landing-zone/, khong chi layer
+# pipeline. Buildspec `cd landing-zone/network`, `cd
+# landing-zone/account-baseline`... nen mot repo chi co code pipeline
+# se hong ngay o lenh cd dau tien cua stage A.
+#
+# Repo tren GitHub va repo CodeCommit la HAI BAN SAO. Commit vao
+# GitHub KHONG kich hoat pipeline. Day ca hai:
+#   git remote add codecommit https://git-codecommit.ap-southeast-1.amazonaws.com/v1/repos/account-vending-pipeline
+#   git push codecommit main
 source_type     = "codecommit"
-repository_name = "lz-landing-zone"
+repository_name = "account-vending-pipeline"
 branch_name     = "main"
 
 ########################################
