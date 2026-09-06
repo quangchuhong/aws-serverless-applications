@@ -73,8 +73,40 @@ locals {
   }
 }
 
+########################################
+# HAI DANH TINH, MOT LAN CHAY
+#
+# BACKEND doc/ghi state - state nam o bucket cua account management.
+# PROVIDER tao resource      - ha tang mang nam o account mang.
+#
+# Khi mot NGUOI chay, hai thu do trung nhau duoc: backend.hcl mang
+# profile tro ve management, con provider dung credential account
+# mang trong shell.
+#
+# Khi CODEBUILD chay thi khong: no chi co MOT bo credential, cua
+# account management. Neu provider cung dung bo do, layer nay se dung
+# TGW va firewall trong account management - dung su co da xay ra dem
+# 5/9, va la ly do account-guard.tf ton tai.
+#
+# assume_role tach hai duong ra: backend giu credential cua CodeBuild
+# (doc duoc bucket state), provider nhay sang account mang.
+#
+# De RONG thi khoi nay khong sinh ra gi ca - nguoi chay tay khong bi
+# anh huong.
+########################################
 provider "aws" {
   region = var.region
+
+  dynamic "assume_role" {
+    for_each = var.assume_role_arn == "" ? [] : [1]
+    content {
+      role_arn = var.assume_role_arn
+
+      # Ten phien hien trong CloudTrail cua account mang. Doc no la
+      # biet resource do sinh ra tu pipeline hay tu tay ai.
+      session_name = "lz-network-pipeline"
+    }
+  }
 
   default_tags {
     tags = local.common_tags

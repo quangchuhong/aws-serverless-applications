@@ -1020,3 +1020,68 @@ variable "expected_account_id" {
     error_message = "Phai la 12 chu so, hoac de rong de tat phep kiem."
   }
 }
+
+########################################
+# CHAY TU PIPELINE
+########################################
+
+variable "assume_role_arn" {
+  description = <<-EOT
+    Role o ACCOUNT MANG ma provider se assume truoc khi tao resource.
+
+    DE RONG khi mot nguoi chay tay - provider dung thang credential
+    trong shell, y nhu tu truoc toi nay.
+
+    KHAI VAO khi CodeBuild chay layer nay. CodeBuild chi co MOT bo
+    credential, cua account management, va no can bo do de doc bucket
+    state. Neu provider cung dung bo do thi layer nay dung TGW,
+    firewall va moi VPC trong ACCOUNT MANAGEMENT.
+
+    Do khong phai gia thiet - no da xay ra: mot Transit Gateway thu
+    hai moc len o 609320954321 vi mot lan chay bang nham credential,
+    va do la ly do account-guard.tf ton tai.
+
+    Role nay do chinh layer nay tao ra khi khai
+    var.pipeline_trusted_role_arns - xem pipeline-access.tf.
+
+    Luu y: dat bien nay KHONG lam account-guard mat tac dung.
+    data.aws_caller_identity doc danh tinh SAU khi assume, nen
+    expected_account_id van phai la account mang.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.assume_role_arn == "" || can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/", var.assume_role_arn))
+    error_message = "assume_role_arn phai la ARN cua mot IAM role, hoac de rong."
+  }
+}
+
+variable "pipeline_trusted_role_arns" {
+  description = <<-EOT
+    ARN duoc phep assume role trien khai o account mang.
+
+    Thuong la MOT gia tri: role CodeBuild cua layer
+    landing-zone/vending-pipeline, o account management.
+
+      cd ../vending-pipeline && terraform output codebuild_role_arn
+
+    DE RONG = khong tao role nao. Do la mac dinh, va no dung: mot role
+    cho phep account khac dung toan bo ha tang mang la thu chi nen ton
+    tai khi that su co ai dung.
+
+    KHONG dat OrganizationAccountAccessRole vao day. Role do de con
+    nguoi dung trong tinh huong khan; tron no voi duong tu dong hoa
+    thi khong con phan biet duoc trong CloudTrail ai lam gi.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for a in var.pipeline_trusted_role_arns :
+      can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/", a))
+    ])
+    error_message = "Moi phan tu phai la ARN cua mot IAM role."
+  }
+}
