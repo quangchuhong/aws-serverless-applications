@@ -36,10 +36,10 @@ owner       = "platform@example.com"
 #
 # Repo tren GitHub va repo CodeCommit la HAI BAN SAO. Commit vao
 # GitHub KHONG kich hoat pipeline. Day ca hai:
-#   git remote add codecommit https://git-codecommit.ap-southeast-1.amazonaws.com/v1/repos/account-vending-pipeline
+#   git remote add codecommit https://git-codecommit.ap-southeast-1.amazonaws.com/v1/repos/diy-aws-landing-zone
 #   git push codecommit main
 source_type     = "codecommit"
-repository_name = "account-vending-pipeline"
+repository_name = "diy-aws-landing-zone"
 branch_name     = "main"
 
 ########################################
