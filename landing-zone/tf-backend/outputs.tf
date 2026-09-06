@@ -81,15 +81,14 @@ locals {
     # landing-zone/network/ops/versions.tf.
     "landing-zone/network/ops" = "demo-network-lz-full/ops/terraform.tfstate"
 
-    # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
-    # ban bat no. KHONG dung chung key voi organization: hai layer do
-    # thay the nhau, dung chung state se giam len nhau.
     # Pipeline vending. Chay o management, cung account voi bucket,
     # nen khong can dong backend_profiles nao.
     "landing-zone/vending-pipeline" = "vending-pipeline/terraform.tfstate"
 
+    # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
+    # ban bat no. KHONG dung chung key voi organization: hai layer do
+    # thay the nhau, dung chung state se giam len nhau.
     "landing-zone/control-tower" = "control-tower/terraform.tfstate"
-
   }
 
   # Dong khoa trong backend config, khac nhau theo lock_mode
