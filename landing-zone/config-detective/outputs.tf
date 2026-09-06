@@ -33,7 +33,7 @@ output "recording_scope" {
     continuous_types   = length(var.continuous_recording_types)
     target_ous         = length(var.recorder_target_ous)
     aggregator_regions = var.aggregator_regions
-    excluded_accounts  = length(var.excluded_accounts)
+    excluded_accounts  = length(local.excluded_all)
   }
 }
 

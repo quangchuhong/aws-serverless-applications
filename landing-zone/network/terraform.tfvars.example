@@ -307,3 +307,27 @@ enable_test_instances = true
 # route table khong phan biet duoc hai spoke, va sua thi phai xoa VPC.
 # Bang cap phat o doc 17 muc 3:
 #   NonProd  10.10.0.0/14   Prod  10.20.0.0/14   Sandbox  10.60.0.0/14
+
+########################################
+# DOC ACCOUNT VENDING - tuy chon, mac dinh TAT
+#
+# De RONG thi layer nay chay y nhu truoc: chi dung gia tri go tay o
+# tren. Khai vao thi no doc them tu state cua
+# landing-zone/account-baseline, va account moi khong con phai dan
+# tay nua.
+#
+# Hai nguon GOP lai, gia tri go tay THANG. check trong vending.tf
+# keu ten moi khoa co ca o hai ben.
+#
+# Lay bucket va khoa:
+#   cd ../tf-backend && terraform output layers
+########################################
+
+vending_state = {}
+# vending_state = {
+#   backend = "s3"
+#   bucket  = "<bucket state>"
+#   key     = "account-baseline/terraform.tfstate"
+#   region  = "ap-southeast-1"
+#   profile = "default"     # chi khi state nam o account khac
+# }

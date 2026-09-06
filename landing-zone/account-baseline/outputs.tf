@@ -124,6 +124,85 @@ output "paste_config_detective" {
 }
 
 ########################################
+# MOT CUA CHO MOI LAYER KHAC - vending_handles
+#
+# Cac output paste_* o tren sinh ra khoi HCL cho NGUOI dan. Chung
+# van giu nguyen: dan tay la duong dung khi chua co pipeline, va no
+# bat nguoi ta doc truoc khi dan.
+#
+# Nhung mot pipeline thi khong dan duoc. Output nay la CUNG mot du
+# lieu do, o dang may doc duoc, de layer nhan tu lay qua
+# terraform_remote_state.
+#
+# MOT output chu khong phai nam, cung ly do voi ops_handles ben
+# network: moi lan them mot truong ma phai sua ca hai dau la mot lan
+# co the quen mot dau. Layer nhan doc mot object va tu chon truong.
+#
+# HAI DUONG SONG SONG, VA DO LA CO Y:
+#
+#   paste_*          nguoi doc, nguoi dan   - khi lam tay
+#   vending_handles  may doc, may dan       - khi co pipeline
+#
+# Chung sinh tu cung mot local, nen khong lech nhau duoc.
+########################################
+
+output "vending_handles" {
+  description = <<-EOT
+    Moi thu cac layer khac can, o dang may doc duoc.
+
+    Doc bang terraform_remote_state, giong cach network/ops doc
+    ops_handles cua network. Xem README muc "Nam buoc, ba layer".
+
+    Truong nao dung o dau:
+      spokes           -> landing-zone/network        var.spokes
+      tgw_share        -> landing-zone/network        var.share_tgw_with_accounts
+      by_scope         -> landing-zone/permission-sets accounts_by_scope
+      config_excluded  -> landing-zone/config-detective excluded_accounts
+  EOT
+
+  value = {
+    management_account_id = local.mgmt
+
+    # Account do layer nay tao. ou_id de layer nhan khong phai tra
+    # nguoc lai var.ou_ids - no khong co ban do do.
+    accounts = {
+      for k, a in aws_organizations_account.this : k => {
+        id        = a.id
+        ou_id     = a.parent_id
+        scope     = try(local.catalog_scope_by_name[k], "none")
+        has_vpc   = contains(keys(local.spoke_requests), k)
+        wires_tgw = contains(keys(local.spokes_can_wire), k)
+      }
+    }
+
+    # Dan thang vao var.spokes cua layer network. CHI account thuc su
+    # sinh attachment - xem local.spokes_can_wire.
+    spokes = {
+      for k, v in local.spokes_can_wire : k => {
+        cidr       = v.vpc_cidr
+        account_id = try(aws_organizations_account.this[k].id, null)
+        ou_id      = try(var.ou_ids[v.ou], null)
+        manual_vpc = true
+      }
+    }
+
+    # Account can THAY TGW de tu cam attachment. Cung tap voi spokes,
+    # nhung layer network dung no o mot bien khac nen tra ve rieng.
+    tgw_share = sort([
+      for k, v in local.spokes_can_wire :
+      aws_organizations_account.this[k].id
+      if contains(keys(aws_organizations_account.this), k)
+    ])
+
+    by_scope = local.by_scope
+
+    # Management LUON phai co - xem check "management_account_excluded"
+    # ben config-detective.
+    config_excluded = distinct(concat([local.mgmt], local.by_scope["nonprod"]))
+  }
+}
+
+########################################
 # Trang thai
 ########################################
 

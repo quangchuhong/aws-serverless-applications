@@ -110,7 +110,7 @@ locals {
   # MOT attachment moi VPC, khong phu thuoc so AZ - them AZ chi them
   # subnet vao attachment da co.
   # Dem CA spoke noi bo lan remote: moi attachment deu tinh tien nhu nhau.
-  n_attach = length(var.spokes) + 1 + local.fw + local.ing + local.ptn
+  n_attach = length(local.spokes_all) + 1 + local.fw + local.ing + local.ptn
 
   # Nhung thu NHAN LEN theo so AZ. Bo qua he so nay la bao gia bang
   # mot nua su that khi chay 2 AZ.
@@ -444,7 +444,7 @@ output "ops_handles" {
     # ca va KHONG CO LOI O DAU HET - firewall im lang la trang thai
     # binh thuong cua no. Go nham mot cai ten thi Terraform dung ngay.
     spokes = {
-      for k, v in var.spokes : k => {
+      for k, v in local.spokes_all : k => {
         cidr       = v.cidr
         account_id = try(v.account_id, null)
         is_local   = try(v.account_id, null) == null

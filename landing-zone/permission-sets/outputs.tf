@@ -81,7 +81,7 @@ output "unscoped_accounts" {
   EOT
   value = sort(tolist(setsubtract(
     toset(local.all_accounts),
-    toset(flatten(values(var.accounts_by_scope))),
+    toset(flatten(values(local.by_scope_all))),
   )))
 }
 

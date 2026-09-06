@@ -83,7 +83,7 @@ resource "aws_config_organization_managed_rule" "this" {
   rule_identifier = each.value
 
   # Sandbox / dev: vi pham la chuyen binh thuong, bao dong chi tao nhieu
-  excluded_accounts = var.excluded_accounts
+  excluded_accounts = local.excluded_all
 
   ####################################
   # 5 PHUT MAC DINH LA KHONG DU
@@ -161,7 +161,7 @@ check "rules_have_matching_resource_types" {
 check "management_account_excluded" {
   assert {
     condition = !local.enabled || contains(
-      var.excluded_accounts,
+      local.excluded_all,
       data.aws_caller_identity.current.account_id,
     )
 

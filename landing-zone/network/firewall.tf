@@ -74,7 +74,7 @@ locals {
   # sort() de thu tu on dinh: rule string doi thu tu la rule group bi
   # thay the moi lan plan, va o STRICT_ORDER thi thu tu con doi ca y
   # nghia. Cung ho voi loi 39.
-  mesh_cidrs = sort([for k, v in var.spokes : v.cidr])
+  mesh_cidrs = sort([for k, v in local.spokes_all : v.cidr])
 }
 
 resource "aws_networkfirewall_firewall_policy" "main" {

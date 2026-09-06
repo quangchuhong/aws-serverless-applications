@@ -267,3 +267,27 @@ guardduty_features = []
 # Finding MOI luon day ngay lap tuc, bat ke gia tri nay - doi cai nay
 # KHONG lam bao dong den cham hon, va khong doi chi phi.
 guardduty_publishing_frequency = "SIX_HOURS"
+
+########################################
+# DOC ACCOUNT VENDING - tuy chon, mac dinh TAT
+#
+# De RONG thi layer nay chay y nhu truoc: chi dung gia tri go tay o
+# tren. Khai vao thi no doc them tu state cua
+# landing-zone/account-baseline, va account moi khong con phai dan
+# tay nua.
+#
+# Hai nguon GOP lai, gia tri go tay THANG. check trong vending.tf
+# keu ten moi khoa co ca o hai ben.
+#
+# Lay bucket va khoa:
+#   cd ../tf-backend && terraform output layers
+########################################
+
+vending_state = {}
+# vending_state = {
+#   backend = "s3"
+#   bucket  = "<bucket state>"
+#   key     = "account-baseline/terraform.tfstate"
+#   region  = "ap-southeast-1"
+#   profile = "default"     # chi khi state nam o account khac
+# }

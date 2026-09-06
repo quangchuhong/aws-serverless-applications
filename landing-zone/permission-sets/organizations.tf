@@ -68,9 +68,9 @@ locals {
       for id in local.all_accounts : id if !contains(local.core_accounts, id)
     ]
 
-    analytics = try(var.accounts_by_scope["analytics"], [])
-    nonprod   = try(var.accounts_by_scope["nonprod"], [])
-    prod      = try(var.accounts_by_scope["prod"], [])
+    analytics = try(local.by_scope_all["analytics"], [])
+    nonprod   = try(local.by_scope_all["nonprod"], [])
+    prod      = try(local.by_scope_all["prod"], [])
     none      = []
   }
 }
@@ -137,14 +137,14 @@ check "core_accounts_are_real_members" {
 check "accounts_exist_in_org" {
   assert {
     condition = length(setsubtract(
-      toset(flatten(values(var.accounts_by_scope))),
+      toset(flatten(values(local.by_scope_all))),
       toset(local.active_accounts),
     )) == 0
 
     error_message = format(
       "Account khai trong accounts_by_scope nhung khong ACTIVE trong organization: %s",
       join(", ", tolist(setsubtract(
-        toset(flatten(values(var.accounts_by_scope))),
+        toset(flatten(values(local.by_scope_all))),
         toset(local.active_accounts),
       )))
     )
@@ -154,8 +154,8 @@ check "accounts_exist_in_org" {
 check "no_account_in_two_env_scopes" {
   assert {
     condition = length(setintersection(
-      toset(try(var.accounts_by_scope["nonprod"], [])),
-      toset(try(var.accounts_by_scope["prod"], [])),
+      toset(try(local.by_scope_all["nonprod"], [])),
+      toset(try(local.by_scope_all["prod"], [])),
     )) == 0
 
     error_message = "Mot account khong the vua nonprod vua prod - se duoc ca lz-app-admin lan lz-app-operator."

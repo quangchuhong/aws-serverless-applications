@@ -60,7 +60,7 @@
 locals {
   # Spoke co account_id => nam o account khac.
   remote_spokes = {
-    for k, v in var.spokes : k => v
+    for k, v in local.spokes_all : k => v
     if try(v.account_id, null) != null && v.account_id != data.aws_caller_identity.current.account_id
   }
 
@@ -114,7 +114,7 @@ locals {
   # VPC remote qua StackSet - trung CIDR, trung attachment, gap doi
   # tien. Xem loi 49 doc 22.
   local_spokes = {
-    for k, v in var.spokes : k => v
+    for k, v in local.spokes_all : k => v
     if try(v.account_id, null) == null || v.account_id == data.aws_caller_identity.current.account_id
   }
 }
@@ -174,7 +174,7 @@ locals {
   # khac thay TGW ma chua dung VPC nao. Rang buoc vao has_remote thoi
   # thi share_tgw_with_accounts se im lang khong lam gi - dung cai bay
   # "khai bien ma khong co tac dung".
-  ram_needed = local.has_remote || length(var.share_tgw_with_accounts) > 0
+  ram_needed = local.has_remote || length(local.share_tgw_all) > 0
   ram_share  = local.ram_needed && var.ram_use_external_principals ? 1 : 0
 }
 
@@ -212,7 +212,7 @@ locals {
   ram_principals = local.ram_share == 0 ? [] : [
     for a in distinct(concat(
       [for v in local.remote_spokes : v.account_id],
-      var.share_tgw_with_accounts,
+      local.share_tgw_all,
     )) : a if a != data.aws_caller_identity.current.account_id
   ]
 }
@@ -935,7 +935,7 @@ check "remote_accounts_accepted_invitation" {
 # gay ra loi 49 va 57.
 check "share_list_has_effect" {
   assert {
-    condition     = length(var.share_tgw_with_accounts) == 0 || var.ram_use_external_principals
+    condition     = length(local.share_tgw_all) == 0 || var.ram_use_external_principals
     error_message = "share_tgw_with_accounts co account nhung ram_use_external_principals = false, nen khong share nao duoc tao. Bat bien do, hoac bo danh sach di cho khoi hieu nham la da share."
   }
 }
@@ -977,7 +977,8 @@ check "remote_attachments_wired" {
       "--filters Name=transit-gateway-id,Values=<tgw-id>",
       "Name=resource-type,Values=vpc Name=state,Values=available",
       "--query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceOwnerId]'",
-      "Account nao co trong var.spokes ma khong hien o day thi StackSet",
+      "Account nao co trong danh sach spoke (var.spokes hoac catalog cua",
+      "account-baseline qua vending_state) ma khong hien o day thi StackSet",
       "chua tao xong attachment o account do.",
     ])
   }
