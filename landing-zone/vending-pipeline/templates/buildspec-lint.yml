@@ -1,0 +1,60 @@
+version: 0.2
+
+# ==============================================================
+# LINT - KHONG GOI AWS, KHONG CAN CREDENTIAL
+#
+# Chay TRUOC moi stage khac, va tach rieng khoi chung. Mot catalog
+# sai cu phap khong nen di qua mot cong duyet roi moi hong o apply -
+# luc do da co nguoi doc mot plan, bam duyet, va cho.
+#
+# Ba viec, khong viec nao can mang:
+#   1. lint.sh cua account-baseline  - catalog co hop le khong
+#   2. terraform fmt -check           - dinh dang
+#   3. terraform validate             - cu phap va kieu
+#
+# validate can `terraform init -backend=false`: no khong doc state,
+# nhung van phai tai provider de biet schema.
+# ==============================================================
+
+phases:
+  install:
+    commands:
+      - |
+        set -euo pipefail
+        curl -fsSL -o /tmp/tf.zip \
+          "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip -q -o /tmp/tf.zip -d /usr/local/bin
+        terraform version
+        python3 -c "import yaml" 2>/dev/null || pip3 install --quiet pyyaml
+
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        echo "═══ 1. Catalog yeu cau tao account"
+        cd landing-zone/account-baseline
+        ./lint.sh
+        cd - >/dev/null
+
+      - |
+        set -euo pipefail
+        echo "═══ 2. terraform fmt"
+        # -recursive tren ca cay: mot layer khong nam trong pipeline
+        # van co the lam nguoi doc sau nay mat thoi gian.
+        terraform fmt -check -recursive landing-zone/
+
+      - |
+        set -euo pipefail
+        echo "═══ 3. terraform validate"
+        for d in ${LAYERS}; do
+          echo "--- $d"
+          (
+            cd "$d"
+            # -backend=false: khong doc state, khong can credential.
+            # Van tai provider - validate can schema de kiem kieu.
+            terraform init -backend=false -input=false >/dev/null
+            terraform validate
+          )
+        done
+        echo ""
+        echo "Sach. Cac stage sau se goi AWS."

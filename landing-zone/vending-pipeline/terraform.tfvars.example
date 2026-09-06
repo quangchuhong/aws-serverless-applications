@@ -1,0 +1,110 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# PIPELINE VENDING ACCOUNT - chay o ACCOUNT MANAGEMENT.
+#
+# `-n` co chu dich: mot lan cp de len tfvars cua layer da apply la
+# mot plan doi xoa nhung thu dang chay.
+########################################
+
+# MAC DINH TAT.
+#
+# Bat cai nay khong phai la them vai resource. No tao mot duong TU
+# DONG co quyen apply bon layer, trong do co layer network - tuc
+# duong co the sua TGW, firewall va moi VPC cua to chuc.
+#
+# Doc README truoc, nhat la muc "Ba thu pipeline nay khong lam".
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. NGUON
+#
+# CodeCommit: AWS ngung nhan khach hang MOI tu giua 2024, nhung
+# account da co repo tu truoc van dung binh thuong. Kiem:
+#   aws codecommit list-repositories --region ap-southeast-1
+########################################
+
+source_type     = "codecommit"
+repository_name = "lz-landing-zone"
+branch_name     = "main"
+
+########################################
+# 2. STATE
+#
+# PHAI khop chinh xac. Sai khoa thi Terraform mo mot state RONG:
+# plan doi tao lai toan bo, va ha tang that thanh mo coi - van chay,
+# van tinh tien, khong con ai quan.
+#
+#   cd ../tf-backend && terraform output bucket
+#   cd ../tf-backend && terraform output lock_table
+#   cd ../tf-backend && terraform output layers
+#
+# CHU Y layer network: khoa cua no KHONG khop duong dan, day la di
+# san tu hoi no con nam o demo/network-lz-full. Dung doan.
+########################################
+
+state_bucket     = "qh11-lz-tfstate-609320954321"
+state_lock_table = "qh11-lz-tfstate-lock"
+
+layer_keys = {
+  "landing-zone/account-baseline" = "account-baseline/terraform.tfstate"
+  "landing-zone/network"          = "demo-network-lz-full/terraform.tfstate"
+  "landing-zone/config-detective" = "config-detective/terraform.tfstate"
+  "landing-zone/permission-sets"  = "permission-sets/terraform.tfstate"
+}
+
+########################################
+# 3. SANG ACCOUNT MANG
+#
+# Hai layer tro vao nhau, nen lan dau phai apply BA luot:
+#
+#   1. layer nay, network_deploy_role_arn = ""
+#      -> terraform output codebuild_role_arn
+#   2. layer network, pipeline_trusted_role_arns = [ARN vua lay]
+#      -> terraform output pipeline_deploy_role_arn
+#   3. layer nay lan nua, dien hai dong duoi day
+#
+# DE RONG = bo hai stage network. Bon stage con lai van chay, va
+# buoc 2 voi buoc 5 lam tay theo doc 27. Do la mot lua chon hop le -
+# no danh doi tu dong hoa lay mot ban kinh thiet hai nho hon nhieu.
+########################################
+
+network_deploy_role_arn = ""
+# network_deploy_role_arn = "arn:aws:iam::436908791055:role/quh11-net-pipeline-deploy"
+
+# Stage cho attachment hoi trang thai tren TGW nay.
+#   cd ../network && terraform output -raw transit_gateway_id
+transit_gateway_id = ""
+# transit_gateway_id = "tgw-0407992ad425893db"
+
+########################################
+# 4. DUYET
+#
+# Moi dia chi nhan mot thu tu SNS va PHAI BAM XAC NHAN. Truoc do
+# subscription o PendingConfirmation va khong nhan gi - Terraform van
+# bao tao thanh cong.
+#
+# De rong thi cong duyet VAN chan pipeline, chi la khong ai duoc bao.
+# Mot pipeline dung im cho duyet ma khong goi ai se bi coi la hong.
+########################################
+
+approval_emails = []
+# approval_emails = ["platform@example.com", "netops@example.com"]
+
+########################################
+# 5. NGUONG
+########################################
+
+# Layer network apply mat ~20-30 phut khi dung ca Network Firewall.
+build_timeout_minutes = 60
+
+# Cho attachment sang `available` giua stage C va D. Stage cho HOI
+# trang thai that, khong ngu mot khoang co dinh.
+wait_attachment_minutes = 10
+
+log_retention_days = 90

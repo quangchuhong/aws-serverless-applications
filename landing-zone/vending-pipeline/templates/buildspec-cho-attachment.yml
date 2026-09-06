@@ -1,0 +1,87 @@
+version: 0.2
+
+# ==============================================================
+# CHO ATTACHMENT SANG `available` - HOI TRANG THAI, KHONG NGU
+#
+# Giua stage C (StackSet tao TGW attachment o account dich) va stage
+# D (noi attachment vao route table), attachment mat khoang mot phut
+# de chuyen tu `pending` sang `available`.
+#
+# Data source cua layer network loc `state = available`. Chay som thi
+# no khong thay gi, khong noi gi, va `apply` bao thanh cong voi 0 thay
+# doi - attachment ton tai ma khong thuoc route table nao, tuc khong
+# goi tin nao di dau ca. Do la loi da xay ra hom 6/9 va duoc chua
+# bang mot lan apply thu hai.
+#
+# "Apply hai lan cho chac" la cach giau van de, khong phai sua no:
+# lan thu hai co the van som, va khi that su hong that thi khong ai
+# phan biet duoc.
+#
+# Nen o day HOI AWS, khong ngu mot khoang co dinh. Ngu du lau van co
+# the som; ngu qua lau la tra tien cho mot cai may khong lam gi.
+# ==============================================================
+
+phases:
+  build:
+    commands:
+      - |
+        set -euo pipefail
+
+        CREDS=$(aws sts assume-role \
+          --role-arn "${ASSUME_ROLE_ARN}" \
+          --role-session-name cho-attachment \
+          --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' \
+          --output text)
+        export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | awk '{print $1}')
+        export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | awk '{print $2}')
+        export AWS_SESSION_TOKEN=$(echo "$CREDS" | awk '{print $3}')
+
+        HET=$(( $(date +%s) + ${WAIT_MINUTES} * 60 ))
+
+        while :; do
+          # Dem attachment DANG CHUYEN TRANG THAI. Ta khong biet truoc
+          # se co bao nhieu attachment moi - so do phu thuoc catalog -
+          # nen dieu kien la "khong con cai nao dang do", chu khong
+          # phai "da du N cai".
+          DANG_DO=$(aws ec2 describe-transit-gateway-attachments \
+            --filters Name=transit-gateway-id,Values=${TGW_ID} \
+                      Name=state,Values=pending,initiating,initiatingRequest,modifying \
+            --query 'length(TransitGatewayAttachments)' --output text 2>/dev/null || echo "loi")
+
+          if [ "$DANG_DO" = "0" ]; then
+            echo "Khong con attachment nao dang chuyen trang thai."
+            aws ec2 describe-transit-gateway-attachments \
+              --filters Name=transit-gateway-id,Values=${TGW_ID} \
+                        Name=state,Values=available \
+              --query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,ResourceOwnerId]' \
+              --output text
+            exit 0
+          fi
+
+          if [ "$DANG_DO" = "loi" ]; then
+            # Khong doc duoc KHAC voi "con dang do". Neu gop hai cai
+            # nay lam mot thi mot loi quyen se hien ra thanh mot vong
+            # cho den khi het gio.
+            echo "LOI: khong goi duoc describe-transit-gateway-attachments."
+            echo "     Kiem quyen ec2:DescribeTransitGatewayAttachments cua role"
+            echo "     ${ASSUME_ROLE_ARN}"
+            exit 1
+          fi
+
+          if [ "$(date +%s)" -ge "$HET" ]; then
+            echo "HET GIO sau ${WAIT_MINUTES} phut: van con $DANG_DO attachment dang do."
+            echo "Doc trang thai that:"
+            aws ec2 describe-transit-gateway-attachments \
+              --filters Name=transit-gateway-id,Values=${TGW_ID} \
+              --query 'TransitGatewayAttachments[].[TransitGatewayAttachmentId,State,ResourceOwnerId]' \
+              --output text
+            echo ""
+            echo "Attachment ket o mot trang thai khong phai available thuong la"
+            echo "StackSet ben account dich hong giua chung - xem CloudFormation"
+            echo "o account do, khong phai o day."
+            exit 1
+          fi
+
+          echo "   con $DANG_DO attachment dang chuyen trang thai, doi 15s..."
+          sleep 15
+        done

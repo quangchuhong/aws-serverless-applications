@@ -84,6 +84,10 @@ locals {
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.
+    # Pipeline vending. Chay o management, cung account voi bucket,
+    # nen khong can dong backend_profiles nao.
+    "landing-zone/vending-pipeline" = "vending-pipeline/terraform.tfstate"
+
     "landing-zone/control-tower" = "control-tower/terraform.tfstate"
 
   }

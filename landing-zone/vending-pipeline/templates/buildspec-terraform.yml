@@ -1,0 +1,165 @@
+version: 0.2
+
+# ==============================================================
+# MOT BUILDSPEC CHO CA plan LAN apply
+#
+# TF_ACTION quyet dinh chay cai nao. Mot file thay vi hai, vi phan
+# chuan bi - sinh backend.tf, init, chon danh tinh - PHAI giong het
+# nhau o hai lan chay. Hai file thi mot ngay nao do chung se lech, va
+# lech o buoc chuan bi nghia la apply mot ke hoach tinh tren mot
+# backend khac.
+# ==============================================================
+
+env:
+  variables:
+    TF_IN_AUTOMATION: "true"
+    TF_INPUT: "0"
+    # Mau ANSI trong log CodePipeline la rac. Plan van doc duoc.
+    TF_CLI_ARGS: "-no-color"
+
+phases:
+  install:
+    commands:
+      - |
+        set -euo pipefail
+        echo "== Cai Terraform ${TF_VERSION}"
+        curl -fsSL -o /tmp/tf.zip \
+          "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip -q -o /tmp/tf.zip -d /usr/local/bin
+        terraform version
+
+  pre_build:
+    commands:
+      - |
+        set -euo pipefail
+        echo "== Danh tinh CodeBuild"
+        aws sts get-caller-identity --query '[Account,Arn]' --output text
+
+        # ------------------------------------------------------
+        # DANH TINH TAO RESOURCE
+        #
+        # KHONG assume role o day. Layer network nhan
+        # var.assume_role_arn va tu assume trong provider block, nen
+        # BACKEND giu credential cua CodeBuild (doc duoc bucket state
+        # o management) con PROVIDER nhay sang account mang.
+        #
+        # Assume o day thi ca hai cung nhay, va CodeBuild mat quyen
+        # doc state - hoac te hon, doc duoc mot state khac.
+        # ------------------------------------------------------
+        if [ -n "${ASSUME_ROLE_ARN:-}" ]; then
+          echo "   provider se assume: ${ASSUME_ROLE_ARN}"
+          export TF_VAR_assume_role_arn="${ASSUME_ROLE_ARN}"
+        fi
+
+  build:
+    commands:
+      - |
+        set -euo pipefail
+        cd "${LAYER_DIR}"
+        echo "== Layer: ${LAYER_DIR}"
+
+        # ------------------------------------------------------
+        # SINH backend.tf - BUOC KHONG BO DUOC
+        #
+        # backend.tf va backend.hcl nam trong .gitignore: chung do
+        # wire-backends.sh sinh ra tren may tung nguoi. Nen ban
+        # checkout o day KHONG CO khoi backend nao.
+        #
+        # Thieu buoc nay thi terraform init cau hinh backend LOCAL -
+        # mot state RONG - va plan bao can tao moi toan bo ha tang.
+        # Khong co loi nao ca. Nguoi duyet nhin "200 to add" co the
+        # tuong day la mot moi truong moi.
+        # ------------------------------------------------------
+        cat > backend.tf <<'TFBACKEND'
+        terraform {
+          backend "s3" {}
+        }
+        TFBACKEND
+
+        BACKEND_ARGS="-backend-config=bucket=${STATE_BUCKET}"
+        BACKEND_ARGS="$BACKEND_ARGS -backend-config=key=${STATE_KEY}"
+        BACKEND_ARGS="$BACKEND_ARGS -backend-config=region=${STATE_REGION}"
+        BACKEND_ARGS="$BACKEND_ARGS -backend-config=encrypt=true"
+        if [ -n "${STATE_LOCK_TABLE:-}" ]; then
+          BACKEND_ARGS="$BACKEND_ARGS -backend-config=dynamodb_table=${STATE_LOCK_TABLE}"
+        fi
+
+        echo "== init  (key: ${STATE_KEY})"
+        terraform init -input=false $BACKEND_ARGS
+
+        # ------------------------------------------------------
+        # KHONG DE STATE RONG DI TIEP
+        #
+        # Sai khoa, hoac backend.tf sinh hong, deu cho ra mot state
+        # rong - va plan tren state rong thi HOP LE, chi la no mo ta
+        # viec dung lai tu dau. Dung o day thay vi de mot cong duyet
+        # phai bat.
+        #
+        # Layer chua bao gio apply thi dat FIRST_APPLY=yes.
+        # ------------------------------------------------------
+        N=$(terraform state list 2>/dev/null | wc -l | tr -d ' ')
+        echo "   $N resource trong state"
+        if [ "$N" = "0" ] && [ "${FIRST_APPLY:-no}" != "yes" ]; then
+          echo "LOI: state RONG cho ${LAYER_DIR}."
+          echo "     Khoa dang dung: ${STATE_KEY}"
+          echo "     Layer nay da tung apply, nen state rong nghia la SAI KHOA"
+          echo "     hoac backend chua duoc cau hinh - khong phai lan chay dau."
+          echo "     Doi chieu: cd landing-zone/tf-backend && terraform output layers"
+          exit 1
+        fi
+
+      - |
+        set -euo pipefail
+        cd "${LAYER_DIR}"
+
+        if [ "${TF_ACTION}" = "plan" ]; then
+          echo "== plan"
+          # -out: apply se dung DUNG ke hoach nay, khong tinh lai.
+          #
+          # Giua luc duyet va luc apply co the vai gio. Khong co -out
+          # thi apply tinh mot plan MOI, va thu nguoi ta bam duyet
+          # khong con la thu duoc thuc hien. Cong duyet luc do la
+          # nghi thuc, khong phai kiem soat.
+          set +e
+          terraform plan -input=false -detailed-exitcode -out=tfplan
+          CODE=$?
+          set -e
+
+          # -detailed-exitcode: 0 = khong doi gi, 2 = co thay doi,
+          # 1 = loi. Phan biet duoc "khong co gi de lam" voi "hong"
+          # la thu khien mot pipeline chay hang ngay doc duoc.
+          case "$CODE" in
+            0) echo "KHONG CO THAY DOI"; echo "no-changes" > .tf-verdict ;;
+            2) echo "CO THAY DOI";       echo "changes"    > .tf-verdict ;;
+            *) echo "PLAN HONG";         exit "$CODE" ;;
+          esac
+
+          # Ban doc duoc, de dinh kem vao thu duyet.
+          terraform show -no-color tfplan > tfplan.txt
+          echo "== tom tat"
+          grep -E '^(Plan:|No changes)' tfplan.txt || true
+
+          # CANH BAO khi co gi bi XOA. Pipeline nay sinh ra de THEM
+          # account; mot lan chay doi xoa resource la mot lan dang le
+          # phai co nguoi doc ky hon binh thuong.
+          if grep -qE '^Plan: .* to destroy' tfplan.txt \
+             && ! grep -qE '^Plan: .* 0 to destroy' tfplan.txt; then
+            echo ""
+            echo "!!! PLAN NAY CO RESOURCE BI XOA - doc tfplan.txt truoc khi duyet"
+          fi
+        else
+          echo "== apply"
+          if [ ! -f tfplan ]; then
+            echo "LOI: khong thay file tfplan."
+            echo "     Stage apply phai nhan artifact tu stage plan cua CHINH no."
+            exit 1
+          fi
+          terraform apply -input=false tfplan
+        fi
+
+artifacts:
+  # Ca thu muc lam viec, ke ca tfplan va .terraform: stage apply chay
+  # `terraform apply tfplan` nen can dung ban code va dung provider da
+  # khoa phien ban.
+  files:
+    - "**/*"
