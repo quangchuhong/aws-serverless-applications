@@ -160,6 +160,7 @@ Khác biệt lớn nhất so với làm tay: **khối `network:` khai được n
 | Triệu chứng | Nguyên nhân |
 |---|---|
 | Stage plan báo `LOI: state RONG` | Sai khoá trong `layer_keys`, hoặc backend chưa được cấu hình. Đối chiếu `cd ../tf-backend && terraform output layers` |
+| `Error acquiring the state lock` … `DynamoDB: PutItem` | Đọc như một khoá đang bị giữ, nhưng nếu **không** có khối `Lock Info` đi kèm thì chưa từng có khoá nào — là thiếu quyền DynamoDB trên bảng khoá. `init` không lấy khoá nên mọi bước trước đó vẫn xanh |
 | Stage plan báo `LOI: khong lay duoc terraform.tfvars` | Chưa chạy `./push-tfvars.sh`, hoặc chạy trước lần apply tạo bucket. Thông báo in nguyên câu AWS trả về |
 | Stage nào đó plan ra **rất nhiều `destroy`** | Gần như luôn là tfvars sai hoặc cũ, không phải hạ tầng sai. Đừng duyệt. So `aws s3api head-object` trên khoá tfvars của layer đó với file ở máy |
 | Build chết ngay sau `... resource trong state`, không in `== plan` | `cd` bằng đường dẫn tương đối lần thứ hai. CodeBuild chạy mọi lệnh trong **cùng một shell** nên thư mục giữ nguyên giữa các khối `- \|`. Phải dùng `$CODEBUILD_SRC_DIR` |

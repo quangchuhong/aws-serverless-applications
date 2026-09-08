@@ -3065,6 +3065,26 @@ IAM là **hợp** của các Allow. Statement hẹp không hạn chế được 
 
 Dạng lỗi: **một comment mô tả ý định của tác giả, đặt cạnh code không thực hiện ý định đó.** Nguy hiểm hơn không có comment, vì người đọc sau sẽ tin nó và không kiểm.
 
+### Lỗi 99 — thu hẹp quyền state xuống từng khoá S3, và quên hẳn bảng khoá
+
+Sau khi vá 96 và 97, stage A đi qua được `init`, in `158 dong` tfvars, `14 resource trong state`, `== plan` — rồi hỏng:
+
+```
+Error: Error acquiring the state lock
+Error message: operation error DynamoDB: PutItem, https response error
+PLAN HONG
+```
+
+Trong toàn bộ policy `chay-terraform` không có **một dòng DynamoDB nào**. Tôi viết `DocGhiState` để giới hạn pipeline vào đúng bốn khoá state, viết `ListState` cho `s3:ListBucket`, viết `MaHoaState` cho KMS — và không viết gì cho bảng khoá.
+
+Điều làm nó khó thấy: **`terraform init` không lấy khoá.** Nên mọi thứ trước đó đều xanh, state đọc được, số resource đếm đúng, và lỗi chỉ nổ ở `plan`. Cùng một hình dạng với lỗi 90, chỉ khác nguyên nhân: lần đó bảng nằm ở account khác, lần này quyền không tồn tại.
+
+Và thông báo không nhắc gì tới quyền. Ba dòng đều nói về DynamoDB, nên nó đọc như **một khoá đang bị ai đó giữ** — cách hiểu tự nhiên nhất, và sai. Nếu thật sự có khoá bị giữ, Terraform in thêm một khối `Lock Info` với `ID / Path / Who / Created`; không có khối đó nghĩa là chưa bao giờ có khoá nào, tức là không đọc được bảng chứ không phải bảng đang bận.
+
+Chữa: thêm `dynamodb:GetItem/PutItem/DeleteItem/DescribeTable` trên đúng ARN bảng khoá. `DeleteItem` là cần chứ không phải cho đủ — thiếu nó thì lần chạy đầu tiên bị huỷ giữa chừng sẽ để lại một khoá không ai gỡ được, và `terraform force-unlock` cũng không gỡ nổi.
+
+**Bài học:** "quyền đọc/ghi state" trong backend S3 không phải một thứ, mà là **bốn** — object S3, `ListBucket` trên bucket, KMS key, và bảng khoá DynamoDB. Ba lần liên tiếp trong dự án này (lỗi 85, 90, 99) chi phí đến từ việc chỉ nghĩ tới một hoặc hai trong bốn.
+
 ---
 
 ## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ

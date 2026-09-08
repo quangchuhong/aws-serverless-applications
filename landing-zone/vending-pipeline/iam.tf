@@ -191,6 +191,29 @@ resource "aws_iam_role_policy" "codebuild" {
       },
 
       ####################################
+      # BANG KHOA STATE
+      #
+      # Backend S3 giu khoa trong DynamoDB. Thieu quyen o day KHONG
+      # lam `terraform init` hong - init khong lay khoa - nen loi chi
+      # hien ra o `plan`, sau khi state da doc duoc va moi thu truoc
+      # do deu xanh:
+      #
+      #   Error: Error acquiring the state lock
+      #   Error message: operation error DynamoDB: PutItem, ...
+      #
+      # Ba dong cua thong bao noi ve DynamoDB va ZERO dong noi ve
+      # quyen, nen no doc nhu mot khoa dang bi ai do giu.
+      #
+      # DeleteItem la CAN, khong phai cho du: no vua de nha khoa sau
+      # moi lan chay, vua de `terraform force-unlock` go duoc mot khoa
+      # con sot lai khi build bi huy giua chung. Thieu no thi lan chay
+      # dau tien bi huy se khoa layer do lai vinh vien.
+      ####################################
+      # Khai o cuoi, trong mot nhanh co dieu kien: state_lock_table de
+      # rong nghia la lock_mode = "s3" (dung lockfile), va luc do mot
+      # ARN "table/" khong ten se lam AWS tu choi ca policy.
+
+      ####################################
       # DOC terraform.tfvars - CHI DOC
       #
       # Khong co PutObject: pipeline khong duoc tu sua cau hinh cua
@@ -322,6 +345,20 @@ resource "aws_iam_role_policy" "codebuild" {
         ]
       },
       ],
+
+      var.state_lock_table == "" ? [] : [{
+        Sid    = "KhoaState"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:DescribeTable",
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:dynamodb:${var.region}:${data.aws_caller_identity.current.account_id}:table/${var.state_lock_table}",
+        ]
+      }],
 
       ####################################
       # NHAY SANG ACCOUNT MANG - chi MOT role, khai tuong minh
