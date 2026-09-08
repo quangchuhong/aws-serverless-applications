@@ -186,18 +186,48 @@ resource "aws_cloudformation_stack_set_instance" "spoke_network" {
     account_filter_type     = "INTERSECTION"
   }
 
-  parameter_overrides = {
-    AccountName = each.key
-    VpcCidr     = each.value.vpc_cidr
-    AttachTgw   = tostring(each.value.attach_tgw)
+  ####################################
+  # DE LEN CANG IT CANG TOT
+  #
+  # KHONG phai de gon. parameter_overrides doi la Terraform goi
+  # UpdateStackInstances, va loi nay cho thay lenh do KHONG chay duoc
+  # tren stack set service-managed nham OU:
+  #
+  #   ValidationError: Value '[ou-o5ci-75f3uqe6]' at 'accounts' failed
+  #   to satisfy constraint: Member must satisfy regular expression
+  #   pattern: ^[0-9]{12}$
+  #
+  # Provider luu OU ID vao o danh cho account ID trong resource ID
+  # (xem ID cua resource: "<stackset>,ou-...,<region>"), roi gui chinh
+  # gia tri do lam tham so `accounts` khi update. Do la gioi han cua
+  # provider, khong phai cau hinh sai - va cach di tiep duy nhat la
+  # THAY THE stack instance:
+  #
+  #   terraform apply -replace='aws_cloudformation_stack_set_instance.spoke_network["<ten>"]'
+  #
+  # Thay the nghia la XOA STACK o account dich roi tao lai: VPC,
+  # subnet, attachment, endpoint deu dung len tu dau. Chap nhan duoc
+  # khi VPC con trong; KHONG chap nhan duoc khi da co workload.
+  #
+  # Nen chi de len nhung gi THAT SU khac gia tri mac dinh cua stack
+  # set. DnsProfileId cua account attach_dns = true bang y het mac
+  # dinh, nen de len la tu tao ra mot nguon thay doi khong can thiet -
+  # va moi lan layer network dung lai, dns_profile_id doi, la mot lan
+  # phai thay the stack o MOI account.
+  ####################################
+  parameter_overrides = merge(
+    {
+      AccountName = each.key
+      VpcCidr     = each.value.vpc_cidr
+      AttachTgw   = tostring(each.value.attach_tgw)
+    },
 
     # Rong = Condition DoDns sai = khong gan Profile.
     #
-    # Phai de len o TUNG INSTANCE. Gia tri mac dinh cua stack set la
-    # dns_profile_id, nen khong co dong nay thi MOI account deu duoc
-    # gan profile, ke ca account khong noi TGW.
-    DnsProfileId = each.value.attach_dns ? try(local.net.dns_profile_id, "") : ""
-  }
+    # CHI de len khi TAT. Bat thi gia tri mac dinh cua stack set da
+    # dung roi, va de len bang chinh no khong them thong tin gi.
+    each.value.attach_dns ? {} : { DnsProfileId = "" },
+  )
 
   operation_preferences {
     failure_tolerance_percentage = 0
