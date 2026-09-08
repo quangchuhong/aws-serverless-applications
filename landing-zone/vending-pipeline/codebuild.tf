@@ -60,6 +60,14 @@ resource "aws_codebuild_project" "terraform" {
       name  = "STATE_LOCK_TABLE"
       value = var.state_lock_table
     }
+
+    # Kho terraform.tfvars. Giong nhau o moi stage, nen dat o day chu
+    # khong de len o tung action - khoa duoc suy ra tu LAYER_DIR.
+    environment_variable {
+      name  = "TFVARS_BUCKET"
+      value = aws_s3_bucket.tfvars[0].bucket
+    }
+
     environment_variable {
       name  = "LAYER_DIR"
       value = "chua-dat"

@@ -55,8 +55,67 @@ phases:
     commands:
       - |
         set -euo pipefail
-        cd "${LAYER_DIR}"
+
+        # ------------------------------------------------------
+        # DUONG DAN TUYET DOI - KHONG DUOC DUNG `cd "${LAYER_DIR}"`
+        #
+        # CodeBuild chay MOI lenh trong CUNG mot shell, nen thu muc
+        # hien tai giu nguyen giua cac khoi `- |`. Khoi thu hai ma
+        # `cd` bang duong dan tuong doi lan nua se tim
+        # landing-zone/account-baseline/landing-zone/account-baseline
+        # va chet - sau khi init da chay xong, nen log doc nhu la
+        # plan hong chu khong phai cd hong.
+        # ------------------------------------------------------
+        cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"
         echo "== Layer: ${LAYER_DIR}"
+
+        # ------------------------------------------------------
+        # KEO terraform.tfvars VE - BUOC KHONG BO DUOC
+        #
+        # tfvars nam trong .gitignore (chua account ID, email), nen
+        # ban checkout KHONG CO no.
+        #
+        # Va thieu no KHONG gay loi: ba trong bon layer khong co bien
+        # bat buoc nao - moi bien deu co `default`. `terraform plan`
+        # se chay THANH CONG voi catalog = {}, spokes = {}, ou_ids =
+        # {} tren DUNG state that, tuc mo ta viec XOA moi thu dang co.
+        #
+        # Nen thieu file la LOI CUNG o day.
+        # ------------------------------------------------------
+        TFVARS_KEY="tfvars/${LAYER_DIR}/terraform.tfvars"
+        echo "== tfvars  (s3://${TFVARS_BUCKET}/${TFVARS_KEY})"
+
+        set +e
+        ERR=$(aws s3api get-object \
+                --bucket "${TFVARS_BUCKET}" \
+                --key "${TFVARS_KEY}" \
+                terraform.tfvars 2>&1 >/dev/null)
+        RC=$?
+        set -e
+
+        if [ "$RC" -ne 0 ]; then
+          echo "LOI: khong lay duoc terraform.tfvars cho ${LAYER_DIR}."
+          echo ""
+          echo "AWS tra ve:"
+          echo "  $ERR"
+          echo ""
+          echo "Ba nguyen nhan hay gap:"
+          echo "  1. Chua day file len:  ./push-tfvars.sh  (o landing-zone/vending-pipeline)"
+          echo "  2. Day len sai khoa. Khoa dung: ${TFVARS_KEY}"
+          echo "  3. Role CodeBuild thieu s3:GetObject tren bucket ${TFVARS_BUCKET}"
+          echo ""
+          echo "KHONG chay plan khi thieu file nay: ba trong bon layer khong co"
+          echo "bien bat buoc, nen plan se THANH CONG va mo ta viec xoa moi thu."
+          exit 1
+        fi
+
+        if [ ! -s terraform.tfvars ]; then
+          echo "LOI: terraform.tfvars tai ve nhung RONG (0 byte)."
+          echo "     Day lai bang ./push-tfvars.sh"
+          exit 1
+        fi
+
+        echo "   $(wc -l < terraform.tfvars) dong"
 
         # ------------------------------------------------------
         # SINH backend.tf - BUOC KHONG BO DUOC
@@ -110,7 +169,8 @@ phases:
 
       - |
         set -euo pipefail
-        cd "${LAYER_DIR}"
+        # Tuyet doi, cung ly do voi khoi tren.
+        cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"
 
         if [ "${TF_ACTION}" = "plan" ]; then
           echo "== plan"
@@ -158,8 +218,16 @@ phases:
         fi
 
 artifacts:
-  # Ca thu muc lam viec, ke ca tfplan va .terraform: stage apply chay
-  # `terraform apply tfplan` nen can dung ban code va dung provider da
-  # khoa phien ban.
+  # Ca cay nguon, ke ca file `tfplan` ma stage apply se chay.
+  #
+  # `**/*` KHONG khop thu muc an, nen `.terraform/` (provider da tai)
+  # KHONG di theo artifact. Do khong phai thieu sot: khoi lenh thu
+  # nhat chay cho CA plan lan apply - no sinh lai backend.tf, keo lai
+  # tfvars va `terraform init` lai - nen stage apply tu cai provider
+  # theo dung .terraform.lock.hcl (file nay CO trong git voi
+  # landing-zone/*).
+  #
+  # Dung them "**/.terraform/**/*" vao day: hang tram MB binary di qua
+  # S3 moi lan chay, de doi lay dung cai `init` da lam trong 10 giay.
   files:
     - "**/*"

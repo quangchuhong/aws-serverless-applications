@@ -27,7 +27,7 @@ Lần chạy nào không có account mới thì cả sáu stage đều ra `KHÔN
 
 ---
 
-## Ba quyết định đáng đọc trước khi bật
+## Bốn quyết định đáng đọc trước khi bật
 
 ### 1. `terraform plan -out=tfplan`, và apply đúng file đó
 
@@ -43,7 +43,33 @@ Thiếu bước sinh thì `terraform init` cấu hình backend **local** — m�
 
 Nên buildspec còn dừng lại khi state rỗng mà `FIRST_APPLY != yes`: một layer đã từng apply mà state rỗng nghĩa là sai khoá, không phải lần chạy đầu.
 
-### 3. Hai danh tính trong một lần chạy
+### 3. `terraform.tfvars` đi qua S3, không đi qua git
+
+Cùng lý do với `backend.tf`: `.gitignore` loại `terraform.tfvars` vì nó chứa account ID, email, mã phòng ban. Bản checkout của CodeBuild **không có tfvars của layer nào**.
+
+Nhưng hậu quả khác hẳn, và tệ hơn. Thiếu backend thì state rỗng, và chốt chặn bắt được. Thiếu tfvars thì **không có gì hỏng**:
+
+| Layer | Biến bắt buộc (không có `default`) |
+|---|---|
+| account-baseline | *không có* |
+| network | *không có* |
+| config-detective | *không có* |
+| permission-sets | `management_account_id` |
+
+Ba trong bốn layer mọi biến đều có `default`. Thiếu tfvars thì `terraform plan` chạy **thành công** với `catalog = {}`, `spokes = {}`, `ou_ids = {}` — trên **đúng** state thật. Nghĩa là plan mô tả việc **xoá** account, StackSet, VPC, attachment đang có. Chốt chặn state rỗng không thấy gì bất thường: state đầy đủ, chỉ có biến là rỗng.
+
+Nên tfvars nằm trong một bucket riêng (`tfvars_bucket`), buildspec kéo về trước `init`, và **thiếu file là lỗi cứng**.
+
+```bash
+cd landing-zone/vending-pipeline
+./push-tfvars.sh          # chạy lại MỖI KHI sửa tfvars của bất kỳ layer nào
+```
+
+Quên chạy = pipeline chạy trên cấu hình **cũ**, và không có gì báo điều đó. Bucket bật versioning để lùi lại được sau một lần đẩy nhầm.
+
+Role CodeBuild **bị Deny tường minh** quyền ghi vào bucket này. Deny chứ không phải "không khai Allow": `s3:*` trong cùng policy đã cấp ghi rồi, và chỉ Deny mới thật sự chặn. Sửa cấu hình là việc của người, từ máy có credential riêng.
+
+### 4. Hai danh tính trong một lần chạy
 
 CodeBuild chỉ có **một** bộ credential, của management, và nó cần bộ đó để đọc bucket state. Nếu provider cũng dùng bộ đó thì layer `network` dựng TGW và firewall **trong account management** — đúng sự cố đêm 5/9.
 
@@ -91,6 +117,9 @@ cd ../vending-pipeline
 #    network_deploy_role_arn = "..."
 #    transit_gateway_id      = "tgw-..."
 terraform apply
+
+# 4. Đẩy tfvars của bốn layer lên kho của pipeline
+./push-tfvars.sh
 ```
 
 Rồi bốn việc còn lại:
@@ -131,6 +160,9 @@ Khác biệt lớn nhất so với làm tay: **khối `network:` khai được n
 | Triệu chứng | Nguyên nhân |
 |---|---|
 | Stage plan báo `LOI: state RONG` | Sai khoá trong `layer_keys`, hoặc backend chưa được cấu hình. Đối chiếu `cd ../tf-backend && terraform output layers` |
+| Stage plan báo `LOI: khong lay duoc terraform.tfvars` | Chưa chạy `./push-tfvars.sh`, hoặc chạy trước lần apply tạo bucket. Thông báo in nguyên câu AWS trả về |
+| Stage nào đó plan ra **rất nhiều `destroy`** | Gần như luôn là tfvars sai hoặc cũ, không phải hạ tầng sai. Đừng duyệt. So `aws s3api head-object` trên khoá tfvars của layer đó với file ở máy |
+| Build chết ngay sau `... resource trong state`, không in `== plan` | `cd` bằng đường dẫn tương đối lần thứ hai. CodeBuild chạy mọi lệnh trong **cùng một shell** nên thư mục giữ nguyên giữa các khối `- \|`. Phải dùng `$CODEBUILD_SRC_DIR` |
 | Stage apply báo `khong thay file tfplan` | Artifact từ stage plan không tới. Xem `input_artifacts` của action |
 | Stage chờ báo `HET GIO` | Attachment kẹt ở trạng thái không phải `available` — StackSet ở account đích hỏng giữa chừng. Xem CloudFormation **ở account đó**, không phải ở đây |
 | Stage chờ báo `LOI: khong goi duoc describe...` | Thiếu quyền, không phải còn đang chờ. Hai cái này cố tình tách ra — gộp lại thì một lỗi quyền hiện ra thành một vòng chờ đến hết giờ |

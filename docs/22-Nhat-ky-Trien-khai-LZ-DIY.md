@@ -2993,6 +2993,80 @@ terraform apply -replace='aws_instance.partner_sim[0]'
 
 ---
 
+## 7at. Lỗi 96–98 — pipeline chạy lần đầu, và ba cách hỏng nằm sau một cái `cd`
+
+Lần chạy đầu của CodePipeline vending. `Nguon` xanh, `Lint` xanh, `A_tao_account / Plan` đỏ.
+
+### Lỗi 96 — build chết sau `init`, log đọc như là `plan` hỏng
+
+CodeBuild in ra khối lệnh đã hỏng. Khối đó chứa cả `terraform plan` lẫn `terraform apply`, nên đọc thoáng qua thì đây là một lỗi của Terraform. Nó không phải.
+
+Lọc log theo mốc:
+
+```
+== Layer: landing-zone/account-baseline
+== init  (key: account-baseline/terraform.tfstate)
+   14 resource trong state
+```
+
+Rồi hết. `== plan` — dòng đầu tiên bên trong khối bị tố cáo — **không bao giờ được in**. Nghĩa là khối đó chết ở lệnh trước nó:
+
+```bash
+cd "${LAYER_DIR}"
+```
+
+`LAYER_DIR` là đường dẫn tương đối. CodeBuild chạy **mọi lệnh trong cùng một shell**, nên `cd` ở khối trước vẫn còn hiệu lực. Khối thứ hai `cd landing-zone/account-baseline` lần nữa, từ bên trong chính thư mục đó, tìm `landing-zone/account-baseline/landing-zone/account-baseline`.
+
+Sửa: `cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"` ở cả hai khối.
+
+Điều đáng ghi không phải cái `cd`. Là chuyện **CodeBuild in ra khối lệnh chứ không in ra dòng lệnh**, nên một lỗi ở dòng đầu hiện ra mang hình dạng của dòng cuối. Cách đọc đúng là tìm dòng `echo` **cuối cùng thật sự được in**, rồi xem cái gì đứng ngay sau nó trong code — chứ không phải đọc khối lệnh mà CodeBuild trưng ra.
+
+### Lỗi 97 — `terraform.tfvars` không có trong repo, và điều đó *không* gây lỗi
+
+Tìm ra khi kiểm tại sao stage A hỏng. Không phải nguyên nhân của lỗi 96, nhưng sẽ là nguyên nhân của lần chạy ngay sau khi vá 96.
+
+`.gitignore` loại `terraform.tfvars` — đúng, nó chứa account ID, email, mã phòng ban. Nên bản checkout của CodeBuild không có nó.
+
+Với `backend.tf` thì thiếu là hỏng ngay và chốt chặn state rỗng bắt được. Với tfvars thì:
+
+| Layer | Biến bắt buộc |
+|---|---|
+| account-baseline | *không có* |
+| network | *không có* |
+| config-detective | *không có* |
+| permission-sets | `management_account_id` |
+
+Ba trong bốn layer mọi biến đều có `default`. `terraform plan` chạy **thành công** với `catalog = {}`, `ou_ids = {}`, `spokes = {}` trên **đúng state thật** — tức mô tả việc xoá mọi thứ đang có. Chốt chặn state rỗng không thấy gì lạ: state có đủ 14 resource, chỉ có biến là rỗng.
+
+Đây là kiểu hỏng tệ nhất trong tập: không thông báo, không cảnh báo, và kết quả *hợp lệ*. Thứ duy nhất đứng giữa nó và một lần xoá thật là một người đọc `Plan: 0 to add, 0 to change, 14 to destroy` và hiểu con số đó có nghĩa gì.
+
+Chữa: bucket riêng (`tfvars_bucket`, bật versioning), buildspec kéo về trước `init`, **thiếu file là lỗi cứng**. Đẩy bằng `./push-tfvars.sh`.
+
+Bài học lặp lại từ lỗi 88 và 90: **một giá trị mặc định hợp lý là một cách hỏng im lặng.** `default = {}` trên `catalog` trông vô hại khi đọc file khai báo biến; nó chỉ nguy hiểm khi có một đường chạy nào đó quên nạp tfvars, và đường đó ra đời sau.
+
+### Lỗi 98 — hai statement "thu hẹp" không thu hẹp gì
+
+Kiểm lại IAM khi thêm quyền đọc bucket tfvars, và thấy hai chỗ trong cùng policy `chay-terraform`:
+
+```hcl
+# statement rộng
+Action = [..., "s3:*", "sts:AssumeRole", ...]
+Resource = ["*"]
+
+# statement hẹp, viết sau, kèm comment giải thích tại sao nó hẹp
+Sid      = "SangAccountMang"
+Action   = ["sts:AssumeRole"]
+Resource = [var.network_deploy_role_arn]
+```
+
+IAM là **hợp** của các Allow. Statement hẹp không hạn chế được statement rộng trong cùng policy — nó chỉ *đọc như* một ràng buộc. Cũng vậy với `DocGhiState`, cái được viết ra để giới hạn pipeline vào đúng bốn khoá state.
+
+Đã sửa: gỡ `sts:AssumeRole` khỏi statement rộng, nên `SangAccountMang` giờ là nguồn cấp duy nhất và thêm một account đích là thêm một dòng hiện ra trong code review. Với bucket tfvars, dùng **Deny tường minh** thay vì trông chờ vào việc không khai Allow. Với `s3:*` và bốn khoá state: chưa sửa được nếu không biết chính xác bốn layer tạo những bucket nào, nên comment đã được viết lại để nói đúng sự thật thay vì nói đúng ý định.
+
+Dạng lỗi: **một comment mô tả ý định của tác giả, đặt cạnh code không thực hiện ý định đó.** Nguy hiểm hơn không có comment, vì người đọc sau sẽ tin nó và không kiểm.
+
+---
+
 ## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ
 
 Ba account mới quét xong, `check-sweep.sh` in ra kết quả của từng account:

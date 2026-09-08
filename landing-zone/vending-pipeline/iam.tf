@@ -157,9 +157,20 @@ resource "aws_iam_role_policy" "codebuild" {
       ####################################
       # STATE - HEP TOI TUNG KHOA
       #
-      # Khong cap ca bucket. Bucket do giu state cua MOI layer trong
-      # landing zone, ke ca tf-backend va organization. Pipeline nay
-      # chi duoc cham vao bon khoa no thuc su chay.
+      # Y DINH: chi bon khoa pipeline thuc su chay, khong phai ca
+      # bucket - bucket do giu state cua MOI layer, ke ca tf-backend
+      # va organization.
+      #
+      # NHUNG DOC TIEP TRUOC KHI TIN DONG TREN: statement
+      # "VendingVaBaseline" ben duoi cap `s3:*` tren `*`. IAM la HOP
+      # cua cac Allow, nen mot statement hep khong han che duoc mot
+      # statement rong trong CUNG mot policy. Thuc te CodeBuild ghi
+      # duoc MOI khoa trong bucket state.
+      #
+      # De lai statement nay vi no van la tai lieu ve pham vi DUNG,
+      # va vi cach chua that su la thu hep `s3:*` - viec do can biet
+      # chinh xac bon layer tao nhung bucket nao (Config delivery
+      # channel, flow log...) va se lam rieng.
       #
       # ListBucket phai co dieu kien s3:prefix, va prefix do phai phu
       # het cac khoa - neu khong `terraform init` bao 403 tren mot key
@@ -177,6 +188,20 @@ resource "aws_iam_role_policy" "codebuild" {
         Effect   = "Allow"
         Action   = ["s3:ListBucket", "s3:GetBucketLocation"]
         Resource = ["arn:${data.aws_partition.current.partition}:s3:::${var.state_bucket}"]
+      },
+
+      ####################################
+      # DOC terraform.tfvars - CHI DOC
+      #
+      # Khong co PutObject: pipeline khong duoc tu sua cau hinh cua
+      # chinh no. Doi tfvars la viec cua nguoi, qua ./push-tfvars.sh
+      # tu may co credential rieng.
+      ####################################
+      {
+        Sid      = "DocTfvars"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${aws_s3_bucket.tfvars[0].arn}/tfvars/*"]
       },
       {
         Sid    = "MaHoaState"
@@ -221,7 +246,17 @@ resource "aws_iam_role_policy" "codebuild" {
           "events:*",
           "ram:*",
           "sts:GetCallerIdentity",
-          "sts:AssumeRole",
+
+          # `sts:AssumeRole` CO Y khong nam o day.
+          #
+          # Truoc day no o trong danh sach nay voi Resource = ["*"],
+          # va nhu vay statement "SangAccountMang" ben duoi - cai
+          # khai DUNG MOT role - khong han che duoc gi ca. No doc nhu
+          # mot rang buoc ma khong phai rang buoc.
+          #
+          # Gio muon nhay sang bat ky account nao thi phai them ARN
+          # vao SangAccountMang, va them o do la mot dong hien ra
+          # trong code review.
           "ec2:Describe*",
           "s3:*",
           "kms:*",
@@ -258,6 +293,32 @@ resource "aws_iam_role_policy" "codebuild" {
         Resource = [
           aws_iam_role.codebuild[0].arn,
           aws_iam_role.pipeline[0].arn,
+        ]
+      },
+      {
+        # Khong tu sua CAU HINH cua chinh minh.
+        #
+        # DENY, khong phai "khong khai Allow": `s3:*` tren `*` o
+        # VendingVaBaseline da cap ghi roi. Chi mot Deny tuong minh
+        # moi that su chan - Deny thang Allow trong moi truong hop.
+        #
+        # Neu thieu no: mot lan chay co the sua tfvars cua chinh no
+        # roi lan chay sau doc cau hinh moi do. Cong duyet van chan
+        # apply, nhung thu duoc duyet la thu tinh tren cau hinh khong
+        # ai viet.
+        Sid    = "KhongGhiDeCauHinhCuaChinhMinh"
+        Effect = "Deny"
+        Action = [
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:DeleteObjectVersion",
+          "s3:PutBucketPolicy",
+          "s3:DeleteBucketPolicy",
+          "s3:PutBucketVersioning",
+        ]
+        Resource = [
+          aws_s3_bucket.tfvars[0].arn,
+          "${aws_s3_bucket.tfvars[0].arn}/*",
         ]
       },
       ],
