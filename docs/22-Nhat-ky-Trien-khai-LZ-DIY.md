@@ -3085,6 +3085,47 @@ Chữa: thêm `dynamodb:GetItem/PutItem/DeleteItem/DescribeTable` trên đúng A
 
 **Bài học:** "quyền đọc/ghi state" trong backend S3 không phải một thứ, mà là **bốn** — object S3, `ListBucket` trên bucket, KMS key, và bảng khoá DynamoDB. Ba lần liên tiếp trong dự án này (lỗi 85, 90, 99) chi phí đến từ việc chỉ nghĩ tới một hoặc hai trong bốn.
 
+### Lỗi 100 — `profile` đúng trên laptop là `profile` sai trong CodeBuild
+
+Stage A xanh, `No changes`. Stage B — stage đầu tiên đi sang account mạng — hỏng:
+
+```
+Error: failed to get shared config profile, default
+```
+
+Câu này không nhắc gì tới `vending_state`, tới `terraform_remote_state`, hay tới CodeBuild. Nó đến từ `var.vending_state` trong `network/terraform.tfvars`, khối cấu hình để layer `network` đọc state của `account-baseline`:
+
+```hcl
+vending_state = {
+  backend = "s3"
+  bucket  = "qh11-lz-tfstate-609320954321"
+  key     = "account-baseline/terraform.tfstate"
+  region  = "ap-southeast-1"
+  profile = "default"        # <-- dòng này
+}
+```
+
+Dòng `profile` **đúng** khi một người chạy: họ dùng credential của account mạng, nên đọc bucket state ở account management cần một profile khác. Trong CodeBuild thì ngược hẳn — credential gốc của nó *đã* là management, và provider mới là cái nhảy sang account mạng. Ở đó không những không cần profile, mà còn không thể có: container không có `~/.aws/config`.
+
+Đây là dạng lỗi khác với 96–99. Không có gì viết sai. Cùng một file cấu hình phải phục vụ **hai danh tính khác nhau**, và giá trị đúng cho danh tính này là giá trị sai cho danh tính kia. Kho tfvars-qua-S3 (lỗi 97) giải quyết được chuyện *đưa* file tới CodeBuild, nhưng không giải quyết chuyện file đó **nên khác nhau** giữa hai nơi.
+
+Chữa: `vending.tf` bỏ khoá `profile` khi `var.assume_role_arn != ""`. Điều kiện đó là dấu hiệu chắc chắn "đang chạy trong pipeline" — chính nó là thứ tách hai danh tính ra — nên không phải thêm một biến nữa để người ta phải nhớ đặt.
+
+### Lỗi 101 — Route 53 Profiles là một namespace IAM thứ ba
+
+Cùng một lần chạy stage B, sau khi qua được lỗi 100:
+
+```
+AccessDeniedException: User: arn:aws:sts::436908791055:assumed-role/
+quh11-net-pipeline-deploy/lz-network-pipeline is not authorized to perform:
+route53profiles:GetProfile ... because no identity-based policy allows
+the route53profiles:GetProfile action
+```
+
+Policy của role đã có `route53:*` **và** `route53resolver:*`. Không đủ: `route53profiles:` là namespace thứ ba, dù trên console cả ba nằm dưới một tên dịch vụ.
+
+Thông báo của AWS ở đây tốt — nó nói đúng tên action thiếu, nên sửa mất ba mươi giây. Cái khó là **đoán trước** rằng có một namespace thứ ba, và không có cách nào đoán ra ngoài việc chạy thử. Đó là lập luận cho việc lần chạy khô phải đi hết sáu stage trước khi một account thật đi qua: những lỗi kiểu này chỉ lộ ra khi có người thực sự gọi API.
+
 ---
 
 ## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ

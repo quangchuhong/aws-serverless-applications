@@ -83,7 +83,31 @@ locals {
   # backend tach ra khoi phan con lai: terraform_remote_state nhan
   # backend rieng, config rieng.
   vending_backend = try(var.vending_state.backend, "s3")
-  vending_config  = { for k, v in var.vending_state : k => v if k != "backend" }
+
+  ####################################
+  # BO `profile` KHI PIPELINE CHAY
+  #
+  # `profile` trong vending_state ton tai cho NGUOI chay tay: ho dung
+  # credential cua account mang, nen doc state o bucket cua account
+  # management can mot profile khac.
+  #
+  # CodeBuild thi nguoc han: credential goc CUA NO da la management -
+  # provider moi la cai nhay sang account mang bang assume_role. Nen
+  # o do khong nhung khong can profile, ma con KHONG THE co: container
+  # khong co ~/.aws/config, va terraform_remote_state dung lai voi
+  #
+  #   Error: failed to get shared config profile, default
+  #
+  # mot cau khong nhac gi toi vending_state lan CodeBuild.
+  #
+  # assume_role_arn khac rong la dau hieu chac chan "dang chay trong
+  # pipeline" - chinh no la thu tach hai danh tinh ra. Dung no de bo
+  # profile, thay vi them mot bien nua de nguoi ta phai nho dat.
+  ####################################
+  vending_config = {
+    for k, v in var.vending_state : k => v
+    if k != "backend" && !(var.assume_role_arn != "" && k == "profile")
+  }
 }
 
 data "terraform_remote_state" "vending" {

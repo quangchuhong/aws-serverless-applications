@@ -291,3 +291,9 @@ vending_state = {}
 #   region  = "ap-southeast-1"
 #   profile = "default"     # chi khi state nam o account khac
 # }
+#
+# DUNG KHAI `profile` NEU LAYER NAY CHAY TRONG PIPELINE VENDING.
+# CodeBuild khong co ~/.aws/config, va terraform_remote_state dung lai
+# voi "failed to get shared config profile, default" - mot cau khong
+# nhac gi toi vending_state lan CodeBuild. Layer nay chay o CHINH
+# account management nen khong bao gio can profile o do.

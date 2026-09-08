@@ -116,6 +116,21 @@ resource "aws_iam_role_policy" "pipeline_deploy" {
           "network-firewall:*",
           "route53:*",
           "route53resolver:*",
+
+          # Route 53 Profiles la mot NAMESPACE IAM RIENG.
+          #
+          # `route53:*` va `route53resolver:*` khong phu no, du ba cai
+          # cung nam duoi mot ten dich vu tren console. Thieu dong nay
+          # thi plan cua layer chay den `aws_route53profiles_profile`
+          # roi dung:
+          #
+          #   AccessDeniedException: ... not authorized to perform:
+          #   route53profiles:GetProfile ... because no identity-based
+          #   policy allows the route53profiles:GetProfile action
+          #
+          # Thong bao noi dung ten action, nen no de sua - cai kho la
+          # doan TRUOC rang co mot namespace thu ba.
+          "route53profiles:*",
           "ram:*",
           "logs:*",
           "cloudwatch:*",
