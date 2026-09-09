@@ -93,6 +93,17 @@ Conditions:
   # giai duoc ten noi bo.
   DoDns: !Not [!Equals [!Ref DnsProfileId, ""]]
 
+  # Can cho RAM khi stack nay dung BAT KY tai nguyen nao duoc chia se
+  # tu account mang - TGW, DNS profile, hoac ca hai.
+  #
+  # Ban dau khoi RAM chi gan dieu kien DoAttach, va chi `Attachment`
+  # khai DependsOn. `DnsProfile` khong phu thuoc gi nen CloudFormation
+  # tao no SONG SONG - truoc khi loi moi kip duoc nhan - va stack hong
+  # voi "[RSLVR-05007] Can't find the resource with ID rp-...".
+  # Cau do khong nhac gi toi RAM, y het cau ve Transit Gateway ma ca
+  # co che nay duoc viet ra de tranh.
+  DoRam: !Or [Condition: DoAttach, Condition: DoDns]
+
 Resources:
   Vpc:
     Type: AWS::EC2::VPC
@@ -219,7 +230,7 @@ Resources:
 
   RamRole:
     Type: AWS::IAM::Role
-    Condition: DoAttach
+    Condition: DoRam
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -239,11 +250,15 @@ Resources:
                   - ram:GetResourceShareInvitations
                   - ram:AcceptResourceShareInvitation
                   - ec2:DescribeTransitGateways
+                  # Doc DNS profile de biet share da toi noi chua.
+                  # Chi doc - stack khong sua gi cua account mang.
+                  - route53profiles:GetProfile
+                  - route53profiles:ListProfiles
                 Resource: "*"
 
   RamFn:
     Type: AWS::Lambda::Function
-    Condition: DoAttach
+    Condition: DoRam
     DependsOn: RamRole
     Properties:
       FunctionName: !Sub "${ProjectName}-${AccountName}-nhan-ram"
@@ -312,26 +327,43 @@ Resources:
                   if not tok:
                       return nhan
 
+          def thay_tgw(ec2, tgw):
+              r = ec2.describe_transit_gateways(TransitGatewayIds=[tgw])
+              return r['TransitGateways'][0]['State']
+
+          def thay_profile(r53, pid):
+              # Profile duoc chia se qua RAM chi hien ra o account nay
+              # SAU khi loi moi duoc nhan. Truoc do get_profile bao
+              # ResourceNotFoundException - dung cai ma
+              # AWS::Route53Profiles::ProfileAssociation gap va bao
+              # thanh "[RSLVR-05007] Can't find the resource with ID".
+              r = r53.get_profile(ProfileId=pid)
+              return r['Profile']['Status']
+
           def handler(event, ctx):
               try:
                   if event['RequestType'] == 'Delete':
                       # Khong the huy nhan mot loi moi da nhan, va cung
-                      # khong nen: TGW co the dang duoc dung boi thu khac.
+                      # khong nen: tai nguyen co the dang duoc dung boi
+                      # thu khac trong account nay.
                       send(event, ctx, 'SUCCESS', {'Result': 'DELETE:khong-lam-gi'})
                       return
 
                   p = event['ResourceProperties']
                   tgw = p.get('TransitGatewayId', '')
+                  pid = p.get('DnsProfileId', '')
                   ten_can = set(
                       n.strip() for n in p.get('ShareNames', '').split(',') if n.strip())
                   han = time.time() + int(p.get('WaitSeconds', '240'))
 
-                  if not tgw:
-                      send(event, ctx, 'SUCCESS', {'Result': 'SKIP:khong-co-TransitGatewayId'})
+                  if not tgw and not pid:
+                      send(event, ctx, 'SUCCESS',
+                           {'Result': 'SKIP:khong-dung-tai-nguyen-chia-se-nao'})
                       return
 
                   ram = boto3.client('ram')
                   ec2 = boto3.client('ec2')
+                  r53 = boto3.client('route53profiles')
                   dau_vet = []
 
                   while True:
@@ -340,24 +372,50 @@ Resources:
                       except Exception as e:
                           dau_vet.append('loi-moi:' + why(e))
 
-                      # DIEU KIEN THAT: thay TGW, khong phai "da bam nhan".
-                      try:
-                          r = ec2.describe_transit_gateways(TransitGatewayIds=[tgw])
-                          tt = r['TransitGateways'][0]['State']
-                          if tt == 'available':
-                              send(event, ctx, 'SUCCESS', {
-                                  'Result': 'OK:' + tgw + ' ' + ','.join(dau_vet[-3:])})
-                              return
-                          dau_vet.append('tgw:' + tt)
-                      except Exception as e:
-                          dau_vet.append('tgw:' + why(e))
+                      # DIEU KIEN THAT: MOI tai nguyen duoc khai deu
+                      # nhin thay duoc. Khong phai "da bam nhan loi
+                      # moi".
+                      #
+                      # Phai kiem CA HAI. Ban dau cho nay chi hoi TGW,
+                      # va DnsProfile - khong phu thuoc gi nen duoc tao
+                      # song song - hong voi RSLVR-05007 trong khi ham
+                      # bao SUCCESS.
+                      xong = []
+                      thieu = []
+
+                      if tgw:
+                          try:
+                              tt = thay_tgw(ec2, tgw)
+                              if tt == 'available':
+                                  xong.append('tgw')
+                              else:
+                                  thieu.append('tgw:' + tt)
+                          except Exception as e:
+                              thieu.append('tgw:' + why(e))
+
+                      if pid:
+                          try:
+                              tt = thay_profile(r53, pid)
+                              if tt in ('COMPLETE', 'AVAILABLE', 'CREATE_COMPLETE'):
+                                  xong.append('profile')
+                              else:
+                                  thieu.append('profile:' + tt)
+                          except Exception as e:
+                              thieu.append('profile:' + why(e))
+
+                      if not thieu:
+                          send(event, ctx, 'SUCCESS', {'Result': (
+                              'OK:' + ','.join(xong) + ' ' + ','.join(dau_vet[-3:]))})
+                          return
+
+                      dau_vet += thieu
 
                       if time.time() >= han:
                           send(event, ctx, 'FAILED', {'Result': (
-                              'HET GIO cho ' + tgw + '. Dau vet: '
-                              + '; '.join(dau_vet[-6:])
-                              + ' | Hai nguyen nhan: (1) TGW chua duoc chia se'
-                              + ' toi account nay - chay lai stage chia se TGW;'
+                              'HET GIO. Con thieu: ' + '; '.join(thieu)
+                              + ' | Dau vet: ' + '; '.join(dau_vet[-6:])
+                              + ' | Hai nguyen nhan: (1) tai nguyen chua duoc chia'
+                              + ' se toi account nay - chay lai stage chia se TGW;'
                               + ' (2) ShareNames khong khop ten resource share'
                               + ' that, nen loi moi khong duoc nhan.')})
                           return
@@ -372,11 +430,12 @@ Resources:
 
   NhanRam:
     Type: AWS::CloudFormation::CustomResource
-    Condition: DoAttach
+    Condition: DoRam
     DependsOn: RamFn
     Properties:
       ServiceToken: !GetAtt RamFn.Arn
-      TransitGatewayId: !Ref TransitGatewayId
+      TransitGatewayId: !If [DoAttach, !Ref TransitGatewayId, ""]
+      DnsProfileId: !If [DoDns, !Ref DnsProfileId, ""]
       ShareNames: !Ref RamShareNames
       WaitSeconds: !Ref RamWaitSeconds
 
@@ -455,6 +514,9 @@ Resources:
   DnsProfile:
     Type: AWS::Route53Profiles::ProfileAssociation
     Condition: DoDns
+    # Cung ly do voi Attachment: profile den tu account mang qua RAM,
+    # va truoc khi loi moi duoc nhan thi no khong ton tai o day.
+    DependsOn: NhanRam
     Properties:
       Name: !Sub "${ProjectName}-${AccountName}"
       ProfileId: !Ref DnsProfileId

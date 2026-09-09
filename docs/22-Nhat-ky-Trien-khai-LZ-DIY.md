@@ -3206,6 +3206,33 @@ Chữa: đếm theo `will be created` / `will be updated in-place` / `will be de
 
 ---
 
+### Lỗi 105 — vá đúng một nửa: `DependsOn` gắn cho một resource, quên resource kia
+
+Hai account mới đi qua stage C. `NhanRam` chạy đúng — không còn lỗi nào về Transit Gateway. Stack chết ở chỗ khác:
+
+```
+ResourceLogicalId:DnsProfile, ResourceType:AWS::Route53Profiles::ProfileAssociation
+[RSLVR-05007] Can't find the resource with ID "rp-25f333fc9d924548"
+```
+
+DNS profile nằm **cùng một RAM share** với TGW (`quh11-net-tgw`) — một chủ ý có ghi rõ trong `network/dns.tf`: một share, một lời mời, account bấm nhận một lần là được cả hai. Nên lời mời đã được nhận đúng.
+
+Vấn đề là **thứ tự bên trong CloudFormation**. Tôi gắn `DependsOn: NhanRam` cho `Attachment` và **quên `DnsProfile`**. CloudFormation tạo song song mọi thứ không có phụ thuộc, nên `DnsProfile` khởi chạy trước khi `NhanRam` kịp nhận lời mời.
+
+Câu lỗi `[RSLVR-05007] Can't find the resource with ID rp-...` không nhắc gì tới RAM — **y hệt** câu `Transit Gateway was deleted or does not exist` mà toàn bộ cơ chế `NhanRam` được viết ra để tránh. Bản vá loại bỏ một câu nói dối và để nguyên câu thứ hai, y hệt nó.
+
+Chữa ba chỗ cùng lúc, vì sửa riêng `DependsOn` chỉ là vá tiếp một nửa:
+
+1. Điều kiện của khối RAM đổi từ `DoAttach` sang `DoRam = DoAttach OR DoDns` — stack dùng DNS mà không dùng TGW vẫn phải chờ.
+2. `DnsProfile` khai `DependsOn: NhanRam`.
+3. Hàm Lambda kiểm **mọi** tài nguyên được khai, không chỉ TGW: `describe_transit_gateways` cho TGW, `get_profile` cho profile. Điều kiện dừng là "không còn cái nào thiếu", và thông báo hết giờ nói rõ cái nào.
+
+**Dạng lỗi:** một bản vá đúng về cơ chế nhưng áp thiếu chỗ. Điều làm nó khó thấy là bản vá **có chạy** — `NhanRam` thành công, log sạch, và thứ hỏng nằm ở một resource khác với một mã lỗi khác. Không có gì trong log nói rằng hai chuyện đó liên quan.
+
+Cách đáng lẽ phải làm ngay từ đầu: liệt kê **mọi** resource trong template phụ thuộc vào một tài nguyên đến từ account khác, rồi đối chiếu từng cái với `DependsOn`. Hai cái, và tôi kiểm một.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
