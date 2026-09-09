@@ -172,6 +172,34 @@ phases:
         # Tuyet doi, cung ly do voi khoi tren.
         cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"
 
+        # ------------------------------------------------------
+        # -target: CO CHU DICH, KHONG PHAI DUONG TAT
+        #
+        # Stage A va stage C la CUNG mot layer
+        # (landing-zone/account-baseline). Khong gioi han thi
+        # `terraform apply` cua stage A tao LUON spoke_network - truoc
+        # khi stage B kip chia se TGW - va stack o account dich cho
+        # mot loi moi RAM chua duoc gui, het gio, rollback.
+        #
+        # Day la mot rang buoc thu tu THAT giua hai layer, khong phai
+        # mot lan chay nham. Do la truong hop -target sinh ra de giai
+        # quyet.
+        #
+        # Terraform se in canh bao rang plan nay khong day du. Canh
+        # bao do DUNG va nen de nguyen: nguoi duyet stage A can thay
+        # ro no chi tao account.
+        # ------------------------------------------------------
+        TARGET_ARGS=""
+        for t in ${TF_TARGETS:-}; do
+          TARGET_ARGS="$TARGET_ARGS -target=$t"
+        done
+        # if/fi chu khong phai `[ ... ] && echo`: duoi `set -e`, mot
+        # test SAI lam ca bieu thuc tra ve 1 va giet script - o day la
+        # giet no o truong hop BINH THUONG nhat, khi khong co target.
+        if [ -n "$TARGET_ARGS" ]; then
+          echo "== gioi han:$TARGET_ARGS"
+        fi
+
         if [ "${TF_ACTION}" = "plan" ]; then
           echo "== plan"
           # -out: apply se dung DUNG ke hoach nay, khong tinh lai.
@@ -181,7 +209,7 @@ phases:
           # khong con la thu duoc thuc hien. Cong duyet luc do la
           # nghi thuc, khong phai kiem soat.
           set +e
-          terraform plan -input=false -detailed-exitcode -out=tfplan
+          terraform plan -input=false -detailed-exitcode $TARGET_ARGS -out=tfplan
           CODE=$?
           set -e
 

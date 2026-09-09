@@ -3157,6 +3157,30 @@ Việc thu hẹp không tạo ra quyền đó, nó chỉ khiến quyền đó ph
 
 Chữa lỗi 100 lần này theo hướng khác với layer `network`: hai layer `config-detective` và `permission-sets` chạy ở **chính** account management, nơi state nằm — nên `profile` không bao giờ cần, chứ không phải cần-tuỳ-ngữ-cảnh. Thêm `validation` từ chối thẳng khoá đó, để nó hỏng trên máy người khai kèm tên khoá, thay vì hỏng ở stage E vài ngày sau.
 
+### Lỗi 103 — thứ tự stage không tách được hai việc trong cùng một `terraform apply`
+
+Hai account đầu tiên đi qua pipeline. Stage A tạo xong cả hai trong 14 giây, rồi treo ba phút rưỡi ở `aws_cloudformation_stack_set_instance.spoke_network` trước khi hỏng.
+
+Thiết kế sáu stage nói:
+
+```
+A tạo account  →  B chia sẻ TGW  →  C dựng VPC + attachment
+```
+
+Nhưng **A và C là cùng một layer** (`landing-zone/account-baseline`). Buildspec chạy `terraform apply` trên cả layer, nên stage A tạo luôn `spoke_network` — trước khi stage B kịp chia sẻ TGW. Stack ở account đích chờ một lời mời RAM chưa được gửi, hết `RamWaitSeconds`, rollback.
+
+Thứ tự giữa các stage là thật. Thứ tự **bên trong** một stage thì không tồn tại: Terraform xếp theo phụ thuộc tài nguyên, và `spoke_network` phụ thuộc vào `aws_organizations_account` — nên nó chạy ngay sau, trong cùng một apply. Không có chỗ nào cho stage B chen vào.
+
+Tôi đã viết trong README và doc 27 rằng *"khối `network:` khai được ngay từ đầu vì pipeline giải quyết bằng thứ tự stage"*, và cùng ngày còn sửa chú thích trong `accounts.yaml` để **gỡ** cảnh báo cũ về việc để trống khối đó. Cảnh báo cũ đúng; tôi gỡ nó dựa trên một niềm tin về thứ tự stage mà chưa bao giờ kiểm.
+
+**Cách chữa đầu tiên tôi đưa ra cũng sai.** Tôi bảo bỏ khối `network:`, chạy một lượt để stage B chia sẻ TGW, rồi thêm lại. Nhưng `vending_handles.tgw_share` được suy ra từ `local.spokes_can_wire` — tức **chỉ những account có khối `network:`**. Bỏ khối đó đi là tự cắt mất đầu vào của chính bước mình cần. Lượt hai sẽ hỏng y hệt lượt một.
+
+Chữa thật: stage A chạy `terraform apply -target=aws_organizations_account.this`. Đây là trường hợp `-target` sinh ra để giải quyết — một ràng buộc thứ tự **thật** giữa hai layer, không phải một lần chạy nhầm. Terraform in cảnh báo "plan không đầy đủ", và cảnh báo đó nên để nguyên: người duyệt stage A cần thấy rõ nó chỉ tạo account.
+
+**Dạng lỗi:** một sơ đồ đúng ở mức khái niệm, sai ở mức thực thi. `A → B → C` mô tả đúng thứ tự *mong muốn*, và mọi tài liệu viết theo sơ đồ đó đều nhất quán với nhau — nhưng không có dòng code nào bắt buộc A dừng lại trước phần việc của C. Ba tài liệu cùng nói một điều sai không làm nó đúng hơn; chúng chỉ làm nó khó nghi ngờ hơn.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

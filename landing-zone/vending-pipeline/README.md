@@ -151,7 +151,20 @@ git commit && git push codecommit main
 
 Rồi mở console, duyệt sáu lần, đọc plan trước mỗi lần. Stage A tạo account; stage B chia sẻ TGW; stage C dựng VPC; stage D nối route table; E và F cắm account vào lớp phát hiện và lớp truy cập.
 
-Khác biệt lớn nhất so với làm tay: **khối `network:` khai được ngay từ đầu.** Quy trình tay bắt để trống ở lần apply đầu vì TGW chưa chia sẻ được cho account chưa tồn tại; pipeline giải quyết bằng thứ tự stage, nên catalog không phải sửa hai lần.
+Khác biệt lớn nhất so với làm tay: **khối `network:` khai được ngay từ đầu**, catalog không phải sửa hai lần.
+
+Điều làm được chuyện đó **không** phải thứ tự stage. Stage A và stage C là cùng một layer, và thứ tự giữa các stage không tách được hai việc nằm trong cùng một `terraform apply` — Terraform xếp theo phụ thuộc tài nguyên, nên `spoke_network` chạy ngay sau `aws_organizations_account`, không chừa chỗ cho stage B chen vào.
+
+Thứ làm được là **`-target`**:
+
+```hcl
+# main.tf, stage A
+targets = ["aws_organizations_account.this"]
+```
+
+Stage A apply đúng một resource. Stage B mới chia sẻ TGW. Stage C apply cả layer.
+
+Câu này từng được viết ở đây như một hệ quả hiển nhiên của sơ đồ `A → B → C`, và nó sai suốt cho tới khi hai account thật đi qua — xem lỗi 103 doc 22. Sơ đồ mô tả thứ tự **mong muốn**; `-target` là dòng code duy nhất bắt buộc nó.
 
 ---
 
