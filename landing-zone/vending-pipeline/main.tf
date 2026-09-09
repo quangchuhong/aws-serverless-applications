@@ -31,42 +31,67 @@ locals {
       layer  = "landing-zone/account-baseline"
       assume = false
       wait   = false
-      mo_ta  = "Tao account tu catalog. Gan nhu khong hoan tac duoc - doc ky email."
+
+      ####################################
+      # GIOI HAN VAO DUNG VIEC TAO ACCOUNT
+      #
+      # Stage A va stage C la CUNG mot layer. Khong co dong nay thi
+      # `terraform apply` cua stage A tao luon spoke_network - truoc
+      # khi stage B kip chia se TGW - va stack o account dich cho mot
+      # loi moi RAM chua duoc gui, het gio, rollback.
+      #
+      # Thu tu sau stage chi co y nghia khi moi stage lam DUNG phan
+      # cua no. Truoc ban nay, tai lieu noi "khoi network: khai duoc
+      # ngay tu dau vi pipeline giai quyet bang thu tu stage" - cau do
+      # sai, vi thu tu stage khong tach duoc hai viec nam trong cung
+      # mot `terraform apply`. Xem loi 103 doc 22.
+      #
+      # catalog_guard khong can liet ke: aws_organizations_account
+      # phu thuoc vao no, nen -target keo no theo.
+      ####################################
+      targets = ["aws_organizations_account.this"]
+
+      mo_ta = "Tao account tu catalog - CHI tao account. Gan nhu khong hoan tac duoc, doc ky email."
     },
     {
-      key    = "B-chia-se-tgw"
-      layer  = "landing-zone/network"
-      assume = true
-      wait   = false
-      mo_ta  = "Chia se Transit Gateway cho account vua tao."
+      key     = "B-chia-se-tgw"
+      layer   = "landing-zone/network"
+      assume  = true
+      wait    = false
+      targets = []
+      mo_ta   = "Chia se Transit Gateway cho account vua tao."
     },
     {
-      key    = "C-mang-nen"
-      layer  = "landing-zone/account-baseline"
-      assume = false
-      wait   = false
-      mo_ta  = "StackSet dung VPC, subnet, TGW attachment, DNS o account dich."
+      key     = "C-mang-nen"
+      layer   = "landing-zone/account-baseline"
+      assume  = false
+      wait    = false
+      targets = []
+      mo_ta   = "StackSet dung VPC, subnet, TGW attachment, DNS o account dich."
     },
     {
-      key    = "D-noi-route-table"
-      layer  = "landing-zone/network"
-      assume = true
-      wait   = true # cho attachment sang `available` TRUOC khi plan
-      mo_ta  = "Noi attachment vao rtb-spokes va propagate vao rtb-security."
+      key     = "D-noi-route-table"
+      layer   = "landing-zone/network"
+      assume  = true
+      wait    = true # cho attachment sang `available` TRUOC khi plan
+      targets = []
+      mo_ta   = "Noi attachment vao rtb-spokes va propagate vao rtb-security."
     },
     {
-      key    = "E-config-detective"
-      layer  = "landing-zone/config-detective"
-      assume = false
-      wait   = false
-      mo_ta  = "excluded_accounts - account khong co recorder phai duoc loai tru."
+      key     = "E-config-detective"
+      layer   = "landing-zone/config-detective"
+      assume  = false
+      wait    = false
+      targets = []
+      mo_ta   = "excluded_accounts - account khong co recorder phai duoc loai tru."
     },
     {
-      key    = "F-permission-sets"
-      layer  = "landing-zone/permission-sets"
-      assume = false
-      wait   = false
-      mo_ta  = "accounts_by_scope - khong co buoc nay thi khong ai vao duoc account moi."
+      key     = "F-permission-sets"
+      layer   = "landing-zone/permission-sets"
+      assume  = false
+      wait    = false
+      targets = []
+      mo_ta   = "accounts_by_scope - khong co buoc nay thi khong ai vao duoc account moi."
     },
   ]
 

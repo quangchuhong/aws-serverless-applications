@@ -80,6 +80,13 @@ resource "aws_codebuild_project" "terraform" {
       name  = "TF_ACTION"
       value = "plan"
     }
+
+    # Danh sach resource address, cach nhau bang dau cach. Rong = ca
+    # layer. Xem `targets` trong local.stages_all.
+    environment_variable {
+      name  = "TF_TARGETS"
+      value = ""
+    }
     environment_variable {
       name  = "ASSUME_ROLE_ARN"
       value = ""

@@ -170,6 +170,11 @@ resource "aws_codepipeline" "vending" {
             { name = "STATE_KEY", value = local.stage_keys[stage.value.layer], type = "PLAINTEXT" },
             { name = "TF_ACTION", value = "plan", type = "PLAINTEXT" },
             {
+              name  = "TF_TARGETS"
+              value = join(" ", try(stage.value.targets, []))
+              type  = "PLAINTEXT"
+            },
+            {
               name  = "ASSUME_ROLE_ARN"
               value = stage.value.assume ? var.network_deploy_role_arn : ""
               type  = "PLAINTEXT"
@@ -218,6 +223,16 @@ resource "aws_codepipeline" "vending" {
             { name = "LAYER_DIR", value = stage.value.layer, type = "PLAINTEXT" },
             { name = "STATE_KEY", value = local.stage_keys[stage.value.layer], type = "PLAINTEXT" },
             { name = "TF_ACTION", value = "apply", type = "PLAINTEXT" },
+
+            # apply chay `terraform apply tfplan`, ma file plan da ghi
+            # san pham vi target ben trong - nen dong nay khong doi
+            # hanh vi. De o day de hai action doc giong nhau: mot ngay
+            # nao do ai do sua nhanh apply va se can no.
+            {
+              name  = "TF_TARGETS"
+              value = join(" ", try(stage.value.targets, []))
+              type  = "PLAINTEXT"
+            },
             {
               name  = "ASSUME_ROLE_ARN"
               value = stage.value.assume ? var.network_deploy_role_arn : ""
