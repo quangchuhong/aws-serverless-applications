@@ -5,6 +5,27 @@
 # Xem README muc "Nam buoc, ba layer, va khong gop duoc".
 #
 # ---------------------------------------------------------------
+# TU BAN 09/09: BUOC NAY DA TU DONG - SCRIPT NAY LA DO SUA CHUA
+#
+# Template spoke-network.yaml mang mot Lambda custom resource
+# (RamFn/NhanRam) nhan loi moi RAM tu BEN TRONG account dich, va
+# Attachment DependsOn no. Nen quy trinh binh thuong - ke ca qua
+# pipeline vending - khong can chay script nay nua.
+#
+# Van giu lai vi ba viec no lam ma stack khong lam duoc:
+#
+#   1. Nhan loi moi cho account KHONG co khoi `network` trong catalog
+#      (khong co stack spoke-network nao chay o do).
+#   2. Nhan mot resource share KHAC ngoai TGW.
+#   3. Chua khi custom resource da hong va ban can day stack qua cho
+#      do bang tay truoc khi chay lai.
+#
+# Neu ban thay minh phai chay script nay trong quy trinh BINH THUONG
+# thi do la dau hieu custom resource khong chay - doc CloudFormation
+# event cua stack o account dich, resource `NhanRam`, chu khong phai
+# chay lai script nay va di tiep.
+#
+# ---------------------------------------------------------------
 # VI SAO CAN MOT SCRIPT CHO BA DONG LENH
 #
 # Vi ba dong do phai chay TRONG account khac, va cach lay credential

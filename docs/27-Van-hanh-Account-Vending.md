@@ -97,14 +97,24 @@ Bỏ qua account khai `attach_tgw: false` — nó không dùng TGW.
 
 ### Bước 3 — account nhận lời mời RAM
 
-```bash
-cd ../account-baseline
-./accept-ram.sh 598122632665 913051689123
+**Từ bản 09/09 bước này tự động.** Bỏ qua, đi thẳng sang bước 4.
+
+Template `spoke-network.yaml` mang một Lambda custom resource (`RamFn` / `NhanRam`) nhận lời mời RAM **từ bên trong** account đích, và `Attachment` khai `DependsOn: NhanRam`. Nên stack tự lo phần này ở bước 4.
+
+Hai chi tiết của cách làm đó đáng biết khi đọc log:
+
+- Điều kiện dừng là **`DescribeTransitGateways` thấy TGW ở trạng thái `available`**, không phải "đã bấm nhận lời mời". Giữa hai cái đó có một khoảng trễ, và đúng khoảng trễ ấy làm hỏng `Attachment` ở lần trước. Cách này cũng chạy đúng với triển khai dùng RAM chia sẻ trong tổ chức — nơi **không có** lời mời nào cả.
+- Nó chạy bằng role của StackSet trong chính account đích, nên pipeline **không** cần `sts:AssumeRole` vào account mới. Một stage pipeline làm việc này sẽ phải có quyền assume `OrganizationAccountAccessRole` của mọi account mới — tức quyền admin toàn tổ chức cấp cho một đường tự động.
+
+Khai `tgw_share_name` trong `terraform.tfvars` để nó chỉ nhận **đúng** share của TGW:
+
+```hcl
+tgw_share_name = "quh11-net-tgw"
 ```
 
-Chạy bằng credential **management**: `OrganizationAccountAccessRole` trong account mới chỉ tin management account. Chạy từ nơi khác cho ra `AccessDenied ... not authorized to perform: sts:AssumeRole`, đọc như thiếu quyền, và cấp thêm quyền không sửa được gì.
+Để rỗng thì nó nhận **mọi** lời mời đang chờ — chạy được, nhưng biến stack thành một cái bấm-đồng-ý-tất-cả trong một account workload nơi không ai đọc CloudFormation event. `terraform plan` sẽ cảnh báo nếu bạn để rỗng.
 
-Với account **trong cùng tổ chức**, AWS thường tự chấp nhận và script báo `da nhan tu truoc` — đó là kết quả đúng, không phải bỏ sót.
+**Khi nào vẫn cần `./accept-ram.sh`:** account không có khối `network:` trong catalog (không có stack nào chạy ở đó), một resource share khác ngoài TGW, hoặc chữa cháy khi custom resource đã hỏng. Nếu bạn thấy mình phải chạy nó trong quy trình **bình thường**, đó là dấu hiệu custom resource không chạy — đọc CloudFormation event của stack ở account đích, resource `NhanRam`, thay vì chạy script rồi đi tiếp.
 
 ### Bước 4 — mạng nền
 
@@ -282,7 +292,9 @@ Gắn profile cho VPC không attach nghĩa là mọi lời gọi API của AWS t
 |---|---|---|
 | `Apply complete, 0 changed` mà account mới không được nối | `paste_spokes` bị dán **cạnh** khối `spokes` thay vì vào trong → khoá cấp cao nhất → chỉ là `Warning: Value for undeclared variable` | Đếm spoke trong tfvars (mục 2 bước 5) |
 | `verify.sh` 6c: attachment `KHONG thuoc route table nao` | Data source lọc `state = available`; attachment cross-account mất ~1 phút để chuyển từ `pending` | `terraform apply` lần hai |
-| `invalid transit gateway ID` khi tạo VPC | Bước 2/3 chưa xong — TGW chưa được chia sẻ. Câu lỗi nói về ID trong khi vấn đề là quyền nhìn thấy | `./accept-ram.sh <id>` |
+| `invalid transit gateway ID` khi tạo VPC | Bước 2 chưa xong — TGW chưa được chia sẻ. Câu lỗi nói về ID trong khi vấn đề là quyền nhìn thấy | Đọc event của `NhanRam` trong stack ở account đích |
+| Stack ở account đích treo ở `NhanRam` rồi `HET GIO cho tgw-...` | Custom resource chờ hết `ram_wait_seconds` mà không thấy TGW. Thông báo kèm dấu vết mấy vòng cuối | Hai khả năng nó nêu sẵn: TGW chưa được chia sẻ tới account này, hoặc `tgw_share_name` không khớp tên share thật |
+| `InsufficientCapabilitiesException` khi apply StackSet | Template có IAM role mà stack set chưa khai `capabilities` | Đã sửa từ bản 09/09 (`CAPABILITY_IAM`). Gặp lại nghĩa là bạn đang chạy code cũ |
 | `AccessDenied ... sts:AssumeRole` | Không phải thiếu quyền — **sai account**. `OrganizationAccountAccessRole` chỉ tin management | `aws sts get-caller-identity` |
 | `unmapped_accounts` rỗng ngay sau khi tạo account | Nó tính từ data source, đọc **trước** khi account tồn tại | Chạy `terraform plan` lần nữa |
 | `SweepResult` có `SKIP` ở region ngoài `allowed_regions` | `region_lock` SCP từ chối `ec2:DeleteVpc`. Default VPC ở region bị khoá là vô hại | Bình thường, bỏ qua |

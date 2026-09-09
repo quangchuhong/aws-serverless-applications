@@ -64,6 +64,22 @@ Parameters:
     AllowedValues: ["true", "false"]
     Default: "true"
 
+  # Ten resource share duoc phep NHAN tu dong, cach nhau bang dau
+  # phay. De rong = nhan MOI loi moi dang cho.
+  #
+  # Nen khai ten: mot account trong to chuc co the nhan loi moi tu
+  # bat ky ai da duoc phep chia se toi no, va "nhan het" bien stack
+  # nay thanh mot cai bam-dong-y-tat-ca.
+  RamShareNames:
+    Type: String
+    Default: ""
+
+  # Cho toi da bao lau de TGW nhin thay duoc trong account nay.
+  # Phai NHO HON Timeout cua RamFn (600).
+  RamWaitSeconds:
+    Type: String
+    Default: "240"
+
 Conditions:
   # Noi TGW can CA hai: nguoi ta muon noi, VA co TGW de noi. Thieu ve
   # thu hai ma van tao attachment thi stack hong o giua voi mot loi
@@ -169,9 +185,209 @@ Resources:
   # network_lock SCP chan viec tao IGW trong account workload.
   # ------------------------------------------------------------
 
+  # ------------------------------------------------------------
+  # NHAN LOI MOI RAM - chay TRONG account nay
+  #
+  # Trien khai nay chia se TGW bang external principals (duong vong
+  # cua loi 56), nen moi account moi nhan mot loi moi RAM o trang
+  # thai PENDING. Loi moi chi chap nhan duoc TU BEN TRONG account
+  # duoc moi - management khong bam ho duoc.
+  #
+  # Truoc day do la mot buoc tay: ./accept-ram.sh. Buoc tay nam giua
+  # mot quy trinh tu dong la buoc se bi quen, va khi quen thi
+  # Attachment ben duoi hong voi:
+  #
+  #   Transit Gateway tgw-xxx was deleted or does not exist
+  #
+  # mot cau khong nhac gi toi RAM.
+  #
+  # Dat viec do o DAY thay vi them mot stage vao pipeline: stack nay
+  # chay bang role cua StackSet trong chinh account dich, nen no
+  # khong doi hoi pipeline duoc quyen assume vao account nao ca. Mot
+  # stage pipeline thi phai co sts:AssumeRole vao
+  # OrganizationAccountAccessRole cua MOI account moi - tuc quyen
+  # admin toan to chuc cho mot duong tu dong.
+  #
+  # Ham KHONG chi nhan loi moi roi bao xong. No hoi lai
+  # DescribeTransitGateways cho toi khi THAY TGW. Ly do:
+  #   - trien khai dung RAM chia se trong to chuc (khong co loi moi)
+  #     van chay dung, vi dieu kien la "thay TGW", khong phai "da
+  #     chap nhan mot loi moi";
+  #   - va "da bam chap nhan" khac "TGW da dung duoc" - giua hai cai
+  #     do co mot khoang tre, dung khoang tre lam hong Attachment.
+  # ------------------------------------------------------------
+
+  RamRole:
+    Type: AWS::IAM::Role
+    Condition: DoAttach
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: nhan-loi-moi-ram
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ram:GetResourceShareInvitations
+                  - ram:AcceptResourceShareInvitation
+                  - ec2:DescribeTransitGateways
+                Resource: "*"
+
+  RamFn:
+    Type: AWS::Lambda::Function
+    Condition: DoAttach
+    DependsOn: RamRole
+    Properties:
+      FunctionName: !Sub "${ProjectName}-${AccountName}-nhan-ram"
+      Handler: index.handler
+      Runtime: python3.12
+      # Phai LON HON WaitSeconds cua custom resource, neu khong ham bi
+      # cat giua chung va CloudFormation cho het mot gio moi bo cuoc.
+      Timeout: 600
+      Role: !GetAtt RamRole.Arn
+      Code:
+        # KHONG dung `import cfnresponse`: python3.12 khong co san
+        # module do, va thieu no thi ham chet luc KHOI TAO - truoc khi
+        # vao try - nen khong nhanh nao gui duoc phan hoi. Stack treo
+        # CREATE_IN_PROGRESS mot tieng. Tu gui bang urllib thi khong
+        # phu thuoc gi ngoai thu vien chuan.
+        ZipFile: |
+          import json, time, urllib.request, boto3
+
+          def send(event, ctx, status, data):
+              body = json.dumps({
+                  'Status': status,
+                  'Reason': 'Xem CloudWatch log: ' + ctx.log_stream_name,
+                  'PhysicalResourceId': ctx.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data,
+              }).encode()
+              req = urllib.request.Request(event['ResponseURL'], data=body, method='PUT')
+              req.add_header('content-type', '')
+              req.add_header('content-length', str(len(body)))
+              urllib.request.urlopen(req)
+
+          def why(e):
+              # type(e).__name__ tra ve "ClientError" cho MOI loi cua
+              # AWS - AccessDenied, tham so sai, dich vu chua bat deu
+              # in ra mot tu. Ma loi that nam trong response.
+              try:
+                  return e.response['Error']['Code']
+              except Exception:
+                  return type(e).__name__
+
+          def cho_loi_moi(ram, ten_can):
+              nhan = []
+              tok = None
+              while True:
+                  kw = {'maxResults': 100}
+                  if tok:
+                      kw['nextToken'] = tok
+                  r = ram.get_resource_share_invitations(**kw)
+                  for i in r.get('resourceShareInvitations', []):
+                      if i.get('status') != 'PENDING':
+                          continue
+                      if ten_can and i.get('resourceShareName') not in ten_can:
+                          continue
+                      arn = i['resourceShareInvitationArn']
+                      try:
+                          ram.accept_resource_share_invitation(
+                              resourceShareInvitationArn=arn)
+                          nhan.append('OK:' + i.get('resourceShareName', '?'))
+                      except Exception as e:
+                          # InvitationAlreadyAcceptedException xay ra khi
+                          # hai lan chay dam nhau. Khong phai loi.
+                          nhan.append(why(e) + ':' + i.get('resourceShareName', '?'))
+                  tok = r.get('nextToken')
+                  if not tok:
+                      return nhan
+
+          def handler(event, ctx):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      # Khong the huy nhan mot loi moi da nhan, va cung
+                      # khong nen: TGW co the dang duoc dung boi thu khac.
+                      send(event, ctx, 'SUCCESS', {'Result': 'DELETE:khong-lam-gi'})
+                      return
+
+                  p = event['ResourceProperties']
+                  tgw = p.get('TransitGatewayId', '')
+                  ten_can = set(
+                      n.strip() for n in p.get('ShareNames', '').split(',') if n.strip())
+                  han = time.time() + int(p.get('WaitSeconds', '240'))
+
+                  if not tgw:
+                      send(event, ctx, 'SUCCESS', {'Result': 'SKIP:khong-co-TransitGatewayId'})
+                      return
+
+                  ram = boto3.client('ram')
+                  ec2 = boto3.client('ec2')
+                  dau_vet = []
+
+                  while True:
+                      try:
+                          dau_vet += cho_loi_moi(ram, ten_can)
+                      except Exception as e:
+                          dau_vet.append('loi-moi:' + why(e))
+
+                      # DIEU KIEN THAT: thay TGW, khong phai "da bam nhan".
+                      try:
+                          r = ec2.describe_transit_gateways(TransitGatewayIds=[tgw])
+                          tt = r['TransitGateways'][0]['State']
+                          if tt == 'available':
+                              send(event, ctx, 'SUCCESS', {
+                                  'Result': 'OK:' + tgw + ' ' + ','.join(dau_vet[-3:])})
+                              return
+                          dau_vet.append('tgw:' + tt)
+                      except Exception as e:
+                          dau_vet.append('tgw:' + why(e))
+
+                      if time.time() >= han:
+                          send(event, ctx, 'FAILED', {'Result': (
+                              'HET GIO cho ' + tgw + '. Dau vet: '
+                              + '; '.join(dau_vet[-6:])
+                              + ' | Hai nguyen nhan: (1) TGW chua duoc chia se'
+                              + ' toi account nay - chay lai stage chia se TGW;'
+                              + ' (2) ShareNames khong khop ten resource share'
+                              + ' that, nen loi moi khong duoc nhan.')})
+                          return
+
+                      time.sleep(10)
+
+              except Exception as e:
+                  # Bat MOI thu: mot ngoai le khong bat duoc nghia la
+                  # CloudFormation khong nhan duoc phan hoi nao va treo
+                  # mot tieng dong ho.
+                  send(event, ctx, 'FAILED', {'Result': 'NGOAI LE:' + why(e)})
+
+  NhanRam:
+    Type: AWS::CloudFormation::CustomResource
+    Condition: DoAttach
+    DependsOn: RamFn
+    Properties:
+      ServiceToken: !GetAtt RamFn.Arn
+      TransitGatewayId: !Ref TransitGatewayId
+      ShareNames: !Ref RamShareNames
+      WaitSeconds: !Ref RamWaitSeconds
+
   Attachment:
     Type: AWS::EC2::TransitGatewayAttachment
     Condition: DoAttach
+    # Khong tao attachment truoc khi TGW that su nhin thay duoc trong
+    # account nay. Thieu dong nay thi stack hong voi "Transit Gateway
+    # ... was deleted or does not exist" - mot cau doc nhu TGW khong
+    # ton tai, trong khi no ton tai va chi la chua toi day.
+    DependsOn: NhanRam
     Properties:
       TransitGatewayId: !Ref TransitGatewayId
       VpcId: !Ref Vpc

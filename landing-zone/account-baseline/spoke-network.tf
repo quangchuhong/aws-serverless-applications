@@ -137,6 +137,17 @@ resource "aws_cloudformation_stack_set" "spoke_network" {
     retain_stacks_on_account_removal = false
   }
 
+  # Template tao mot IAM role (RamRole) cho Lambda nhan loi moi RAM.
+  # Thieu dong nay thi StackSet tu choi voi
+  # InsufficientCapabilitiesException - mot cau khong noi ro resource
+  # nao doi hoi quyen gi.
+  #
+  # CAPABILITY_IAM du: role do KHONG dat ten co dinh (khong co
+  # RoleName), nen khong can NAMED_IAM. Dat ten co dinh cho mot role
+  # nhan ban ra hang chuc account cung la mot y toi - hai stack trong
+  # cung mot account se dam ten nhau.
+  capabilities = ["CAPABILITY_IAM"]
+
   template_body = file("${path.module}/templates/spoke-network.yaml")
 
   parameters = {
@@ -149,6 +160,13 @@ resource "aws_cloudformation_stack_set" "spoke_network" {
     DnsProfileId     = try(local.net.dns_profile_id, "")
     InternalSupernet = try(local.net.internal_supernet, "10.0.0.0/8")
     AttachTgw        = "false"
+
+    # Khai o cap STACK SET, khong phai parameter_overrides: gia tri
+    # giong nhau o moi account, va moi khoa trong parameter_overrides
+    # la mot lan UpdateStackInstances - lenh khong chay duoc tren
+    # stack set nham OU (xem khoi chu thich o resource ben duoi).
+    RamShareNames  = var.tgw_share_name
+    RamWaitSeconds = tostring(var.ram_wait_seconds)
   }
 
   operation_preferences {
@@ -273,5 +291,31 @@ check "spokes_have_central_dns" {
   assert {
     condition     = length(local.spokes_without_dns) == 0
     error_message = "Chua co dns_profile_id trong network_handles: ${join(", ", local.spokes_without_dns)}. VPC se khong phan giai duoc ten noi bo, va ten dich vu AWS se tro ra IP CONG KHAI - luu luong di vong ra Internet trong khi interface endpoint tap trung van tinh tien ma khong ai dung."
+  }
+}
+
+########################################
+# Ten resource share nen duoc khai.
+#
+# De rong VAN chay - Lambda se nhan moi loi moi dang cho - nen day la
+# canh bao, khong phai loi. Nhung mot stack nhan het moi loi moi la
+# mot cai bam-dong-y-tat-ca, va no chay trong account workload noi
+# khong ai doc CloudFormation event.
+########################################
+check "nen_khai_ten_resource_share" {
+  assert {
+    condition = (
+      length(local.spoke_requests) == 0
+      || !anytrue([for k, v in local.spoke_requests : v.attach_tgw])
+      || var.tgw_share_name != ""
+    )
+    error_message = join(" ", [
+      "tgw_share_name de rong, nen Lambda trong account dich se NHAN MOI",
+      "loi moi RAM dang cho o do - khong chi loi moi cua TGW.",
+      "Khai ten cu the:",
+      "cd ../network && aws ram get-resource-shares --resource-owner SELF",
+      "--region <region> --query 'resourceShares[].name' --output text",
+      "Thuong la \"<project cua layer network>-tgw\".",
+    ])
   }
 }

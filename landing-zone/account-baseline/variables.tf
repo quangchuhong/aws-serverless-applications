@@ -389,3 +389,56 @@ variable "network_handles" {
   })
   default = {}
 }
+
+########################################
+# NHAN LOI MOI RAM TRONG ACCOUNT DICH
+#
+# Trien khai nay chia se TGW bang external principals (duong vong cua
+# loi 56), nen moi account moi nhan mot loi moi RAM PENDING - va loi
+# moi chi chap nhan duoc TU BEN TRONG account duoc moi.
+#
+# Truoc day la buoc tay ./accept-ram.sh. Gio template spoke-network
+# mang mot Lambda custom resource lam viec do, chay bang role cua
+# StackSet trong chinh account dich - nen khong doi hoi pipeline
+# duoc quyen assume vao account nao ca.
+########################################
+
+variable "tgw_share_name" {
+  description = <<-EOT
+    Ten resource share cua TGW, de account dich chi nhan DUNG cai do.
+
+      cd ../network && terraform output -json tgw_shared_with
+      aws ram get-resource-shares --resource-owner SELF --region <region> \
+        --query 'resourceShares[].name' --output text
+
+    Thuong la "<project cua layer network>-tgw", vi du "quh11-net-tgw".
+
+    DE RONG = nhan MOI loi moi RAM dang cho o account do. Chay duoc,
+    nhung bien stack thanh mot cai bam-dong-y-tat-ca: account trong to
+    chuc co the nhan loi moi tu bat ky ai duoc phep chia se toi no.
+    Khai ten cu the.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "ram_wait_seconds" {
+  description = <<-EOT
+    Cho toi da bao lau de TGW nhin thay duoc trong account dich.
+
+    Ham hoi DescribeTransitGateways moi 10 giay cho toi khi TGW o
+    trang thai `available`. Dieu kien la THAY TGW chu khong phai "da
+    bam nhan loi moi": giua hai cai do co mot khoang tre, va dung
+    khoang tre do lam hong Attachment.
+
+    Nho hon Timeout cua Lambda (600) - de qua thi ham bi cat giua
+    chung va CloudFormation cho HET MOT GIO moi bo cuoc.
+  EOT
+  type        = number
+  default     = 240
+
+  validation {
+    condition     = var.ram_wait_seconds >= 30 && var.ram_wait_seconds <= 540
+    error_message = "ram_wait_seconds trong khoang 30..540 (phai nho hon Lambda timeout 600)."
+  }
+}
