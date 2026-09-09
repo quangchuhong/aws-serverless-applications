@@ -142,8 +142,20 @@ fi
 # Cat tu `== plan` (hoac `== apply`) toi khi bao hong. Neu khong khop
 # moc nao thi in phan dau - luc do loi nam TRUOC buoc plan, thuong la
 # o tfvars, backend hoac khoa state.
+# -E (bieu thuc mo rong), KHONG phai `\(a\|b\)`.
+#
+# macOS dung BSD sed, va BSD sed KHONG hieu `\|` lam phep hoac trong
+# bieu thuc co ban - no coi `\(plan\|apply\)` la chuoi ky tu
+# "plan|apply" va khong khop gi. Khong bao loi, chi tra ve rong.
+#
+# Da lam mot vong hong: nhanh du phong ket luan "loi xay ra TRUOC buoc
+# plan" trong khi `== plan` co trong log va loi la loi Terraform. Mot
+# ket luan sai chac chan, sinh ra tu mot phep loc im lang khong khop.
+#
+# GNU sed hieu ca hai, nen loi nay khong hien ra tren Linux/CodeBuild.
+# -E thi ca hai deu hieu.
 CAT=$(printf '%s\n' "$DONG" \
-  | sed -n '/^== \(plan\|apply\)/,/^\(PLAN HONG\|Apply complete\|LOI:\)/p')
+  | sed -nE '/^== (plan|apply)/,/^(PLAN HONG|Apply complete|LOI:)/p')
 
 if [ -n "$CAT" ]; then
   printf '%s\n' "$CAT"

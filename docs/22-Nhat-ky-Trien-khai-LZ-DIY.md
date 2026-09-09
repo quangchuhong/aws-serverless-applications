@@ -3157,6 +3157,21 @@ Việc thu hẹp không tạo ra quyền đó, nó chỉ khiến quyền đó ph
 
 Chữa lỗi 100 lần này theo hướng khác với layer `network`: hai layer `config-detective` và `permission-sets` chạy ở **chính** account management, nơi state nằm — nên `profile` không bao giờ cần, chứ không phải cần-tuỳ-ngữ-cảnh. Thêm `validation` từ chối thẳng khoá đó, để nó hỏng trên máy người khai kèm tên khoá, thay vì hỏng ở stage E vài ngày sau.
 
+### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
+
+`log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
+
+| Lỗi | Kết luận sai nó đưa ra |
+|---|---|
+| `--query` lồng hai phép chiếu rồi `\| [0][0]` trả `None` | *"action chưa chạy lần nào"* — trong khi nó đã chạy và đã hỏng |
+| `sed` dùng `\(a\|b\)` trên macOS (BSD sed không hiểu `\|` trong biểu thức cơ bản) | *"lỗi xảy ra TRƯỚC bước plan"* — trong khi `== plan` có trong log và lỗi là lỗi Terraform |
+
+Cùng một cơ chế: **một phép lọc không khớp trả về rỗng, và rỗng bị đọc thành một sự kiện có nghĩa.** Giống hệt lỗi 91, và giống chốt chặn state rỗng ở buildspec — chỉ khác là ở đó tôi đã lường trước nên nó hỏi lại `FIRST_APPLY`.
+
+BSD sed đáng ghi riêng: `\|` là **phần mở rộng của GNU**. Code dùng nó chạy đúng trên CodeBuild (Linux) và im lặng sai trên máy người vận hành (macOS) — kiểu khác biệt không lộ ra trong CI. `sed -E` thì cả hai đều hiểu.
+
+---
+
 ---
 
 ## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ
