@@ -39,13 +39,19 @@
 #   network                Bo trong = account KHONG noi vao luoi mang.
 #                          Dung cho account ha tang khong can VPC.
 #
-#                          VOI ACCOUNT HOAN TOAN MOI: DE TRONG O LAN
-#                          APPLY DAU TIEN. TGW chua duoc chia se cho
-#                          mot account chua ton tai, va CloudFormation
-#                          se hong voi mot loi noi ve "ID TGW khong hop
-#                          le" - mot cau noi ve ID trong khi van de la
-#                          quyen nhin thay. Them khoi nay o lan apply
-#                          THU HAI, sau khi account da nhan loi moi RAM.
+#                          QUA PIPELINE VENDING: khai NGAY tu dau.
+#                          Pipeline chay nam buoc theo dung thu tu, va
+#                          template mang mot Lambda custom resource
+#                          (NhanRam) tu nhan loi moi RAM ben trong
+#                          account dich roi moi tao attachment.
+#
+#                          LAM TAY, KHONG QUA PIPELINE: van phai de
+#                          trong o lan apply DAU TIEN. Khong phai vi
+#                          loi moi RAM - cai do da tu dong - ma vi
+#                          buoc 2 (share_tgw_with_accounts o layer
+#                          network) can ACCOUNT ID, ma ID do chi co
+#                          sau khi account duoc tao. Them khoi nay o
+#                          lan apply THU HAI.
 #                          Nam buoc day du: xem README muc "Nam buoc,
 #                          ba layer, va khong gop duoc".
 #     vpc_cidr   BAT BUOC  theo bang cap phat o doc 17 muc 3:
@@ -78,17 +84,30 @@
 
 accounts:
   # ============================================================
-  # DANG O BUOC 4/5 - xem README muc "Nam buoc, ba layer".
+  # BA ACCOUNT DUOI DAY DA XONG CA NAM BUOC (09/09/2026).
   #
   #   [x] 1. tao account            598122632665 / 913051689123 / 792207721718
   #   [x] 2. share_tgw_with_accounts o layer network
   #   [x] 3. account thay share quh11-net-tgw
-  #   [ ] 4. khoi `network:` duoi day - apply layer nay
-  #   [ ] 5. layer network apply lai de noi attachment vao rtb-spokes
+  #   [x] 4. khoi `network:` duoi day - apply layer nay
+  #   [x] 5. layer network noi attachment vao rtb-spokes
   #
-  # Buoc 5 KHONG bo duoc: attachment hien ra o account network, layer
-  # nay khong voi toi. Bo qua thi VPC ton tai, attachment ton tai o
-  # trang thai available, va khong goi tin nao di dau ca.
+  # Chung duoc lam TAY, tuan tu, va buoc 3 phai chay ./accept-ram.sh.
+  #
+  # TU GIO DUNG PIPELINE VENDING (landing-zone/vending-pipeline):
+  # them mot khoi vao file nay - DU ca khoi `network:` - roi
+  #
+  #   git push codecommit HEAD:main
+  #
+  # Pipeline chay ca nam buoc theo dung thu tu, dung sau lan cho
+  # nguoi duyet doc plan. Buoc 3 khong con la viec tay: template
+  # spoke-network.yaml mang mot Lambda custom resource (NhanRam) nhan
+  # loi moi RAM tu ben trong account dich, va Attachment cho no.
+  #
+  # Buoc 5 van KHONG bo duoc, chi la pipeline lam ho: attachment hien
+  # ra o account network, layer nay khong voi toi. Bo qua thi VPC ton
+  # tai, attachment ton tai o trang thai available, va khong goi tin
+  # nao di dau ca.
   # ============================================================
 
   - name: app-uat
