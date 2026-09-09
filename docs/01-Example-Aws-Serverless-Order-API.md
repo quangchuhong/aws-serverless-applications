@@ -6,7 +6,7 @@ Ví dụ 01: Kiến trúc serverless theo kiểu **event-driven**, dùng:
 - **AWS Lambda**
 - **Amazon SQS** (+ **DLQ**)
 - **Amazon DynamoDB**
-- **Amazon SNS** (alert khi có message vào DLQ)
+- **Amazon SNS** + **CloudWatch Alarm** (alert khi có message vào DLQ)
 - IaC với **Terraform**
 
 ---
@@ -32,8 +32,20 @@ Luồng chính:
    → đọc dữ liệu từ DynamoDB `OrdersTable` và trả JSON.
 
 4. DLQ `order-dlq`  
-   → Lambda `order-dlq-alert-handler`  
-   → gửi nội dung lỗi lên SNS topic `order-dlq-alerts` (có thể subscribe email).
+   → **CloudWatch Alarm** trên metric `ApproximateNumberOfMessagesVisible`  
+   → gửi alert lên SNS topic `order-dlq-alerts` (có thể subscribe email).  
+   → Message **vẫn nằm nguyên trong DLQ** để điều tra và redrive lại sau.
+
+> **Tại sao không dùng Lambda poll DLQ để gửi alert?**
+>
+> Một anti-pattern hay gặp là gắn event source mapping từ DLQ sang một Lambda
+> "alert handler". Vấn đề: khi Lambda đó chạy thành công, event source mapping
+> sẽ **xoá message khỏi DLQ**. Kết quả là bạn nhận được email, nhưng message lỗi
+> đã biến mất — không còn gì để phân tích hay redrive lại.
+>
+> DLQ nên được coi là **nơi lưu trữ**, không phải nơi để consume. Alert lấy từ
+> **metric** (CloudWatch Alarm), còn việc xử lý lại dùng **redrive**
+> (`StartMessageMoveTask` hoặc nút "Start DLQ redrive" trên Console).
 
 Kiến trúc này minh họa:
 
@@ -52,9 +64,10 @@ project-root/
     order_api_handler.py
     order_processor.py
     get_order_handler.py
-    dlq_alert_handler.py
   README.md
 ```
+
+> Code chạy được của lab này nằm ở [`labs/01-order-api/`](../labs/01-order-api/).
 ---
 
 ## 3. Code Lambda
@@ -115,6 +128,10 @@ def _response(status_code, body):
 ### 3.2. lambda/order_processor.py
 
 Lambda đọc message từ SQS, ghi order vào DynamoDB OrdersTable.
+
+Handler trả về `batchItemFailures` để chỉ những message thực sự lỗi mới bị
+retry — nếu không, một message hỏng sẽ kéo cả batch 5 message quay lại queue
+và các message đã ghi thành công bị xử lý lại lần nữa.
 ```python
 import json
 import logging
@@ -131,25 +148,26 @@ orders_table = dynamodb.Table(table_name)
 
 
 def lambda_handler(event, context):
-    records = event.get("Records", [])
+    failures = []
 
-    for record in records:
-        body = record["body"]
-        msg = json.loads(body)
-
-        order_id = msg.get("orderId")
-        user_id = msg.get("userId")
-        items = msg.get("items")
-        created_at = msg.get("createdAt")
-
-        logger.info(
-            "Processing order: orderId=%s userId=%s createdAt=%s",
-            order_id,
-            user_id,
-            created_at,
-        )
+    for record in event.get("Records", []):
+        message_id = record["messageId"]
 
         try:
+            msg = json.loads(record["body"])
+
+            order_id = msg.get("orderId")
+            user_id = msg.get("userId")
+            items = msg.get("items")
+            created_at = msg.get("createdAt")
+
+            logger.info(
+                "Processing order: orderId=%s userId=%s createdAt=%s",
+                order_id,
+                user_id,
+                created_at,
+            )
+
             orders_table.put_item(
                 Item={
                     "orderId": order_id,
@@ -158,14 +176,20 @@ def lambda_handler(event, context):
                     "createdAt": created_at,
                 }
             )
-        except ClientError as e:
-            logger.error("Failed to write order %s to DynamoDB: %s", order_id, e)
-            # Raise để SQS/Lambda retry, quá maxReceiveCount → vào DLQ
-            raise
+        except (ClientError, json.JSONDecodeError, KeyError) as e:
+            logger.exception("Failed to process message %s: %s", message_id, e)
+            # Chỉ message này bị trả lại queue để retry.
+            # Quá maxReceiveCount (5) → chuyển sang DLQ.
+            failures.append({"itemIdentifier": message_id})
 
-    return {"status": "ok"}
+    return {"batchItemFailures": failures}
 
 ```
+
+> **Lưu ý về kiểu số của DynamoDB:** `boto3` resource API không nhận `float`.
+> Nếu `items` chứa giá tiền dạng `19.99`, `put_item` sẽ raise `TypeError`.
+> Cần convert sang `decimal.Decimal` trước khi ghi (thường dùng
+> `json.loads(record["body"], parse_float=Decimal)`).
 
 ### 3.3. lambda/get_order_handler.py
 
@@ -191,7 +215,9 @@ class DecimalEncoder(json.JSONEncoder):
 
 
 def lambda_handler(event, context):
-    order_id = event.get("pathParameters", {}).get("id")
+    # Không dùng event.get("pathParameters", {}).get("id"):
+    # khi key tồn tại nhưng giá trị là None, .get() trả về None → AttributeError.
+    order_id = (event.get("pathParameters") or {}).get("id")
     if not order_id:
         return _response(400, {"message": "Missing path parameter: id"})
 
@@ -219,54 +245,22 @@ def _response(status_code, body):
 
 ```
 
-### 3.4. lambda/dlq_alert_handler.py
+### 3.4. Xử lý message trong DLQ
 
-Lambda đọc từ DLQ order-dlq và gửi alert lên SNS.
-```python
-import json
-import os
-import boto3
-import logging
+Không cần viết Lambda cho phần này. Alert do **CloudWatch Alarm** đảm nhiệm
+(xem Terraform ở mục 4), còn khi muốn xử lý lại message sau khi đã fix bug:
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-sns = boto3.client("sns")
-TOPIC_ARN = os.environ["ALERT_TOPIC_ARN"]
-
-
-def lambda_handler(event, context):
-    records = event.get("Records", [])
-
-    failed_messages = []
-
-    for record in records:
-        body = record.get("body")
-        failed_messages.append(body)
-
-    if not failed_messages:
-        return {"status": "no-messages"}
-
-    subject = f"[ALERT] {len(failed_messages)} messages in Order DLQ"
-    message = json.dumps(
-        {
-            "count": len(failed_messages),
-            "messages": failed_messages[:5],  # gửi kèm tối đa 5 message để tham khảo
-        },
-        indent=2,
-    )
-
-    logger.info("Sending DLQ alert: %s", message)
-
-    sns.publish(
-        TopicArn=TOPIC_ARN,
-        Subject=subject,
-        Message=message,
-    )
-
-    return {"status": "alert-sent", "count": len(failed_messages)}
-
+```bash
+# Redrive toàn bộ message từ DLQ về lại queue chính
+aws sqs start-message-move-task \
+  --source-arn "$(aws sqs get-queue-attributes \
+      --queue-url "$DLQ_URL" \
+      --attribute-names QueueArn \
+      --query 'Attributes.QueueArn' --output text)"
 ```
+
+Message được đưa về `order-queue` và `order-processor` xử lý lại như bình thường.
+
 ---
 
 ## 4. Terraform – main.tf
@@ -279,6 +273,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
     }
   }
 }
@@ -386,7 +384,7 @@ resource "aws_iam_role_policy" "order_api_lambda_policy" {
   })
 }
 
-# Role dùng chung cho order_processor + get_order
+# Role cho order_processor (đọc SQS + ghi DynamoDB)
 resource "aws_iam_role" "order_processor_lambda_role" {
   name = "order-processor-lambda-role"
 
@@ -429,8 +427,7 @@ resource "aws_iam_role_policy" "order_processor_lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem"
+          "dynamodb:PutItem"
         ]
         Resource = aws_dynamodb_table.orders_table.arn
       }
@@ -438,9 +435,9 @@ resource "aws_iam_role_policy" "order_processor_lambda_policy" {
   })
 }
 
-# Role cho dlq_alert_handler
-resource "aws_iam_role" "dlq_alert_lambda_role" {
-  name = "dlq-alert-lambda-role"
+# Role riêng cho get_order_handler – chỉ đọc DynamoDB (least privilege)
+resource "aws_iam_role" "get_order_lambda_role" {
+  name = "get-order-lambda-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -452,9 +449,9 @@ resource "aws_iam_role" "dlq_alert_lambda_role" {
   })
 }
 
-resource "aws_iam_role_policy" "dlq_alert_lambda_policy" {
-  name = "dlq-alert-lambda-policy"
-  role = aws_iam_role.dlq_alert_lambda_role.id
+resource "aws_iam_role_policy" "get_order_lambda_policy" {
+  name = "get-order-lambda-policy"
+  role = aws_iam_role.get_order_lambda_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -471,19 +468,9 @@ resource "aws_iam_role_policy" "dlq_alert_lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
+          "dynamodb:GetItem"
         ]
-        Resource = aws_sqs_queue.order_dlq.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = aws_sns_topic.order_dlq_alerts.arn
+        Resource = aws_dynamodb_table.orders_table.arn
       }
     ]
   })
@@ -511,12 +498,6 @@ data "archive_file" "get_order_zip" {
   output_path = "${path.module}/lambda/get_order_handler.zip"
 }
 
-data "archive_file" "dlq_alert_zip" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/dlq_alert_handler.py"
-  output_path = "${path.module}/lambda/dlq_alert_handler.zip"
-}
-
 ########################
 # Lambda Functions
 ########################
@@ -525,7 +506,10 @@ resource "aws_lambda_function" "order_api_handler" {
   function_name = "order-api-handler"
   role          = aws_iam_role.order_api_lambda_role.arn
   handler       = "order_api_handler.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = "python3.12"
+
+  memory_size = 256
+  timeout     = 10
 
   filename         = data.archive_file.order_api_zip.output_path
   source_code_hash = data.archive_file.order_api_zip.output_base64sha256
@@ -541,7 +525,13 @@ resource "aws_lambda_function" "order_processor" {
   function_name = "order-processor"
   role          = aws_iam_role.order_processor_lambda_role.arn
   handler       = "order_processor.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = "python3.12"
+
+  memory_size = 256
+
+  # Visibility timeout của order-queue (60s) = 6 × timeout này,
+  # đúng khuyến nghị của AWS cho event source mapping.
+  timeout = 10
 
   filename         = data.archive_file.order_processor_zip.output_path
   source_code_hash = data.archive_file.order_processor_zip.output_base64sha256
@@ -555,9 +545,12 @@ resource "aws_lambda_function" "order_processor" {
 
 resource "aws_lambda_function" "get_order_handler" {
   function_name = "get-order-handler"
-  role          = aws_iam_role.order_processor_lambda_role.arn
+  role          = aws_iam_role.get_order_lambda_role.arn
   handler       = "get_order_handler.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = "python3.12"
+
+  memory_size = 256
+  timeout     = 10
 
   filename         = data.archive_file.get_order_zip.output_path
   source_code_hash = data.archive_file.get_order_zip.output_base64sha256
@@ -569,24 +562,25 @@ resource "aws_lambda_function" "get_order_handler" {
   }
 }
 
-resource "aws_lambda_function" "dlq_alert_handler" {
-  function_name = "order-dlq-alert-handler"
-  role          = aws_iam_role.dlq_alert_lambda_role.arn
-  handler       = "dlq_alert_handler.lambda_handler"
-  runtime       = "python3.11"
+########################
+# CloudWatch Log Groups
+########################
 
-  filename         = data.archive_file.dlq_alert_zip.output_path
-  source_code_hash = data.archive_file.dlq_alert_zip.output_base64sha256
+# Tạo tường minh để set retention. Nếu để Lambda tự tạo,
+# log group mặc định giữ log VĨNH VIỄN → tốn tiền theo thời gian.
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  for_each = toset([
+    aws_lambda_function.order_api_handler.function_name,
+    aws_lambda_function.order_processor.function_name,
+    aws_lambda_function.get_order_handler.function_name,
+  ])
 
-  environment {
-    variables = {
-      ALERT_TOPIC_ARN = aws_sns_topic.order_dlq_alerts.arn
-    }
-  }
+  name              = "/aws/lambda/${each.value}"
+  retention_in_days = 14
 }
 
 ########################
-# Event Source Mappings
+# Event Source Mapping
 ########################
 
 resource "aws_lambda_event_source_mapping" "sqs_to_order_processor" {
@@ -594,13 +588,34 @@ resource "aws_lambda_event_source_mapping" "sqs_to_order_processor" {
   function_name    = aws_lambda_function.order_processor.arn
   batch_size       = 5
   enabled          = true
+
+  # Chỉ trả lại message thực sự lỗi, thay vì retry cả batch 5 message.
+  # Handler phải trả về {"batchItemFailures": [{"itemIdentifier": "<messageId>"}]}.
+  function_response_types = ["ReportBatchItemFailures"]
 }
 
-resource "aws_lambda_event_source_mapping" "dlq_to_alert_lambda" {
-  event_source_arn = aws_sqs_queue.order_dlq.arn
-  function_name    = aws_lambda_function.dlq_alert_handler.arn
-  batch_size       = 10
-  enabled          = true
+########################
+# CloudWatch Alarm cho DLQ
+########################
+
+resource "aws_cloudwatch_metric_alarm" "order_dlq_not_empty" {
+  alarm_name          = "order-dlq-not-empty"
+  alarm_description   = "Có message trong order-dlq — order-processor đang fail liên tục"
+  namespace           = "AWS/SQS"
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    QueueName = aws_sqs_queue.order_dlq.name
+  }
+
+  alarm_actions = [aws_sns_topic.order_dlq_alerts.arn]
+  ok_actions    = [aws_sns_topic.order_dlq_alerts.arn]
 }
 
 ########################
@@ -747,7 +762,7 @@ Response:
       - /aws/lambda/order-api-handler
       - /aws/lambda/order-processor
       - /aws/lambda/get-order-handler
-      - /aws/lambda/order-dlq-alert-handler
+   - CloudWatch → Alarms → order-dlq-not-empty.
    - SNS → topic order-dlq-alerts → check email (nếu đã subscribe).
 
 ---
@@ -757,4 +772,6 @@ Response:
    - Thêm GET /orders?userId=... với DynamoDB GSI.
    - Thêm trạng thái đơn hàng status (NEW, PAID, SHIPPED, …).
    - Phát OrderCreated lên SNS hoặc EventBridge để tích hợp hệ thống khác.
-   - Thêm CloudWatch Alarms cho DLQ length, Lambda errors, v.v.
+   - Thêm CloudWatch Alarms cho Lambda `Errors`, `Throttles`, và
+     `ApproximateAgeOfOldestMessage` của `order-queue` (phát hiện backlog).
+   - Thêm authorizer (Cognito JWT) cho các endpoint — xem doc 02.

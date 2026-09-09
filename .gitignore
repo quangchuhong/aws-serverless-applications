@@ -1,0 +1,28 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Chứa giá trị thật (API key, email) — không commit
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Lambda zip do archive_file sinh ra
+**/build/
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# OS
+.DS_Store

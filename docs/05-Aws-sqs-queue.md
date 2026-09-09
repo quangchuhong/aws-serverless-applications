@@ -22,6 +22,37 @@
   - Không muốn/khó xử lý duplicate.
   - Ví dụ: xử lý giao dịch theo user/account, order.
 
+**High throughput mode (từ 2021):**
+
+Giới hạn "~300 msg/s" hay bị trích dẫn là của chế độ FIFO **mặc định**. Bật
+high throughput mode thì con số cao hơn nhiều:
+
+| Chế độ | Không batch | Batch 10 |
+|--------|-------------|----------|
+| FIFO mặc định | 300 msg/s | 3,000 msg/s |
+| FIFO high throughput | ~9,000 msg/s | ~70,000 msg/s |
+
+(Con số thay đổi theo region — tra bảng quota chính thức của AWS.)
+
+Bật bằng 2 thuộc tính:
+
+```hcl
+resource "aws_sqs_queue" "orders_fifo" {
+  name       = "orders.fifo"
+  fifo_queue = true
+
+  deduplication_scope   = "messageGroup" # thay vì "queue"
+  fifo_throughput_limit = "perMessageGroupId"
+}
+```
+
+Điều kiện để đạt throughput cao: phải có **nhiều MessageGroupId khác nhau**.
+Nếu tất cả message dùng chung 1 group id thì vẫn bị giới hạn như cũ — thứ tự
+trong 1 group vốn dĩ là tuần tự. Đây là lý do nên chọn group id có
+cardinality cao (`orderId`, `accountId`) thay vì hằng số.
+
+→ Đừng loại FIFO khỏi bài toán chỉ vì nghĩ nó "chỉ chạy được 300 msg/s".
+
 ---
 
 ## 2. Nhóm cấu hình quan trọng của SQS
@@ -45,8 +76,16 @@ Khi một consumer (ví dụ Lambda) nhận message:
     
 **Best practice:**
 
-  - Nếu Lambda timeout = 30s, xử lý max ~20s → Visibility Timeout nên ≥ 30–40s.
-  - Tránh để Visibility quá thấp → message bị “phát lại” khi consumer vẫn đang xử lý.
+  - Với consumer thường (EC2/ECS tự gọi ReceiveMessage): Visibility Timeout >
+    thời gian xử lý tối đa. Lambda timeout 30s, xử lý max ~20s → đặt 30–40s.
+
+  - **Với Lambda event source mapping, AWS khuyến nghị Visibility Timeout ≥ 6 ×
+    Lambda timeout.** Lý do: ESM cần biên để retry batch nội bộ và xử lý trường
+    hợp poller bị lỗi. Lambda timeout 10s → Visibility Timeout 60s.
+
+  - Tránh để Visibility quá thấp → message bị “phát lại” khi consumer vẫn đang
+    xử lý, gây duplicate và `ReceiveCount` tăng vô ích (đẩy message vào DLQ sớm
+    dù code không hề lỗi).
 
 ### 2.2. Message Retention Period
 
@@ -58,10 +97,16 @@ Khi một consumer (ví dụ Lambda) nhận message:
 **Thiết lập:**
 
   - Min: 60s.
+  - **Mặc định: 4 ngày (345,600s).**
   - Max: 14 ngày.
   - Chọn theo:
     - SLA xử lý tối đa.
     - Dung lượng lưu trữ chấp nhận được.
+
+> Với **DLQ**, nên đặt retention **dài hơn** queue chính (thường là max 14 ngày).
+> Message chỉ vào DLQ khi đã lỗi nhiều lần, và bạn cần đủ thời gian để điều tra
+> rồi redrive. Retention của DLQ tính từ lúc message được gửi vào **queue gốc**,
+> không phải lúc vào DLQ.
 
 ### 2.3. Delivery Delay (Delay Seconds)
 
@@ -72,10 +117,17 @@ Khi một consumer (ví dụ Lambda) nhận message:
     - Mặc định ở mức queue (mọi message).
     - Hoặc override per message (nếu API cho phép).
       
+**Thiết lập:**
+
+  - 0–**900 giây (15 phút)**. Đây là trần cứng — muốn delay lâu hơn phải dùng
+    EventBridge Scheduler hoặc Step Functions.
+
 **Dùng khi:**
 
   - Bạn muốn trì hoãn xử lý (ví dụ: 5 phút sau mới bắt đầu).
   - Flow “retry sau X giây/phút” mà không dùng scheduler.
+
+> FIFO queue **không** hỗ trợ delay per-message, chỉ đặt được ở mức queue.
 
 ### 2.4. Maximum Message Size
 
@@ -606,7 +658,7 @@ Các option:
 
 | Tiêu chí                    | Standard Queue                                                                 | FIFO Queue                                                                                                   |
 |-----------------------------|-------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
-| Thông lượng (Throughput)   | **Gần như không giới hạn** TPS per API action.                               | **Cao nhưng giới hạn**: ~300 msg/s (send/receive/delete). Nếu batch 10 msg/operation → ~3,000 msg/s.       |
+| Thông lượng (Throughput)   | **Gần như không giới hạn** TPS per API action.                               | Mặc định ~300 msg/s per API action (batch 10 → ~3,000 msg/s). Bật **high throughput mode** → tới ~9,000 msg/s (batch 10 → ~70,000 msg/s), với điều kiện có nhiều MessageGroupId. |
 | Thứ tự (Ordering)          | **Best-effort ordering**: cố gắng giữ thứ tự nhưng **thỉnh thoảng có thể lệch**. | **First-in-first-out (FIFO)**: thứ tự gửi – nhận được **bảo toàn nghiêm ngặt** (per MessageGroupId).      |
 | Giao hàng (Delivery)       | **At-least-once delivery**: mỗi message được giao **ít nhất 1 lần**, đôi khi >1 lần (có duplicate). | **Exactly-once processing**: mỗi message được giao **một lần**, giữ nguyên trong queue đến khi consumer xử lý & xóa; **không tự sinh duplicate** trong queue. |
 | Use case điển hình         | Tải rất lớn, không cần thứ tự tuyệt đối, xử lý được duplicate.               | Cần thứ tự nghiêm ngặt, tránh duplicate, luồng giao dịch/order theo user, account, đơn hàng,…              |
@@ -620,7 +672,7 @@ Các option:
 1. **Số request (API requests)**  
    Mọi thao tác với SQS đều tính theo **số request**, ví dụ:
    - `SendMessage`, `SendMessageBatch`
-   - `ReceiveMessage`, `ReceiveMessageBatch`
+   - `ReceiveMessage` (có `MaxNumberOfMessages` để lấy tới 10 message/lần)
    - `DeleteMessage`, `DeleteMessageBatch`
    - (các lệnh quản lý khác như `GetQueueAttributes`, `SetQueueAttributes`, … cũng là request nhưng ít hơn nhiều)
 
@@ -630,11 +682,26 @@ Các option:
    - **Standard queue**: rẻ hơn, throughput gần như không giới hạn.
    - **FIFO queue**: đắt hơn (do đảm bảo thứ tự + dedup).
 
-3. **Kích thước payload (gián tiếp)**
-   - Giá SQS **cơ bản tính theo request**, không tính theo KB/message.
-   - Tuy nhiên, nếu payload lớn (gần 256 KB), thường dùng pattern:
-     - Lưu payload lớn ở S3.
-     - Trong SQS chỉ gửi metadata + S3 key → phát sinh chi phí S3 + request S3.
+3. **Kích thước payload — ĐÂY LÀ CHỖ HAY BỊ TÍNH THIẾU**
+
+   Giá SQS **không** chỉ tính theo số lần gọi API. AWS tính **mỗi 64 KB payload
+   là 1 request**:
+
+   | Kích thước message | Số request bị tính |
+   |--------------------|--------------------|
+   | 1 KB               | 1                  |
+   | 64 KB              | 1                  |
+   | 65 KB              | 2                  |
+   | 256 KB (tối đa)    | 4                  |
+
+   Nghĩa là một `SendMessage` với payload 256 KB tốn tiền gấp **4 lần** một
+   `SendMessage` 10 KB. Và vì message đó còn bị Receive + Delete, tổng chi phí
+   nhân lên theo cả 3 thao tác.
+
+   → Đây là lý do kỹ thuật (chứ không chỉ là giới hạn 256 KB) khiến pattern
+   **"lưu payload lớn ở S3, trong SQS chỉ gửi metadata + S3 key"** tiết kiệm
+   đáng kể: giảm message từ 256 KB xuống ~1 KB là giảm 4× chi phí request SQS,
+   đổi lại thêm chi phí S3 PUT/GET (thường rẻ hơn nhiều).
 
 4. **Data transfer**
    - Thông thường, giao tiếp giữa SQS và các dịch vụ AWS cùng region **không tính phí data transfer**.
@@ -651,19 +718,26 @@ Các option:
 
 > Lưu ý: **giá cụ thể** thay đổi theo region, cần tra bảng giá chính thức AWS. Dưới đây chỉ mô tả **cách tính**, không chốt con số.
 
+- **Free tier**: 1 triệu request/tháng, áp dụng **chung cho cả Standard và FIFO**
+  (không phải FIFO có ít free tier hơn).
+
 - **Standard Queue**
-  - Có **free tier**: một lượng request miễn phí mỗi tháng (ví dụ 1M request, tuỳ thời điểm/chính sách).
   - Sau free tier: tính `X USD / 1,000,000 request`.
 
 - **FIFO Queue**
-  - Không (hoặc ít) free tier hơn Standard.
   - Giá/1M request **cao hơn Standard** (vì đảm bảo FIFO + dedup).
 
-**Batch giúp giảm số request:**
+**Batch giúp giảm số request — nhưng có giới hạn:**
 
 - `SendMessageBatch` gửi tối đa 10 message → tính là **1 request**.
 - `ReceiveMessage` với `MaxNumberOfMessages = 10` → lấy tối đa 10 message trong **1 request**.
 - `DeleteMessageBatch` xoá nhiều message trong 1 request.
+
+> **Cảnh báo:** quy tắc 64 KB vẫn áp dụng cho batch. `SendMessageBatch` có tổng
+> payload tối đa 256 KB → batch đầy vẫn bị tính là 4 request, không phải 1.
+> Batch chỉ thực sự tiết kiệm khi message **nhỏ**. Với message ~1–5 KB, gộp 10
+> message vào 1 batch = 1 request → tiết kiệm 10×. Với message 64 KB, gộp 4
+> message = 4 request → không tiết kiệm gì.
 
 ---
 
@@ -672,6 +746,7 @@ Các option:
 Giả sử:
 
 - 1 Standard queue.
+- **Message nhỏ (< 64 KB)** → mỗi thao tác = đúng 1 request.
 - Mỗi tháng:
   - 10 triệu message gửi (Send).
   - Mỗi message được nhận 1 lần, xoá 1 lần:
@@ -772,6 +847,14 @@ Chi phí ≈ `1.5 * 1.20 = 1.8 USD / tháng`.
    - Nếu bật SSE với CMK riêng:
      - Mỗi lần gửi/nhận message có thể gọi KMS (encrypt/decrypt).
      - Chi phí KMS có thể đáng kể nếu traffic lớn.
+   - Giảm bằng `kms_data_key_reuse_period_seconds` (tối đa 24h): SQS cache lại
+     data key thay vì gọi KMS mỗi message.
+
+5. **Kích thước payload (64 KB = 1 request)**
+   - Yếu tố bị bỏ sót nhiều nhất. Message 200 KB tốn gấp 4 lần message 20 KB
+     cho **mỗi** thao tác Send/Receive/Delete.
+   - Kiểm tra bằng CloudWatch metric `SentMessageSize` (Average / Maximum) để
+     biết payload thực tế của hệ thống đang ở mức nào.
 
 ---
 
@@ -779,14 +862,17 @@ Chi phí ≈ `1.5 * 1.20 = 1.8 USD / tháng`.
 
 1. Ước lượng số message:
    - Message/tháng hoặc message/ngày × 30.
-2. Ước lượng số lần receive/delete:
+2. Ước lượng **kích thước message trung bình** → hệ số payload:
+   - `chunks = ceil(payload_bytes / 65536)`.
+   - Message < 64 KB → `chunks = 1` (đa số trường hợp).
+3. Ước lượng số lần receive/delete:
    - Lý tưởng: mỗi message receive 1 lần, delete 1 lần.
    - Thực tế: thêm 10–20% nếu có retry (tùy chất lượng code).
-3. Tính tổng số request (có/không batch):
-   - `#Send / batch_size + #Receive / batch_size + #Delete / batch_size`.
-4. Trừ free tier (nếu còn).
-5. Nhân với đơn giá / 1M request (Standard/FIFO theo loại queue).
-6. Cộng thêm (nếu dùng):
+4. Tính tổng số request:
+   - `(#Send / batch_size + #Receive / batch_size + #Delete / batch_size) × chunks`.
+5. Trừ free tier 1M (nếu còn).
+6. Nhân với đơn giá / 1M request (Standard/FIFO theo loại queue).
+7. Cộng thêm (nếu dùng):
    - Chi phí KMS (CMK).
    - S3 (nếu lưu payload lớn ở S3).
    - Request ở DLQ (nếu error nhiều).

@@ -1,3 +1,38 @@
+# Jira Service Management → CI/CD automation (bản nháp)
+
+> **Lưu ý:** tài liệu này **không thuộc chủ đề AWS serverless** của repo. Giữ
+> lại ở đây vì cùng nhóm chủ đề automation, nhưng nội dung độc lập hoàn toàn
+> với doc 00–05.
+>
+> Đây là **bản nháp** — mới có sơ đồ luồng, chưa có code hay cấu hình cụ thể.
+
+## Bài toán
+
+Cho phép người dùng (dev/ops/business) yêu cầu deploy hoặc thao tác hạ tầng
+thông qua **ticket Jira Service Management**, thay vì gọi trực tiếp Jenkins.
+Mục đích:
+
+- Có **quy trình phê duyệt** trước khi chạy (workflow của JSM).
+- Có **audit trail**: ai yêu cầu, ai duyệt, chạy lúc nào, kết quả ra sao —
+  tất cả nằm trong ticket.
+- Người dùng không cần quyền trực tiếp trên Jenkins/GitLab/cluster.
+
+## Các thành phần
+
+| Thành phần | Vai trò |
+|------------|---------|
+| **Jira Service Management** | Nhận yêu cầu, workflow phê duyệt, lưu `values_jira.yml` dưới dạng attachment |
+| **Jira Automation Rule** | Trigger webhook sang CI khi ticket chuyển sang `Approved` |
+| **Pipeline 1 (Jenkins)** | Nhận webhook → clone repo → tải values từ Jira → merge bằng `yq` → commit & push |
+| **GitLab repo** | Nguồn sự thật cho cấu hình (GitOps) |
+| **Pipeline 2 (Jenkins/GitLab CI)** | Trigger bởi push → build/test/scan/deploy hoặc chạy ops task |
+| **Jira REST API** | Pipeline 2 comment kết quả và transition ticket về `Succeeded`/`Failed` |
+
+`JIRA_ISSUE_KEY` (ví dụ `OPS-123`) là sợi dây xuyên suốt: dùng để tải
+attachment, đặt trong commit message, và để update ngược lại ticket.
+
+## Sơ đồ luồng
+
 ```text
 
 +---------------------+         +----------------------+         +-------------------------------+
@@ -111,11 +146,23 @@
            |       + status final          |                                      |
            |       + log CI, version, env  |                                      |
            |<------------------------------+                                      |
-           |                                                                         |
-+----------+----------+         +----------------------+         +-------------------+--------+
-|  Hệ thống đích      |                                                     |
-|  AWS / Win / RHEL   |<----------------------------------------------------+
+           |                                                                      |
++----------+----------+                                                          |
+|  Hệ thống đích      |                                                          |
+|  AWS / Win / RHEL   |<---------------------------------------------------------+
 |  K8s / OpenShift    |
 +---------------------+
 
 ```
+
+## Còn thiếu
+
+Bản nháp này chưa có:
+
+- Cấu hình cụ thể của Jira Automation Rule (payload, authentication sang CI).
+- `Jenkinsfile` cho cả hai pipeline.
+- Cách quản lý credentials: token Jira, deploy key GitLab, kubeconfig.
+- Xử lý lỗi giữa chừng — ví dụ pipeline 1 push thành công nhưng pipeline 2
+  không trigger, ticket sẽ kẹt ở trạng thái nào?
+- Chống race condition khi nhiều ticket cùng sửa một file values.
+- Timeout và cách hủy một job đang chạy từ phía Jira.
