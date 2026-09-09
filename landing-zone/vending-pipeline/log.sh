@@ -66,14 +66,21 @@ jq_stage() {
   printf "stageStates[?stageName=='%s'].actionStates[] | %s" "$1" "$2"
 }
 
+# -a nhan o BAT KY vi tri nao. Ban dau no chi duoc doc khi la tham so
+# thu nhat, trong khi dong huong dan o cuoi script lai in ra
+# "./log.sh <stage> <action> -a" - tuc tai lieu va code khong khop.
 TAT_CA="no"
-if [ "${1:-}" = "-a" ]; then
-  TAT_CA="yes"
-  shift
-fi
+VITRI=()
+for t in "$@"; do
+  if [ "$t" = "-a" ]; then
+    TAT_CA="yes"
+  else
+    VITRI+=("$t")
+  fi
+done
 
-STAGE="${1:-}"
-ACTION="${2:-}"
+STAGE="${VITRI[0]:-}"
+ACTION="${VITRI[1]:-}"
 
 ########################################
 # Tim build hong, neu khong duoc chi dinh
@@ -141,9 +148,23 @@ CAT=$(printf '%s\n' "$DONG" \
 if [ -n "$CAT" ]; then
   printf '%s\n' "$CAT"
 else
-  echo "(khong thay moc '== plan' - loi xay ra TRUOC buoc plan)"
+  echo "(khong thay moc '== plan' - loi xay ra TRUOC buoc plan:"
+  echo " keo tfvars, sinh backend.tf, init, hoac chot chan state rong)"
   echo ""
-  printf '%s\n' "$DONG" | sed -n '/^== /,$p' | head -60
+  # PHAN CUOI, khong phai phan dau.
+  #
+  # Ban dau cho nay in tu `== ` dau tien roi `head -60`, va no cho ra
+  # muc "Cai Terraform 1.9.8" - dung dau ma sai huong: khi khong co
+  # moc thi thu can xem nam o CUOI.
+  #
+  # Loc hai loai rac truoc khi cat duoi:
+  #   - dong chu thich cua buildspec ma CodeBuild in lai khi hong
+  #   - dong dieu phoi cua container
+  printf '%s\n' "$DONG" \
+    | grep -vE '^[[:space:]]*#' \
+    | grep -vE '^\[Container\] .*(Running command|Phase complete|Phase context|Expanding|Assembling|Found [0-9]+ file|auto-discover)' \
+    | grep -vE '^[[:space:]]*$' \
+    | tail -60
 fi
 
 echo ""
