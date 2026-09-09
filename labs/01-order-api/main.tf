@@ -26,7 +26,7 @@ variable "region" {
 variable "alert_email" {
   description = "Email nhận alert khi có message vào DLQ. Để trống thì bỏ qua subscription."
   type        = string
-  default     = ""
+  default     = "quang.hong.0991@gmail.com"
 }
 
 locals {
