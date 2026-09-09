@@ -154,8 +154,17 @@ fi
 #
 # GNU sed hieu ca hai, nen loi nay khong hien ra tren Linux/CodeBuild.
 # -E thi ca hai deu hieu.
+# Moc ket thuc la HET PHA BUILD, khong phai mot cau bao loi.
+#
+# Ban dau moc ket la `PLAN HONG|Apply complete|LOI:` - toan mốc của
+# truong hop HONG. Mot plan THANH CONG khong in dong nao trong so do,
+# nen dai sed chay toi cuoi file va nguoi doc nhan duoc phan duoi
+# cung: nhat ky container.
+#
+# Tuc la cong cu chi doc duoc log cua nhung lan hong. Dung o dung luc
+# no vo dung nhat - khi ban muon xac nhan mot lan chay ĐÚNG.
 CAT=$(printf '%s\n' "$DONG" \
-  | sed -nE '/^== (plan|apply)/,/^(PLAN HONG|Apply complete|LOI:)/p')
+  | sed -nE '/^== (plan|apply)/,/Phase complete: BUILD/p')
 
 if [ -n "$CAT" ]; then
   printf '%s\n' "$CAT"
