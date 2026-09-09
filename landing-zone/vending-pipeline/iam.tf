@@ -361,14 +361,22 @@ resource "aws_iam_role_policy" "codebuild" {
       }],
 
       ####################################
-      # NHAY SANG ACCOUNT MANG - chi MOT role, khai tuong minh
+      # NHAY SANG ACCOUNT KHAC - LIET KE TUNG ROLE
+      #
+      # Mot statement, mot danh sach ARN cu the. Khong `Resource =
+      # ["*"]`: voi `sts:AssumeRole` thi `*` nghia la assume duoc MOI
+      # role trong to chuc ma tin no - trong do co
+      # OrganizationAccountAccessRole, tuc admin day du o moi account.
+      #
+      # Them mot account dich = them mot dong o tfvars, hien ra trong
+      # code review. Do la ca muc dich.
       ####################################
-      local.network_on ? [{
-        Sid      = "SangAccountMang"
+      length(local.assume_targets) == 0 ? [] : [{
+        Sid      = "SangAccountKhac"
         Effect   = "Allow"
         Action   = ["sts:AssumeRole"]
-        Resource = [var.network_deploy_role_arn]
-      }] : []
+        Resource = local.assume_targets
+      }]
     )
   })
 }

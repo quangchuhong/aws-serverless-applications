@@ -93,6 +93,16 @@ locals {
 
   name = "${var.project}-vending"
 
+  # Toan bo role o account khac ma CodeBuild duoc phep assume.
+  #
+  # Gom hai nguon: role mang (stage B, D) va role o cac account thanh
+  # vien (stage E). distinct() vi hai nguon co the trung neu ai do
+  # khai role mang o ca hai cho.
+  assume_targets = distinct(compact(concat(
+    [local.network_on ? var.network_deploy_role_arn : ""],
+    var.member_assume_role_arns,
+  )))
+
   next_steps = <<-EOT
 
     ═══════════════ SAU KHI APPLY ═══════════════

@@ -169,6 +169,55 @@ variable "network_deploy_role_arn" {
   default     = ""
 }
 
+variable "member_assume_role_arns" {
+  description = <<-EOT
+    Role o CAC ACCOUNT THANH VIEN ma layer chay trong pipeline can
+    assume, ngoai role mang.
+
+    Layer landing-zone/config-detective co HAI provider alias:
+
+      provider "aws" { alias = "security"    ... }  -> account security
+      provider "aws" { alias = "log_archive" ... }  -> account log archive
+
+    ca hai assume `cross_account_role` (mac dinh
+    OrganizationAccountAccessRole). Thieu ARN o day thi stage E dung
+    lai voi:
+
+      Error: Cannot assume IAM Role
+      ... is not authorized to perform: sts:AssumeRole on resource:
+      arn:aws:iam::<id>:role/OrganizationAccountAccessRole
+
+    Lay hai account ID:
+      cd ../config-detective && grep -E 'security_account_id|log_archive_account_id' terraform.tfvars
+
+    ---------------------------------------------------------------
+    DOC KY TRUOC KHI DIEN
+
+    OrganizationAccountAccessRole la quyen ADMIN DAY DU trong account
+    dich. Khai no o day nghia la pipeline nay - mot duong tu dong -
+    co toan quyen o hai account do.
+
+    Truoc ban 09/09 danh sach nay khong ton tai va policy cap
+    `sts:AssumeRole` tren `Resource = ["*"]`, tuc pipeline assume duoc
+    OrganizationAccountAccessRole o MOI account trong to chuc. Danh
+    sach nay khong tao ra quyen do - no thu hep quyen do lai, va bat
+    moi lan mo rong phai di qua mot dong code doc duoc.
+
+    Cach tot hon (chua lam): tao o security va log archive mot role
+    HEP chi du cho Security Hub aggregator va bucket snapshot, roi
+    tro `cross_account_role` cua config-detective vao do.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for a in var.member_assume_role_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/", a))
+    ])
+    error_message = "Moi phan tu phai la ARN role day du, dang arn:aws:iam::<12 so>:role/<ten>."
+  }
+}
+
 ########################################
 # 3. DUYET
 ########################################

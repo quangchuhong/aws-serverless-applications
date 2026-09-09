@@ -3126,6 +3126,37 @@ Policy của role đã có `route53:*` **và** `route53resolver:*`. Không đủ
 
 Thông báo của AWS ở đây tốt — nó nói đúng tên action thiếu, nên sửa mất ba mươi giây. Cái khó là **đoán trước** rằng có một namespace thứ ba, và không có cách nào đoán ra ngoài việc chạy thử. Đó là lập luận cho việc lần chạy khô phải đi hết sáu stage trước khi một account thật đi qua: những lỗi kiểu này chỉ lộ ra khi có người thực sự gọi API.
 
+### Lỗi 102 — bản vá của lỗi 98 làm hỏng stage E, và cái nó làm lộ ra
+
+Stage B, C, D xanh. Stage E dừng với ba lỗi cùng lúc:
+
+```
+Error: failed to get shared config profile, default
+
+Error: Cannot assume IAM Role
+  with provider["...aws"].security, on versions.tf line 56
+  IAM Role (arn:aws:iam::458195083898:role/OrganizationAccountAccessRole)
+  cannot be assumed.
+  ... is not authorized to perform: sts:AssumeRole on resource:
+      arn:aws:iam::458195083898:role/OrganizationAccountAccessRole
+
+Error: Cannot assume IAM Role
+  with provider["...aws"].log_archive, on versions.tf line 68
+  ... arn:aws:iam::654560867047:role/OrganizationAccountAccessRole
+```
+
+Lỗi thứ nhất là **lỗi 100 lặp lại** ở một layer khác: `config-detective/terraform.tfvars` cũng có `profile` trong `vending_state`. Bản vá hôm trước chỉ áp cho layer `network`, vì nó dùng `assume_role_arn != ""` làm tín hiệu "đang chạy trong pipeline" — tín hiệu đó không tồn tại ở đây.
+
+Hai lỗi sau là **hậu quả trực tiếp của bản vá lỗi 98**. Hôm trước tôi gỡ `sts:AssumeRole` khỏi statement rộng và viết rằng đây là thay đổi duy nhất có rủi ro: *"nếu một layer nào đó assume một role tôi chưa biết, stage đó sẽ báo AccessDenied"*. `config-detective` có hai provider alias assume `OrganizationAccountAccessRole` ở account security và log archive.
+
+Điều đáng ghi không phải là bản vá làm hỏng một stage. Là **cái nó làm lộ ra**: trước bản vá, policy cấp `sts:AssumeRole` trên `Resource = ["*"]`, nghĩa là pipeline này assume được `OrganizationAccountAccessRole` ở **mọi account trong tổ chức** — quyền admin đầy đủ ở khắp nơi, cấp cho một đường tự động, và không ai nhìn thấy vì nó ẩn trong một danh sách hai mươi action.
+
+Việc thu hẹp không tạo ra quyền đó, nó chỉ khiến quyền đó phải được viết ra. Và ngay khi phải viết ra thì câu hỏi đúng hiện lên: *pipeline có nên assume `OrganizationAccountAccessRole` không?* Câu trả lời tốt hơn là tạo ở hai account đó một role hẹp, chỉ đủ cho Security Hub aggregator và bucket snapshot, rồi trỏ `cross_account_role` vào đó. Chưa làm, đã ghi lại trong mô tả biến `member_assume_role_arns`.
+
+**Dạng lỗi:** một `Resource = ["*"]` không chỉ là quyền rộng — nó còn là **một câu hỏi không bao giờ được hỏi**. Thu hẹp nó gây ra vài lần hỏng ngắn, và đổi lại một danh sách mà người ta phải đọc.
+
+Chữa lỗi 100 lần này theo hướng khác với layer `network`: hai layer `config-detective` và `permission-sets` chạy ở **chính** account management, nơi state nằm — nên `profile` không bao giờ cần, chứ không phải cần-tuỳ-ngữ-cảnh. Thêm `validation` từ chối thẳng khoá đó, để nó hỏng trên máy người khai kèm tên khoá, thay vì hỏng ở stage E vài ngày sau.
+
 ---
 
 ## 7as. Lỗi 94–95 — một guardrail tự khoá chính thứ nó bảo vệ

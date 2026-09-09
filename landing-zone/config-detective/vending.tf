@@ -50,6 +50,26 @@ variable "vending_state" {
     )
     error_message = "vending_state phai co khoa 'backend' la \"s3\" hoac \"local\" - hoac de rong han."
   }
+
+  # `profile` KHONG duoc khai o layer nay.
+  #
+  # Layer nay chay o CHINH account management, va state cua
+  # account-baseline cung nam o account management. Hai dau cung mot
+  # account nghia la credential dang chay da doc duoc state - profile
+  # khong them gi.
+  #
+  # Nhung no pha duoc: CodeBuild khong co ~/.aws/config, nen
+  # terraform_remote_state dung lai voi
+  #
+  #   Error: failed to get shared config profile, default
+  #
+  # mot cau khong nhac gi toi vending_state, toi layer nay, hay toi
+  # CodeBuild. Chan o day de no hong ngay tren may nguoi khai, kem ten
+  # khoa - thay vi hong o stage E cua pipeline vai ngay sau.
+  validation {
+    condition     = !contains(keys(var.vending_state), "profile")
+    error_message = "Bo khoa 'profile' khoi vending_state. Layer nay chay o chinh account management - noi state nam - nen profile khong bao gio can, va khai no se lam pipeline hong voi mot thong bao khong lien quan gi toi day."
+  }
 }
 
 locals {

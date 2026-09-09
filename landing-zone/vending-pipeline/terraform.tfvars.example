@@ -92,6 +92,29 @@ transit_gateway_id = ""
 # transit_gateway_id = "tgw-0407992ad425893db"
 
 ########################################
+# 3b. SANG CAC ACCOUNT THANH VIEN (stage E)
+#
+# config-detective co HAI provider alias assume
+# OrganizationAccountAccessRole o account security va log archive.
+# Thieu hai ARN nay thi stage E dung lai voi "Cannot assume IAM Role".
+#
+# Lay account ID:
+#   cd ../config-detective && grep -E 'security_account_id|log_archive_account_id' terraform.tfvars
+#
+# DOC KY: OrganizationAccountAccessRole la ADMIN DAY DU o account
+# dich. Khai o day nghia la pipeline co toan quyen o hai account do.
+# Danh sach nay khong tao ra quyen - truoc no, policy cap
+# sts:AssumeRole tren "*", tuc moi account trong to chuc - nhung no
+# bat moi lan mo rong phai di qua mot dong doc duoc.
+########################################
+
+member_assume_role_arns = []
+# member_assume_role_arns = [
+#   "arn:aws:iam::458195083898:role/OrganizationAccountAccessRole",  # security
+#   "arn:aws:iam::654560867047:role/OrganizationAccountAccessRole",  # log archive
+# ]
+
+########################################
 # 4. DUYET
 #
 # Moi dia chi nhan mot thu tu SNS va PHAI BAM XAC NHAN. Truoc do
