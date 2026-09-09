@@ -32,6 +32,18 @@ demo/**/.terraform.lock.hcl
 # Gia tri that - thuong co account ID, email, ma phong ban
 terraform.tfvars
 *.auto.tfvars
+
+# BAN SAO LUU CUNG PHAI BI LOAI.
+#
+# Mau `terraform.tfvars` khop DUNG TEN, khong khop
+# `terraform.tfvars.truoc-khi-them-2-spoke`. Da xay ra that: mot ban
+# sao luu 50 dong, 9 dong co account ID hoac email, di thang len
+# GitHub vi `git add -A` - trong khi ban goc thi duoc chan cẩn thận.
+#
+# Chinh sach "tfvars khong len git" chi manh bang cai ten de nhat.
+terraform.tfvars.*
+
+# Negation phai nam SAU hai mau tren, neu khong no khong co tac dung.
 !terraform.tfvars.example
 
 # Do wire-backends.sh sinh ra. Khong phai bi mat, nhung khac nhau
