@@ -149,6 +149,30 @@ accounts:
       vpc_cidr: 10.60.0.0/16
       attach_tgw: false
 
+  - name: app-nonprod-2
+    email: quang.hong.0991+lz-app-nonprod-2@gmail.com
+    ou: NonProd
+    scope: nonprod
+    environment: dev
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-1042
+    ticket: ACC-2026-004
+    note: Account nonprod dau tien tao hoan toan bang pipeline
+    network:
+      vpc_cidr: 10.13.0.0/16
+
+  - name: app-prod-2
+    email: quang.hong.0991+lz-app-prod-2@gmail.com
+    ou: Prod
+    scope: prod
+    environment: prod
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-4021
+    ticket: ACC-2026-005
+    note: Account prod dau tien tao hoan toan bang pipeline
+    network:
+      vpc_cidr: 10.22.0.0/16
+
 # --------------------------------------------------------------
 # Vi du (dang tat)
 #

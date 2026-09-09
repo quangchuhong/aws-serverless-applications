@@ -1,0 +1,28 @@
+enable      = true
+region      = "ap-southeast-1"
+project     = "quh11-lz"
+cost_center = "CC-0000"
+owner       = "quang.hong.0991@gmail.com"
+
+baseline_target_ous = [
+  "ou-o5ci-g5rv7do1",   # Security       - lz-security, lz-logarchive
+  "ou-o5ci-popibm5d",   # Infrastructure - lz-network
+  "ou-o5ci-syf8rqi7",   # Non-Production - lz-app-dev
+  "ou-o5ci-75f3uqe6",   # Production     - lz-app-prod
+  "ou-o5ci-lovqpj5y",   # Data Analytics - chua co account
+  "ou-o5ci-ivhzg9qe",   # Sandbox        - chua co account
+]
+
+sweep_regions = ["ap-southeast-1", "us-east-1"]
+sweep_version = "1"
+
+create_accounts           = {}
+close_accounts_on_destroy = false
+
+account_scopes = {
+  "436908791055" = "none"      # lz-network
+  "458195083898" = "none"      # lz-security
+  "654560867047" = "none"      # lz-logarchive
+  "169873795883" = "nonprod"   # lz-app-dev
+  "761558631239" = "prod"      # lz-app-prod
+}
