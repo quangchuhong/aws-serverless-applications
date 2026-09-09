@@ -48,6 +48,24 @@ fi
 
 NHOM="/aws/codebuild/${PIPELINE}"
 
+########################################
+# LAM PHANG TRUOC, LOC SAU
+#
+# `stageStates[?...].actionStates[?...].latestExecution.field | [0][0]`
+# tra ve None: hai phep chieu long nhau bi xep lai, va [0][0] cat vao
+# mot cau truc khac voi cau truc minh tuong.
+#
+# `actionStates[]` lam phang truoc, roi `| [?...]` loc tren mot danh
+# sach phang, roi `| [0]` lay phan tu dau. Dai hon mot chut va doc
+# duoc - va no tra ve gia tri.
+#
+# Da mat mot vong vi cho nay, nen tach thanh ham de hai lenh duoi
+# khong the lech nhau.
+########################################
+jq_stage() {
+  printf "stageStates[?stageName=='%s'].actionStates[] | %s" "$1" "$2"
+}
+
 TAT_CA="no"
 if [ "${1:-}" = "-a" ]; then
   TAT_CA="yes"
@@ -75,7 +93,7 @@ fi
 
 if [ -z "$ACTION" ]; then
   ACTION=$(aws codepipeline get-pipeline-state --region "$REGION" --name "$PIPELINE" \
-    --query "stageStates[?stageName=='${STAGE}'].actionStates[?latestExecution.status=='Failed'].actionName | [0][0]" \
+    --query "$(jq_stage "$STAGE" "[?latestExecution.status=='Failed'] | [0].actionName")" \
     --output text)
   # if/fi chu khong phai `A || B && C`: chuoi do doc la (A || B) && C,
   # nen khi ACTION co gia tri that thi ca bieu thuc tra ve 1 va
@@ -90,7 +108,7 @@ fi
 # Ten log stream la phan UUID.
 ########################################
 BUILD=$(aws codepipeline get-pipeline-state --region "$REGION" --name "$PIPELINE" \
-  --query "stageStates[?stageName=='${STAGE}'].actionStates[?actionName=='${ACTION}'].latestExecution.externalExecutionId | [0][0]" \
+  --query "$(jq_stage "$STAGE" "[?actionName=='${ACTION}'] | [0].latestExecution.externalExecutionId")" \
   --output text)
 
 if [ -z "$BUILD" ] || [ "$BUILD" = "None" ]; then
