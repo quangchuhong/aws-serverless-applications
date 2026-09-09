@@ -224,16 +224,36 @@ phases:
 
           # Ban doc duoc, de dinh kem vao thu duyet.
           terraform show -no-color tfplan > tfplan.txt
-          echo "== tom tat"
-          grep -E '^(Plan:|No changes)' tfplan.txt || true
 
-          # CANH BAO khi co gi bi XOA. Pipeline nay sinh ra de THEM
-          # account; mot lan chay doi xoa resource la mot lan dang le
-          # phai co nguoi doc ky hon binh thuong.
-          if grep -qE '^Plan: .* to destroy' tfplan.txt \
-             && ! grep -qE '^Plan: .* 0 to destroy' tfplan.txt; then
+          # ----------------------------------------------------
+          # DEM THEO `will be ...`, KHONG THEO DONG `Plan:`
+          #
+          # `terraform show <file plan>` KHONG in dong
+          # "Plan: N to add, ...". Dong do do `terraform plan` in ra
+          # man hinh, khong nam trong ban show.
+          #
+          # Ban dau cho nay grep '^Plan:' tren tfplan.txt. Hau qua
+          # khong phai mat mot dong tom tat - ma la khoi `if` ben
+          # duoi KHONG BAO GIO dung, nen canh bao "co resource bi
+          # xoa" chua tung chay mot lan nao, ke ca khi plan doi xoa
+          # sach ha tang. Mot lop chan cuoi truoc cong duyet, chet im
+          # lang tu ngay dau.
+          # ----------------------------------------------------
+          TAO=$(grep -c 'will be created' tfplan.txt || true)
+          SUA=$(grep -c 'will be updated in-place' tfplan.txt || true)
+          XOA=$(grep -c 'will be destroyed' tfplan.txt || true)
+          THAY=$(grep -c 'must be replaced' tfplan.txt || true)
+
+          echo "== tom tat: ${TAO} tao, ${SUA} sua, ${XOA} xoa, ${THAY} thay the"
+
+          # THAY THE dem ngang XOA: mot stack instance bi thay the la
+          # stack o account dich bi xoa roi dung lai - VPC, subnet,
+          # attachment deu ID moi.
+          if [ "$XOA" != "0" ] || [ "$THAY" != "0" ]; then
             echo ""
-            echo "!!! PLAN NAY CO RESOURCE BI XOA - doc tfplan.txt truoc khi duyet"
+            echo "!!! PLAN NAY XOA ${XOA} VA THAY THE ${THAY} RESOURCE"
+            echo "!!! Pipeline nay sinh ra de THEM account. Doc ky truoc khi duyet:"
+            grep -E 'will be destroyed|must be replaced' tfplan.txt | sed 's/^/    /'
           fi
         else
           echo "== apply"

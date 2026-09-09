@@ -3181,6 +3181,31 @@ Chữa thật: stage A chạy `terraform apply -target=aws_organizations_account
 
 ---
 
+### Lỗi 104 — lớp chặn cuối trước cổng duyệt, chết im lặng từ ngày đầu
+
+Buildspec có một cảnh báo dành cho trường hợp nguy hiểm nhất:
+
+```bash
+if grep -qE '^Plan: .* to destroy' tfplan.txt \
+   && ! grep -qE '^Plan: .* 0 to destroy' tfplan.txt; then
+  echo "!!! PLAN NAY CO RESOURCE BI XOA - doc tfplan.txt truoc khi duyet"
+fi
+```
+
+`tfplan.txt` sinh ra từ `terraform show -no-color tfplan`. Và **`terraform show` trên một file plan không in dòng `Plan: N to add, ...`** — dòng đó do `terraform plan` in ra màn hình, không nằm trong bản `show`.
+
+Nên điều kiện không bao giờ đúng. Cảnh báo chưa từng chạy một lần nào, kể cả nếu plan đòi xoá sạch hạ tầng.
+
+Phát hiện ra nhờ một triệu chứng nhỏ: dòng `== tom tat` in ra rồi không có gì theo sau. Cái trống rỗng đó là thứ duy nhất lộ ra ngoài — và nó trông hoàn toàn bình thường, vì `grep ... || true` nuốt mã thoát.
+
+Chữa: đếm theo `will be created` / `will be updated in-place` / `will be destroyed` / `must be replaced`, những chuỗi **thật sự** có trong bản `show`. Tính cả `must be replaced` ngang với xoá: một stack instance bị thay thế là stack ở account đích bị xoá rồi dựng lại — VPC, subnet, attachment đều ID mới.
+
+**Dạng lỗi:** đây là lần thứ năm trong hai ngày, và là lần đắt nhất. Bốn lần trước — `--query` trả `None`, `sed` với `\|` trên BSD, mốc kết thúc chỉ phủ trường hợp hỏng, `describe-stack-set` thiếu tiền tố `StackSet.` — chỉ làm mất thời gian. Lần này thì một lớp kiểm soát an toàn báo "sạch" trong khi nó chưa bao giờ nhìn.
+
+Điểm chung của cả năm: **một phép lọc không khớp trả về rỗng, và rỗng được đọc thành một câu trả lời.** Cách phòng duy nhất đã dùng được ở đây là thử ngược: viết một `tfplan.txt` giả có đủ bốn loại thay đổi rồi chạy đoạn đếm trên đó. Ba mươi giây, và nó nói ngay điều mà sáu tuần chạy thật không nói.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
