@@ -3495,6 +3495,52 @@ Chuỗi rỗng nghe vô hại hơn, và tệ hơn hẳn. Với `resourcegroupsta
 
 ---
 
+### Lỗi 112 — bản vá lỗi 108 chờ đúng thứ mà chính nó đang chặn
+
+Hai account hoàn toàn mới (`app-nonprod-4`, `app-prod-4`) được thêm vào catalog để đo đúng một điều chưa từng được chứng minh: **một** execution tạo account *và* dựng xong mọi thứ cho nó. Pipeline chạy tới stage E rồi đứng 15 phút:
+
+```
+== StackSet: quh11-lz-config-recorder
+   con 1 instance chua CURRENT:
+     302805792678 ou-o5ci-75f3uqe6 OUTDATED
+   khong co operation nao chay va instance van hong -> THU LAI
+     OU ou-o5ci-75f3uqe6: 302805792678
+       operation 097b74f0-...
+   ...
+HET GIO sau 15 phut.
+```
+
+Action `Cho_recorder` — chính là bản vá của lỗi 108 — hết giờ. Nó thử lại một lần, operation chạy xong, và instance vẫn `OUTDATED`.
+
+Nguyên nhân không nằm trong log. Nó nằm trong thứ tự:
+
+```
+Cho_recorder   cho recorder o account moi -> CURRENT
+recorder       can bucket Config o log-archive cho account moi GHI
+bucket policy  do apply cua stage E viet ra
+stage E apply  nam SAU Cho_recorder
+```
+
+`config-detective/s3-log-archive.tf` tính `delivery_account_ids` từ **mọi account ACTIVE** của tổ chức, và dùng `AWS:SourceAccount` chứ không `SourceOrgID` — vì Config gọi S3 với tư cách dịch vụ và `SourceOrgID` không được điền. Danh sách ấy được đọc lúc stage E **plan**, nhưng chỉ được ghi vào policy lúc stage E **apply** — mà apply đó đứng sau `Cho_recorder`.
+
+Với một account chưa từng đi qua một lần stage E apply nào, `Cho_recorder` chờ một điều kiện mà chỉ chính nó đang chặn. Không phải chậm. **Không bao giờ xong.**
+
+Điều đáng ghi nhất là **vì sao lỗi 108 nghiệm thu được**. Khi vá 108, hai account `353007002364` và `687259232009` đã tồn tại từ lượt chạy trước, và bucket policy khi đó đã liệt kê 13 account — điều chính tôi đã đo và dán lại. `Cho_recorder` chờ, StackSet thử lại, và thành công **vì điều kiện đã sẵn có từ trước**, không phải vì thứ tự đúng. Bản vá được nghiệm thu trong đúng hoàn cảnh che mất khuyết điểm mà nó lẽ ra phải phơi ra.
+
+Đó là lý do phép đo này đáng giá: bảy account trước đều đi qua ít nhất hai lượt, và **hai lượt che được mọi lỗi thứ tự trong một lượt**. Lượt thứ hai luôn thấy thế giới mà lượt thứ nhất để lại. Một quy trình chỉ đúng khi chạy hai lần thì không phải quy trình tự động — nó là quy trình thủ công có máy làm hộ, và điều đó chỉ lộ ra khi bắt nó làm một lần.
+
+Chữa: tách stage E làm hai, cắt vòng bằng thứ tự chứ không bằng chờ lâu hơn.
+
+```
+D  ->  E0 (chinh sach bucket, -target)  ->  Cho_recorder  ->  E (ca layer)  ->  F
+```
+
+`E0` chỉ `-target=aws_s3_bucket_policy.config`. Cố ý không apply cả layer: org config rule nằm trong chính layer đó và sẽ hỏng với `NoAvailableConfigurationRecorder` — đúng cái đang tránh. Và vì `delivery_account_ids` đọc mọi account ACTIVE, `E0` không cần biết gì về account vừa tạo; nó chỉ cần chạy **sau** stage A.
+
+**Dạng lỗi:** một cơ chế chờ đặt sai phía của thứ nó chờ. Nhìn từ trong log thì không phân biệt được với "AWS chậm" — cùng một dòng lặp lại, cùng một trạng thái `OUTDATED`, và tăng `wait_recorder_minutes` sẽ không bao giờ cứu được. Chẩn đoán chỉ đến từ việc đọc xem **ai viết ra** điều kiện đang được chờ. Bài học lặp lại từ lỗi 108, giờ ở cấp cao hơn một bậc: *hành động rồi kiểm điều kiện thật* vẫn chưa đủ — còn phải hỏi thứ tạo ra điều kiện đó có được phép chạy trước hay không.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

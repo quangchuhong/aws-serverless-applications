@@ -284,10 +284,11 @@ variable "approve_stages" {
     Stage nao dung lai cho nguoi bam duyet. Dung KHOA cua stage:
 
       A-tao-account  B-chia-se-tgw  C-mang-nen
-      D-noi-route-table  E-config-detective  F-permission-sets
+      D-noi-route-table  E0-chinh-sach-bucket  E-config-detective
+      F-permission-sets
 
     MAC DINH chi "A-tao-account" - stage duy nhat gan nhu khong hoan
-    tac duoc. Nam stage con lai deu sua lai duoc bang mot lan apply.
+    tac duoc. Sau stage con lai deu sua lai duoc bang mot lan apply.
 
     ---------------------------------------------------------------
     BO CONG DUYET KHONG PHAI BO KIEM SOAT
@@ -301,8 +302,8 @@ variable "approve_stages" {
     o account dich, tuc xoa roi dung lai VPC.
 
     De ["A-tao-account","B-chia-se-tgw","C-mang-nen","D-noi-route-table",
-    "E-config-detective","F-permission-sets"] de quay lai che do duyet
-    tung buoc.
+    "E0-chinh-sach-bucket","E-config-detective","F-permission-sets"] de
+    quay lai che do duyet tung buoc.
   EOT
   type        = list(string)
   default     = ["A-tao-account"]

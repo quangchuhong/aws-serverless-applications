@@ -2,10 +2,10 @@
 # PIPELINE VENDING ACCOUNT
 #
 # Chay o ACCOUNT MANAGEMENT. Tu dong hoa nam buoc cua doc 27 thanh
-# sau stage, moi stage mot cong duyet.
+# bay stage, moi stage mot cong duyet.
 #
 # ---------------------------------------------------------------
-# VI SAO SAU STAGE CHO NAM BUOC
+# VI SAO BAY STAGE CHO NAM BUOC
 #
 # Rang buoc thu tu khong bien mat khi bo nguoi ra - no chi thoi can
 # nguoi:
@@ -14,11 +14,17 @@
 #   B  network            chia se TGW  (can account ID tu A)
 #   C  account-baseline   VPC + attachment  (can TGW da chia se tu B)
 #   D  network            noi attachment vao route table (can C)
+#   E0 config-detective   chinh sach bucket Config o log-archive
 #   E  config-detective   excluded_accounts
 #   F  permission-sets    accounts_by_scope
 #
-# A va C cung mot layer, B va D cung mot layer. Lan chay nao khong co
-# account moi thi ca sau stage deu la no-op, nen lap lai la re.
+# E0 tach khoi E vi buoc cho recorder nam GIUA hai cai: recorder can
+# chinh sach bucket, ma chinh sach do truoc day do chinh apply cua E
+# viet ra - tuc nam sau cai dang cho no. Xem loi 112.
+#
+# A va C cung mot layer, B va D cung mot layer, E0 va E cung mot
+# layer. Lan chay nao khong co account moi thi ca bay stage deu la
+# no-op, nen lap lai la re.
 #
 # ---------------------------------------------------------------
 # BACKEND CUA CHINH LAYER NAY

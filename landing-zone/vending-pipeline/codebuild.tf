@@ -1,5 +1,5 @@
 ########################################
-# HAI PROJECT CHO SAU STAGE
+# HAI PROJECT CHO BAY STAGE
 #
 # Khong phai mot project moi stage. Stage khac nhau o BA gia tri -
 # thu muc layer, khoa state, va co assume role hay khong - va
@@ -320,7 +320,7 @@ check "co_ten_stackset_recorder" {
     condition = !local.enabled || var.recorder_stack_set_name != ""
     error_message = join(" ", [
       "recorder_stack_set_name de rong, nen pipeline BO QUA buoc cho config recorder.",
-      "Stage E se chay ngay sau stage D, va mot account prod moi thuong CHUA co",
+      "Stage E se chay ngay sau stage E0, va mot account prod moi thuong CHUA co",
       "recorder o thoi diem do - org config rule se hong voi",
       "NoAvailableConfigurationRecorder, mot cau khong nhac gi toi StackSet.",
       "Lay ten: cd ../config-detective && terraform output sweep_stack_set",

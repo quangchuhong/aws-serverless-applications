@@ -142,8 +142,8 @@ approval_emails = []
 #
 # Muon quay lai duyet tung buoc:
 #   approve_stages = ["A-tao-account","B-chia-se-tgw","C-mang-nen",
-#                     "D-noi-route-table","E-config-detective",
-#                     "F-permission-sets"]
+#                     "D-noi-route-table","E0-chinh-sach-bucket",
+#                     "E-config-detective","F-permission-sets"]
 ########################################
 
 approve_stages = ["A-tao-account"]

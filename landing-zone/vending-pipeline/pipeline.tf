@@ -126,7 +126,7 @@ resource "aws_codepipeline" "vending" {
   }
 
   ####################################
-  # SAU STAGE, SINH TU local.stages
+  # BAY STAGE, SINH TU local.stages
   ####################################
   dynamic "stage" {
     for_each = { for i, s in local.stages : s.key => merge(s, { thu_tu = i }) }

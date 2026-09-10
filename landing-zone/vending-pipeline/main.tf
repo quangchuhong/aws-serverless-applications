@@ -1,5 +1,5 @@
 ########################################
-# SAU STAGE, KHAI THANH DU LIEU
+# BAY STAGE, KHAI THANH DU LIEU
 #
 # Moi stage la mot dong o day. Them mot stage la them mot dong, khong
 # phai chep mot khoi resource - va nho vay khong co chuyen hai stage
@@ -21,9 +21,13 @@ locals {
   #   C can TGW ma B vua chia se
   #   D can attachment ma C vua tao
   #
-  # E va F khong phu thuoc nhau, nhung dat sau D de mot lan chay bao
-  # "xong" nghia la moi thu da xong - khong phai "xong phan mang, con
-  # phan quyen truy cap thi tuan sau".
+  # E0 -> E cung bat buoc, va vi mot ly do khac han: E0 viet chinh
+  # sach bucket, buoc cho recorder giua hai stage cho dieu kien ma
+  # chinh sach do tao ra. Xem loi 112.
+  #
+  # F khong phu thuoc gi, nhung dat cuoi de mot lan chay bao "xong"
+  # nghia la moi thu da xong - khong phai "xong phan mang, con phan
+  # quyen truy cap thi tuan sau".
   ####################################
   stages_all = [
     {
@@ -84,6 +88,47 @@ locals {
       mo_ta         = "Noi attachment vao rtb-spokes va propagate vao rtb-security."
     },
     {
+      ####################################
+      # CHINH SACH BUCKET TRUOC, CHO RECORDER SAU
+      #
+      # LOI 112: truoc ban nay, stage E la MOT stage:
+      #
+      #   Cho_recorder  ->  plan  ->  apply
+      #
+      # Cho_recorder cho recorder o account moi ve CURRENT. Recorder
+      # do can bucket snapshot o account log-archive cho account moi
+      # ghi. Ma chinh sach bucket do lai do apply cua stage E viet ra
+      # - tuc nam SAU cai dang cho no.
+      #
+      # Vong do khong hien ra o bay account dau tien, vi chung da di
+      # qua mot luot pipeline truoc do va da nam san trong policy.
+      # No chi hien khi mot account HOAN TOAN MOI di het sau stage
+      # trong MOT lan chay - dung tinh huong ma bo hai account
+      # app-nonprod-4 / app-prod-4 duoc them de do.
+      #
+      # Tach ra thi vong bi cat: chinh sach bucket duoc viet TRUOC,
+      # roi moi cho recorder.
+      #
+      # delivery_account_ids doc TAT CA account ACTIVE cua to chuc
+      # (s3-log-archive.tf), nen stage nay khong can biet gi ve
+      # account vua tao - no chi can chay SAU stage A.
+      ####################################
+      key           = "E0-chinh-sach-bucket"
+      layer         = "landing-zone/config-detective"
+      assume        = false
+      wait          = false
+      wait_recorder = false
+
+      # CHI chinh sach bucket. Khong phai ca layer: org config rule
+      # nam trong layer nay va no se hong voi
+      # NoAvailableConfigurationRecorder - chinh cai ta dang di
+      # tranh. aws_s3_bucket.config va data source cua no duoc
+      # -target keo theo.
+      targets = ["aws_s3_bucket_policy.config"]
+
+      mo_ta = "Cho account moi ghi vao bucket Config o log-archive - PHAI truoc buoc cho recorder."
+    },
+    {
       key           = "E-config-detective"
       layer         = "landing-zone/config-detective"
       assume        = false
@@ -130,7 +175,8 @@ locals {
       # voi plan.
       # has_pre: stage co MOT action chay truoc plan - cho attachment
       # (stage D) hoac cho config recorder (stage E). Hai cai loai tru
-      # nhau trong thuc te, nen mot o run_order la du.
+      # nhau trong thuc te, nen mot o run_order la du. Stage E0 khong
+      # cho gi: no la thu TAO RA dieu kien ma stage E cho.
       has_pre  = s.wait || s.wait_recorder
       ro_wait  = 1
       ro_plan  = (s.wait || s.wait_recorder) ? 2 : 1
@@ -142,8 +188,8 @@ locals {
   # Khoa state cua tung layer, tra san de buildspec khong phai doan.
   #
   # distinct() la BAT BUOC: stages_all co account-baseline HAI LAN
-  # (stage A va C) va network HAI LAN (B va D) - do la ca thiet ke,
-  # khong phai nham. Gom truc tiep theo s.layer thi hai stage cung
+  # (stage A va C), network HAI LAN (B va D) va config-detective HAI
+  # LAN (E0 va E) - do la ca thiet ke, khong phai nham. Gom truc tiep theo s.layer thi hai stage cung
   # layer sinh trung khoa va Terraform tu choi ca file:
   #
   #   Error: Duplicate object key
