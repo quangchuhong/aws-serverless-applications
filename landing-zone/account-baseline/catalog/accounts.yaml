@@ -250,6 +250,40 @@ accounts:
     network:
       vpc_cidr: 10.24.0.0/16
 
+  # ------------------------------------------------------------
+  # PHEP DO CUOI CUNG - MOT LUOT, TU TAO ACCOUNT TOI HET
+  #
+  # app-nonprod-4 va app-prod-4 KHONG chung minh duoc dieu nay: hai
+  # cai do di qua BA luot (luot 1 tao account roi chet o stage E,
+  # luot 2 chet y het, luot 3 xanh tren hai account DA ton tai).
+  # Do van la mo hinh hai-luot.
+  #
+  # Khoi nay di mot minh, va no chi co gia tri neu lan chay dau tien
+  # sau khi them no di het bay stage. Chay lai lan hai la mat phep
+  # do - khong lay lai duoc, vi account chi tao duoc mot lan.
+  #
+  # Ba loi 111, 112, 113 deu do dung phep do nay sinh ra. Hai luot
+  # che duoc moi loi thu tu trong mot luot, vi luot thu hai luon
+  # thay the gioi ma luot thu nhat de lai.
+  #
+  # 10.25.0.0/16 la /16 CUOI CUNG cua dai Prod (10.20-10.25).
+  # Sau khoi nay, ca hai dai NonProd va Prod deu het, va account
+  # tiep theo - nonprod hay prod - deu phai mo rong bang cap phat o
+  # doc 17 muc 3 truoc khi lint.sh cho qua.
+  # ------------------------------------------------------------
+
+  - name: app-prod-5
+    email: quang.hong.0991+lz-app-prod-5@gmail.com
+    ou: Prod
+    scope: prod
+    environment: prod
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-4021
+    ticket: ACC-2026-010
+    note: Phep do mot-luot - /16 cuoi cua dai Prod
+    network:
+      vpc_cidr: 10.25.0.0/16
+
 # --------------------------------------------------------------
 # Vi du (dang tat)
 #
