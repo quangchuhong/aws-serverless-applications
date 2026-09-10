@@ -278,9 +278,22 @@ Resources:
           import json, time, urllib.request, boto3
 
           def send(event, ctx, status, data):
+              # `Reason` PHAI mang chan doan, khong phai mot loi moi doc
+              # log.
+              #
+              # CloudFormation chi hien `Reason` trong stack event, va
+              # do la thu Terraform in ra khi stack instance hong. Ban
+              # dau cho nay ghi "Xem CloudWatch log: <stream>" va nhet
+              # chan doan vao `Data` - nen nguoi doc loi nhan duoc mot
+              # loi chi dan thay vi nguyen nhan, va con phai assume role
+              # vao account dich moi doc duoc log.
+              #
+              # CFN gioi han truong nay ~1024 byte, nen cat con 900 va
+              # GIU CA `Data` cho ai muon doc day du.
+              ly_do = str(data.get('Result', status))[:900]
               body = json.dumps({
                   'Status': status,
-                  'Reason': 'Xem CloudWatch log: ' + ctx.log_stream_name,
+                  'Reason': ly_do + ' | log: ' + ctx.log_stream_name,
                   'PhysicalResourceId': ctx.log_stream_name,
                   'StackId': event['StackId'],
                   'RequestId': event['RequestId'],
