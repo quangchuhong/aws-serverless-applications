@@ -1085,3 +1085,38 @@ variable "pipeline_trusted_role_arns" {
     error_message = "Moi phan tu phai la ARN cua mot IAM role."
   }
 }
+
+variable "east_west_capacity" {
+  description = <<-EOT
+    Capacity cua rule group east-west (so rule toi da).
+
+    Rule mesh sinh theo N*(N-1)*P voi N = so spoke, P = so port trong
+    east_west_mesh_ports. Tuc no lon theo BINH PHUONG so spoke:
+
+        8 spoke, 1 port  ->  56 rule
+       10 spoke, 1 port  ->  90 rule
+       15 spoke, 1 port  -> 210 rule
+       20 spoke, 1 port  -> 380 rule
+
+    Cong them ~6 rule ha tang. Con so 100 gan cung truoc day du o 8
+    spoke va VO o 10 - apply chet giua stage B cua pipeline vending.
+
+    DOI GIA TRI NAY LA THAY THE RULE GROUP. `capacity` la thuoc tinh
+    ForceNew cua AWS. Ten rule group mang hau to "-c<capacity>" va
+    resource dat create_before_destroy, nen thay the chay duoc mà
+    khong dung firewall: tao cai moi -> policy tro sang -> xoa cai cu.
+    Nhung no VAN la mot thay the, nen dat rong rai mot lan thay vi
+    nhich dan.
+
+    Capacity KHONG bi tinh phi rieng - AWS tinh theo gio endpoint va
+    theo GB. No chi dem vao gioi han 30.000 cua ca policy. Nen rong
+    rai o day gan nhu khong ton gi.
+  EOT
+  type        = number
+  default     = 2000
+
+  validation {
+    condition     = var.east_west_capacity >= 100 && var.east_west_capacity <= 30000
+    error_message = "east_west_capacity trong khoang 100..30000 (30.000 la gioi han cua mot firewall policy)."
+  }
+}

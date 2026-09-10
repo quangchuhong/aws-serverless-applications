@@ -75,6 +75,37 @@ locals {
   # thay the moi lan plan, va o STRICT_ORDER thi thu tu con doi ca y
   # nghia. Cung ho voi loi 39.
   mesh_cidrs = sort([for k, v in local.spokes_all : v.cidr])
+
+  ####################################
+  # SID CUA MESH: CHI SO PHANG
+  #
+  # Cong thuc cu la `1700 + pi*100 + i*10 + j` - dong goi ba chi so
+  # vao mot so thap phan. No chi dung khi co TOI DA 10 spoke: o spoke
+  # thu 11, i = 10 cho 1700 + 100 + 0 = 1800, trung sid cua rule
+  # "INFRA nlb to app". Network Firewall khong nhan sid trung.
+  #
+  # Mot gioi han im lang o con so 10, trong mot he thong sinh ra de
+  # them account. Chi so phang thi khong co ranh gioi nao ca.
+  #
+  # Base 10000 de cach xa moi dai dang dung: 1000+ (east_west_rules),
+  # 1800-1820 (ha tang), 1900/1999 (icmp va log).
+  ####################################
+  ew_mesh_pairs = flatten([
+    for port in var.east_west_mesh_ports : [
+      for a in local.mesh_cidrs : [
+        for b in local.mesh_cidrs :
+        { a = a, b = b, port = port } if a != b
+      ]
+    ]
+  ])
+
+  ew_mesh_rules = [
+    for idx, m in local.ew_mesh_pairs :
+    format(
+      "pass tcp %s any -> %s %d (msg:\"MESH %s to %s\"; sid:%d; rev:1;)",
+      m.a, m.b, m.port, m.a, m.b, 10000 + idx
+    )
+  ]
 }
 
 resource "aws_networkfirewall_firewall_policy" "main" {
@@ -144,9 +175,39 @@ check "ops_rule_groups_are_attached" {
 resource "aws_networkfirewall_rule_group" "east_west" {
   count = local.fw
 
-  capacity = 100
-  name     = "${var.project}-east-west"
+  ####################################
+  # CAPACITY TU BIEN, VA TEN MANG CAPACITY
+  #
+  # Truoc day capacity = 100 gan cung. No du o 8 spoke (56 rule mesh)
+  # va VO o 10 spoke (90 rule): apply chet giua stage B cua pipeline
+  # voi
+  #
+  #   InvalidRequestException: StatefulRules capacity exceeded,
+  #   parameter: [116]
+  #
+  # Rule mesh la N*(N-1)*P, nen no lon theo BINH PHUONG so spoke. Mot
+  # con so gan cung o day la mot buc tuong khong ai thay cho toi khi
+  # dam vao no - va cho dam la mot lan them account.
+  #
+  # TEN MANG CAPACITY co chu dich. `capacity` la thuoc tinh ForceNew:
+  # doi no la thay the rule group. Va thay the mot rule group DANG
+  # duoc policy tham chieu, voi ten khong doi, thi Terraform phai xoa
+  # truoc khi tao - AWS tu choi xoa mot rule group dang duoc dung, va
+  # apply be tac.
+  #
+  # Ten khac nhau + create_before_destroy thi thu tu thanh: tao rule
+  # group moi -> policy tro sang ARN moi -> xoa cai cu. Chay duoc.
+  #
+  # Doi lai: ten co hau to. Do la gia phai tra de doi capacity duoc
+  # ma khong phai dung firewall.
+  ####################################
+  capacity = var.east_west_capacity
+  name     = "${var.project}-east-west-c${var.east_west_capacity}"
   type     = "STATEFUL"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   rule_group {
     stateful_rule_options {
@@ -215,17 +276,7 @@ resource "aws_networkfirewall_rule_group" "east_west" {
         #
         # sid bat dau tu 1700 de khong dam vao dai cua east_west_rules
         # (1000+) hay ha tang (1800+).
-        flatten([
-          for pi, port in var.east_west_mesh_ports : [
-            for i, a in local.mesh_cidrs : [
-              for j, b in local.mesh_cidrs :
-              format(
-                "pass tcp %s any -> %s %d (msg:\"MESH %s to %s\"; sid:%d; rev:1;)",
-                a, b, port, a, b, 1700 + pi * 100 + i * 10 + j
-              ) if i != j
-            ]
-          ]
-        ]),
+        local.ew_mesh_rules,
 
         [
           # ICMP noi bo de troubleshoot
@@ -376,4 +427,28 @@ resource "aws_networkfirewall_logging_configuration" "main" {
   }
 
   depends_on = [aws_s3_bucket_policy.fw_logs]
+}
+
+########################################
+# Capacity con du cho bao nhieu spoke nua
+#
+# Canh bao SOM, khong doi toi luc vo. Vo capacity nghia la apply chet
+# giua chung - va voi pipeline vending thi no chet o stage B, sau khi
+# account da duoc tao va truoc khi mang duoc dung.
+########################################
+check "east_west_capacity_con_du" {
+  assert {
+    condition = (
+      local.fw == 0
+      || length(local.ew_mesh_rules) + 10 <= var.east_west_capacity * 7 / 10
+    )
+    error_message = join(" ", [
+      "Rule group east-west dang dung",
+      "${length(local.ew_mesh_rules)} rule mesh tren capacity ${var.east_west_capacity}",
+      "(${length(local.mesh_cidrs)} spoke, ${length(var.east_west_mesh_ports)} port).",
+      "Rule mesh lon theo BINH PHUONG so spoke, nen khoang trong con lai",
+      "it hon ve so account nhieu hon ban tuong.",
+      "Nang east_west_capacity - va nho rang doi no la THAY THE rule group.",
+    ])
+  }
 }

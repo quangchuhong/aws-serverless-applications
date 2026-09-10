@@ -3270,6 +3270,46 @@ Chữa: sau một apply có `-target`, chạy thêm `terraform apply -refresh-on
 
 ---
 
+### Lỗi 107 — hai bức tường ẩn trong rule east-west, cả hai lớn theo số account
+
+Bản vá lỗi 106 chạy đúng: stage B tạo được hai `aws_ram_principal_association` còn thiếu. Rồi apply chết ở dòng tiếp theo:
+
+```
+InvalidRequestException: StatefulRules capacity exceeded, parameter: [116]
+  with aws_networkfirewall_rule_group.east_west[0]
+```
+
+**Bức tường thứ nhất: `capacity = 100` gán cứng.** Rule mesh sinh theo `N×(N−1)×P` — bình phương số spoke:
+
+| Spoke | Rule mesh (1 port) |
+|---|---|
+| 8 | 56 |
+| 10 | **90** |
+| 15 | 210 |
+| 20 | 380 |
+
+Cộng ~6 rule hạ tầng. Con số 100 vừa đủ ở 8 spoke và vỡ ở 10. Nó sống sót nhiều tháng vì hệ thống chưa bao giờ vượt 8 — và thứ làm nó vượt chính là cái pipeline sinh ra để thêm account dễ dàng hơn.
+
+**Bức tường thứ hai, chưa ai chạm: sid của mesh.** Công thức cũ đóng gói ba chỉ số vào một số thập phân:
+
+```hcl
+sid: 1700 + pi * 100 + i * 10 + j
+```
+
+`i*10 + j` chỉ nằm gọn khi có **tối đa 10** spoke. Ở spoke thứ 11, `i = 10` cho `1700 + 100 + 0 = 1800` — đúng sid của `INFRA nlb to app`. Network Firewall không nhận sid trùng.
+
+Nghĩa là kể cả khi nâng capacity, hệ thống vẫn sẽ vỡ ở account tiếp theo, vì một lý do hoàn toàn khác và một thông báo hoàn toàn khác. Hai bức tường cách nhau đúng một account.
+
+Chữa:
+- `capacity` thành biến, mặc định 2000. Capacity **không** bị tính phí riêng (AWS tính theo giờ endpoint và theo GB) nên rộng rãi gần như không tốn gì.
+- Tên rule group mang hậu tố `-c<capacity>` kèm `create_before_destroy`. `capacity` là thuộc tính ForceNew, và thay thế một rule group **đang được policy tham chiếu** với tên không đổi thì Terraform phải xoá trước khi tạo — AWS từ chối xoá rule group đang dùng, và apply bế tắc. Tên khác nhau thì thứ tự thành: tạo mới → policy trỏ sang → xoá cũ.
+- Sid mesh dùng **chỉ số phẳng** từ base 10000, không đóng gói thập phân.
+- Thêm `check` cảnh báo khi rule vượt 70% capacity, thay vì đợi tới lúc vỡ.
+
+**Dạng lỗi:** một hằng số hợp lý khi viết, trở thành giới hạn cứng khi hệ thống lớn lên — và cái làm nó lớn lên chính là công cụ ta vừa xây để nó lớn lên dễ hơn. Hai bức tường ở 10 và 11 spoke cho thấy điều đáng lo hơn: chúng không nằm trong tài liệu, không có phép đo nào theo dõi, và chỉ lộ ra bằng cách đâm vào.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
