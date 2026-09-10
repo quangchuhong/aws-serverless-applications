@@ -3241,12 +3241,19 @@ Kiểm từ trong account đích: **không lời mời RAM, không TGW, không D
 
 Ngược lên stage B: `KHONG CO THAY DOI`, và refresh chỉ thấy 9 `aws_ram_principal_association` cũ. Nhưng đọc state ở máy thì `vending_handles.tgw_share` có đủ **6** account, kể cả hai cái mới. Hai dữ kiện mâu thuẫn nhau, và chỗ mâu thuẫn chính là nguyên nhân.
 
-Giải thích duy nhất khớp cả hai: **`terraform apply <file plan>` chỉ thực hiện đúng plan đã lưu, và với `-target` Terraform loại output khỏi plan.** Nên stage A tạo hai account rồi ghi state với resource **mới** và output **cũ**. Giá trị 6 mà ta đọc được do stage C Apply ghi — nó apply cả layer nên tính lại mọi output, nhưng lúc đó B đã plan xong từ lâu.
+Giải thích duy nhất khớp cả hai: **`terraform apply <file plan>` chỉ thực hiện đúng plan đã lưu, và với `-target` Terraform loại output khỏi plan.** Nên stage A tạo hai account rồi ghi state với resource **mới** và output **cũ**. Đo trên chính bản state mà A ghi (S3 versioning, bản `08:42:22Z`):
+
+```
+accounts : 5  ['app-nonprod-2','app-payments-prod','app-prod-2','app-uat','sandbox-thu-nghiem']
+tgw_share: 4
+```
+
+`app-nonprod-3` và `app-prod-3` không xuất hiện ở đâu cả — output không được tính lại chút nào, chứ không phải cập nhật một phần. Giá trị 6 mà ta đọc được do stage C Apply ghi — nó apply cả layer nên tính lại mọi output, nhưng lúc đó B đã plan xong từ lâu.
 
 Chuỗi nhân quả dài ba stage:
 
 ```
-A apply -target  →  state: 7 account, tgw_share van 4
+A apply -target  →  state: 7 resource account, output van la 5/4 cu
 B doc state      →  thay 4, khong co gi de share  →  "KHONG CO THAY DOI"
 C dung stack     →  NhanRam cho loi moi chua ai gui  →  het gio
 ```
