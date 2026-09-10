@@ -3609,6 +3609,41 @@ for_each = {
 
 ---
 
+### Kết quả của 111–113, và điều vẫn chưa chứng minh được
+
+Sau ba bản vá, pipeline chạy hết bảy stage. Đo lại:
+
+```
+pipeline.stages[].name
+  Nguon  Lint  A_tao_account  B_chia_se_tgw  C_mang_nen
+  D_noi_route_table  E0_chinh_sach_bucket  E_config_detective  F_permission_sets
+                     ^^^ dung giua D va E - loi 113 da an
+
+list-stack-instances
+  302805792678  CURRENT      ← truoc do OUTDATED suot hai luot
+  ...           CURRENT      (8/8)
+```
+
+Chuỗi nhân quả đóng kín: E0 ghi bucket policy → `DeliveryChannel` ổn định → recorder `CURRENT` → E và F chạy tiếp. Chẩn đoán lỗi 112 đúng, và được nghiệm thu bằng phép đo chứ không bằng việc "chạy xanh".
+
+**Nhưng mệnh đề ban đầu vẫn chưa được chứng minh.** Hai account mới đi qua ba lượt:
+
+```
+Luot 1   A TAO hai account   → B → C → D → E hong
+Luot 2   A khong tao gi      → B → C → D → E hong
+Luot 3   A khong tao gi      → B → C → D → E0 → E → F  xanh
+```
+
+Không lượt nào đi từ *tạo account* tới hết. Lượt xanh chạy trên hai account **đã tồn tại sẵn** — tức vẫn đúng mô hình hai-lượt mà phép đo này được dựng ra để thoát khỏi.
+
+Điều đó không làm ba bản vá mất giá trị: chúng có thật, và stage B–F đều chạy sạch. Nhưng nó đáng ghi rõ, vì đây chính xác là loại kết luận mà một bản ghi cẩu thả sẽ viết thành *"đã chứng minh pipeline làm trọn vẹn trong một lượt"* — và câu đó sai.
+
+Phần còn thiếu bây giờ rất hẹp: chỉ còn câu hỏi *stage A tạo account xong thì B trở đi có chạy liền được trong cùng lượt không*. Ba lỗi vừa sửa đều nằm ở nhánh E, không nằm ở nhánh A→B. Rủi ro còn lại nhỏ — nhưng không bằng không, và chính lỗi 112 là loại chỉ hiện ra trong một-lượt.
+
+**Điều đáng giữ lại:** ba lỗi (111, 112, 113) đều được sinh ra bởi cùng một quyết định — bắt hệ thống làm **một lần** thay vì hai. Hai lượt che được mọi lỗi thứ tự trong một lượt, vì lượt thứ hai luôn thấy thế giới mà lượt thứ nhất để lại. Một quy trình chỉ đúng khi chạy hai lần không phải quy trình tự động; nó là quy trình thủ công có máy làm hộ, và cách duy nhất để biết là thử làm một lần.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
