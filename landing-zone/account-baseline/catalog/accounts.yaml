@@ -173,6 +173,30 @@ accounts:
     network:
       vpc_cidr: 10.22.0.0/16
 
+  - name: app-nonprod-3
+    email: quang.hong.0991+lz-app-nonprod-3@gmail.com
+    ou: NonProd
+    scope: nonprod
+    environment: dev
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-1042
+    ticket: ACC-2026-006
+    note: Test luong vending tu dau - khong co buoc tay nao
+    network:
+      vpc_cidr: 10.14.0.0/16
+
+  - name: app-prod-3
+    email: quang.hong.0991+lz-app-prod-3@gmail.com
+    ou: Prod
+    scope: prod
+    environment: prod
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-4021
+    ticket: ACC-2026-007
+    note: Test luong vending tu dau - khong co buoc tay nao
+    network:
+      vpc_cidr: 10.23.0.0/16
+
 # --------------------------------------------------------------
 # Vi du (dang tat)
 #
