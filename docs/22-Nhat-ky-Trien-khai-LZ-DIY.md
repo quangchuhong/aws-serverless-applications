@@ -3310,6 +3310,42 @@ Chữa:
 
 ---
 
+### Lỗi 108 — vòng phụ thuộc về thời điểm giữa recorder và bucket policy
+
+Stage E hỏng: org config rule không áp được vì hai account prod mới không có configuration recorder.
+
+```
+Account ID (353007002364): NoAvailableConfigurationRecorder
+Account ID (687259232009): NoAvailableConfigurationRecorder
+```
+
+`list-stack-instances` của StackSet recorder cho thấy cả hai ở `OUTDATED`:
+
+```
+ResourceLogicalId:DeliveryChannel  →  "Exceeded attempts to wait"  (NotStabilized)
+```
+
+Recorder **đã** được triển khai — và hỏng ở `DeliveryChannel`, tức nó không ghi được vào bucket snapshot ở account log-archive.
+
+Vòng phụ thuộc:
+
+```
+stage A tạo account  →  StackSet recorder TỰ triển khai ngay
+                        bucket policy chưa có account này → DeliveryChannel hỏng
+stage E cập nhật bucket policy  →  giờ mới đủ, nhưng recorder đã hỏng
+                        và StackSet không tự thử lại
+```
+
+Bucket policy phải liệt kê **từng account** qua `AWS:SourceAccount`: Config gọi S3 với tư cách dịch vụ, và `SourceOrgID` không được điền cho luồng gọi này — điều đã ghi sẵn trong `config-detective/s3-log-archive.tf` từ trước, kèm câu *"thêm account mới thì PHẢI apply lại layer này"*. Cảnh báo đúng; chỉ là không ai nối nó với việc tự động hoá.
+
+Vòng này **không sắp xếp lại được**, vì thứ thiết lập điều kiện (bucket policy) và thứ cần điều kiện (recorder) nằm ở hai cơ chế khác nhau, một của Terraform và một của StackSet auto-deployment.
+
+Chữa: action `Cho_recorder` trước plan của stage E — cùng khuôn với `NhanRam`. Đọc `list-stack-instances`, gọi `update-stack-instances` cho đúng những account chưa `CURRENT` (gom theo OU, `AccountFilterType=INTERSECTION`), rồi **chờ tới khi tất cả `CURRENT`**. Thử lại một lần; hỏng lần hai là nguyên nhân khác và lặp mãi chỉ làm mờ nó.
+
+**Dạng lỗi:** giống hệt lời mời RAM (lỗi 105) — một điều kiện tiên quyết **bất đồng bộ**, thiết lập muộn hơn thứ cần nó, và triệu chứng hiện ra ở một dịch vụ khác với một thông báo không nhắc gì tới nguyên nhân. Cả hai đều được chữa bằng cùng một khuôn: **hành động, rồi kiểm điều kiện thật** — không tin rằng hành động đã đủ.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
