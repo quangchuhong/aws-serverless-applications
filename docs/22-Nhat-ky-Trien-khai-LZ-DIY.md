@@ -3512,6 +3512,18 @@ HET GIO sau 15 phut.
 
 Action `Cho_recorder` — chính là bản vá của lỗi 108 — hết giờ. Nó thử lại một lần, operation chạy xong, và instance vẫn `OUTDATED`.
 
+Bốn phép đo, theo thứ tự chúng được chạy:
+
+```
+StatusReason   DeliveryChannel  "Exceeded attempts to wait"  (NotStabilized)
+bucket         SSE-S3, khong KMS  → khong co key policy nao la nghi pham thu hai
+lich su chay   E_config_detective|Apply|Succeeded lan cuoi khi app-prod-4
+               CHUA ton tai; tu do toi nay ca hai luot deu chet o Cho_recorder
+bucket policy  grep -c 302805792678  →  0
+```
+
+Mảnh thứ ba là mảnh quyết định: stage E apply là **thứ duy nhất** ghi bucket policy, và nó chưa chạy lần nào kể từ khi account ra đời. Mảnh thứ tư chỉ để đóng lại mọi nghi ngờ còn sót.
+
 Nguyên nhân không nằm trong log. Nó nằm trong thứ tự:
 
 ```
@@ -3536,6 +3548,24 @@ D  ->  E0 (chinh sach bucket, -target)  ->  Cho_recorder  ->  E (ca layer)  ->  
 ```
 
 `E0` chỉ `-target=aws_s3_bucket_policy.config`. Cố ý không apply cả layer: org config rule nằm trong chính layer đó và sẽ hỏng với `NoAvailableConfigurationRecorder` — đúng cái đang tránh. Và vì `delivery_account_ids` đọc mọi account ACTIVE, `E0` không cần biết gì về account vừa tạo; nó chỉ cần chạy **sau** stage A.
+
+#### Hai lần suýt đi chệch, đáng ghi hơn cả bản sửa
+
+**Một.** Hai account mới được tạo, nhưng chỉ **một** kẹt. Tôi lấy đó làm bằng chứng chống lại chính giả thuyết của mình: nếu bucket policy là nguyên nhân, cả hai phải kẹt như nhau. Lập luận nghe chặt và **sai** — `list-stack-instances` cho thấy `791359099343` (app-nonprod-4) *không có trong StackSet*, vì `recorder_target_ous` chỉ phủ Prod và hạ tầng. Con số 1 không mâu thuẫn với gì cả; nó chỉ nói một trong hai account nằm ngoài phạm vi.
+
+Bài học không phải "đừng nghi ngờ giả thuyết của mình" — mà là **một suy luận bác bỏ cũng cần được đo như một suy luận khẳng định**. Tôi đã suýt bỏ một chẩn đoán đúng vì một phép trừ trong đầu.
+
+**Hai.** Sau khi thêm stage E0, lượt chạy tiếp theo vẫn hỏng y hệt. Trong khoảnh khắc đó nó đọc như bằng chứng bản sửa vô dụng. `list-action-executions` nói khác:
+
+```
+E_config_detective | Cho_recorder | Failed
+D_noi_route_table  | Apply        | Succeeded
+...                                            ← khong co E0_chinh_sach_bucket
+```
+
+Stage E0 **chưa từng chạy**. Layer `vending-pipeline` là thứ định nghĩa các stage, nên sửa `main.tf` rồi push code là chưa đủ — phải `terraform apply` chính layer đó thì CodePipeline mới có stage mới. Lượt hai chạy lại đúng pipeline cũ, và nó không phủ định gì hết.
+
+Cả hai lần đều là cùng một dạng: **một quan sát được đọc thành bằng chứng cho một mệnh đề mà nó không nói tới**. Giống hệt lỗi 110, chỉ khác là ở đây cái đọc sai là tôi chứ không phải một đoạn script.
 
 **Dạng lỗi:** một cơ chế chờ đặt sai phía của thứ nó chờ. Nhìn từ trong log thì không phân biệt được với "AWS chậm" — cùng một dòng lặp lại, cùng một trạng thái `OUTDATED`, và tăng `wait_recorder_minutes` sẽ không bao giờ cứu được. Chẩn đoán chỉ đến từ việc đọc xem **ai viết ra** điều kiện đang được chờ. Bài học lặp lại từ lỗi 108, giờ ở cấp cao hơn một bậc: *hành động rồi kiểm điều kiện thật* vẫn chưa đủ — còn phải hỏi thứ tạo ra điều kiện đó có được phép chạy trước hay không.
 
