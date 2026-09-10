@@ -3454,6 +3454,47 @@ Chữa hai phần:
 
 ---
 
+### Lỗi 111 — thứ mà phép kiểm hỏng đã che, hiện ra ngay khi nó chịu nhìn
+
+Sửa xong lỗi 110, `verify.sh` chạy lại. Mục 6 và mục 9 xanh, và mục 6b — cái vừa được dạy cách đếm — báo:
+
+```
+6b. Tag chi phi da gan day du chua
+  ✗ 6/104 resource THIEU tag CostCenter
+      arn:...:cloudwatch:...:alarm:quh11-net-partner-vpn-mat-du-phong
+      arn:...:network-firewall:...:stateful-rulegroup/quh11-net-ops-east-west
+      arn:...:ec2:...:security-group-rule/sgr-090447cfb1a825945
+      arn:...:elasticloadbalancing:...:targetgroup/quh11-net-p-sim-api-80
+      arn:...:cloudwatch:...:alarm:quh11-net-partner-vpn-DUT
+```
+
+Sáu resource, **một** nguyên nhân, và cả sáu đều thuộc layer `ops/`. `ops/versions.tf` khai `default_tags` **riêng**:
+
+```hcl
+default_tags {
+  tags = {
+    Project   = local.hub.project
+    ManagedBy = "terraform"
+    Repo      = "...network/ops"
+    Layer     = "network-ops"
+  }                              # ← khong co CostCenter
+}
+```
+
+Layer cha có `CostCenter` (`versions.tf`), layer con thì không. Không có gì nối hai bộ tag ấy với nhau, và không có gì bắt buộc chúng giống nhau — hai `provider "aws"` ở hai thư mục là hai khai báo độc lập.
+
+Hậu quả không phải là hạ tầng hỏng. Là ba mục chi phí — alarm VPN đối tác, rule group firewall, target group dịch vụ đối tác — rơi vào nhóm `No CostCenter` trong Cost Explorer, tức **không quy được về đâu**. Tiền vẫn tính, chỉ là không ai nhận.
+
+Chữa: truyền `cost_center` / `owner` / `environment` qua output `ops_handles` của layer cha, và `ops/` merge chúng vào `default_tags`. Không khai lại ở `ops/terraform.tfvars` — hai nơi gõ tay cùng một giá trị thì một ngày nào đó chúng lệch, và **không có gì báo cả**: số liệu chi phí vẫn hiện bình thường, chỉ là chia nhầm cột. Một sai số im lặng thì tệ hơn một lỗi.
+
+Một quyết định nhỏ nhưng đáng ghi: khi layer cha chưa apply lại, `try()` trả `{}` và tag **biến mất hẳn** — chứ không phải `CostCenter = ""`.
+
+Chuỗi rỗng nghe vô hại hơn, và tệ hơn hẳn. Với `resourcegroupstaggingapi`, một tag giá trị rỗng vẫn là một tag **có mặt**, nên mục 6b sẽ báo **đạt**. Tức lựa chọn "an toàn" ấy sẽ làm im đúng cái phép kiểm vừa được sửa để phát hiện chuyện này, và bịt lại lỗi 110 lần thứ hai — lần này bằng chính tay người đi vá nó. Tag thiếu thì ồn ào và được sửa; tag rỗng thì yên lặng và sống mãi.
+
+**Dạng lỗi:** hai lớp cấu hình cùng mô tả một chính sách, không lớp nào biết lớp kia. Nhưng điều đáng nhớ hơn nằm ở thứ tự thời gian: khuyết điểm này **có sẵn từ ngày `ops/` ra đời**, và mục 6b lẽ ra phải bắt được ngay hôm đó. Nó không bắt, vì bản thân nó đang lọc theo một tag không tồn tại và đọc kết quả rỗng thành "mọi thứ đều ổn". Lỗi 110 không chỉ là một phép kiểm sai — nó là **lý do lỗi 111 sống được lâu đến vậy**. Một phép kiểm hỏng không phải là mất một phép kiểm; nó là một khoảng mù có người canh gác, và người ta thôi nhìn vào đó.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

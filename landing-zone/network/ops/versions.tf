@@ -114,15 +114,57 @@ provider "aws" {
   profile = var.aws_profile != "" ? var.aws_profile : null
 
   default_tags {
-    tags = {
-      Project   = local.hub.project
-      ManagedBy = "terraform"
-      Repo      = "aws-serverless-applications/landing-zone/network/ops"
+    tags = merge(
+      {
+        Project   = local.hub.project
+        ManagedBy = "terraform"
+        Repo      = "aws-serverless-applications/landing-zone/network/ops"
 
-      # Phan biet voi resource cua layer cha khi doc Cost Explorer hay
-      # khi quet tag luc go bo.
-      Layer = "network-ops"
-    }
+        # Phan biet voi resource cua layer cha khi doc Cost Explorer hay
+        # khi quet tag luc go bo.
+        Layer = "network-ops"
+      },
+
+      ####################################
+      # TAG CHI PHI - LAY TU LAYER CHA
+      #
+      # LOI 111: khoi nay truoc day khong co CostCenter. Sau resource
+      # cua ops/ - hai alarm VPN, rule group east-west, SG ingress
+      # rule, target group va listener cua dich vu doi tac - deu ra
+      # Cost Explorer o nhom "No CostCenter".
+      #
+      # Doc tu local.hub chu khong khai lai o ops/terraform.tfvars:
+      # hai noi go tay cung mot gia tri thi mot ngay nao do chung se
+      # lech, va khong co gi bao - so lieu van hien binh thuong, chi
+      # la chia nham cot.
+      #
+      # THIEU THI BO HAN TAG, khong dat chuoi rong. Layer cha chua
+      # apply lai ke tu khi them ba truong nay thi try() tra {} va
+      # resource ra doi KHONG mang CostCenter - va muc 6b cua
+      # verify.sh se bat duoc.
+      #
+      # Dat "" thi nguoc lai: tag CO MAT voi gia tri vo dung, 6b bao
+      # dat, va khong con ai phat hien. Mot tag rong te hon mot tag
+      # thieu, vi no lam im phep kiem duy nhat nhin vao no.
+      ####################################
+      try({
+        CostCenter  = local.hub.cost_center
+        Owner       = local.hub.owner
+        Environment = local.hub.environment
+      }, {}),
+    )
+  }
+}
+
+check "tag_chi_phi_lay_duoc_tu_layer_cha" {
+  assert {
+    condition = can(local.hub.cost_center)
+    error_message = join(" ", [
+      "Layer cha chua co truong cost_center trong output ops_handles, nen resource cua ops/",
+      "se ra doi KHONG mang tag CostCenter va khong quy duoc chi phi ve dau.",
+      "Sua: apply layer cha mot lan (chi doi Outputs, 0 changed), roi apply lai ops/.",
+      "  cd .. && terraform apply && cd ops && terraform apply",
+    ])
   }
 }
 

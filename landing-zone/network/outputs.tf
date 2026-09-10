@@ -413,6 +413,22 @@ output "ops_handles" {
     security_vpc_cidr = var.security_vpc_cidr
     ingress_vpc_cidr  = var.ingress_vpc_cidr
 
+    # TAG CHI PHI - de ops/ dat CUNG bo tag, khong go lai.
+    #
+    # LOI 111: default_tags cua ops/ tung chi co Project/ManagedBy/
+    # Repo/Layer. Sau resource cua ops/ - hai alarm VPN, rule group,
+    # SG rule, target group, listener - ra Cost Explorer o nhom "No
+    # CostCenter", tuc ba muc chi phi doi tac va firewall khong quy
+    # duoc ve dau.
+    #
+    # Truyen qua day chu khong khai lai ben ops/: hai noi go tay cung
+    # mot gia tri thi mot ngay nao do chung se lech, va khong co gi
+    # bao ca - so lieu chi phi cu the hien binh thuong, chi la chia
+    # nham cot.
+    cost_center = var.cost_center
+    owner       = var.owner
+    environment = var.environment
+
     firewall = {
       enabled = var.enable_firewall
       mode    = var.firewall_mode
