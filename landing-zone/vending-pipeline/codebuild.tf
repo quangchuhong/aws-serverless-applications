@@ -225,3 +225,107 @@ resource "aws_codebuild_project" "lint" {
     buildspec = file("${path.module}/templates/buildspec-lint.yml")
   }
 }
+
+########################################
+# CHO CONFIG RECORDER - truoc stage E
+#
+# Stage E khai org config rule, va rule do hong neu MOT account trong
+# pham vi khong co configuration recorder. Recorder do StackSet cua
+# layer config-detective tu trien khai khi account vao OU - nhung lan
+# dau no hong, vi bucket snapshot o account log-archive chua cho
+# account moi ghi. Bucket policy do lai chi day du sau khi chinh
+# stage E apply.
+#
+# Vong phu thuoc do khong sap xep lai duoc; no phai duoc CHUA. Action
+# nay thu lai mot lan roi cho toi khi moi instance o CURRENT.
+########################################
+
+resource "aws_codebuild_project" "cho_recorder" {
+  count = local.enabled && var.recorder_stack_set_name != "" ? 1 : 0
+
+  name          = "${local.name}-cho-recorder"
+  description   = "Cho config recorder toi account moi truoc stage E"
+  service_role  = aws_iam_role.codebuild[0].arn
+  build_timeout = var.wait_recorder_minutes + 5
+
+  artifacts { type = "CODEPIPELINE" }
+
+  environment {
+    compute_type = "BUILD_GENERAL1_SMALL"
+    image        = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
+    type         = "LINUX_CONTAINER"
+
+    environment_variable {
+      name  = "RECORDER_STACK_SET"
+      value = var.recorder_stack_set_name
+    }
+    environment_variable {
+      name  = "WAIT_MINUTES"
+      value = tostring(var.wait_recorder_minutes)
+    }
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = aws_cloudwatch_log_group.build[0].name
+    }
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = file("${path.module}/templates/buildspec-cho-recorder.yml")
+  }
+}
+
+variable "recorder_stack_set_name" {
+  description = <<-EOT
+    Ten StackSet trien khai config recorder, o layer
+    landing-zone/config-detective.
+
+      cd ../config-detective && terraform output sweep_stack_set
+      # hoac: aws cloudformation list-stack-sets --region <r> --call-as SELF \
+      #         --query 'Summaries[].StackSetName' --output text
+
+    Thuong la "<project cua config-detective>-config-recorder". LUU Y
+    project cua layer do co the KHAC project cua layer nay.
+
+    DE RONG = bo action cho. Stage E se chay ngay, va mot account prod
+    moi chua co recorder se lam ca org config rule hong voi
+    NoAvailableConfigurationRecorder - mot cau khong nhac gi toi
+    StackSet.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "wait_recorder_minutes" {
+  description = <<-EOT
+    Cho toi da bao lau de moi stack instance cua StackSet recorder ve
+    CURRENT.
+
+    DeliveryChannel mat khoang 4-5 phut de on dinh, va action nay co
+    the phai thu lai mot lan - nen 15 la de co bien cho hai luot.
+  EOT
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.wait_recorder_minutes >= 5 && var.wait_recorder_minutes <= 60
+    error_message = "wait_recorder_minutes trong khoang 5..60."
+  }
+}
+
+check "co_ten_stackset_recorder" {
+  assert {
+    condition = !local.enabled || var.recorder_stack_set_name != ""
+    error_message = join(" ", [
+      "recorder_stack_set_name de rong, nen pipeline BO QUA buoc cho config recorder.",
+      "Stage E se chay ngay sau stage D, va mot account prod moi thuong CHUA co",
+      "recorder o thoi diem do - org config rule se hong voi",
+      "NoAvailableConfigurationRecorder, mot cau khong nhac gi toi StackSet.",
+      "Lay ten: cd ../config-detective && terraform output sweep_stack_set",
+      "Day la mot lua chon hop le neu ban chap nhan mot buoc tay moi lan them",
+      "account prod - nhung phai la lua chon.",
+    ])
+  }
+}

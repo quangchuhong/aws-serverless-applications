@@ -1,0 +1,162 @@
+version: 0.2
+
+# ==============================================================
+# CHO CONFIG RECORDER TOI ACCOUNT MOI - VA THU LAI KHI HONG
+#
+# Stage E khai org config rule. Rule do ap len moi account KHONG nam
+# trong excluded_accounts, va account nao khong co configuration
+# recorder se lam ca rule hong:
+#
+#   InternalError: One or more member accounts failed to process
+#   your request
+#   Account ID (353007002364): NoAvailableConfigurationRecorder
+#
+# Cau do khong nhac gi toi StackSet, va nguyen nhan that nam o mot
+# thu tu khong ai dieu khien duoc:
+#
+#   stage A tao account  -> StackSet recorder TU trien khai NGAY
+#                           DeliveryChannel hong: bucket policy o
+#                           account log-archive chua co account nay
+#   stage E cap nhat bucket policy -> gio moi du, nhung recorder da
+#                           hong va khong tu thu lai
+#
+# Bucket policy phai liet ke tung account (AWS:SourceAccount) chu
+# khong dung duoc dieu kien to chuc - xem chu thich o
+# config-detective/s3-log-archive.tf. Nen vong lap nay khong tranh
+# duoc bang cach sap xep lai; no phai duoc CHUA.
+#
+# ---------------------------------------------------------------
+# CUNG KHUON VOI NhanRam
+#
+# Hanh dong, roi kiem DIEU KIEN THAT - khong tin rang hanh dong da
+# du. Diem dung la "moi stack instance o CURRENT", khong phai "da goi
+# update-stack-instances".
+#
+# Thu lai MOT lan. Hong lan hai la mot nguyen nhan khac, va lap lai
+# mai chi lam mo nguyen nhan do.
+# ==============================================================
+
+phases:
+  build:
+    commands:
+      - |
+        set -euo pipefail
+
+        if [ -z "${RECORDER_STACK_SET:-}" ]; then
+          echo "SKIP: RECORDER_STACK_SET de rong."
+          echo "      Stage E se chay ngay, va neu mot account prod moi chua co"
+          echo "      recorder thi org config rule se hong voi"
+          echo "      NoAvailableConfigurationRecorder."
+          exit 0
+        fi
+
+        echo "== StackSet: ${RECORDER_STACK_SET}"
+        HAN=$(( $(date +%s) + ${WAIT_MINUTES} * 60 ))
+        DA_THU="no"
+
+        while :; do
+          # ------------------------------------------------------
+          # Instance nao CHUA o CURRENT.
+          #
+          # Lay ca OrganizationalUnitId: update-stack-instances tren
+          # stack set SERVICE_MANAGED doi --deployment-targets, va
+          # deployment-targets doi OU. Khong doc duoc OU tu dau khac
+          # ma khong hoi nguoi - nhung chinh ban ghi instance co no.
+          # ------------------------------------------------------
+          set +e
+          ERR=$(aws cloudformation list-stack-instances \
+                  --region "${AWS_REGION}" --call-as SELF \
+                  --stack-set-name "${RECORDER_STACK_SET}" \
+                  --query 'length(Summaries)' --output text 2>&1 >/dev/null)
+          RC=$?
+          set -e
+
+          if [ "$RC" -ne 0 ]; then
+            echo "LOI: khong doc duoc stack instance cua ${RECORDER_STACK_SET}."
+            echo ""
+            echo "AWS tra ve:"
+            echo "  $ERR"
+            echo ""
+            echo "Hai nguyen nhan: ten stack set sai, hoac role CodeBuild thieu"
+            echo "cloudformation:ListStackInstances."
+            exit 1
+          fi
+
+          # --query thay vi python nhung: mot doan python nhieu dong
+          # trong block scalar `- |` phai thut sau hon block, va Python
+          # thi tu choi chinh cai thut do. Hai rang buoc nguoc nhau -
+          # nen dung JMESPath, no lam duoc viec nay.
+          CHUA=$(aws cloudformation list-stack-instances \
+                   --region "${AWS_REGION}" --call-as SELF \
+                   --stack-set-name "${RECORDER_STACK_SET}" \
+                   --query 'Summaries[?Status!=`CURRENT`].[Account,OrganizationalUnitId,Status]' \
+                   --output text | tr '\t' ' ')
+
+          if [ -z "$CHUA" ]; then
+            TONG=$(aws cloudformation list-stack-instances \
+                     --region "${AWS_REGION}" --call-as SELF \
+                     --stack-set-name "${RECORDER_STACK_SET}" \
+                     --query 'length(Summaries)' --output text)
+            echo "Moi stack instance o CURRENT (${TONG} account)."
+            exit 0
+          fi
+
+          echo "   con $(printf '%s\n' "$CHUA" | wc -l | tr -d ' ') instance chua CURRENT:"
+          printf '%s\n' "$CHUA" | sed 's/^/     /'
+
+          # ------------------------------------------------------
+          # Dang co operation chay thi CHO, khong goi them.
+          #
+          # Goi update-stack-instances khi StackSet dang chay se bi
+          # OperationInProgressException - va thong bao do doc nhu
+          # mot loi cua ta, khong phai mot trang thai binh thuong.
+          # ------------------------------------------------------
+          DANG_CHAY=$(aws cloudformation list-stack-set-operations \
+            --region "${AWS_REGION}" --call-as SELF \
+            --stack-set-name "${RECORDER_STACK_SET}" \
+            --query 'Summaries[?Status==`RUNNING`].OperationId' --output text)
+
+          if [ -n "$DANG_CHAY" ]; then
+            echo "   StackSet dang chay operation ${DANG_CHAY} - cho."
+          elif [ "$DA_THU" = "no" ]; then
+            DA_THU="yes"
+            echo "   khong co operation nao chay va instance van hong -> THU LAI"
+
+            # Mot lenh cho MOI OU. INTERSECTION gioi han dung nhung
+            # account dang hong trong OU do, khong dung lai ca OU.
+            printf '%s\n' "$CHUA" | awk '{print $2}' | sort -u | while read -r OU; do
+              [ "$OU" = "-" ] && continue
+              ACCS=$(printf '%s\n' "$CHUA" | awk -v o="$OU" '$2==o {printf "%s%s", sep, $1; sep=","}')
+              echo "     OU ${OU}: ${ACCS}"
+              aws cloudformation update-stack-instances \
+                --region "${AWS_REGION}" --call-as SELF \
+                --stack-set-name "${RECORDER_STACK_SET}" \
+                --deployment-targets "OrganizationalUnitIds=${OU},AccountFilterType=INTERSECTION,Accounts=${ACCS}" \
+                --regions "${AWS_REGION}" \
+                --operation-preferences FailureToleranceCount=0,MaxConcurrentCount=5 \
+                --query OperationId --output text | sed 's/^/       operation /'
+            done
+          else
+            echo "   da thu lai mot lan roi - cho ket qua."
+          fi
+
+          if [ "$(date +%s)" -ge "$HAN" ]; then
+            echo ""
+            echo "HET GIO sau ${WAIT_MINUTES} phut. Instance chua CURRENT:"
+            printf '%s\n' "$CHUA" | sed 's/^/  /'
+            echo ""
+            echo "Doc ly do that (StatusReason cua tung instance):"
+            echo "  aws cloudformation list-stack-instances --region ${AWS_REGION} --call-as SELF \\"
+            echo "    --stack-set-name ${RECORDER_STACK_SET} \\"
+            echo "    --query 'Summaries[?Status!=\`CURRENT\`].[Account,Status,StatusReason]' --output table"
+            echo ""
+            echo "Ly do hay gap nhat: DeliveryChannel bao \"Exceeded attempts to wait\""
+            echo "(NotStabilized) - bucket snapshot o account log-archive chua cho"
+            echo "account do ghi. Bucket policy liet ke tung account, va no chi day"
+            echo "du sau khi layer config-detective duoc apply LAI - tuc sau khi"
+            echo "account ton tai."
+            exit 1
+          fi
+
+          sleep 20
+        done

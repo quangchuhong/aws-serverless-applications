@@ -32,6 +32,9 @@ locals {
       assume = false
       wait   = false
 
+      # Stage nay khong cho gi truoc plan.
+      wait_recorder = false
+
       ####################################
       # GIOI HAN VAO DUNG VIEC TAO ACCOUNT
       #
@@ -54,44 +57,49 @@ locals {
       mo_ta = "Tao account tu catalog - CHI tao account. Gan nhu khong hoan tac duoc, doc ky email."
     },
     {
-      key     = "B-chia-se-tgw"
-      layer   = "landing-zone/network"
-      assume  = true
-      wait    = false
-      targets = []
-      mo_ta   = "Chia se Transit Gateway cho account vua tao."
+      key           = "B-chia-se-tgw"
+      layer         = "landing-zone/network"
+      assume        = true
+      wait          = false
+      targets       = []
+      wait_recorder = false
+      mo_ta         = "Chia se Transit Gateway cho account vua tao."
     },
     {
-      key     = "C-mang-nen"
-      layer   = "landing-zone/account-baseline"
-      assume  = false
-      wait    = false
-      targets = []
-      mo_ta   = "StackSet dung VPC, subnet, TGW attachment, DNS o account dich."
+      key           = "C-mang-nen"
+      layer         = "landing-zone/account-baseline"
+      assume        = false
+      wait          = false
+      targets       = []
+      wait_recorder = false
+      mo_ta         = "StackSet dung VPC, subnet, TGW attachment, DNS o account dich."
     },
     {
-      key     = "D-noi-route-table"
-      layer   = "landing-zone/network"
-      assume  = true
-      wait    = true # cho attachment sang `available` TRUOC khi plan
-      targets = []
-      mo_ta   = "Noi attachment vao rtb-spokes va propagate vao rtb-security."
+      key           = "D-noi-route-table"
+      layer         = "landing-zone/network"
+      assume        = true
+      wait          = true # cho attachment sang `available` TRUOC khi plan
+      targets       = []
+      wait_recorder = false
+      mo_ta         = "Noi attachment vao rtb-spokes va propagate vao rtb-security."
     },
     {
-      key     = "E-config-detective"
-      layer   = "landing-zone/config-detective"
-      assume  = false
-      wait    = false
-      targets = []
-      mo_ta   = "excluded_accounts - account khong co recorder phai duoc loai tru."
+      key           = "E-config-detective"
+      layer         = "landing-zone/config-detective"
+      assume        = false
+      wait          = false
+      targets       = []
+      wait_recorder = true
+      mo_ta         = "excluded_accounts - account khong co recorder phai duoc loai tru."
     },
     {
-      key     = "F-permission-sets"
-      layer   = "landing-zone/permission-sets"
-      assume  = false
-      wait    = false
-      targets = []
-      mo_ta   = "accounts_by_scope - khong co buoc nay thi khong ai vao duoc account moi."
+      key           = "F-permission-sets"
+      layer         = "landing-zone/permission-sets"
+      assume        = false
+      wait          = false
+      targets       = []
+      wait_recorder = false
+      mo_ta         = "accounts_by_scope - khong co buoc nay thi khong ai vao duoc account moi."
     },
   ]
 
@@ -120,10 +128,14 @@ locals {
       # do la cho de sinh ra hai action cung run_order, va
       # CodePipeline chay chung SONG SONG - tuc apply chay cung luc
       # voi plan.
+      # has_pre: stage co MOT action chay truoc plan - cho attachment
+      # (stage D) hoac cho config recorder (stage E). Hai cai loai tru
+      # nhau trong thuc te, nen mot o run_order la du.
+      has_pre  = s.wait || s.wait_recorder
       ro_wait  = 1
-      ro_plan  = s.wait ? 2 : 1
-      ro_duyet = (s.wait ? 2 : 1) + 1
-      ro_apply = (s.wait ? 2 : 1) + (contains(var.approve_stages, s.key) ? 2 : 1)
+      ro_plan  = (s.wait || s.wait_recorder) ? 2 : 1
+      ro_duyet = ((s.wait || s.wait_recorder) ? 2 : 1) + 1
+      ro_apply = ((s.wait || s.wait_recorder) ? 2 : 1) + (contains(var.approve_stages, s.key) ? 2 : 1)
     })
   ]
 

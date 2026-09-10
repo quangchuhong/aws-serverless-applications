@@ -149,6 +149,34 @@ approval_emails = []
 approve_stages = ["A-tao-account"]
 
 ########################################
+# CHO CONFIG RECORDER TRUOC STAGE E
+#
+# Stage E khai org config rule. Rule do hong neu MOT account trong
+# pham vi khong co configuration recorder:
+#
+#   Account ID (353007002364): NoAvailableConfigurationRecorder
+#
+# Recorder do StackSet cua layer config-detective tu trien khai khi
+# account vao OU - nhung lan dau no HONG, vi bucket snapshot o account
+# log-archive chua cho account moi ghi. Bucket policy do liet ke tung
+# account (AWS:SourceAccount, khong dung duoc dieu kien to chuc) va
+# chi day du sau khi chinh stage E apply.
+#
+# Vong phu thuoc do khong sap xep lai duoc. Action Cho_recorder thu
+# lai MOT lan roi cho toi khi moi stack instance o CURRENT.
+#
+# Lay ten:
+#   cd ../config-detective && terraform output sweep_stack_set
+# LUU Y project cua layer do co the KHAC project cua layer nay.
+#
+# DE RONG = bo action cho, va moi account prod moi se can mot buoc tay.
+########################################
+
+recorder_stack_set_name = ""
+# recorder_stack_set_name = "quh11-lz-config-recorder"
+wait_recorder_minutes   = 15
+
+########################################
 # 5. NGUONG
 ########################################
 

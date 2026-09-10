@@ -152,6 +152,29 @@ resource "aws_codepipeline" "vending" {
         }
       }
 
+      # --- cho config recorder (chi stage E) ---
+      #
+      # Cung vi tri va cung y voi Cho_attachment: mot dieu kien tien
+      # quyet bat dong bo phai xong TRUOC khi plan, khong phai truoc
+      # apply. Plan cua stage E doc trang thai that; chay som thi no
+      # tinh tren mot to chuc chua co recorder.
+      dynamic "action" {
+        for_each = (stage.value.wait_recorder && var.recorder_stack_set_name != "") ? [1] : []
+        content {
+          name            = "Cho_recorder"
+          category        = "Build"
+          owner           = "AWS"
+          provider        = "CodeBuild"
+          version         = "1"
+          run_order       = stage.value.ro_wait
+          input_artifacts = ["nguon"]
+
+          configuration = {
+            ProjectName = aws_codebuild_project.cho_recorder[0].name
+          }
+        }
+      }
+
       # --- plan ---
       action {
         name             = "Plan"

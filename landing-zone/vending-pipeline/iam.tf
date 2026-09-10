@@ -70,6 +70,7 @@ resource "aws_iam_role_policy" "pipeline" {
           aws_codebuild_project.terraform[0].arn,
           aws_codebuild_project.lint[0].arn,
           try(aws_codebuild_project.cho_attachment[0].arn, ""),
+          try(aws_codebuild_project.cho_recorder[0].arn, ""),
         ])
       },
       {
