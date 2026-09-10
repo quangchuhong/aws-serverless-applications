@@ -3644,6 +3644,60 @@ Phần còn thiếu bây giờ rất hẹp: chỉ còn câu hỏi *stage A tạo
 
 ---
 
+### Lỗi 114 — cảnh báo của Terraform đi ra stdout, và ba chốt chặn hỏng theo ba kiểu khác nhau
+
+Sau khi destroy layer `network` xong, `./teardown.sh` in ra:
+
+```
+════════════════════════════════════════════
+ SAI ACCOUNT - dung lai
+════════════════════════════════════════════
+
+  Ha tang nay o account : ╷
+│ Warning: No outputs found
+│
+│ The state file either has no outputs defined, or all the defined outputs
+│ are empty. ...
+╵
+  Credential dang dung  : 436908791055
+```
+
+Credential **đúng**. Thứ sai là biến `EXPECT_ACCOUNT`: nó chứa trọn khối cảnh báo của Terraform.
+
+Dòng sinh ra nó đã có sẵn chuyển hướng:
+
+```bash
+EXPECT_ACCOUNT=$(terraform output -raw account_id 2>/dev/null || echo "")
+```
+
+`2>/dev/null` có. `|| echo ""` có. Cả hai vô dụng, vì **`terraform output -raw` trên một state rỗng in khối `Warning: No outputs found` ra STDOUT chứ không phải stderr, và thoát mã 0.** Đây là đo chứ không phải suy đoán: chuyển hướng đã nằm sẵn trong code mà văn bản vẫn lọt vào biến.
+
+Một khuyết điểm, ba chốt chặn, ba kiểu hỏng khác nhau — và kiểu nguy hiểm nhất là kiểu im lặng nhất:
+
+| Chốt chặn | Kiểu hỏng | Hậu quả |
+|---|---|---|
+| `ephemeral == "false"` | **mở** | Văn bản cảnh báo khác `"false"` → chốt chặn **cho qua**. Một lớp bảo vệ mạng thật, tự mở cửa vì không đọc được đầu vào của chính nó |
+| `EXPECT_ACCOUNT != ACTUAL` | **đóng** | So rác với `436908791055` → từ chối chạy, kèm thông báo không đọc nổi |
+| `if [[ -n "$PROJECT" ]]` quanh phần quét | **im lặng** | `PROJECT` rỗng → **mọi** phép quét resource mồ côi bị bỏ qua, không in gì. Và "không in gì" đọc y hệt "không có vấn đề" |
+
+Cái thứ ba đáng sợ nhất về mặt vận hành: phần quét mồ côi tồn tại để chạy **ngay sau destroy**, đúng lúc state vừa rỗng, tức đúng lúc nó tự tắt.
+
+Chữa: một hàm `tf_out()` trả **mã lỗi 1** khi không đọc được giá trị thật, để nơi gọi phân biệt được *"đọc được giá trị X"* với *"không đọc được gì"* — điều mà `|| echo ""` cố tình xoá nhoà.
+
+Rồi mỗi chốt chặn xử lý "không đọc được" theo cách riêng, có chủ đích:
+
+- **`ephemeral` không đọc được** → hỏi tiếp `terraform state list`. State rỗng = đã destroy xong, nói ra rồi chạy tiếp. State **có** resource mà output mất = có gì đó sai, **từ chối chạy**. Không đoán.
+- **`account_id` không đọc được** → bỏ phép so sánh, không in rác.
+- **`project` không đọc được** → in hẳn một dòng nói *"BỎ QUA phần quét — đây KHÔNG phải 'đã sạch', mà là CHƯA NHÌN"*, kèm `LZ_PROJECT=<tên>` để quét được cả khi state đã rỗng.
+
+**Dạng lỗi:** lần thứ bảy trong nhật ký này — một phép đọc thất bại được coi là một câu trả lời. Nhưng lần này có hai điều mới.
+
+Thứ nhất, **`|| echo ""` là một mẫu chủ động phá hoại chẩn đoán**. Nó biến "không đọc được" thành "đọc được, giá trị rỗng" — hai chuyện khác hẳn nhau — và nó xuất hiện ở đây bảy lần vì trông có vẻ cẩn thận. Cái vẻ ngoài phòng thủ ấy chính là thứ làm nó khó thấy.
+
+Thứ hai, **cùng một khuyết điểm hỏng theo ba chiều khác nhau**, nên không có cách nào "hỏng an toàn" chung. Mỗi chốt chặn phải tự trả lời câu *"nếu tôi không biết thì tôi làm gì?"*, và câu trả lời khác nhau ở từng chỗ. Một `set -e` hay một giá trị mặc định không giải quyết được chuyện đó.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

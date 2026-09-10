@@ -7,6 +7,35 @@ set -uo pipefail
 REGION="${AWS_REGION:-ap-southeast-1}"
 
 ########################################
+# DOC OUTPUT AN TOAN
+#
+# LOI 114: `terraform output -raw <ten>` tren mot state RONG in khoi
+#
+#   ╷
+#   │ Warning: No outputs found
+#   ╵
+#
+# ra STDOUT chu khong phai stderr, VA THOAT MA 0. Nen ca
+# `2>/dev/null` lan `|| echo ""` deu khong bat duoc - bien nhan tron
+# van ban canh bao lam gia tri.
+#
+# O chot chan ephemeral ben duoi, hau qua la HONG THEO CHIEU MO: van
+# ban do khac "false", nen phep so sanh cho qua. Mot lop bao ve mang
+# that, im lang mo cua vi no khong doc duoc dau vao cua chinh no.
+#
+# Ham nay tra ma loi 1 khi khong co gia tri THAT, de noi goi biet
+# phan biet "doc duoc gia tri X" voi "khong doc duoc gi".
+########################################
+tf_out() {
+  local v
+  v=$(terraform output -raw "$1" 2>/dev/null) || return 1
+  case "$v" in
+    "" | *"Warning:"* | *"No outputs found"* | *"╷"*) return 1 ;;
+  esac
+  printf '%s' "$v"
+}
+
+########################################
 # CHAN: bo nay co dang duoc dung lam ha tang thuong tru khong
 #
 # ephemeral = false nghia la ai do da giu bo demo nay lai lam mang
@@ -16,9 +45,37 @@ REGION="${AWS_REGION:-ap-southeast-1}"
 # Doc tu state chu khong tu tfvars: tfvars co the da bi sua sau lan
 # apply cuoi, state thi phan anh cai dang chay that.
 ########################################
-EPHEMERAL=$(terraform output -raw ephemeral 2>/dev/null || echo "unknown")
+EPHEMERAL=$(tf_out ephemeral) || EPHEMERAL=""
+SO_RESOURCE=$(terraform state list 2>/dev/null | wc -l | tr -d ' ')
 
-if [[ "$EPHEMERAL" == "false" ]]; then
+########################################
+# KHONG DOC DUOC ephemeral: HAI TRUONG HOP KHAC HAN NHAU
+#
+# State rong = layer da destroy xong. Khong con gi de xoa, va chay
+# tiep de QUET resource mo coi la dung viec.
+#
+# State CO resource ma khong doc duoc output = co gi do sai (sai
+# khoa backend, output bi go, state hong). Luc do khong duoc doan.
+########################################
+if [[ -z "$EPHEMERAL" ]]; then
+  if [[ "$SO_RESOURCE" == "0" ]]; then
+    echo "Luu y: state RONG - layer nay da destroy xong."
+    echo "      Khong con gi de xoa. Chay tiep de quet resource mo coi."
+    echo
+  else
+    echo "════════════════════════════════════════════"
+    echo " DUNG LAI - khong doc duoc output 'ephemeral'"
+    echo "════════════════════════════════════════════"
+    echo
+    echo "State co ${SO_RESOURCE} resource nhung output 'ephemeral' khong doc duoc."
+    echo
+    echo "Script nay se khong chay: no khong biet bo nay dang la demo hay la"
+    echo "ha tang thuong tru, va doan sai theo mot chieu la xoa mang that."
+    echo
+    echo "Kiem: terraform output ephemeral"
+    exit 1
+  fi
+elif [[ "$EPHEMERAL" == "false" ]]; then
   echo "════════════════════════════════════════════"
   echo " DUNG LAI"
   echo "════════════════════════════════════════════"
@@ -122,7 +179,7 @@ fi
 #
 # Ket qua: ban tin la da xoa xong, trong khi ~$30/ngay van chay.
 ########################################
-EXPECT_ACCOUNT=$(terraform output -raw account_id 2>/dev/null || echo "")
+EXPECT_ACCOUNT=$(tf_out account_id) || EXPECT_ACCOUNT=""
 ACTUAL_ACCOUNT=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
 
 if [[ -n "$EXPECT_ACCOUNT" && -n "$ACTUAL_ACCOUNT" && "$EXPECT_ACCOUNT" != "$ACTUAL_ACCOUNT" ]]; then
@@ -152,8 +209,8 @@ fi
 # Gap phai thi destroy chay ~15 phut roi chet o aws_ec2_transit_gateway
 # voi mot cau ve dependency - dung luc ban tuong sap xong.
 ########################################
-TGW_ID=$(terraform output -raw transit_gateway_id 2>/dev/null || echo "")
-PROJECT=$(terraform output -raw project 2>/dev/null || echo "<project>")
+TGW_ID=$(tf_out transit_gateway_id) || TGW_ID=""
+PROJECT=$(tf_out project) || PROJECT="<project>"
 
 if [[ -n "$TGW_ID" ]]; then
   foreign=$(aws ec2 describe-transit-gateway-attachments --region "$REGION" \
@@ -187,7 +244,7 @@ echo "Se xoa toan bo resource cua demo trong region $REGION."
 read -r -p "Go 'yes' de tiep tuc: " ans
 [[ "$ans" == "yes" ]] || { echo "Da huy."; exit 0; }
 
-HAS_CDN=$(terraform output -raw cloudfront_domain 2>/dev/null || echo "")
+HAS_CDN=$(tf_out cloudfront_domain) || HAS_CDN=""
 
 echo
 if [[ -n "$HAS_CDN" ]]; then
@@ -280,7 +337,26 @@ check "EC2 dang chay" "$(aws ec2 describe-instances --region "$REGION" \
 # list-stack-instances thi hoi duoc tu day, vi account nay la delegated
 # administrator cua StackSets.
 ########################################
-PROJECT=$(terraform output -raw project 2>/dev/null || echo "")
+# LOI 114: cho nay tung la `terraform output -raw project 2>/dev/null`.
+# Sau khi destroy xong, state rong nen output bien mat - va MOI phep
+# quet ben duoi nam trong `if [[ -n "$PROJECT" ]]`, tuc chung bi bo
+# qua LANG LE. Man hinh khong in gi, va "khong in gi" doc y het "khong
+# co van de".
+#
+# Dung luc can nhat: ngay sau destroy la luc phai tim resource mo coi.
+#
+# LZ_PROJECT= cho phep quet ke ca khi state da rong.
+PROJECT=$(tf_out project) || PROJECT="${LZ_PROJECT:-}"
+
+if [[ -z "$PROJECT" ]]; then
+  echo
+  echo "  ⚠ BO QUA phan quet resource mo coi: khong doc duoc output 'project'."
+  echo "    State rong sau destroy la binh thuong - nhung day KHONG phai"
+  echo "    'da sach', ma la CHUA NHIN."
+  echo
+  echo "    Quet duoc bang: LZ_PROJECT=<ten-project> ./teardown.sh"
+  echo
+fi
 
 if [[ -n "$PROJECT" ]]; then
   instances=$(aws cloudformation list-stack-instances \
