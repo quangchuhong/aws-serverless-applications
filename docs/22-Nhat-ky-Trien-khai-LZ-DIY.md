@@ -3571,6 +3571,44 @@ Cả hai lần đều là cùng một dạng: **một quan sát được đọc 
 
 ---
 
+### Lỗi 113 — thứ tự sáu stage do phép sắp chuỗi quyết định, và không ai biết
+
+Bản vá lỗi 112 thêm stage `E0-chinh-sach-bucket` vào `stages_all`, giữa `D` và `E`. Đọc lại `pipeline.tf` trước khi chạy thì thấy:
+
+```hcl
+dynamic "stage" {
+  for_each = { for i, s in local.stages : s.key => merge(s, { thu_tu = i }) }
+```
+
+`for_each` chạy trên một **map**. Terraform duyệt map theo **thứ tự sắp xếp khoá**, không theo thứ tự phần tử trong danh sách. Và:
+
+```
+"E-config-detective"   vs   "E0-chinh-sach-bucket"
+ ^^                          ^^
+ ky tu thu hai: "-" = 0x2D   <   "0" = 0x30
+```
+
+`E-` sắp **trước** `E0`. Stage E0 sẽ nằm **sau** stage E — đúng phía sai, tái tạo lại y nguyên vòng phụ thuộc mà nó được viết ra để cắt. Bản vá sẽ chạy xanh, `Cho_recorder` vẫn hỏng, và log sẽ không nói gì về thứ tự.
+
+Sáu khoá cũ `A` `B` `C` `D` `E` `F` **tình cờ** sắp đúng thứ tự mong muốn. Nên trong suốt thời gian pipeline hoạt động, thứ tự stage — thứ mà cả thiết kế dựa vào, và cả một mục README giải thích *"thứ tự là một phần của thiết kế"* — thực ra do phép sắp chuỗi quyết định, không phải do thứ tự khai trong `stages_all`. Chú thích đầu `main.tf` nói *"thêm một stage là thêm một dòng"*. Câu đó đúng, có điều kiện, và điều kiện ấy không được viết ra ở đâu: **chỉ khi tên stage tình cờ sắp đúng.**
+
+Chữa:
+
+```hcl
+for_each = {
+  for i, s in local.stages :
+  format("%02d-%s", i, s.key) => merge(s, { thu_tu = i })
+}
+```
+
+`%02d` chứ không `%d`: mười stage thì `"10"` phải sắp sau `"9"`, mà theo chuỗi thì `"10" < "9"`. Cùng một cái bẫy, một tầng sâu hơn.
+
+**Dạng lỗi:** một bất biến quan trọng được giữ bởi **sự trùng hợp**, không bởi cơ chế. Nó không phải bug cho tới lúc có người thêm phần tử thứ bảy — và người đó không có cách nào biết mình đang bước vào đâu, vì năm năm dữ liệu trước đó đều nói cơ chế hoạt động tốt. Đây là loại khuyết điểm mà số lần chạy thành công **không** đo được: sáu stage chạy đúng hàng trăm lượt không nói gì về stage thứ bảy.
+
+Đáng để ý là nó được tìm ra bằng cách **đọc code trước khi chạy**, không phải bằng log. Nếu tôi cứ apply rồi đợi, triệu chứng nhận được sẽ giống hệt lỗi 112 — `Cho_recorder` hết giờ, `OUTDATED`, không một dòng nào nhắc tới thứ tự stage — và bước tiếp theo hợp lý nhất sẽ là nghi ngờ chẩn đoán 112 vốn đã đúng.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

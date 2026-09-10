@@ -128,8 +128,36 @@ resource "aws_codepipeline" "vending" {
   ####################################
   # BAY STAGE, SINH TU local.stages
   ####################################
+  ####################################
+  # KHOA MANG SO THU TU - THU TU KHONG DUOC PHU THUOC VAO TEN
+  #
+  # LOI 113: dong nay tung la
+  #
+  #   for_each = { for i, s in local.stages : s.key => ... }
+  #
+  # Terraform duyet map theo THU TU SAP XEP KHOA, khong theo thu tu
+  # phan tu trong danh sach. Sau khoa cu (A..F) tinh co sap dung thu
+  # tu mong muon, nen khong ai thay rang thu tu stage dang do phep
+  # sap chuoi quyet dinh.
+  #
+  # Them "E0-chinh-sach-bucket" thi no lo ra ngay: so "E-config-
+  # detective" voi "E0-chinh-sach-bucket", ky tu thu hai la "-"
+  # (0x2D) va "0" (0x30), nen E- SAP TRUOC E0. Stage E0 se nam SAU
+  # stage E - dung phia sai, tai tao lai chinh vong phu thuoc ma no
+  # duoc viet ra de cat.
+  #
+  # format("%02d", i) lam thu tu den tu DANH SACH. Ten stage tro lai
+  # dung viec cua no la mot cai ten, va them mot stage o giua chi con
+  # la them mot dong o stages_all - dung nhu chu thich dau main.tf
+  # noi tu truoc.
+  #
+  # %02d chu khong %d: 10 phai sap sau 9, va "10" < "9" theo chuoi.
+  ####################################
   dynamic "stage" {
-    for_each = { for i, s in local.stages : s.key => merge(s, { thu_tu = i }) }
+    for_each = {
+      for i, s in local.stages :
+      format("%02d-%s", i, s.key) => merge(s, { thu_tu = i })
+    }
 
     content {
       name = replace(stage.value.key, "-", "_")
