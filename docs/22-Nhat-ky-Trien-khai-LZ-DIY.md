@@ -3346,6 +3346,73 @@ Chữa: action `Cho_recorder` trước plan của stage E — cùng khuôn với
 
 ---
 
+### Lỗi 109 — đổi một tag làm chết `for_each`, và cách sửa hiển nhiên xoá mất route của cả 10 spoke
+
+Việc rất nhỏ: đặt `ephemeral = false` ở layer `network` để bỏ tag `Ephemeral = "true"` — cái tag mà `teardown.sh` quét theo để xoá sạch. Bản đếm nhanh cho kết quả yên tâm:
+
+```
+Plan: 0 to add, 106 to change, 0 to destroy
+```
+
+Nhưng plan đầy đủ **không chạy xong**:
+
+```
+Error: Invalid for_each argument
+  on vpc-spokes-remote.tf line 835, in resource
+     "aws_ec2_transit_gateway_route_table_association" "remote_spokes":
+ 835:   for_each = local.remote_attachments_ready
+     │ local.remote_attachments_ready is a set of dynamic,
+     │ known only after apply
+```
+
+Và một lỗi y hệt cho `aws_ec2_transit_gateway_route_table_propagation.remote_to_security`.
+
+Chuỗi nhân quả dài hơn vẻ ngoài của nó:
+
+```
+ephemeral = false
+  → tag Ephemeral bỏ khỏi default_tags (versions.tf)
+  → default_tags áp cho MỌI resource → 106 cái "đang bị sửa"
+  → trong đó có aws_ec2_transit_gateway.hub
+  → data "aws_ec2_transit_gateway_attachments" "remote_by_account"
+      lọc theo values = [aws_ec2_transit_gateway.hub.id]
+  → cấu hình của data source phụ thuộc vào một resource ĐANG BỊ SỬA
+  → Terraform hoãn việc đọc sang lúc apply
+  → local.remote_attachments_ready "known only after apply"
+  → for_each không có bộ khoá → chết ở plan
+```
+
+Không có gì trong câu lệnh gợi ý rằng đổi một cái *tag* lại đụng tới *route*. `default_tags` là thứ nối hai việc đó, và nó nằm ở một file khác.
+
+Đây đúng là hình dạng của **lỗi 50** — thứ mà biến `wire_remote_attachments` sinh ra để chữa. Nên phản xạ đầu tiên là đặt nó về `false`, apply một pha, rồi bật lại.
+
+**Phản xạ đó sai, và sai theo hướng đắt nhất.** `vpc-spokes-remote.tf:107`:
+
+```hcl
+wire = local.has_remote && var.wire_remote_attachments
+```
+
+```hcl
+remote_attachments_ready = local.wire ? toset(flatten([...])) : toset([])
+```
+
+`wire = false` cho tập rỗng, mà tập rỗng là `for_each` rỗng, mà `for_each` rỗng nghĩa là **xoá**: 10 association và 10 propagation của spoke remote biến mất. Attachment vẫn `available`, không lỗi, không cảnh báo — và không một gói tin nào đi qua, đúng như chính mô tả của biến đó đã ghi. Biến này dựng cho lần apply **đầu tiên**, khi chưa có gì để mất; dùng lại nó trên hạ tầng đang chạy thì cái giá hoàn toàn khác.
+
+Cách đúng nằm ngay trong thông báo lỗi của Terraform — *"you could use the `-target` planning option to first apply only the resources that the `for_each` value depends on"*:
+
+```bash
+terraform apply -target=aws_ec2_transit_gateway.hub   # pha 1: hub hết "đang bị sửa"
+terraform apply                                       # pha 2: cả layer
+```
+
+Pha 1 làm hub thôi thay đổi, nên ở pha 2 `hub.id` đã biết tại thời điểm plan, data source đọc được, `for_each` có bộ khoá. Cả hai pha đều `0 to destroy`, và route không đứt lúc nào.
+
+Một điểm cần nhớ từ **lỗi 106**: `-target` không tính lại output. Ở đây không phải chữa riêng, vì pha 2 là apply toàn layer nên output được tính lại ở đó — nhưng chỉ đúng **nếu pha 2 chạy tới cùng**. Dừng giữa hai pha thì state có tag mới và output cũ.
+
+**Dạng lỗi:** một biến cờ được viết cho *một tình huống* (bootstrap lần đầu) và sau đó được dùng như *một công tắc chung*. Mô tả của nó nói rõ nó làm gì, chỉ không nói ở trạng thái nào thì việc đó là vô hại. Chỗ sửa: mô tả của `ephemeral` giờ nói thẳng cách đi hai pha và nói thẳng **đừng** đụng `wire_remote_attachments` — cảnh báo đặt ở nơi người ta sẽ đứng khi phạm lỗi, không phải ở nơi nó được định nghĩa.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

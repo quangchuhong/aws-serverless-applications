@@ -355,6 +355,20 @@ variable "wire_remote_attachments" {
 
     Giua hai pha, attachment ton tai ma khong thuoc route table nao:
     State la 'available', khong loi, khong mot goi tin nao di qua.
+
+    ---------------------------------------------------------------
+    CHI DUNG CHO LAN APPLY DAU. Xem loi 109 doc 22.
+
+    Bien nay viet cho luc chua co gi de mat. Tren ha tang DANG CHAY,
+    doi no ve false cho remote_attachments_ready thanh tap RONG - va
+    for_each rong nghia la XOA: moi association va propagation cua
+    spoke remote bien mat trong mot lan apply.
+
+    Neu ban toi day vi mot loi "Invalid for_each argument" thi day
+    KHONG phai cho sua. Loi do thuong do mot resource ma data source
+    remote_by_account phu thuoc vao dang bi sua - vi du doi
+    var.ephemeral lam default_tags doi tren ca TGW hub. Cach sua la
+    apply hai pha bang -target, xem mo ta bien ephemeral.
   EOT
   type        = bool
   default     = false
@@ -804,6 +818,33 @@ variable "ephemeral" {
 
     Doi sang false thi terraform destroy se KHONG chay tron nua. Do
     la dung y muon - xem muc "Xoa" trong README.
+
+    ---------------------------------------------------------------
+    DOI GIA TRI NAY PHAI APPLY HAI PHA. Xem loi 109 doc 22.
+
+    Tag Ephemeral di qua default_tags (versions.tf), nen doi no lam
+    MOI resource bi sua - trong do co aws_ec2_transit_gateway.hub.
+    Ma data source remote_by_account loc theo chinh hub.id do, nen
+    Terraform hoan viec doc no toi luc apply, va for_each cua
+    remote_spokes / remote_to_security chet ngay o plan:
+
+      Error: Invalid for_each argument
+      local.remote_attachments_ready is a set of dynamic,
+      known only after apply
+
+    KHONG sua bang wire_remote_attachments = false. Bien do cho
+    remote_attachments_ready ve rong, tuc plan se XOA moi
+    association va propagation cua spoke remote - attachment con
+    'available' nhung khong goi tin nao di qua.
+
+    Cach dung:
+
+      terraform apply -target=aws_ec2_transit_gateway.hub
+      terraform apply        # ca layer, output duoc tinh lai o day
+
+    Pha 1 lam hub het "dang bi sua", nen pha 2 doc duoc hub.id ngay
+    o thoi diem plan. Giua hai pha route van nguyen - khong resource
+    nao bi xoa, ca hai pha deu 0 to destroy.
   EOT
   type        = bool
   default     = true
