@@ -208,6 +208,48 @@ accounts:
     network:
       vpc_cidr: 10.23.0.0/16
 
+  # ------------------------------------------------------------
+  # HAI KHOI DUOI DAY: do MOT lan chay pipeline lam tron ven.
+  #
+  # Bay account truoc deu di qua it nhat HAI luot - hoac vi loi
+  # 103 (stage A tao luon spoke_network truoc khi TGW duoc chia
+  # se), hoac vi loi 106 (-target khong tinh lai output). Ca hai
+  # da sua, nhung CHUA lan nao mot execution duy nhat vua tao
+  # account vua dung xong mang cho no.
+  #
+  # Do la dieu duy nhat trong toan bo he chua duoc chung minh.
+  # Hai khoi nay la phep do do.
+  #
+  # LUU Y 10.15.0.0/16 la /16 CUOI CUNG cua dai NonProd
+  # (10.10-10.15, trong do 10.11 do layer network giu cho probe).
+  # Account nonprod tiep theo se bi lint.sh chan, va phai mo rong
+  # bang cap phat o doc 17 muc 3 truoc.
+  # ------------------------------------------------------------
+
+  - name: app-nonprod-4
+    email: quang.hong.0991+lz-app-nonprod-4@gmail.com
+    ou: NonProd
+    scope: nonprod
+    environment: dev
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-1042
+    ticket: ACC-2026-008
+    note: Chung minh mot execution lam tron ven - /16 cuoi cua dai NonProd
+    network:
+      vpc_cidr: 10.15.0.0/16
+
+  - name: app-prod-4
+    email: quang.hong.0991+lz-app-prod-4@gmail.com
+    ou: Prod
+    scope: prod
+    environment: prod
+    owner: quang.hong.0991@gmail.com
+    cost_center: CC-4021
+    ticket: ACC-2026-009
+    note: Chung minh mot execution lam tron ven - account prod di qua cong duyet
+    network:
+      vpc_cidr: 10.24.0.0/16
+
 # --------------------------------------------------------------
 # Vi du (dang tat)
 #
