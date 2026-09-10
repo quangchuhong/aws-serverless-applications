@@ -278,6 +278,9 @@ Resources:
           import json, time, urllib.request, boto3
 
           def send(event, ctx, status, data):
+              # In truoc khi gui: neu urlopen hong thi it ra log con
+              # giu duoc ket qua.
+              print('KET QUA %s: %s' % (status, data.get('Result', '')))
               # `Reason` PHAI mang chan doan, khong phai mot loi moi doc
               # log.
               #
@@ -415,6 +418,17 @@ Resources:
                                   thieu.append('profile:' + tt)
                           except Exception as e:
                               thieu.append('profile:' + why(e))
+
+                      # IN RA LOG.
+                      #
+                      # Truoc day ham chi gui chan doan trong response
+                      # body, va CloudFormation nhet no vao `Data` -
+                      # truong khong hien o dau. `Reason` thi ghi "Xem
+                      # CloudWatch log", va CloudWatch KHONG CO GI vi
+                      # khong co lenh print nao. Nguoi doc loi duoc chi
+                      # sang mot cho trong.
+                      print('vong: xong=%s thieu=%s con %ds'
+                            % (xong, thieu, int(han - time.time())))
 
                       if not thieu:
                           send(event, ctx, 'SUCCESS', {'Result': (
