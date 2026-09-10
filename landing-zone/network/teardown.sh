@@ -33,7 +33,19 @@ if [[ "$EPHEMERAL" == "false" ]]; then
   echo "Script nay se khong chay. Muon xoa that thi lam co y thuc:"
   echo
   echo "  1. Doi ephemeral = true trong terraform.tfvars"
-  echo "  2. terraform apply        # go bao ve, RIENG mot lan"
+  echo
+  echo "  2. Apply HAI PHA - loi 109. Doi tag Ephemeral lam TGW hub bi"
+  echo "     sua, ma data source remote_by_account loc theo hub.id do,"
+  echo "     nen for_each cua remote_spokes chet ngay o plan voi"
+  echo "     \"Invalid for_each argument\":"
+  echo
+  echo "       terraform apply -target=aws_ec2_transit_gateway.hub"
+  echo "       terraform apply"
+  echo
+  echo "     KHONG sua bang wire_remote_attachments = false: bien do"
+  echo "     cho remote_attachments_ready ve rong, tuc XOA moi"
+  echo "     association va propagation cua spoke remote."
+  echo
   echo "  3. Chay lai ./teardown.sh"
   echo
   exit 1
