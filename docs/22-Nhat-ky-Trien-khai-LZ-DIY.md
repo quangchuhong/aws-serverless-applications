@@ -3233,6 +3233,36 @@ Cách đáng lẽ phải làm ngay từ đầu: liệt kê **mọi** resource tr
 
 ---
 
+### Lỗi 106 — `-target` tạo được resource nhưng không ghi output, và triệu chứng nằm ba stage sau
+
+Hai account mới đi qua pipeline lần thứ hai. Stage A, B xanh. Stage C hỏng: `NhanRam` chờ 240 giây rồi báo hết giờ ở cả hai account.
+
+Kiểm từ trong account đích: **không lời mời RAM, không TGW, không DNS profile.** Không có gì được chia sẻ tới đó. `NhanRam` chờ một thứ chưa bao giờ được gửi — nó làm đúng việc của nó.
+
+Ngược lên stage B: `KHONG CO THAY DOI`, và refresh chỉ thấy 9 `aws_ram_principal_association` cũ. Nhưng đọc state ở máy thì `vending_handles.tgw_share` có đủ **6** account, kể cả hai cái mới. Hai dữ kiện mâu thuẫn nhau, và chỗ mâu thuẫn chính là nguyên nhân.
+
+Giải thích duy nhất khớp cả hai: **`terraform apply <file plan>` chỉ thực hiện đúng plan đã lưu, và với `-target` Terraform loại output khỏi plan.** Nên stage A tạo hai account rồi ghi state với resource **mới** và output **cũ**. Giá trị 6 mà ta đọc được do stage C Apply ghi — nó apply cả layer nên tính lại mọi output, nhưng lúc đó B đã plan xong từ lâu.
+
+Chuỗi nhân quả dài ba stage:
+
+```
+A apply -target  →  state: 7 account, tgw_share van 4
+B doc state      →  thay 4, khong co gi de share  →  "KHONG CO THAY DOI"
+C dung stack     →  NhanRam cho loi moi chua ai gui  →  het gio
+```
+
+Không có gì trong log của C nói rằng nguyên nhân ở A. Và stage B — stage thật sự sai — báo **thành công**.
+
+Chữa: sau một apply có `-target`, chạy thêm `terraform apply -refresh-only`. Lệnh đó không đổi hạ tầng, chỉ đọc lại thực tế và ghi state kèm output. Chỉ chạy khi có target, vì apply không target đã cập nhật output đầy đủ.
+
+**Cách đúng hơn về lâu dài** là bỏ `-target` hẳn: tách `spoke_network` sang một layer riêng đọc state của `account-baseline`. Lúc đó stage A apply cả layer (account + output), stage B share, stage C apply layer mới — không cần `-target`, không cần `-refresh-only`. Chưa làm vì nó là một lần di chuyển state.
+
+**Dạng lỗi:** một bản vá đúng ý định nhưng có tác dụng phụ ở lớp khác. Lỗi 103 sinh ra `-target` để tách thứ tự; `-target` cắt luôn đường bàn giao mà thứ tự đó phục vụ. Và đường bàn giao ấy đi qua **state**, không qua biến — nên không có `plan` nào của stage A cho thấy nó bị thiếu.
+
+Điều đáng học nhất không phải `-target`. Là chuyện tôi đã đoán sai bốn lần liên tiếp trước khi đo: đoán `-target` không cập nhật output (state ở máy chứng minh ngược), đoán `vending_state` không được đọc (cảnh báo `vending_khong_de_len_tfvars` chứng minh nó có đọc), đoán tfvars trong bucket cũ (`LastModified` là hôm nay), đoán stage B bị nhảy qua (`list-action-executions` cho thấy nó chạy). Mỗi lần một lệnh đo là đủ để loại một giả thuyết, và tôi đưa giả thuyết trước khi đo.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

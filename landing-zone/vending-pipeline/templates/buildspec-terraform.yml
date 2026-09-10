@@ -263,6 +263,34 @@ phases:
             exit 1
           fi
           terraform apply -input=false tfplan
+
+          # ----------------------------------------------------
+          # SAU MOT APPLY CO -target: GHI LAI OUTPUT
+          #
+          # `terraform apply <file plan>` chi thuc hien dung plan da
+          # luu. Voi `-target`, Terraform loai output khoi plan tru khi
+          # chung phu thuoc vao resource duoc target - va ket qua la
+          # state co resource MOI nhung output CU.
+          #
+          # Do la thu da lam hong lan chay 10/09: stage A tao hai
+          # account, nhung `vending_handles.tgw_share` trong state van
+          # la danh sach 4 account. Stage B doc state do qua
+          # terraform_remote_state, thay 4, va bao KHONG CO THAY DOI -
+          # nen TGW khong duoc chia se cho hai account moi. Stage C
+          # dung stack o do, `NhanRam` cho 240 giay mot loi moi chua ai
+          # gui, roi bao het gio.
+          #
+          # Chuoi nhan qua dai ba stage: nguyen nhan o A, trieu chung o
+          # C, va khong co gi noi rang chung lien quan.
+          #
+          # `-refresh-only` KHONG doi ha tang - no chi doc lai thuc te
+          # va ghi state, ke ca output. Chi chay khi CO target, vi apply
+          # khong target da cap nhat output day du.
+          # ----------------------------------------------------
+          if [ -n "$TARGET_ARGS" ]; then
+            echo "== ghi lai output (sau apply co -target)"
+            terraform apply -refresh-only -input=false -auto-approve
+          fi
         fi
 
 artifacts:
