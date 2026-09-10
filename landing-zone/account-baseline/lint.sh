@@ -114,14 +114,25 @@ ENVS = {"dev", "staging", "prod", "sandbox"}
 # Ten that phu thuoc ou_structure ben layer organization, va no la mot
 # BIEN. Cay long nhau cho khoa "Workloads/Production"; cay phang cho
 # khoa "Production". Nen nhan ca ba cach viet cho cung mot dai.
+# NOI RONG 10.10-10.13 -> 10.10-10.15 va 10.20-10.23 -> 10.20-10.25
+# ngay 10/09, vi dai cu DA HET.
+#
+# Bon /16 mot moi truong nghe nhieu tren giay, nhung ha tang cua chinh
+# layer network an het mot nua ma khong ai tinh vao: probe 10.11 va
+# app-dev 10.10 nam trong dai NonProd, app-prod 10.20 nam trong dai
+# Prod. Con lai hai cho cho NonProd, ba cho cho Prod - va chung day
+# sau nam account.
+#
+# 10.14-10.19 la khoang chua ai cap, nen noi rong khong dam vao dai
+# nao. Doc 17 muc 3 da cap nhat theo.
 ALLOCATED = {
-    "Non-Production": (10, 13),
-    "Workloads/Non-Production": (10, 13),
-    "NonProd": (10, 13),
+    "Non-Production": (10, 15),
+    "Workloads/Non-Production": (10, 15),
+    "NonProd": (10, 15),
 
-    "Production": (20, 23),
-    "Workloads/Production": (20, 23),
-    "Prod": (20, 23),
+    "Production": (20, 25),
+    "Workloads/Production": (20, 25),
+    "Prod": (20, 25),
 
     "Data Analytics": (30, 33),
     "Analytics": (30, 33),
@@ -130,11 +141,39 @@ ALLOCATED = {
 }
 
 # Dai HA TANG - khong bao gio cap cho workload.
+#
+# ---------------------------------------------------------------
+# NAM /16 DUOI DAY KHONG NAM TRONG CATALOG, VA DO LA VAN DE
+#
+# lint.sh chi doc catalog nay. Nhung layer landing-zone/network khai
+# spoke rieng cua no trong terraform.tfvars cua layer do - mot file
+# nam trong .gitignore, o mot thu muc khac, va script nay khong doc
+# duoc.
+#
+# Hau qua truoc ngay 10/09: mot account moi xin 10.20.0.0/16 se qua
+# lint SACH, roi dam vao app-prod (account 761558631239). Xung dot
+# khong hien ra o day - no hien ra thanh hai route chong nhau trong
+# rtb-spokes, va sua nghia la XOA MOT VPC.
+#
+# Danh sach nay duy tri BANG TAY, va do la mot lua chon te nhung la
+# lua chon te it nhat: lint.sh co y KHONG goi AWS (chay duoc offline,
+# chay duoc trong CodeBuild o stage Lint truoc moi credential), nen
+# no khong the tu hoi xem TGW dang co nhung attachment nao.
+#
+# Them mot spoke vao layer network thi PHAI them mot dong o day.
+# ---------------------------------------------------------------
 RESERVED = [
     (ipaddress.ip_network("10.0.0.0/16"), "ingress VPC"),
     (ipaddress.ip_network("10.1.0.0/16"), "security VPC"),
     (ipaddress.ip_network("10.2.0.0/16"), "egress VPC"),
     (ipaddress.ip_network("10.9.0.0/16"), "3rd-party VPC (doi tac)"),
+
+    # Spoke do layer landing-zone/network khai - xem khoi tren.
+    (ipaddress.ip_network("10.8.0.0/16"), "spoke security (layer network)"),
+    (ipaddress.ip_network("10.10.0.0/16"), "spoke app-dev (layer network)"),
+    (ipaddress.ip_network("10.11.0.0/16"), "VPC probe (layer network, local)"),
+    (ipaddress.ip_network("10.20.0.0/16"), "spoke app-prod (layer network)"),
+    (ipaddress.ip_network("10.100.0.0/16"), "spoke logarchive (layer network)"),
 ]
 
 seen_names, seen_emails, nets = {}, {}, []

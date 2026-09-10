@@ -286,13 +286,29 @@ Ghi lại quyết định này thành ADR, kèm ngày dự kiến có license. K
 | Dự phòng hub | `10.3.0.0/16` – `10.7.0.0/16` | DR, region thứ hai |
 | `security-account-vpc` | `10.8.0.0/16` | Account `lz-security` — công cụ chạy *trong* VPC: scanner, SIEM collector, bastion |
 | `3rd-party-vpc` | `10.9.0.0/16` | |
-| **NonProd spokes** | `10.10.0.0/15` + `10.12.0.0/15` | `10.10` – `10.13` |
+| **NonProd spokes** | `10.10.0.0/15` + `10.12.0.0/15` + `10.14.0.0/15` | `10.10` – `10.15` |
 <!-- Hai /15, khong phai mot /14: xem ghi chu ngay sau bang -->
-| **Prod spokes** | `10.20.0.0/14` | `10.20` – `10.23` |
+| **Prod spokes** | `10.20.0.0/14` + `10.24.0.0/15` | `10.20` – `10.25` |
 | **Sandbox** | `10.60.0.0/14` | Không attach TGW |
 | `logarchive-account-vpc` | `10.100.0.0/16` | Account `lz-logarchive` |
 | `management-account-vpc` | `10.101.0.0/16` | Account management — **xem cảnh báo bên dưới** |
 | Dự phòng mở rộng | `10.102.0.0/15` trở đi | Phần còn lại của `10.100.0.0/12` |
+
+> **Nới dải ngày 10/09/2026: NonProd `10.10`–`10.13` → `10.10`–`10.15`, Prod `10.20`–`10.23` → `10.20`–`10.25`.**
+>
+> Bốn `/16` mỗi môi trường nghe nhiều trên giấy, nhưng **hạ tầng của chính layer `network` ăn hết một nửa mà bảng này không tính vào**:
+>
+> | Dải | Ai giữ | Nằm trong |
+> |---|---|---|
+> | `10.10.0.0/16` | spoke `app-dev` (layer network) | NonProd |
+> | `10.11.0.0/16` | VPC `probe` (layer network, local) | NonProd |
+> | `10.20.0.0/16` | spoke `app-prod` (layer network) | Prod |
+>
+> Còn lại hai chỗ cho NonProd và ba chỗ cho Prod — và chúng đầy sau năm account. Khoảng `10.14`–`10.19` chưa ai cấp, nên nới rộng không đụng dải nào.
+>
+> Ba dải trên **cũng đã được thêm vào `RESERVED` của `lint.sh`**. Trước đó lint chỉ đọc catalog, không đọc `network/terraform.tfvars` (file bị gitignore, ở layer khác), nên một account mới xin `10.20.0.0/16` sẽ qua lint **sạch** rồi đâm vào `app-prod`. Xung đột đó không hiện ra ở lint — nó hiện ra thành hai route chồng nhau trong `rtb-spokes`, và sửa nghĩa là **xoá một VPC**.
+>
+> Danh sách đó duy trì **bằng tay**: `lint.sh` cố ý không gọi AWS (phải chạy được offline, và chạy ở stage Lint của pipeline trước mọi credential). **Thêm một spoke vào layer `network` thì phải thêm một dòng vào `RESERVED`.**
 
 > **`10.10.0.0/14` không phải một CIDR hợp lệ.** Một `/14` bắt đầu ở bội số của 4 ở octet thứ hai, nên nó chỉ có thể là `10.8.0.0/14` (phủ `10.8`–`10.11`) hoặc `10.12.0.0/14` (`10.12`–`10.15`). Khoảng `10.10`–`10.13` mà bảng này cấp phát **không viết được thành một `/14` nào** — phải là hai `/15`.
 >
