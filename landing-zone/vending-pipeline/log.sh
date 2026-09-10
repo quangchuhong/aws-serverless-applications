@@ -31,6 +31,26 @@
 #      lai, vi trong script co nhung tu do.
 #      -> Cat theo hai moc `== plan` va `PLAN HONG`.
 #
+# ---------------------------------------------------------------
+# CAI BAY THU TU: get-pipeline-state TRON NHIEU LAN THUC THI
+#
+# `aws codepipeline get-pipeline-state` tra ve "lan thuc thi MOI NHAT
+# CUA TUNG STAGE", khong phai trang thai cua mot lan chay. Sau khi
+# stage C hong, bang do van co the ghi D/E/F la `Succeeded` - do la
+# ket qua cua lan chay TRUOC, va no doc y het nhu ca pipeline da xong.
+#
+# Script nay dung get-pipeline-state de tim stage dang hong, va cho
+# viec do thi du. Nhung khi ban doc mot stage DA XANH, nho rang build
+# ID lay ra co the thuoc mot lan chay khac - doi chieu dau thoi gian.
+#
+# Trang thai cua DUNG mot lan chay:
+#   ID=$(aws codepipeline list-pipeline-executions --region <r> \
+#     --pipeline-name <p> \
+#     --query 'pipelineExecutionSummaries[0].pipelineExecutionId' --output text)
+#   aws codepipeline list-action-executions --region <r> \
+#     --pipeline-name <p> --filter pipelineExecutionId=$ID \
+#     --query 'actionExecutionDetails[].[stageName,actionName,status]' --output table
+#
 # bash, khong phai zsh.
 #
 set -euo pipefail
@@ -129,10 +149,23 @@ echo "── build  : ${BUILD}"
 echo "── stream : ${NHOM}/${STREAM}"
 echo ""
 
+# --limit 10000, KHONG phai 1000.
+#
+# Plan cua layer network refresh ~200 resource, moi cai mot dong, cong
+# noi dung plan. 1000 event cuoi khong cham toi dong verdict
+# (CO THAY DOI / KHONG CO THAY DOI) - va hau qua la loc theo verdict
+# tra ve RONG, doc y het nhu build khong in gi.
+#
+# 10000 la gioi han cua get-log-events. Vuot ca no thi phai phan trang
+# bang nextBackwardToken; chua can, nhung neu mot ngay nao do log dai
+# hon thi day la cho phai sua.
 DONG=$(aws logs get-log-events --region "$REGION" \
   --log-group-name "$NHOM" --log-stream-name "$STREAM" \
-  --limit 1000 --no-start-from-head \
+  --limit 10000 --no-start-from-head \
   --query 'events[].message' --output text | tr '\t' '\n')
+
+echo "── $(printf '%s\n' "$DONG" | wc -l | tr -d ' ') dong log"
+echo ""
 
 if [ "$TAT_CA" = "yes" ]; then
   printf '%s\n' "$DONG"
