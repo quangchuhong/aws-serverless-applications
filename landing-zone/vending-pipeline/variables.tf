@@ -278,3 +278,32 @@ variable "log_retention_days" {
   type    = number
   default = 90
 }
+
+variable "approve_stages" {
+  description = <<-EOT
+    Stage nao dung lai cho nguoi bam duyet. Dung KHOA cua stage:
+
+      A-tao-account  B-chia-se-tgw  C-mang-nen
+      D-noi-route-table  E-config-detective  F-permission-sets
+
+    MAC DINH chi "A-tao-account" - stage duy nhat gan nhu khong hoan
+    tac duoc. Nam stage con lai deu sua lai duoc bang mot lan apply.
+
+    ---------------------------------------------------------------
+    BO CONG DUYET KHONG PHAI BO KIEM SOAT
+
+    Stage khong co trong danh sach nay duoc dat FAIL_ON_DESTROY=yes:
+    plan co resource bi XOA hoac THAY THE se dung ngay o buoc plan,
+    chua apply gi. Khong co nguoi doc thi may phai doc.
+
+    Doc ky truoc khi thu hep them: stage B va D apply layer network -
+    TGW, firewall va moi VPC cua to chuc. Stage C thay the duoc stack
+    o account dich, tuc xoa roi dung lai VPC.
+
+    De ["A-tao-account","B-chia-se-tgw","C-mang-nen","D-noi-route-table",
+    "E-config-detective","F-permission-sets"] de quay lai che do duyet
+    tung buoc.
+  EOT
+  type        = list(string)
+  default     = ["A-tao-account"]
+}

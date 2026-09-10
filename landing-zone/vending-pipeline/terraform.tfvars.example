@@ -129,6 +129,26 @@ approval_emails = []
 # approval_emails = ["platform@example.com", "netops@example.com"]
 
 ########################################
+# STAGE NAO DUNG LAI CHO NGUOI BAM
+#
+# MAC DINH chi "A-tao-account" - stage duy nhat gan nhu khong hoan tac
+# duoc. Email la duy nhat vinh vien o pham vi AWS toan cau, va account
+# chi dong duoc chu khong xoa duoc.
+#
+# Nam stage con lai tu apply. Doi lai chung mang FAIL_ON_DESTROY=yes:
+# plan co resource bi XOA hoac THAY THE se dung ngay o buoc plan, chua
+# apply gi. Mot canh bao chi co gia tri khi co nguoi doc; khong co
+# nguoi doc thi no phai thanh mot lan tu choi.
+#
+# Muon quay lai duyet tung buoc:
+#   approve_stages = ["A-tao-account","B-chia-se-tgw","C-mang-nen",
+#                     "D-noi-route-table","E-config-detective",
+#                     "F-permission-sets"]
+########################################
+
+approve_stages = ["A-tao-account"]
+
+########################################
 # 5. NGUONG
 ########################################
 

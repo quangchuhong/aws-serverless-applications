@@ -252,8 +252,33 @@ phases:
           if [ "$XOA" != "0" ] || [ "$THAY" != "0" ]; then
             echo ""
             echo "!!! PLAN NAY XOA ${XOA} VA THAY THE ${THAY} RESOURCE"
-            echo "!!! Pipeline nay sinh ra de THEM account. Doc ky truoc khi duyet:"
+            echo "!!! Pipeline nay sinh ra de THEM account. Doc ky:"
             grep -E 'will be destroyed|must be replaced' tfplan.txt | sed 's/^/    /'
+
+            # ----------------------------------------------------
+            # STAGE KHONG CO CONG DUYET THI DUNG HAN
+            #
+            # Mot canh bao chi co gia tri khi co nguoi doc. Stage
+            # khong nam trong var.approve_stages thi apply chay ngay
+            # sau plan, khong ai xen vao - nen o do canh bao phai
+            # thanh mot lan TU CHOI.
+            #
+            # Dung o buoc PLAN, truoc khi apply cham vao gi. Muon di
+            # tiep thi them stage do vao approve_stages roi doc plan
+            # bang mat - do la ca muc dich.
+            # ----------------------------------------------------
+            if [ "${FAIL_ON_DESTROY:-no}" = "yes" ]; then
+              echo ""
+              echo "LOI: stage nay KHONG co cong duyet, nen mot plan co xoa/thay the"
+              echo "     bi TU CHOI thay vi chay tiep."
+              echo ""
+              echo "Hai duong di tiep:"
+              echo "  1. Neu xoa/thay the la dung y ban: them stage nay vao"
+              echo "     approve_stages o landing-zone/vending-pipeline/terraform.tfvars,"
+              echo "     apply layer do, roi chay lai - luc do ban se doc plan bang mat."
+              echo "  2. Neu khong: sua nguyen nhan. Danh sach o tren la thu se bi mat."
+              exit 1
+            fi
           fi
         else
           echo "== apply"

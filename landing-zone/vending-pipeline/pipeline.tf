@@ -143,7 +143,7 @@ resource "aws_codepipeline" "vending" {
           owner           = "AWS"
           provider        = "CodeBuild"
           version         = "1"
-          run_order       = 1
+          run_order       = stage.value.ro_wait
           input_artifacts = ["nguon"]
 
           configuration = {
@@ -159,7 +159,7 @@ resource "aws_codepipeline" "vending" {
         owner            = "AWS"
         provider         = "CodeBuild"
         version          = "1"
-        run_order        = stage.value.wait ? 2 : 1
+        run_order        = stage.value.ro_plan
         input_artifacts  = ["nguon"]
         output_artifacts = ["plan_${replace(stage.value.key, "-", "_")}"]
 
@@ -169,6 +169,14 @@ resource "aws_codepipeline" "vending" {
             { name = "LAYER_DIR", value = stage.value.layer, type = "PLAINTEXT" },
             { name = "STATE_KEY", value = local.stage_keys[stage.value.layer], type = "PLAINTEXT" },
             { name = "TF_ACTION", value = "plan", type = "PLAINTEXT" },
+
+            # Stage KHONG co cong duyet thi may phai doc thay nguoi:
+            # plan co xoa hoac thay the se dung ngay o buoc plan.
+            {
+              name  = "FAIL_ON_DESTROY"
+              value = stage.value.gated ? "no" : "yes"
+              type  = "PLAINTEXT"
+            },
             {
               name  = "TF_TARGETS"
               value = join(" ", try(stage.value.targets, []))
@@ -189,21 +197,28 @@ resource "aws_codepipeline" "vending" {
       # Nguoi duyet phai mo log CodeBuild de xem plan. Do la mot buoc
       # them, va no co chu dich - mot cong duyet ma noi dung hien ngay
       # trong thu se duoc bam tu dien thoai, khong doc.
-      action {
-        name      = "Duyet"
-        category  = "Approval"
-        owner     = "AWS"
-        provider  = "Manual"
-        version   = "1"
-        run_order = stage.value.wait ? 3 : 2
+      # --- duyet: CHI stage nao nam trong var.approve_stages ---
+      #
+      # Mac dinh chi A-tao-account. Nam stage con lai tu apply, va
+      # doi lai chung mang FAIL_ON_DESTROY=yes.
+      dynamic "action" {
+        for_each = stage.value.gated ? [1] : []
+        content {
+          name      = "Duyet"
+          category  = "Approval"
+          owner     = "AWS"
+          provider  = "Manual"
+          version   = "1"
+          run_order = stage.value.ro_duyet
 
-        configuration = {
-          NotificationArn = aws_sns_topic.approval[0].arn
-          CustomData      = "${stage.value.key}: ${stage.value.mo_ta} -- DOC PLAN trong log CodeBuild truoc khi duyet."
-          ExternalEntityLink = format(
-            "https://%s.console.aws.amazon.com/codesuite/codebuild/projects/%s/history?region=%s",
-            var.region, aws_codebuild_project.terraform[0].name, var.region,
-          )
+          configuration = {
+            NotificationArn = aws_sns_topic.approval[0].arn
+            CustomData      = "${stage.value.key}: ${stage.value.mo_ta} -- DOC PLAN trong log CodeBuild truoc khi duyet."
+            ExternalEntityLink = format(
+              "https://%s.console.aws.amazon.com/codesuite/codebuild/projects/%s/history?region=%s",
+              var.region, aws_codebuild_project.terraform[0].name, var.region,
+            )
+          }
         }
       }
 
@@ -214,7 +229,7 @@ resource "aws_codepipeline" "vending" {
         owner           = "AWS"
         provider        = "CodeBuild"
         version         = "1"
-        run_order       = stage.value.wait ? 4 : 3
+        run_order       = stage.value.ro_apply
         input_artifacts = ["plan_${replace(stage.value.key, "-", "_")}"]
 
         configuration = {

@@ -95,7 +95,37 @@ locals {
     },
   ]
 
-  stages = [for s in local.stages_all : s if local.network_on || !s.assume]
+  ####################################
+  # STAGE NAO CO CONG DUYET
+  #
+  # var.approve_stages liet ke khoa cua stage can nguoi bam. Mac dinh
+  # chi "A-tao-account" - stage duy nhat gan nhu khong hoan tac duoc.
+  #
+  # BO CONG DUYET KHONG PHAI BO KIEM SOAT. Stage khong co cong duyet
+  # duoc dat FAIL_ON_DESTROY=yes: plan nao co resource bi xoa hoac
+  # thay the thi DUNG NGAY o buoc plan, chua apply gi. Khong co nguoi
+  # doc thi may phai doc.
+  #
+  # Ly do can lop do: stage B va D apply layer network - TGW, firewall
+  # va moi VPC cua to chuc. Stage C thay the duoc stack o account dich,
+  # tuc xoa roi dung lai VPC. "Sua duoc" khong dong nghia "vo hai".
+  ####################################
+  stages = [
+    for i, s in [for s in local.stages_all : s if local.network_on || !s.assume] :
+    merge(s, {
+      gated = contains(var.approve_stages, s.key)
+
+      # run_order phai lien tuc va khong trung. Tinh o day thay vi
+      # trong dynamic block: mot bieu thuc dieu kien long ba tang o
+      # do la cho de sinh ra hai action cung run_order, va
+      # CodePipeline chay chung SONG SONG - tuc apply chay cung luc
+      # voi plan.
+      ro_wait  = 1
+      ro_plan  = s.wait ? 2 : 1
+      ro_duyet = (s.wait ? 2 : 1) + 1
+      ro_apply = (s.wait ? 2 : 1) + (contains(var.approve_stages, s.key) ? 2 : 1)
+    })
+  ]
 
   # Khoa state cua tung layer, tra san de buildspec khong phai doan.
   #
@@ -148,11 +178,16 @@ locals {
        "${var.branch_name}". Repo GitHub KHONG kich hoat gi ca.
 
     3. LAN CHAY DAU TIEN PHAI LA MOT LAN KHONG CO ACCOUNT MOI
-       Moi stage phai ra "KHONG CO THAY DOI". Duyet sau lan de xem
-       duong di co thong khong - TRUOC khi mot account that di qua no.
-       Mot account tao nham gan nhu khong hoan tac duoc.
+       Moi stage phai ra "KHONG CO THAY DOI" - de xem duong di co
+       thong khong TRUOC khi mot account that di qua no. Mot account
+       tao nham gan nhu khong hoan tac duoc.
 
-    4. DOC PLAN TRUOC KHI DUYET
+    4. CONG DUYET: chi cac stage trong approve_stages
+       Hien dang la: ${join(", ", var.approve_stages)}
+       Cac stage con lai tu apply, va mang FAIL_ON_DESTROY=yes - plan
+       co xoa hoac thay the se TU CHOI thay vi chay tiep.
+
+    5. DOC PLAN TRUOC KHI DUYET
        Thu duyet KHONG chua noi dung plan, co y: mot cong duyet ma
        noi dung hien ngay trong thu se duoc bam tu dien thoai.
        Mo log CodeBuild cua stage do.
@@ -208,6 +243,33 @@ check "khoa_state_khong_trung" {
       join(", ", [for k, v in var.layer_keys : "${k} -> ${v}"]),
       ". Hai layer dung chung mot state se giam len nhau, va cai apply sau se",
       "coi resource cua cai truoc la thu can xoa.",
+    ])
+  }
+}
+
+check "approve_stages_tro_dung_stage" {
+  assert {
+    condition = length(setsubtract(
+      var.approve_stages,
+      [for s in local.stages_all : s.key]
+    )) == 0
+    error_message = join(" ", [
+      "approve_stages co khoa khong khop stage nao:",
+      join(", ", setsubtract(var.approve_stages, [for s in local.stages_all : s.key])),
+      "- chung bi BO QUA lang le, va stage ban tuong da co cong duyet thi khong co.",
+      "Khoa hop le:", join(", ", [for s in local.stages_all : s.key]),
+    ])
+  }
+}
+
+check "stage_tao_account_luon_co_cong_duyet" {
+  assert {
+    condition = !local.enabled || contains(var.approve_stages, "A-tao-account")
+    error_message = join(" ", [
+      "A-tao-account KHONG nam trong approve_stages, tuc account se duoc tao TU DONG.",
+      "Email la duy nhat vinh vien o pham vi AWS toan cau va account chi dong duoc,",
+      "khong xoa duoc - mot khoi catalog go nham se ton tai mai mai.",
+      "Day co the la lua chon co y, nhung phai la lua chon.",
     ])
   }
 }

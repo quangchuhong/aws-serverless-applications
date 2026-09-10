@@ -1,6 +1,6 @@
 # Pipeline vending account
 
-CodePipeline ở **account management**. Tự động hoá năm bước của [doc 27](../../docs/27-Van-hanh-Account-Vending.md) thành sáu stage, mỗi stage một cổng duyệt.
+CodePipeline ở **account management**. Tự động hoá năm bước của [doc 27](../../docs/27-Van-hanh-Account-Vending.md) thành sáu stage, với **một** cổng duyệt ở stage tạo account.
 
 **Mặc định tắt.** Bật nó không phải là thêm vài resource — nó tạo một đường tự động có quyền apply bốn layer, trong đó có layer `network`.
 
@@ -14,12 +14,14 @@ Nguồn (CodeCommit)
   ├─ Lint                    lint.sh + fmt + validate — không gọi AWS
   │
   ├─ A  account-baseline     plan → DUYỆT → apply    tạo account
-  ├─ B  network              plan → DUYỆT → apply    chia sẻ TGW
-  ├─ C  account-baseline     plan → DUYỆT → apply    VPC + attachment
-  ├─ D  network      ⏳chờ → plan → DUYỆT → apply    nối vào rtb-spokes
-  ├─ E  config-detective     plan → DUYỆT → apply    excluded_accounts
-  └─ F  permission-sets      plan → DUYỆT → apply    accounts_by_scope
+  ├─ B  network              plan → apply            chia sẻ TGW
+  ├─ C  account-baseline     plan → apply            VPC + attachment
+  ├─ D  network      ⏳chờ → plan → apply            nối vào rtb-spokes
+  ├─ E  config-detective     plan → apply            excluded_accounts
+  └─ F  permission-sets      plan → apply            accounts_by_scope
 ```
+
+Chỉ stage **A** dừng lại cho người bấm — xem `approve_stages` bên dưới. Năm stage tự apply mang `FAIL_ON_DESTROY=yes`, tức plan có xoá hoặc thay thế sẽ **từ chối** thay vì chạy tiếp.
 
 A và C cùng một layer, B và D cũng vậy. **Không gộp được:** C cần TGW đã chia sẻ ở B, D cần attachment đã tồn tại ở C. Ràng buộc thứ tự không biến mất khi bỏ người ra — nó chỉ thôi cần người.
 
@@ -82,11 +84,25 @@ Buildspec **không** assume role. Nó truyền `TF_VAR_assume_role_arn`, và lay
 
 ---
 
+## Cổng duyệt: mặc định chỉ ở stage A
+
+`approve_stages` quyết định stage nào dừng lại cho người bấm. Mặc định `["A-tao-account"]`.
+
+Năm stage còn lại tự apply — và **đổi lại** chúng mang `FAIL_ON_DESTROY=yes`: plan có resource bị **xoá** hoặc **thay thế** sẽ dừng ngay ở bước plan, chưa apply gì, kèm danh sách những gì sắp mất.
+
+Đó không phải nới lỏng mà là đổi loại kiểm soát. Một cảnh báo chỉ có giá trị khi có người đọc; ở stage không có cổng duyệt thì apply chạy ngay sau plan, không ai xen vào — nên cảnh báo phải thành một lần **từ chối**.
+
+Cần biết trước khi thu hẹp thêm: stage **B** và **D** apply layer `network` — TGW, firewall và mọi VPC của tổ chức. Stage **C** thay thế được stack ở account đích, tức xoá rồi dựng lại VPC. "Sửa được" không đồng nghĩa "vô hại".
+
+Muốn quay lại duyệt từng bước thì liệt kê cả sáu khoá vào `approve_stages`.
+
+---
+
 ## Ba thứ pipeline này không làm
 
 | | Vì sao |
 |---|---|
-| **Không tự duyệt** | Tạo account gần như không hoàn tác được, và email là duy nhất vĩnh viễn ở phạm vi AWS toàn cầu. Sáu cổng duyệt, không có đường tắt |
+| **Không tự tạo account** | Tạo account gần như không hoàn tác được, và email là duy nhất vĩnh viễn ở phạm vi AWS toàn cầu. `A-tao-account` **luôn** có cổng duyệt — `check "stage_tao_account_luon_co_cong_duyet"` cảnh báo nếu bạn gỡ nó |
 | **Không đính kèm plan vào thư** | Cố ý. Một cổng duyệt mà nội dung hiện ngay trong thư sẽ được bấm từ điện thoại, không đọc. Thư chỉ có link tới log CodeBuild |
 | **Không tạo repo CodeCommit** | Layer này trỏ tới repo đã có. Repo là nơi chứa lịch sử thay đổi hạ tầng; tạo và xoá nó bằng cùng một `terraform destroy` với pipeline là một ý tồi |
 
