@@ -308,6 +308,39 @@ check "Interface endpoint" "$(aws ec2 describe-vpc-endpoints --region "$REGION" 
   --filters "Name=vpc-endpoint-type,Values=Interface" \
   --query 'VpcEndpoints[].VpcEndpointId' --output text)"
 
+########################################
+# DUONG HAM DOI TAC - BA THU CHUA TUNG DUOC KIEM
+#
+# LOI 114b: truoc ban nay, phan xac nhan co dong "Canh bao duong ham
+# VPN" - nhung do la CloudWatch ALARM, khong phai duong ham. Khong
+# phep kiem nao nhin vao chinh VPN connection.
+#
+# Mot VPN connection tinh ~$0.05/gio (~$36/thang) DU KHONG CO mot goi
+# tin nao di qua. Nen muoi ba dau tich va dong "DA SACH" co the dung
+# het ma van bo lai khoan ton kem nhat con song.
+#
+# Phat hien ra bang luoi vot theo tag: vpn-connection, vpn-gateway va
+# customer-gateway deu nam trong 28 ARN do, va khong cai nao co mat o
+# phan xac nhan. Phan mang doi tac duoc them vao sau, va phan xac
+# nhan chi duoc them theo cho alarm.
+#
+# Day khong phai mot phep kiem hong - la mot thu tinh tien CHUA TUNG
+# co phep kiem nao. Danh sach dau tich chi bao phu nhung gi co nguoi
+# nghi toi luc viet no, va no khong tu noi ra minh thieu gi.
+#
+# VGW va CGW khong tinh phi theo gio, nhung de lai thi lan dung sau
+# se dung nham cai cu - va mot VGW con gan vao VPC thi chan viec xoa
+# VPC do.
+########################################
+check "VPN connection" "$(aws ec2 describe-vpn-connections --region "$REGION" \
+  --query 'VpnConnections[?State!=`deleted`].VpnConnectionId' --output text)"
+
+check "VPN gateway" "$(aws ec2 describe-vpn-gateways --region "$REGION" \
+  --query 'VpnGateways[?State!=`deleted`].VpnGatewayId' --output text)"
+
+check "Customer gateway" "$(aws ec2 describe-customer-gateways --region "$REGION" \
+  --query 'CustomerGateways[?State!=`deleted`].CustomerGatewayId' --output text)"
+
 check "Load balancer" "$(aws elbv2 describe-load-balancers --region "$REGION" \
   --query 'LoadBalancers[].LoadBalancerName' --output text 2>/dev/null)"
 

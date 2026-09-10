@@ -3690,6 +3690,30 @@ Rồi mỗi chốt chặn xử lý "không đọc được" theo cách riêng, c
 - **`account_id` không đọc được** → bỏ phép so sánh, không in rác.
 - **`project` không đọc được** → in hẳn một dòng nói *"BỎ QUA phần quét — đây KHÔNG phải 'đã sạch', mà là CHƯA NHÌN"*, kèm `LZ_PROJECT=<tên>` để quét được cả khi state đã rỗng.
 
+#### Lỗi 114b — mười ba dấu ✓, và khoản tốn kém nhất không có dấu nào
+
+Sau khi sửa xong, `teardown.sh` chạy sạch: mười ba phép kiểm xanh, `DA SACH. Khong con gi phat sinh chi phi.` Lưới vớt theo tag liệt kê 28 ARN, và script tự giải thích rằng đó là dữ liệu tag còn lưu của resource đã xoá.
+
+Đọc kỹ 28 ARN đó thì thấy ba thứ:
+
+```
+vpn-connection/vpn-07442f48fdbc6ddd4
+vpn-gateway/vgw-0c7c16e5374d5f2cd
+customer-gateway/cgw-06ee3116dbbff2c0c
+```
+
+Trong mười ba phép kiểm có dòng `Canh bao duong ham VPN` — nhưng đó là **CloudWatch alarm**, không phải đường hầm. **Không phép kiểm nào nhìn vào chính VPN connection**, mà một VPN connection tính ~$0.05/giờ (~$36/tháng) *dù không một gói tin nào đi qua*.
+
+Nghĩa là mười ba dấu ✓ và dòng "DA SACH" có thể **đúng hết** mà vẫn bỏ lại khoản tốn kém nhất còn sống. Lần này nó thật sự đã sạch — kiểm trực tiếp cho bảng rỗng — nhưng đó là may, không phải nhờ phép kiểm nào.
+
+Nguyên nhân: phần mạng đối tác được thêm vào sau, và phần xác nhận chỉ được thêm theo cho *alarm*. Đúng chỗ dễ nghĩ tới nhất, không phải chỗ đắt nhất.
+
+Đây **không phải một phép kiểm hỏng** — mà là một thứ tính tiền chưa từng có phép kiểm nào. Khác biệt quan trọng: cả bảy lần trước, khuyết điểm nằm trong một phép kiểm *đã tồn tại* và có thể phát hiện bằng cách đọc nó. Ở đây không có gì để đọc. Một danh sách dấu tích chỉ bao phủ những gì có người nghĩ tới lúc viết nó, và **nó không tự nói ra mình thiếu gì** — số dấu ✓ càng nhiều thì cảm giác đã bao phủ hết càng mạnh.
+
+Cái duy nhất bắt được nó là **lưới vớt theo tag**: thứ liệt kê thô, không lọc theo một danh sách định trước. Chính cái mà chú thích trong code gọi là *"lưới vớt, không phải phép đo chính xác"* và mô tả như một nguồn báo động giả. Nó ồn ào đúng vì nó không giả định trước phải tìm gì — và đó là lý do nó thấy được thứ mười ba phép kiểm chính xác không thấy.
+
+Chữa: thêm `check` cho VPN connection, VPN gateway và customer gateway. VGW/CGW không tính phí theo giờ, nhưng để lại thì lần dựng sau dễ dùng nhầm cái cũ, và một VGW còn gắn vào VPC thì chặn việc xoá VPC đó.
+
 **Dạng lỗi:** lần thứ bảy trong nhật ký này — một phép đọc thất bại được coi là một câu trả lời. Nhưng lần này có hai điều mới.
 
 Thứ nhất, **`|| echo ""` là một mẫu chủ động phá hoại chẩn đoán**. Nó biến "không đọc được" thành "đọc được, giá trị rỗng" — hai chuyện khác hẳn nhau — và nó xuất hiện ở đây bảy lần vì trông có vẻ cẩn thận. Cái vẻ ngoài phòng thủ ấy chính là thứ làm nó khó thấy.
