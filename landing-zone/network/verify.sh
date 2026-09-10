@@ -229,8 +229,19 @@ fi
 hdr "6. Gateway endpoint (mien phi) o moi spoke"
 ########################################
 
+# LOC THEO Project, KHONG PHAI Ephemeral.
+#
+# LOI 110: dong nay tung loc "Name=tag:Ephemeral,Values=true". Tag do
+# CHI ton tai khi ephemeral = true. Dat ephemeral = false - dung viec
+# ma tai lieu khuyen cho ha tang thuong tru - thi phep loc khong khop
+# gi, va script bao "Khong tim thay gateway endpoint" trong khi
+# endpoint van nam do va muc 7 van phan giai S3 qua no.
+#
+# Project co mat o CA HAI che do (versions.tf), nen no la thu nhan
+# dang duoc resource cua bo nay ma khong phu thuoc vao mot lua chon
+# van hanh.
 n=$(aws ec2 describe-vpc-endpoints --region "$REGION" \
-  --filters "Name=vpc-endpoint-type,Values=Gateway" "Name=tag:Ephemeral,Values=true" \
+  --filters "Name=vpc-endpoint-type,Values=Gateway" "Name=tag:Project,Values=$PROJECT" \
   --query 'length(VpcEndpoints)' --output text)
 [[ "$n" -gt 0 ]] && ok "$n gateway endpoint (S3 + DynamoDB)" || bad "Khong tim thay gateway endpoint"
 
@@ -240,17 +251,37 @@ hdr "6b. Tag chi phi da gan day du chua"
 
 # Cost allocation tag chi huu dung khi resource THUC SU mang tag do.
 # Bat tag o billing-guard ma khong gan o day = khong co du lieu de group.
-missing=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
-  --tag-filters "Key=Ephemeral,Values=true" \
-  --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])].ResourceARN' \
-  --output text 2>/dev/null)
+#
+# LOI 110: phep kiem nay tung loc "Key=Ephemeral,Values=true" va doc
+# ket qua RONG thanh "moi resource deu co tag CostCenter". Voi
+# ephemeral = false thi tag do khong ton tai, nen no in mot dong DAT
+# ma chua he nhin vao resource nao.
+#
+# Do la dang nguy hiem hon o muc 6: mot phep kiem hong ma keu to thi
+# duoc sua, mot phep kiem hong ma im lang bao "dat" thi song mai.
+#
+# Nen o day dem TONG truoc. Khong co gi mang tag Project nghia la
+# phep loc hong - va do la mot LOI, khong phai mot ban ha tang sach.
+tagged=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
+  --tag-filters "Key=Project,Values=$PROJECT" \
+  --query 'ResourceTagMappingList[].ResourceARN' --output text 2>/dev/null)
+total=$(echo "$tagged" | tr '\t' '\n' | grep -c . || true)
 
-if [[ -z "$missing" ]]; then
-  ok "Moi resource deu co tag CostCenter"
+if [[ "$total" -eq 0 ]]; then
+  bad "Khong resource nao mang tag Project=$PROJECT - phep loc HONG, day khong phai ket qua sach"
 else
-  cnt=$(echo "$missing" | tr '\t' '\n' | grep -c . || true)
-  bad "$cnt resource THIEU tag CostCenter - se hien la 'No CostCenter' trong Cost Explorer"
-  echo "$missing" | tr '\t' '\n' | head -5 | sed 's/^/      /'
+  missing=$(aws resourcegroupstaggingapi get-resources --region "$REGION" \
+    --tag-filters "Key=Project,Values=$PROJECT" \
+    --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])].ResourceARN' \
+    --output text 2>/dev/null)
+
+  if [[ -z "$missing" ]]; then
+    ok "$total resource deu co tag CostCenter"
+  else
+    cnt=$(echo "$missing" | tr '\t' '\n' | grep -c . || true)
+    bad "$cnt/$total resource THIEU tag CostCenter - se hien la 'No CostCenter' trong Cost Explorer"
+    echo "$missing" | tr '\t' '\n' | head -5 | sed 's/^/      /'
+  fi
 fi
 
 ########################################

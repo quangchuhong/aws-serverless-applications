@@ -3413,6 +3413,47 @@ Một điểm cần nhớ từ **lỗi 106**: `-target` không tính lại outpu
 
 ---
 
+### Lỗi 110 — bỏ một tag làm công cụ kiểm chứng vừa báo hỏng giả vừa báo đạt giả
+
+Ngay sau khi `ephemeral = false` apply xong (`0 added, 105 changed, 0 destroyed`), `verify.sh` tụt từ **69 đạt / 0 lỗi** xuống **68 đạt / 1 lỗi**:
+
+```
+6. Gateway endpoint (mien phi) o moi spoke
+  ✗ Khong tim thay gateway endpoint
+```
+
+Không có gì bị xoá. Mục 7 ngay bên dưới vẫn phân giải `s3.ap-southeast-1.amazonaws.com` qua chính cái gateway endpoint đó. Endpoint còn nguyên; thứ hỏng là câu hỏi.
+
+```bash
+aws ec2 describe-vpc-endpoints \
+  --filters "Name=vpc-endpoint-type,Values=Gateway" \
+            "Name=tag:Ephemeral,Values=true"      # ← tag vừa bị bỏ có chủ đích
+```
+
+Nhưng cái đáng ghi không phải mục 6. Là mục 6b, ngay dưới nó, lọc **cùng một tag**:
+
+```bash
+missing=$(... --tag-filters "Key=Ephemeral,Values=true" \
+              --query 'ResourceTagMappingList[?!(Tags[?Key==`CostCenter`])]...')
+if [[ -z "$missing" ]]; then
+  ok "Moi resource deu co tag CostCenter"    # ← in ra khi KHÔNG nhìn gì cả
+```
+
+Cùng một nguyên nhân, hai kết cục ngược nhau: mục 6 báo **hỏng giả**, mục 6b báo **đạt giả**. Và trong hai cái đó, cái được in bằng dấu ✓ mới là cái nguy hiểm — một phép kiểm hỏng mà kêu to thì được sửa trong mười phút, một phép kiểm hỏng mà im lặng nói "đạt" thì sống qua mọi lần chạy sau. Nếu hôm nay có resource thật sự thiếu `CostCenter`, `verify.sh` đã che nó đi.
+
+Đây là **lần thứ ba trong cùng một file**. Header của chính `verify.sh` đã liệt kê sẵn `"Khong tim thay gateway endpoint"` làm triệu chứng kinh điển của lọc-không-khớp, viết ra sau lỗi 48 và lỗi 57. Cảnh báo đúng, đặt đúng chỗ, và vẫn không chặn được lần thứ ba — vì hai lần trước sai ở **giá trị** của khoá lọc (`PROJECT` gán cứng, credential lệch account), còn lần này sai ở **chính khoá**: lọc theo một tag mà sự tồn tại của nó là một *lựa chọn vận hành*.
+
+Chữa hai phần:
+
+1. Lọc theo `Project` thay vì `Ephemeral`. `Project` có mặt ở cả hai chế độ (`versions.tf`), nên nó nhận dạng được resource của bộ này mà không phụ thuộc vào việc người ta chọn `ephemeral` bằng gì.
+2. Mục 6b **đếm tổng trước**. `total == 0` là phép lọc hỏng, và nó được báo là **lỗi**, không phải là một bản khai sạch. Dòng đạt giờ in cả số đã kiểm — `"11 resource deu co tag CostCenter"` — vì một con số buộc phép kiểm phải thừa nhận nó đã nhìn bao nhiêu.
+
+`teardown.sh` cũng quét theo `Ephemeral=true` và **không sửa**: ở đó, không tìm thấy gì chính là lớp bảo vệ, và dòng 29 của nó đã nói thẳng điều đó.
+
+**Dạng lỗi:** một phép lọc không khớp trả về rỗng, và rỗng bị đọc thành một câu trả lời — lần thứ sáu được ghi lại. Điểm mới lần này: cùng một khuyết điểm sinh ra **cả** dương tính giả **lẫn** âm tính giả tuỳ theo `if` viết theo chiều nào, nên đếm số dòng ✗ không đo được mức độ hỏng của một bộ kiểm chứng. Phép kiểm phải nói được **nó đã nhìn bao nhiêu thứ**, không chỉ nói **nó thấy bao nhiêu vấn đề**.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
