@@ -39,14 +39,62 @@ resource "aws_sns_topic_policy" "alerts" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
+    Statement = concat([{
       Sid       = "AllowEventBridgePublish"
       Effect    = "Allow"
       Principal = { Service = "events.amazonaws.com" }
       Action    = "sns:Publish"
       Resource  = aws_sns_topic.alerts[0].arn
-    }]
+      }],
+
+      ####################################
+      # NGUOI GUI O ACCOUNT KHAC
+      #
+      # Topic nay nam o account security. Mot role o account khac -
+      # vi du CodeBuild cua ops-pipeline o account management, bao
+      # drift - KHONG publish duoc chi bang quyen IAM cua no. SNS lien
+      # account doi CA HAI phia cho phep.
+      #
+      # Va khi thieu ve nay, no hong theo kieu te nhat: ben gui nhan
+      # AuthorizationError, ghi mot dong vao log cua chinh no, roi chay
+      # tiep. Khong co gi o phia topic bao rang co ai do dang co gui.
+      # Mot canh bao khong den duoc dich te hon khong co canh bao, vi
+      # no tao cam giac da co nguoi canh.
+      #
+      # DE RONG la lua chon mac dinh va dung cho phan lon truong hop:
+      # moi layer tu tao topic o account cua no. Chi khai o day khi ban
+      # co y muon gom canh bao ve mot cho.
+      ####################################
+      length(var.extra_publisher_arns) == 0 ? [] : [{
+        Sid       = "AllowCrossAccountPublish"
+        Effect    = "Allow"
+        Principal = { AWS = var.extra_publisher_arns }
+        Action    = "sns:Publish"
+        Resource  = aws_sns_topic.alerts[0].arn
+    }])
   })
+}
+
+variable "extra_publisher_arns" {
+  description = <<-EOT
+    ARN cua role/user o ACCOUNT KHAC duoc phep publish vao topic canh
+    bao nay.
+
+    Vi sao can: SNS lien account doi CA HAI phia cho phep. Cap
+    sns:Publish trong IAM cua ben gui la chua du - resource policy cua
+    topic cung phai cho.
+
+    Truong hop dien hinh: role CodeBuild cua ops-pipeline o account
+    management, gui bao phat hien drift.
+
+      cd ../ops-pipeline && terraform output codebuild_role_arn
+
+    DE RONG la mac dinh dung cho phan lon truong hop - moi layer tu tao
+    topic o account cua no, khong co phu thuoc lien account nao. Chi
+    khai o day khi ban CO Y muon gom canh bao ve mot cho.
+  EOT
+  type        = list(string)
+  default     = []
 }
 
 resource "aws_sns_topic_subscription" "email" {
