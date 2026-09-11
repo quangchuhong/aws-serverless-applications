@@ -14,7 +14,9 @@ owner       = "platform@example.com"
 
 enable = true
 
-repository_name = "aws-serverless-applications"
+# Ten kho CodeCommit - KHONG phai ten repo GitHub. Bay layer khac deu
+# ghi "diy-aws-landing-zone"; giu giong chung.
+repository_name = "diy-aws-landing-zone"
 branch_name     = "main"
 
 ########################################

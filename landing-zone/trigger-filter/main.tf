@@ -30,7 +30,22 @@ locals {
 
   tao_topic = var.loi_topic_arn == "" && length(var.loi_emails) > 0
   loi_topic = var.loi_topic_arn != "" ? var.loi_topic_arn : try(aws_sns_topic.loi[0].arn, "")
-  repo_arn  = "arn:${data.aws_partition.current.partition}:codecommit:${var.region}:${data.aws_caller_identity.current.account_id}:${var.repository_name}"
+  ####################################
+  # ARN KHO: TRA CUU, KHONG TU GHEP
+  #
+  # Ghep chuoi thi mot ten kho SAI van cho ra mot ARN dung cu phap. Rule
+  # EventBridge nhan no, apply xanh, va rule do khong bao gio no - vi
+  # khong co su kien nao mang ARN ay. Khong co trieu chung nao.
+  #
+  # (Da suyt vuong: terraform.tfvars.example cua layer nay tung ghi
+  # "aws-serverless-applications" - ten repo GitHub - trong khi kho
+  # CodeCommit that ten "diy-aws-landing-zone". Bay layer khac deu ghi
+  # dung; chi cho nay lech, va khong co gi bat duoc.)
+  #
+  # Data source doi kho co THAT: ten sai thi plan CHET ngay voi
+  # RepositoryDoesNotExistException, kem dung ten da go.
+  ####################################
+  repo_arn = local.enabled ? data.aws_codecommit_repository.kho[0].arn : ""
 
   # Tien to duong dan khong ket thuc bang "/" - xem check ben duoi.
   tien_to_lung_lo = flatten([
@@ -135,6 +150,12 @@ check "co_duong_bao_loi" {
 ########################################
 # HAM LOC
 ########################################
+
+data "aws_codecommit_repository" "kho" {
+  count = local.enabled ? 1 : 0
+
+  repository_name = var.repository_name
+}
 
 data "archive_file" "loc" {
   count = local.enabled ? 1 : 0
