@@ -149,6 +149,14 @@ policies:
         resource: "*"
         condition: exempt_roles
         locked: true
+        # Chan dung organizations:DetachPolicy va DeletePolicy - hai
+        # hanh dong ma chinh pipeline SCP phai goi duoc. Nen role cua
+        # pipeline BAT BUOC nam trong var.scp_exempt_role_names; thieu
+        # no thi pipeline khong sua duoc SCP, va khong sua duoc bang
+        # chinh no.
+        pipeline_scope: >-
+          exempt_roles mien tru scp_exempt_role_names - role cua pipeline
+          phai nam trong danh sach do
         reason: >-
           Mot account roi to chuc la mot account roi khoi MOI SCP, MOI
           Config rule va MOI trail cung mot luc. Day la hanh dong duy
@@ -192,6 +200,9 @@ policies:
         resource: "*"
         condition: root_user_only
         locked: true
+        pipeline_scope: >-
+          root_user_only gioi han vao root user cua account con; pipeline
+          chay bang IAM role, khong bao gio bang root
         reason: >-
           Root user cua account con khong co MFA bat buoc, khong di qua
           Identity Center, va khong xuat hien trong bat ky bao cao truy
@@ -295,6 +306,9 @@ policies:
           - kms:DescribeKey
         resource: "*"
         condition: region_lock
+        pipeline_scope: >-
+          chi chan khi RequestedRegion nam ngoai allowed_regions; pipeline
+          chay trong region duoc phep
         reason: >-
           Gioi han be mat tan cong va gioi han chi phi. Resource chay
           o region khong ai nhin toi la thu de bi bo quen nhat - va
@@ -459,6 +473,9 @@ policies:
         action: "*"
         resource: "*"
         locked: true
+        pipeline_scope: >-
+          OU Suspended la noi KHONG gi duoc chay, ke ca pipeline. Do la ca
+          muc dich - khong phai mot thieu sot can mien tru
         reason: >-
           Mot account ngung su dung ma con lam duoc bat cu viec gi la
           mot account khong ai theo doi nhung van co kha nang hanh
