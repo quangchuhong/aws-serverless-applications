@@ -231,7 +231,20 @@ phases:
           # --------------------------------------------------
           terraform show -json tfplan > tfplan.json
 
-          GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-pipeline/gate/gate.py"
+          # ------------------------------------------------
+          # gate/ KHONG thuoc pipeline nao - DUNG MOT BAN
+          #
+          # Bang LUAT trong gate.py la CHINH SACH AN NINH: "tao mot
+          # assignment la noi", "them account vao excluded_accounts la
+          # noi". Khi bon pipeline cua bon phong ban cung goi no, bon ban
+          # sao se lech nhau - va ban lech se la ban LONG hon, vi khong
+          # ai sua mot luat de no chan minh nhieu hon.
+          #
+          # Nen no nam o landing-zone/ops-gate/, khong nam trong thu muc
+          # cua mot pipeline. Duong dan la TUYET DOI tu goc repo, khong
+          # phai tuong doi tu layer.
+          # ------------------------------------------------
+          GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-gate/gate.py"
           if [ ! -f "$GATE" ]; then
             echo "LOI: khong thay $GATE"
             echo "     Cong chan la lop kiem duy nhat o pipeline nay doc duoc"
