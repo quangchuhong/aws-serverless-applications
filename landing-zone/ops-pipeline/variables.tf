@@ -241,63 +241,8 @@ variable "log_retention_days" {
 # "layer nay da ton tai va da apply mot lan".
 ########################################
 
-variable "enable_config_rules_ops" {
-  description = <<-EOT
-    Bat stage B-config-rules (layer landing-zone/config-detective/ops).
 
-    CAN TRUOC KHI BAT:
 
-      1. Layer do ton tai va da apply mot lan (state khong rong).
-      2. Role CodeBuild cua pipeline nay assume duoc vao ACCOUNT
-         SECURITY. Config rule song o do - aggregator-rules.tf:80 ghi
-         `provider = aws.security`.
-
-    Diem 2 la ly do that su cua viec bien nay mac dinh false. Hom nay o
-    account security chi co OrganizationAccountAccessRole, tuc FULL
-    ADMIN. Cap cho pipeline quyen do de sua Config rule la cap quyen sua
-    moi thu trong account bao mat.
-
-    Duong dung: mot role rieng cho pipeline, day xuong bang CloudFormation
-    StackSet, chi co quyen tren Config. Viec do da hoan lai den sau phep
-    do app-prod-5.
-  EOT
-  type        = bool
-  default     = false
-}
-
-variable "enable_permission_set_ops" {
-  description = <<-EOT
-    Bat stage C-permission-set-assignment (layer
-    landing-zone/permission-sets/ops).
-
-    Layer nay chay trong CHINH account management nen KHONG can role lien
-    account. Dieu duy nhat can truoc khi bat: layer ton tai va da apply
-    mot lan.
-
-    Pham vi cua no la "ai vao account nao" - assignment va thanh vien
-    group. Noi dung quyen nam o layer cha va KHONG di qua pipeline.
-  EOT
-  type        = bool
-  default     = false
-}
-
-variable "enable_network_ops" {
-  description = <<-EOT
-    Bat stage D-network-ops (layer landing-zone/network/ops).
-
-    Layer nay DA co state rieng tu truoc va da tung apply
-    (bootstrap_done = true). Ly do no mac dinh tat la khac hai cai tren:
-    state dang RONG vi layer network vua bi xoa de do tien.
-
-    Dung lai network roi hay bat:
-
-      cd ../network && terraform apply
-      cd ops && terraform apply
-      terraform state list | wc -l     # phai khac 0
-  EOT
-  type        = bool
-  default     = false
-}
 
 ########################################
 # STAGE Expiry

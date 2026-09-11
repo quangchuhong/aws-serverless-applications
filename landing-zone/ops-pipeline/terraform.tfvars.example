@@ -154,38 +154,6 @@ log_retention_days = 90
 ########################################
 
 ########################################
-# 6. BAT/TAT TUNG STAGE
-#
-# Mac dinh chi A-scp. Xem mo ta cua tung bien trong variables.tf - moi
-# cai co dieu kien khac nhau phai co truoc khi bat.
-#
-# Vi sao khong bat san: mot stage tro vao layer chua ton tai, hoac vao
-# layer co state RONG, se dung o chot chan "state RONG" cua buildspec -
-# va thong bao o do noi ve SAI KHOA STATE, khong noi rang layer chua
-# duoc dung. Doc log do se dan nguoi ta di sua backend.
-########################################
-
-# Config rule. CAN role rieng assume vao account security truoc - hom
-# nay o do chi co OrganizationAccountAccessRole, tuc full admin.
-enable_config_rules_ops = false
-
-# Ai vao account nao. Chay trong chinh account management nen KHONG can
-# role lien account - chi can layer permission-sets/ops ton tai va da
-# apply mot lan.
-enable_permission_set_ops = false
-
-# DNS, endpoint, rule group, ingress rule. Layer da co state rieng tu
-# truoc nhung state dang RONG vi network vua bi xoa de do tien.
-enable_network_ops = false
-
-# Khoi `loosen` het han co lam pipeline dung hay khong.
-#
-# false = chi bao cao. Khi do phep thi hanh THAT nam o job drift hang
-# dem, va PHAI co nguoi doc bao dong cua no - neu khong thi moi khoi
-# loosen deu song vinh vien.
-expiry_blocks_pipeline = false
-
-########################################
 # 7. LAYER KEYS - THEM KHI BAT STAGE
 #
 # Moi stage duoc bat phai co khoa state o day, neu khong check
@@ -193,12 +161,8 @@ expiry_blocks_pipeline = false
 #
 #   cd ../tf-backend && terraform output layers
 #
-# layer_keys = {
-#   "landing-zone/organization"              = "organization/terraform.tfstate"
-#   "landing-zone/config-detective/ops"      = "config-detective-ops/terraform.tfstate"
-#   "landing-zone/permission-sets/ops"       = "permission-sets-ops/terraform.tfstate"
-#   "landing-zone/network/ops"               = "network-ops/terraform.tfstate"
-# }
+# Pipeline nay chi vao layer organization. Cac layer khac thuoc pipeline
+# cua cloudops - mot layer rieng.
 ########################################
 
 ########################################

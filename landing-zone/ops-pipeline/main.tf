@@ -40,6 +40,24 @@
 # dung la PR tren git, khong phai mot cong trong CodeBuild noi nguoi
 # ta bam tu dien thoai.
 #
+# --------------------------------------------------------------
+# NHUNG LOP BU DO HIEN CHUA TON TAI - DO DUOC, KHONG PHAI PHONG DOAN
+#
+#   git log --merges     chi co merge tu-nhanh, chua co PR nao
+#   .github/CODEOWNERS   vua them, va no KHONG chan gi neu khong co
+#                        branch protection + PR
+#   duong len CodeCommit `git push codecommit HEAD:main` - PUSH TRUC TIEP
+#
+# Nen cau "cho duyet la PR tren git" o tren dang la mot LOI HUA, khong
+# phai mot phep chan. Mot thay doi SCP di tu may nguoi viet den AWS ma
+# khong ai khac doc: Lint, gate.py va FAIL_ON_DESTROY deu khong phai
+# NGUOI, va khong lop nao trong so do doc duoc y DINH.
+#
+# Xem .github/CODEOWNERS - muc "PHAI LAM GI DE NO THANH THAT". Buoc quan
+# trong nhat la buoc de bo qua nhat: chung nao con push truc tiep vao
+# main cua CodeCommit thi branch protection tren GitHub chi bao ve mot
+# ban sao, khong bao ve duong chay.
+#
 # Doi lai, hai lop bu:
 #
 #   1. FAIL_ON_DESTROY=yes - plan co xoa hoac thay the thi dung ngay o
@@ -248,79 +266,6 @@ locals {
       mo_ta = "Tag policy. Go khoi mot target la NOI."
     },
 
-    ####################################
-    # permission-sets/ops - STATE RIENG
-    #
-    # CHI "ai vao account nao". Noi dung quyen o layer cha: doi mot
-    # managed policy attachment la doi quyen cua MOI nguoi dang dung
-    # permission set do, o MOI account, ngay lap tuc - va Identity
-    # Center day thay doi do xuong moi role da sinh ma khong ai phai
-    # dang nhap lai. Do khong phai viec hang ngay.
-    #
-    # Chay trong CHINH account management, khong can role lien account.
-    ####################################
-    {
-      key     = "cloudops-permission-set"
-      layer   = "landing-zone/permission-sets/ops"
-      enabled = var.enable_permission_set_ops
-
-      targets = [
-        "aws_ssoadmin_account_assignment.ops",
-        "aws_identitystore_group_membership.ops",
-      ]
-
-      lint  = "./lint.sh --aws --strict"
-      mo_ta = "Ai vao account nao. TAO mot assignment la NOI - chieu nguoc voi SCP."
-    },
-
-    ####################################
-    # config-detective/ops - STATE RIENG
-    #
-    # Config rule doi hang ngay (them mot rule, doi mot tham so), nen no
-    # bien minh duoc mot state rieng. Recorder, aggregator, Security Hub
-    # va GuardDuty KHONG o day - chung doi vai lan mot nam, va mot
-    # pipeline tu apply duoc chung la mot pipeline co the tat ca he
-    # thong phat hien cua to chuc.
-    #
-    # CHUA BAT DUOC: Config rule song o ACCOUNT SECURITY -
-    # aggregator-rules.tf:80 ghi `provider = aws.security`. Layer nay se
-    # can sts:AssumeRole lien account, va hom nay chi co
-    # OrganizationAccountAccessRole = full admin o do. Do la dung cai
-    # role da hoan lai den sau phep do app-prod-5.
-    ####################################
-    {
-      key     = "cloudops-config-rules"
-      layer   = "landing-zone/config-detective/ops"
-      enabled = var.enable_config_rules_ops
-
-      targets = [
-        "aws_config_organization_managed_rule.ops",
-      ]
-
-      lint  = "./lint.sh --aws --strict"
-      mo_ta = "Config rule tu catalog. Xoa rule hoac them account vao excluded_accounts la NOI."
-    },
-
-    ####################################
-    # network/ops - DA co state rieng tu truoc
-    #
-    # Layer nay la khuon mau cho hai cai tren: no doc layer cha qua
-    # terraform_remote_state va giu state rieng.
-    #
-    # CHUA BAT DUOC vi ly do khac han: state dang RONG. network vua bi
-    # xoa de do tien, nen bat stage nay se cho ra mot loi noi ve sai
-    # khoa state.
-    ####################################
-    {
-      key     = "cloudops-network"
-      layer   = "landing-zone/network/ops"
-      enabled = var.enable_network_ops
-
-      targets = []
-
-      lint  = "./verify-catalog.sh"
-      mo_ta = "DNS record, endpoint, rule group, ingress rule. TAO mot ingress rule la NOI."
-    },
   ]
 
   # CHI stage duoc bat. thu_tu danh lai TU DAU tren tap da loc, nen tat
