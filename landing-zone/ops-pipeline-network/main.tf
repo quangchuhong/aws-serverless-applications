@@ -88,6 +88,23 @@ locals {
   # MANAGEMENT: terraform_remote_state cua layer cha nam trong bucket
   # state, va module da cap quyen doc bucket do.
   ####################################
+  ####################################
+  # STATE LAYER NAY DOC CUA LAYER KHAC
+  #
+  # network/ops doc state cua layer CHA (landing-zone/network) qua
+  # terraform_remote_state de lay TGW, VPC va vung. Xem
+  # network/ops/main.tf muc "DUONG DAN STATE CUA LAYER CHA".
+  #
+  # KHOA KHONG KHOP DUONG DAN - giong layer_keys, va vi cung mot ly do:
+  # layer network truoc o demo/network-lz-full va khoa state giu nguyen
+  # khi duong dan doi.
+  #
+  # CHI DOC: module cap dung s3:GetObject.
+  ####################################
+  state_chi_doc = [
+    "demo-network-lz-full/terraform.tfstate",
+  ]
+
   quyen_dich_vu = [
     {
       Sid      = "AssumeVaoAccountNetwork"
@@ -133,6 +150,7 @@ module "pipeline" {
   stages           = local.stages
   catalogs         = local.catalogs
   khong_co_catalog = local.khong_co_catalog
+  state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 

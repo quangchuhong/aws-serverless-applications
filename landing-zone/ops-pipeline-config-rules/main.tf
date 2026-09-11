@@ -57,6 +57,22 @@ locals {
   # aws_securityhub_account.management va aws_guardduty_detector.management
   # dung provider mac dinh, va plan refresh ca chung.
   ####################################
+  ####################################
+  # STATE LAYER NAY DOC CUA LAYER KHAC
+  #
+  # config-detective/vending.tf doc state cua account-baseline qua
+  # terraform_remote_state (bien vending_state).
+  #
+  # Khong khai thi plan CHET voi mot loi 403 cua S3 tren khoa do - va
+  # loi do khong nhac gi toi terraform_remote_state. Da vuong that o
+  # pipeline permission-set.
+  #
+  # CHI DOC: module cap dung s3:GetObject.
+  ####################################
+  state_chi_doc = [
+    "account-baseline/terraform.tfstate",
+  ]
+
   quyen_dich_vu = [
     {
       Sid      = "AssumeVaoSecurityVaLogArchive"
@@ -123,6 +139,7 @@ module "pipeline" {
   stages           = local.stages
   catalogs         = local.catalogs
   khong_co_catalog = local.khong_co_catalog
+  state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 

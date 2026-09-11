@@ -21,6 +21,7 @@ Bay phep kiem, khong can mang:
   5. caller doc module.pipeline.X ma module khong xuat
   6. dung local.X ma khong khai
   7. bien module dung type = list(any)
+  8. layer doc state cua layer khac ma caller khong khai state_chi_doc
 
 Phep thu 7 la mot bai hoc duoc ma hoa: list(any) buoc MOI phan tu cung
 mot type, va IAM statement thi luon khac hinh - mot cai co Condition, cai
@@ -161,6 +162,37 @@ def kiem_caller(C, mt_raw, ten_caller):
     ref = set(re.findall(r"module\.pipeline\.([a-z_]+)", ct))
     if ref - outs(mt_raw):
         loi.append(f"{ten_caller}: doc output module khong co: {sorted(ref - outs(mt_raw))}")
+
+    # 8. PHU THUOC STATE - phep kiem duy nhat nhin RA NGOAI caller
+    #
+    # Mot layer co the DOC state cua layer khac qua terraform_remote_state.
+    # Khi do khoa state do la mot phan be mat quyen cua pipeline, va
+    # layer_keys khong phu duoc (no cap ca quyen GHI).
+    #
+    # Khong khai thi plan CHET voi:
+    #   Error: Unable to access object "<khoa>" ... 403 Forbidden
+    # va loi do khong nhac gi toi terraform_remote_state. Da vuong that o
+    # pipeline permission-set, phat hien bang mot lan chay chu khong bang
+    # suy luan.
+    #
+    # Phep kiem nay chi bao "layer co doc" - no KHONG doan duoc khoa nao,
+    # vi khoa thuong den tu mot bien trong tfvars (vending_state). Nen no
+    # la mot canh bao co dia chi, khong phai mot phep so.
+    for m2 in re.finditer(r'layer\s*=\s*"([^"]+)"', ct_raw):
+        d_layer = os.path.join(GOC, m2.group(1))
+        if not os.path.isdir(d_layer):
+            continue
+        co_remote = any(
+            re.search(r'data\s+"terraform_remote_state"', open(f).read())
+            for f in glob.glob(os.path.join(d_layer, "*.tf"))
+        )
+        if co_remote and not re.search(r"state_chi_doc\s*=\s*\[\s*\"", ct_raw):
+            loi.append(
+                f"{ten_caller}: layer {m2.group(1)} DOC state cua layer khac "
+                "(terraform_remote_state) nhung caller khong khai state_chi_doc. "
+                "Plan se chet voi mot loi 403 cua S3 khong nhac gi toi remote state."
+            )
+            break
 
     return loi
 

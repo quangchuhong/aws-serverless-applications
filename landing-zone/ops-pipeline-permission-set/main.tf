@@ -61,6 +61,24 @@ locals {
   khong_co_catalog = "Layer permission-sets khai bang HCL (locals-policies.tf, permission-sets.tf), chua co catalog YAML. Khi catalog hoa thi them vao local.catalogs va XOA dong nay."
 
   ####################################
+  # STATE LAYER NAY DOC CUA LAYER KHAC
+  #
+  # permission-sets/vending.tf doc state cua account-baseline qua
+  # terraform_remote_state de lay danh sach account vua vend - xem
+  # local.vending_by_scope.
+  #
+  # Khong khai o day thi plan CHET voi:
+  #   Error: Unable to access object "account-baseline/terraform.tfstate"
+  #   ... StatusCode: 403, Forbidden
+  # va loi do khong nhac gi toi terraform_remote_state.
+  #
+  # CHI DOC. Module cap dung s3:GetObject, khong bao gio PutObject.
+  ####################################
+  state_chi_doc = [
+    "account-baseline/terraform.tfstate",
+  ]
+
+  ####################################
   # DOC RONG
   #
   # plan refresh TOAN BO state cua layer: permission set, inline policy,
@@ -167,6 +185,7 @@ module "pipeline" {
   stages           = local.stages
   catalogs         = local.catalogs
   khong_co_catalog = local.khong_co_catalog
+  state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 

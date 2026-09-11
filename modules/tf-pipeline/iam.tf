@@ -161,6 +161,25 @@ resource "aws_iam_role_policy" "codebuild" {
       # cung role mo rong hon. Va no doc duoc: mot nguoi doc Allow khong
       # biet duoc thu gi CO Y khong cho.
       ####################################
+      ####################################
+      # STATE CUA LAYER KHAC - CHI GetObject
+      #
+      # KHONG PutObject, khong DeleteObject. Pipeline doc state cua layer
+      # khac de lay output; no khong bao gio duoc ghi vao do. Tach khoi
+      # DocGhiState co chu dich: gop lai se cap quyen GHI tren state cua
+      # layer khac, va mot lan apply nham o day lam layer kia mat state.
+      #
+      # LA MOT DOI SO concat RIENG, khong nam trong danh sach literal:
+      # khi state_chi_doc rong thi Resource se la [], va IAM TU CHOI CA
+      # POLICY voi mot loi ve dinh dang ARN - khong noi gi ve bien nao.
+      ####################################
+      length(var.state_chi_doc) == 0 ? [] : [{
+        Sid      = "DocStateCuaLayerKhac"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:GetObjectVersion"]
+        Resource = [for k in var.state_chi_doc : "arn:${data.aws_partition.current.partition}:s3:::${var.state_bucket}/${k}"]
+      }],
+
       var.quyen_dich_vu,
       var.tu_choi_dich_vu,
 

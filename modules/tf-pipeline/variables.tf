@@ -136,6 +136,45 @@ variable "layer_keys" {
 # KHO tfvars
 ########################################
 
+########################################
+# STATE CUA LAYER KHAC - CHI DOC
+#
+# Mot layer co the DOC state cua layer khac qua terraform_remote_state.
+# Khi do khoa state do la mot phan BE MAT QUYEN cua pipeline, va
+# layer_keys khong phu duoc: layer_keys cap ca GhiObject, ma pipeline
+# tuyet doi khong duoc ghi vao state cua layer khac.
+#
+# Phat hien bang mot lan chay that, khong bang suy luan:
+#
+#   data.terraform_remote_state.vending[0]: Reading...
+#   Error: Unable to access object "account-baseline/terraform.tfstate"
+#   in S3 bucket "...": StatusCode: 403, Forbidden
+#
+# Layer permission-sets doc state cua account-baseline de lay danh sach
+# account vua vend. Khong co dong nay thi plan CHET - va thong bao noi ve
+# S3 403, khong noi rang mot phu thuoc state chua duoc khai.
+########################################
+
+variable "state_chi_doc" {
+  description = <<-EOT
+    Khoa state cua nhung layer KHAC ma layer cua pipeline nay DOC qua
+    terraform_remote_state. Chi cap s3:GetObject - khong bao gio cap ghi.
+
+    Tim bang cach doc chinh layer do:
+
+      grep -rn 'terraform_remote_state' <layer>/*.tf
+
+    Roi xem no doc khoa nao (thuong qua mot bien kieu vending_state),
+    va tra khoa do o tf-backend/outputs.tf muc local.layers.
+
+    RONG la hop le - phan lon layer khong doc state cua ai. Nhung neu
+    layer CO doc ma bien nay rong thi plan chet voi mot loi 403 cua S3,
+    va loi do khong nhac gi toi terraform_remote_state.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "tfvars_bucket" {
   description = <<-EOT
     Bucket chua terraform.tfvars cua cac layer. DUNG CHUNG voi
