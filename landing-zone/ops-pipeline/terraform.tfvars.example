@@ -130,22 +130,25 @@ build_timeout_minutes = 30
 log_retention_days = 90
 
 ########################################
-# SAU KHI APPLY: MOT BUOC KHONG BO DUOC
+# SAU KHI APPLY
 #
-# Lay ten role cua CodeBuild va them vao scp_exempt_role_names cua
-# layer organization:
+# KHONG can them role cua pipeline nay vao scp_exempt_role_names.
 #
-#   terraform output -raw codebuild_role_name
-#   # -> them vao ../organization/terraform.tfvars
-#   cd ../organization && terraform apply
+# SCP KHONG ap dung cho principal o account management, ke ca SCP gan
+# vao Root - xem ghi chu dau scp.tf. Role CodeBuild o day song o
+# management, nen ProtectOrganizationMembership khong cham toi no.
 #
-# VI SAO BAT BUOC: statement ProtectOrganizationMembership chan
-# organizations:DetachPolicy va organizations:DeletePolicy - hai hanh
-# dong ma chinh pipeline nay phai goi duoc de sua SCP.
+# Mien tru chi can khi principal nam o mot account THANH VIEN.
 #
-# Thieu mien tru thi pipeline apply duoc LAN DAU (luc SCP chua gan),
-# roi tu do khong sua duoc SCP nua - VA KHONG SUA DUOC BANG CHINH NO.
-# Phai vao bang tay de go.
+# Viec THAT SU phai lam, va chi khi dung topic o account khac:
 #
-# organization/lint.sh keu ve dieu nay o muc canh bao, kem ten role.
+#   terraform output codebuild_role_arn
+#   # -> them vao extra_publisher_arns o ../config-detective/terraform.tfvars
+#   cd ../config-detective && terraform apply
+#
+# Kiem bang phep do, khong bang state:
+#
+#   aws codebuild start-build --project-name <project>-ops-drift
+#   # log co "Da bao ve arn:aws:sns:..."  = thong
+#   # log co "khong bao duoc ve SNS"      = chua mo phia topic
 ########################################

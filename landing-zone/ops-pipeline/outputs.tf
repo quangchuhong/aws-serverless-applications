@@ -30,28 +30,35 @@ output "codebuild_role_arn" {
 }
 
 ########################################
-# BUOC BAT BUOC SAU APPLY
+# SCP KHONG AP DUNG CHO MANAGEMENT ACCOUNT
 #
-# Ten role nay phai vao var.scp_exempt_role_names cua layer
-# organization. Mo ta day du nam trong value, khong trong description -
-# xem ghi chu cu phap o dau file.
+# Role nay song o account management, va AWS KHONG ap SCP len principal
+# o do - ke ca SCP gan vao Root. Nen ProtectOrganizationMembership
+# (chan organizations:DetachPolicy va DeletePolicy) khong cham toi no,
+# va KHONG can them ten nay vao scp_exempt_role_names.
+#
+# Ban dau khoi nay ghi nguoc lai va goi do la "buoc bat buoc". Sai.
+# Chinh scp.tf da ghi dieu nay o dau file tu truoc: "SCP KHONG ap dung
+# cho management account."
+#
+# CHO NAO THI MOI CAN MIEN TRU: khi principal nam o mot account THANH
+# VIEN. Vi du role cua mot pipeline chay o account security de sua
+# Config rule - role do bi SCP cua Root chan binh thuong.
 ########################################
 output "codebuild_role_name" {
-  description = "Ten role CodeBuild. PHAI them vao scp_exempt_role_names cua layer organization."
+  description = "Ten role CodeBuild. Khong can mien tru SCP - role nay o management account."
   value = local.enabled ? {
     ten = aws_iam_role.codebuild[0].name
 
-    viec_phai_lam = join(" ", [
-      "Them ten nay vao var.scp_exempt_role_names o ../organization/terraform.tfvars",
-      "roi apply layer do.",
+    scp = join(" ", [
+      "KHONG can them vao scp_exempt_role_names: role nay o account management,",
+      "va SCP khong ap dung cho principal o account management.",
     ])
 
-    vi_sao_bat_buoc = join(" ", [
-      "Statement ProtectOrganizationMembership chan organizations:DetachPolicy va",
-      "organizations:DeletePolicy - hai hanh dong ma chinh pipeline nay phai goi",
-      "duoc de sua SCP. Thieu mien tru thi pipeline apply duoc LAN DAU (luc SCP",
-      "chua gan), roi tu do khong sua duoc SCP nua - VA KHONG SUA DUOC BANG",
-      "CHINH NO. Phai vao bang tay de go.",
+    can_lam_gi = join(" ", [
+      "Neu topic bao drift nam o ACCOUNT KHAC thi them ARN cua role nay vao",
+      "var.extra_publisher_arns o ../config-detective - SNS lien account doi",
+      "ca hai phia cho phep.",
     ])
   } : null
 }

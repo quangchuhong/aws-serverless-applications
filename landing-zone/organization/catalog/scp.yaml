@@ -149,14 +149,18 @@ policies:
         resource: "*"
         condition: exempt_roles
         locked: true
-        # Chan dung organizations:DetachPolicy va DeletePolicy - hai
-        # hanh dong ma chinh pipeline SCP phai goi duoc. Nen role cua
-        # pipeline BAT BUOC nam trong var.scp_exempt_role_names; thieu
-        # no thi pipeline khong sua duoc SCP, va khong sua duoc bang
-        # chinh no.
+        # Chan organizations:DetachPolicy va DeletePolicy - hai hanh
+        # dong ma pipeline SCP phai goi duoc.
+        #
+        # KHONG can mien tru cho ops-pipeline: no chay o account
+        # MANAGEMENT, va SCP khong ap dung cho principal o do - ke ca
+        # SCP gan vao Root. Xem ghi chu dau scp.tf.
+        #
+        # Mien tru chi can neu mot ngay nao do automation sua SCP chay
+        # tu mot account THANH VIEN.
         pipeline_scope: >-
-          exempt_roles mien tru scp_exempt_role_names - role cua pipeline
-          phai nam trong danh sach do
+          ops-pipeline chay o account management, noi SCP khong ap dung -
+          khong can mien tru
         reason: >-
           Mot account roi to chuc la mot account roi khoi MOI SCP, MOI
           Config rule va MOI trail cung mot luc. Day la hanh dong duy

@@ -210,15 +210,20 @@ CONDITIONS = {
     "region_lock", "network_account_exempt", "public_ip_on_launch",
 }
 
-# Hanh dong ma pipeline PHAI goi duoc. Chan chung di ma quen mien tru
-# la tu khoa chinh minh - va tu khoa theo kieu KHONG sua duoc bang
-# chinh pipeline do, vi lenh sua cung bi chan.
+# Hanh dong ma mot automation PHAI goi duoc. Chan chung di ma quen
+# mien tru la tu khoa chinh minh - theo kieu KHONG sua duoc bang chinh
+# automation do, vi lenh sua cung bi chan.
 #
-# Ba cai dau dang chu y nhat: pipeline SCP phai Attach/Detach/Update
-# duoc policy, ma ProtectOrganizationMembership chan dung
-# DetachPolicy va DeletePolicy. Nen role cua pipeline BAT BUOC nam
-# trong var.scp_exempt_role_names. Do la mot rang buoc that cua viec
-# dua SCP vao pipeline, khong phai mot canh bao cho vui.
+# NHUNG CHI KHI PRINCIPAL O ACCOUNT THANH VIEN.
+#
+# SCP khong ap dung cho principal o account MANAGEMENT, ke ca SCP gan
+# vao Root. Nen mot pipeline chay o management - nhu ops-pipeline -
+# khong bi nhung statement nay cham toi, va khong can mien tru.
+#
+# Canh bao nay van dang phat, vi tap automation se lon len: mot role o
+# account security sua Config rule, mot role o account network sua
+# route. Nhung no la mot CAU HOI ("principal cua ban o dau?"), khong
+# phai mot menh lenh.
 THIET_YEU = [
     "organizations:AttachPolicy", "organizations:DetachPolicy",
     "organizations:UpdatePolicy", "organizations:CreatePolicy",
@@ -335,10 +340,11 @@ for p in POLICIES:
                 for d in THIET_YEU if phu(mau, d)
             })
             if chan and not s.get("pipeline_scope"):
-                W(f"{name}/{sid}: chan hanh dong pipeline can:"
+                W(f"{name}/{sid}: chan hanh dong automation can:"
                   f" {', '.join(chan)}."
-                  " Role cua pipeline PHAI nam trong scp_exempt_role_names,"
-                  " neu khong thi chinh pipeline nay khong sua duoc no."
+                  " Neu automation goi chung nam o mot account THANH VIEN thi"
+                  " role cua no phai vao scp_exempt_role_names."
+                  " O account MANAGEMENT thi khong can - SCP khong ap dung o do."
                   " Da xem xet roi thi ghi `pipeline_scope: <ly do>` vao"
                   " statement de canh bao nay thoi lap lai")
         elif has_na:
