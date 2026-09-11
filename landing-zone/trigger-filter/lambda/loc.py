@@ -129,6 +129,22 @@ def kiem_ban_do(ban_do, tien_to_phu):
     # Sau khi tat rule EventBridge rieng cua tung pipeline, BAN_DO la
     # duong DUY NHAT den chung. Mot pipeline bi quen o day van "ton tai",
     # van xanh trong console, va khong bao gio chay nua.
+    #
+    # ---------------------------------------------------------------
+    # PHEP KIEM NAY BAO DAM DUNG MOT DIEU, KHONG HON
+    #
+    #   "moi pipeline TEN BAT DAU BANG tien_to_phu deu co trong BAN_DO"
+    #
+    # KHONG phai "moi pipeline cua landing zone deu co trong BAN_DO".
+    # Hai cau do trung nhau CHI VI ten pipeline do Terraform ghep:
+    # modules/tf-pipeline va vending-pipeline deu dat
+    # local.name = "${var.project}-${var.ten}". Con pipeline dat ten tay
+    # thi no khong thay.
+    #
+    # Da do that: account nay co 5 pipeline, 3 mang tien to "qh11-lz-".
+    # Hai cai con lai (MyImagePipeline1, shopping-cart-pipeline) khong
+    # thuoc landing zone, nen khong sao - nhung do la mot ket luan rut ra
+    # tu viec NHIN danh sach, khong phai tu viec phep kiem im lang.
     if tien_to_phu:
         sot = sorted(
             t for t in co_that

@@ -64,6 +64,18 @@ Dòng cuối là chiều nguy hiểm nhất của cả thiết kế này. `kiem_
 nó: hàm liệt kê pipeline thật ở AWS mỗi lần chạy và báo hỏng nếu có cái nào mang
 tiền tố `<project>-` mà không có trong bản đồ.
 
+Phép kiểm đó bảo đảm đúng một điều: *"mọi pipeline **tên bắt đầu bằng**
+`<project>-` đều có trong bản đồ"* — **không phải** *"mọi pipeline của landing
+zone đều có trong bản đồ"*. Hai câu đó trùng nhau chỉ vì tên pipeline do
+Terraform ghép (`local.name = "${var.project}-${var.ten}"` trong
+`modules/tf-pipeline` và `vending-pipeline`). Một pipeline đặt tên tay thì nó
+không thấy.
+
+Đo thật: account này có 5 pipeline, 3 mang tiền tố `qh11-lz-`. Hai cái còn lại
+(`MyImagePipeline1`, `shopping-cart-pipeline`) không thuộc landing zone — nhưng
+đó là kết luận rút ra từ việc **nhìn** danh sách, không phải từ việc phép kiểm im
+lặng.
+
 Muốn "chạy với mọi commit" thì khai `[""]`, **không phải** `[]`.
 
 ## Thứ tự bật — một chiều an toàn, một chiều im lặng
