@@ -3829,6 +3829,34 @@ Dòng đầu là bằng chứng: **trước bản vá, một tên project sai ch
 
 **Dạng lỗi:** lần thứ mười. Một phép tra cứu không khớp trả về rỗng, và rỗng được đọc thành *"không có gì để so"* thay vì *"chưa so được"*. Điểm mới: lần này rỗng còn được đọc thành một câu khẳng định **có lợi** — "mọi thứ đều là thắt" — nên nó không những không báo động, nó còn báo an toàn.
 
+#### Kết quả — đo được, và trước/sau nằm trong cùng một lệnh grep
+
+Lượt chạy sau bản vá, stream `11a823b0` (action `Plan` của stage `A_scp`):
+
+```
+09:10:45   project = qh11-lz  (tu terraform.tfvars)
+09:11:07   Doi chieu AWS: 0 thay doi NOI / 13 con lai la THAT hoac khong doi
+09:11:07    lint sach
+09:11:21  == tom tat: 0 tao, 0 sua, 0 xoa, 0 thay the
+```
+
+`13` là đúng số statement của catalog — nên nó **so thật**, không phải "so với rỗng rồi báo sạch". Đó là con số phân biệt hai kết cục mà lỗi 116 làm lẫn vào nhau.
+
+Cùng một lệnh `grep` trên cùng log group cũng in ra lượt **hỏng** trước đó, stream `47837525` lúc 08:36: ba dòng `echo "   lint sach"` và **không** dòng `project = `, **không** dòng ` lint sach`. Trước và sau bản vá nằm cạnh nhau trong một màn hình.
+
+Và cách phân biệt echo với kết quả — điều CodeBuild bắt phải làm, vì nó in cả khối lệnh vào log trước khi chạy:
+
+| Dòng | Là gì |
+|---|---|
+| `echo "   lint sach"` | script, chưa chạy |
+| `   lint sach` | đầu ra thật |
+| `echo "== tom tat: ${TAO} tao, ..."` | script — còn `${...}` nguyên |
+| `== tom tat: 0 tao, 0 sua, 0 xoa, 0 thay the` | đầu ra thật |
+
+Toàn tuyến **nguồn → lint đối chiếu AWS thật → plan → apply** đã thông một lượt với 0 thay đổi ở cả hai bước apply (`0 added, 0 changed, 0 destroyed`, rồi `No changes` ở bước `-refresh-only`), với `27 resource trong state` đúng khoá. Đúng thứ `next_steps` mục 3 của layer đòi: **lượt chạy đầu tiên phải là một lượt không có thay đổi** — xem được đường đi trước khi một thay đổi thật đi qua nó.
+
+Một giới hạn đã biết, ghi để không thành nợ im lặng: bước `terraform apply -refresh-only` ghi lại output **không** bị `-target` giới hạn, nên nó refresh cả 27 resource gồm cây OU và delegated administrator. Nó không sửa được hạ tầng (refresh-only theo định nghĩa) nhưng **ghi lại state** cho những resource mà pipeline này không được phép chạm. Nếu ai xoá tay một OU, lượt chạy này ghi nhận việc xoá vào state, và lượt sau attachment gắn vào OU đó sẽ vào plan — nơi `FAIL_ON_DESTROY=yes` chặn nó ở bước plan. Có lớp bù, nên là giới hạn, không phải lỗ.
+
 ---
 
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
