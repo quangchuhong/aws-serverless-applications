@@ -3722,6 +3722,50 @@ Thứ hai, **cùng một khuyết điểm hỏng theo ba chiều khác nhau**, n
 
 ---
 
+### Lỗi 115 — 22 test xanh, và AWS thật tìm ra lỗi trong một lượt
+
+`lint.sh` cho SCP có bộ phân loại thắt/nới, kèm 22 test tự viết. Tất cả xanh. Chạy lần đầu với dữ liệu thật:
+
+```
+PROJECT=qh11-lz ./lint.sh --aws
+
+LOI  NOI ma khong khai bao: network_lock/DenyPublicIpOnLaunch
+     - Resource THU HEP, mat: arn:aws:ec2:*:*:instance/*
+LOI  NOI ma khong khai bao: prod_guard/(ca policy)
+     - go khoi target: Production
+```
+
+Cả hai là **báo động giả**, và cùng một gốc: so **dạng khai** trong catalog với **dạng đã render** ở AWS.
+
+| Catalog giữ | AWS giữ |
+|---|---|
+| `arn:${partition}:ec2:*:*:instance/*` | `arn:aws:ec2:*:*:instance/*` |
+| `Workloads/Production` (đường dẫn, vì `local.ou_ids` đánh khoá thế) | `Production` (tên OU, từ `list-targets-for-policy`) |
+
+Hai chuỗi khác nhau → phép trừ tập hợp thấy "mất một phần tử" → báo thu hẹp. Và nó báo ngay trên **phép kiểm quan trọng nhất của cả file**: một báo động giả ở đó sẽ được bỏ qua sau vài lần, rồi một lần nới thật cũng bị bỏ qua cùng nó.
+
+**Nhưng điều đáng ghi không phải hai lỗi đó. Là việc 22 test không bắt được chúng.**
+
+Bộ test sinh bản chụp "AWS" **từ chính catalog**. Nên fixture mang đúng những sai lệch mà code cần kiểm cũng mang: cả hai phía đều để `${partition}` nguyên, cả hai phía đều dùng đường dẫn OU. Hai sai lệch triệt tiêu nhau, và phép so thấy khớp hoàn hảo.
+
+**Một fixture dựng từ cùng nguồn với code cần kiểm không thể phát hiện lệch biểu diễn.** Nó chỉ chứng minh code tự nhất quán — điều luôn đúng, và không ai cần chứng minh. Toàn bộ 22 test kiểm *logic phân loại* (thu hẹp có bị bắt không, `locked` có chặn được `loosen` không) và không một test nào kiểm *hai phía có nói cùng một ngôn ngữ không*.
+
+Chữa hai chỗ trong `lint.sh`, và một chỗ trong bộ test: **bản chụp giờ render như AWS**, không như catalog. Sau đó kiểm bằng đột biến — bỏ từng bản chuẩn hoá và xem bộ test có đỏ:
+
+```
+bo chuan hoa partition  ->  15 dat / 7 truot
+bo chuan hoa target     ->  15 dat / 7 truot
+ca hai                  ->  22 dat / 0 truot
+```
+
+Lần đầu chạy phép đột biến đó, lệnh sửa file dùng `\${partition}` trong chuỗi nháy kép của bash; bash biến `\$` thành `$`, chuỗi Python đi tìm một dòng không tồn tại, phép thay thế là no-op và **không báo lỗi**. Test in ra `22 dat`, và tôi đọc thành *"test không bắt được"* trong khi sự thật là *"đột biến chưa xảy ra"*. Đúng dạng đã ghi bảy lần, lần này ở trong chính phép kiểm dùng để kiểm phép kiểm. Bản sửa: `assert old in t` trước khi thay — một phép đột biến không đột biến được phải **dừng**, không được im lặng báo xanh.
+
+**Dạng lỗi:** test và code chia sẻ một giả định, nên test không thể kiểm giả định đó. Khác với cả bảy lần trước — ở đó phép kiểm *có thể* đúng nhưng viết sai; ở đây phép kiểm **về mặt cấu trúc** không nhìn được vào chỗ cần nhìn. Cách duy nhất phát hiện là dữ liệu thật, hoặc một fixture được dựng độc lập bằng tay.
+
+Hệ quả thực hành: với bất kỳ phép so "của ta" với "của họ", fixture phải sinh từ **phía họ**. Và khi không có dữ liệu thật, phép đột biến là thứ gần nhất — nhưng chỉ khi nó dừng lại được lúc không đột biến nổi.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

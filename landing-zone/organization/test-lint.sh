@@ -36,6 +36,16 @@ truot=0
 #
 # Chi dung Sid / Action / NotAction / Resource - dung nhung truong ma
 # bo phan loai doc. Condition chi can CO hay KHONG.
+#
+# QUAN TRONG: ban chup phai giong AWS, KHONG giong catalog.
+#
+#   ${partition} -> "aws"              (AWS luu dang da render)
+#   "Workloads/Production" -> "Production"  (AWS tra ve TEN OU)
+#
+# Ban dau ham nay chep thang tu catalog, nen fixture mang dung nhung
+# sai lech ma lint cung mang - va 22 test deu xanh trong khi lint bao
+# dong gia tren hai statement co that. Mot fixture dung tu CUNG NGUON
+# voi code can kiem thi khong the phat hien lech bieu dien.
 ########################################
 chup() {
   CAT="$1" OUT="$2" PROJECT="$PROJECT" python3 - <<'PY'
@@ -45,15 +55,20 @@ out = {}
 for p in doc["policies"]:
     stmts = []
     for s in p.get("statements") or []:
-        d = {"Sid": s["sid"], "Effect": s["effect"], "Resource": s["resource"]}
-        if s.get("action") is not None:     d["Action"] = s["action"]
-        if s.get("not_action") is not None: d["NotAction"] = s["not_action"]
+        def R(v):
+            if isinstance(v, list): return [R(x) for x in v]
+            return v.replace("${partition}", "aws") if isinstance(v, str) else v
+
+        d = {"Sid": s["sid"], "Effect": s["effect"], "Resource": R(s["resource"])}
+        if s.get("action") is not None:     d["Action"] = R(s["action"])
+        if s.get("not_action") is not None: d["NotAction"] = R(s["not_action"])
         if s.get("condition"):              d["Condition"] = {"_": "_"}
         stmts.append(d)
     ten = f"{os.environ['PROJECT']}-{p['name'].replace('_', '-')}"
     out[ten] = {
         "content": json.dumps({"Version": "2012-10-17", "Statement": stmts}),
-        "targets": list(p.get("targets") or []),
+        # AWS tra ve TEN OU, khong phai duong dan.
+        "targets": [str(x).split("/")[-1] for x in (p.get("targets") or [])],
     }
 json.dump(out, open(os.environ["OUT"], "w"))
 PY

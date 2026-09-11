@@ -244,6 +244,36 @@ def as_list(v):
     return v if isinstance(v, list) else [v]
 
 ########################################
+# CHUAN HOA TRUOC KHI SO VOI AWS
+#
+# Catalog giu DANG KHAI ("arn:${partition}:ec2:..."), AWS giu DANG DA
+# RENDER ("arn:aws:ec2:..."). So thang hai dang do thi moi statement
+# co cho thay the deu bi bao la "Resource THU HEP" - mot bao dong gia
+# ngay tren phep kiem quan trong nhat cua file nay.
+#
+# PARTITION mac dinh "aws". Dat PARTITION=aws-cn / aws-us-gov neu chay
+# o partition khac.
+PARTITION = os.environ.get("PARTITION") or "aws"
+
+def render(v):
+    """Dua mot gia tri catalog ve dang AWS se thay."""
+    if isinstance(v, list):
+        return [render(x) for x in v]
+    if isinstance(v, str):
+        return v.replace("${partition}", PARTITION)
+    return v
+
+def ten_target(t):
+    """Ten target de SO SANH.
+
+    Catalog viet duong dan ("Workloads/Production") vi local.ou_ids
+    danh khoa nhu vay. AWS list-targets-for-policy tra ve TEN OU
+    ("Production"). Lay doan cuoi, bo phan biet chu hoa - giong dung
+    cach scp_target_id o scp.tf thu ca hai.
+    """
+    return str(t).split("/")[-1].strip().lower()
+
+########################################
 # 1. SCHEMA
 ########################################
 seen_sid, seen_pol = {}, {}
@@ -374,10 +404,10 @@ def tap_hanh_dong(st):
     na = st.get("NotAction", st.get("not_action"))
     kind = "NotAction" if na is not None else "Action"
     v = na if na is not None else a
-    return kind, set(as_list(v))
+    return kind, set(render(as_list(v)))
 
 def tap_resource(st):
-    return set(as_list(st.get("Resource", st.get("resource"))))
+    return set(render(as_list(st.get("Resource", st.get("resource")))))
 
 noi_long = []          # (policy, sid, ly do)
 
@@ -436,11 +466,11 @@ if AWS_DUMP and os.path.exists(AWS_DUMP):
                     " khong co - day la mot ngoai le moi"))
 
         # Policy bi go khoi mot target = NOI.
-        t_cu = set(cu.get("targets") or [])
-        t_moi = set(as_list(p.get("targets")))
-        # "ROOT" o catalog hien ra duoi ten root that o AWS, nen bo qua.
-        mat_t = {t for t in t_cu - t_moi if t.lower() != "root"}
-        if mat_t and "ROOT" not in t_moi:
+        # So bang TEN OU, khong bang duong dan - xem ten_target().
+        t_cu = {ten_target(t) for t in (cu.get("targets") or [])}
+        t_moi = {ten_target(t) for t in as_list(p.get("targets"))}
+        mat_t = {t for t in t_cu - t_moi if t != "root"}
+        if mat_t and "root" not in t_moi:
             noi_long.append((p["name"], "(ca policy)",
                 f"go khoi target: {', '.join(sorted(mat_t))}"))
 
