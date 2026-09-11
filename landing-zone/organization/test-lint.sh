@@ -204,6 +204,109 @@ sua "condition khong co trong bang builder" 1 \
 sua "locked va loosen cung luc" 1 \
   "S('baseline','ProtectAuditTrail')['loosen'] = {'ticket':'X','reason':'y','approved_by':'a@b.c','expires':'2099-01-01'}"
 
+########################################
+echo
+echo "── Ten project SAI: phai thoat 1, KHONG duoc bao 'sach' ──"
+#
+# Bo phan loai coi "khong thay policy o AWS" la policy MOI, tuc THAT,
+# tuc khong loi. Nen mot ten project sai lam MOI policy thanh "moi" va
+# lint se bao 0 thay doi NOI - mot lan PASS GIA tren mot catalog khong
+# he duoc so. Day la loi 116.
+########################################
+
+ten_project() { # <ten test> <ma thoat mong doi> <ten project> [bien=gia tri]
+  local ten="$1" mong="$2" du_an="$3"
+  shift 3
+  local cat="$TMP/scp.yaml"
+  cp catalog/scp.yaml "$cat"
+
+  local ra
+  ra=$(CATALOG_DIR="$TMP" AWS_DUMP="$TMP/aws.json" PROJECT="$du_an" \
+    env ${1+"$@"} ./lint.sh 2>&1)
+  local ma=$?
+
+  if [[ "$ma" == "$mong" ]]; then
+    printf "  ${G}✓${N} %s  (thoat %s)\n" "$ten" "$ma"
+    dat=$((dat + 1))
+  else
+    printf "  ${R}✗${N} %s  (thoat %s, mong doi %s)\n" "$ten" "$ma" "$mong"
+    echo "$ra" | sed 's/^/        /'
+    truot=$((truot + 1))
+  fi
+}
+
+ten_project "ten project sai            -> thoat 1" 1 "du-an-khong-ton-tai"
+ten_project "ten project dung           -> sach"    0 "$PROJECT"
+
+# LAN_DAU=yes la cach noi ro "chua tung apply SCP nao". Khong co no thi
+# lan apply that su dau tien bi chan - co y: mot lan chan sai lam nguoi
+# ta doc thong bao, con mot lan PASS gia thi khong.
+ten_project "0 khop + LAN_DAU=yes      -> sach"     0 "du-an-khong-ton-tai" LAN_DAU=yes
+
+########################################
+echo
+echo "── Nguon ten project ──"
+#
+# TRICH ham doc_project() THAT ra khoi lint.sh chu khong chep lai no.
+# Mot ban chep chi chung minh ban chep tu nhat quan - do la bai hoc cua
+# loi 115, khi fixture dung tu cung nguon voi code va 22 test deu xanh
+# tren mot loi that.
+########################################
+
+sed -n '/^doc_project() {/,/^}/p' lint.sh >"$TMP/doc_project.sh"
+if [[ ! -s "$TMP/doc_project.sh" ]]; then
+  printf "  ${R}✗${N} khong trich duoc doc_project() tu lint.sh - ham bi doi ten?\n"
+  truot=$((truot + 1))
+fi
+
+nguon() { # <ten test> <mong doi "gia tri|nguon"> <thu muc chay> [BIEN=gia tri ...]
+  local ten="$1" mong="$2" dir="$3"
+  shift 3
+  local ra
+  ra=$(
+    cd "$dir" || exit 1
+    env -u PROJECT -u TF_VAR_project ${1+"$@"} bash -c "
+      set -uo pipefail
+      source '$TMP/doc_project.sh'
+      NGUON_PROJECT=
+      if doc_project; then
+        printf '%s|%s' \"\$PROJECT\" \"\$NGUON_PROJECT\"
+      else
+        printf '|KHONG'
+      fi"
+  )
+
+  if [[ "$ra" == "$mong" ]]; then
+    printf "  ${G}✓${N} %s  (%s)\n" "$ten" "$ra"
+    dat=$((dat + 1))
+  else
+    printf "  ${R}✗${N} %s  (duoc '%s', mong doi '%s')\n" "$ten" "$ra" "$mong"
+    truot=$((truot + 1))
+  fi
+}
+
+mkdir -p "$TMP/co-tfvars" "$TMP/trong" "$TMP/chi-comment" "$TMP/ten-gan-giong"
+printf 'region = "ap-southeast-1"\nproject     = "tu-tfvars"\n' \
+  >"$TMP/co-tfvars/terraform.tfvars"
+printf '# project = "bi-comment"\n' >"$TMP/chi-comment/terraform.tfvars"
+printf 'project_name = "khong-phai-cai-nay"\n' >"$TMP/ten-gan-giong/terraform.tfvars"
+
+nguon "doc tu terraform.tfvars" "tu-tfvars|terraform.tfvars" "$TMP/co-tfvars"
+
+# Bien PROJECT phai THANG tfvars: nguoi chay tay can ghi de duoc.
+nguon "bien PROJECT thang tfvars" "tu-bien|bien PROJECT" "$TMP/co-tfvars" \
+  PROJECT=tu-bien
+
+# Neo `^[[:space:]]*project` phai loai dong comment. Neu no khop thi
+# ket qua se la "bi-comment|terraform.tfvars".
+nguon "dong comment khong tinh" "tu-env|TF_VAR_project" "$TMP/chi-comment" \
+  TF_VAR_project=tu-env
+
+# `project_name = ...` khong duoc khop `project = ...`.
+nguon "project_name khong khop" "|KHONG" "$TMP/ten-gan-giong"
+
+nguon "khong co nguon nao   -> KHONG" "|KHONG" "$TMP/trong"
+
 echo
 echo "════════════════════════════════════════════"
 if [[ "$truot" == "0" ]]; then

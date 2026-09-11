@@ -115,6 +115,13 @@ locals {
       # Lenh lint chay TRUOC plan, trong cung thu muc layer.
       # --aws de bo phan loai THAT/NOI doc duoc policy dang gan that.
       # --strict de canh bao thanh loi trong pipeline.
+      #
+      # KHONG truyen PROJECT=... o day, du lam vay se "sua" duoc loi
+      # 116. lint.sh tu doc ten project tu terraform.tfvars cua layer -
+      # dung file ma buildspec vua keo ve. Mot ban sao thu hai cua ten
+      # do o day la mot cho de no lech, va mot ten project lech KHONG
+      # gay loi: no lam moi policy trong nhu policy moi, tuc moi thay
+      # doi trong nhu THAT, tuc lint bao sach ma khong so voi gi.
       lint = "./lint.sh --aws --strict"
 
       mo_ta = "SCP tu catalog/scp.yaml. That chay tu do, noi phai co khoi loosen."

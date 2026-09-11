@@ -3766,6 +3766,71 @@ Hệ quả thực hành: với bất kỳ phép so "của ta" với "của họ"
 
 ---
 
+### Lỗi 116 — chốt chặn chặn đúng, và ngay cạnh nó là một chốt chặn chặn hụt
+
+Lượt chạy thật đầu tiên của pipeline vận hành. Stage `A_scp`, action `Plan`, **Failed**. Log:
+
+```
+08:36:22  == lint: ./lint.sh --aws --strict
+08:36:24    ⚠ --aws can ten project de tim policy o AWS, nhung khong doc duoc.
+```
+
+Đó là chốt chặn `PROJECT` của `lint.sh`. Nó dừng **trước** `terraform plan`, nên không có gì ở AWS bị chạm tới. Đây là lớp bù cho việc pipeline này cố ý không có cổng duyệt, và nó làm đúng việc của nó.
+
+Nguyên nhân: `lint.sh --aws` lấy tên project bằng `terraform output -raw project`. Trên máy người vận hành nó luôn chạy được vì người ta gõ `PROJECT=qh11-lz ./lint.sh`. Trong CodeBuild không ai đặt biến đó, và lệnh kia trả về rỗng.
+
+Hai lý do, và **không lý do nào sửa được bằng cách thêm một output**:
+
+1. `terraform output` đọc **state**, tức giá trị của lần apply *trước*. lint chạy trước plan và apply. Nên đúng ở lượt quan trọng nhất — lượt đầu sau khi thêm output — state vẫn chưa có nó.
+2. Layer `organization` không khai output `project`. Lệnh đó in khối `No outputs found` ra **stdout** rồi thoát 0 — lỗi 114, lần thứ hai.
+
+`terraform.tfvars` thì ngược lại: nó là **đầu vào sinh ra chính cái tên đó**, và buildspec kéo nó về trước khi lint chạy (thiếu file thì buildspec đã thoát 1 từ trước). Không phụ thuộc vào một lần apply nào.
+
+#### Nhưng lỗi đáng ghi là cái tìm thấy lúc đang sửa
+
+Đọc lại đoạn phân loại để biết `PROJECT` được dùng vào đâu:
+
+```python
+ten_aws = f"{PROJECT}-{p['name'].replace('_', '-')}"
+cu = aws.get(ten_aws)
+if cu is None:
+    # Policy moi. Them mot policy la THAT - khong can khai bao.
+    continue
+```
+
+Dòng đó **đúng** khi thật sự thêm một policy mới. Nhưng nếu tên project **sai** thì không policy nào tìm thấy, nên *mọi* policy đều "mới", nên *mọi* policy đều là thắt, nên kết quả là:
+
+```
+Doi chieu AWS: 0 thay doi NOI / 13 con lai la THAT hoac khong doi
+```
+
+**Sạch.** Thoát 0. Pipeline chạy tiếp và apply.
+
+Hai chốt chặn cạnh nhau, cùng đọc một biến, hỏng theo hai chiều ngược nhau:
+
+| `PROJECT` | Xảy ra gì | Kiểu hỏng |
+|---|---|---|
+| rỗng | lint từ chối chạy, thoát 1 | **đóng** — pipeline dừng, ai cũng thấy |
+| sai một ký tự | lint báo "0 thay doi NOI", thoát 0 | **mở** — lint vừa báo cáo rằng không ai nới guardrail nào, trong khi nó không nhìn thấy guardrail nào cả |
+
+Đúng cặp đã ghi ở lỗi 114, nơi một khuyết điểm làm một chốt chặn fail-open và một chốt chặn khác fail-closed. Ở đây còn gọn hơn: **cùng một biến, chênh nhau một ký tự, và hai kết cục ngược nhau.**
+
+Bản vá: đếm xem bao nhiêu tên mong đợi thật sự có ở AWS. 0 trên N thì chỉ có hai khả năng — tên sai, hoặc thật sự chưa từng apply SCP nào — và lint **không phân biệt được**, nên nó từ chối và bắt người chạy nói rõ bằng `LAN_DAU=yes`. Cùng hình dạng với chốt `FIRST_APPLY` ở buildspec, vì cùng một câu hỏi: *rỗng vì chưa có, hay rỗng vì nhìn nhầm chỗ?*
+
+Kiểm bằng đột biến, vì 30 dấu ✓ tự nó không chứng minh gì (lỗi 115):
+
+```
+vô hiệu hoá chốt 0-khớp  ->  29 dat / 1 truot   ("ten project sai" thoát 0 = PASS giả)
+bỏ neo ^ trong sed        ->  29 dat / 1 truot   (dòng `# project = ...` bị đọc thành giá trị)
+cả hai còn nguyên         ->  30 dat / 0 truot
+```
+
+Dòng đầu là bằng chứng: **trước bản vá, một tên project sai cho ra `exit 0`.**
+
+**Dạng lỗi:** lần thứ mười. Một phép tra cứu không khớp trả về rỗng, và rỗng được đọc thành *"không có gì để so"* thay vì *"chưa so được"*. Điểm mới: lần này rỗng còn được đọc thành một câu khẳng định **có lợi** — "mọi thứ đều là thắt" — nên nó không những không báo động, nó còn báo an toàn.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:

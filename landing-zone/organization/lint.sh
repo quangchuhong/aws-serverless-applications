@@ -13,6 +13,15 @@
 #
 # --strict lam canh bao thanh loi. CI dung --strict.
 #
+# BIEN MOI TRUONG
+#
+#   PROJECT=<ten>   ghi de ten project. Khong dat thi doc tu
+#                   terraform.tfvars - xem doc_project().
+#   LAN_DAU=yes     noi ro "chua tung apply SCP nao". Chi can khi
+#                   --aws tim thay 0 policy o AWS; khong co no thi
+#                   lint TU CHOI truong hop do, vi 0 policy cung la
+#                   dau hieu cua mot ten project sai - loi 116.
+#
 # --------------------------------------------------------------
 # VI SAO CAN, KHI TERRAFORM DA CO check
 #
@@ -117,23 +126,79 @@ if [[ -n "${AWS_DUMP:-}" && -f "${AWS_DUMP}" ]]; then
   echo "  (dung ban chup ${AWS_DUMP}, khong goi AWS)"
 fi
 
-if [[ "$MODE_AWS" == "1" ]]; then
-  # Ten policy o AWS la "<project>-<ten catalog, _ thanh ->" - xem
-  # resource aws_organizations_policy.scp trong scp.tf.
-  if [[ -z "$PROJECT" ]]; then
-    PROJECT=$(terraform output -raw project 2>/dev/null || echo "")
-    # terraform output in canh bao ra STDOUT khi state rong - loi 114.
-    case "$PROJECT" in
-    *"Warning:"* | *"No outputs"* | *"╷"*) PROJECT="" ;;
-    esac
+########################################
+# TEN PROJECT DEN TU DAU
+#
+# Ten policy o AWS la "<project>-<ten catalog, _ thanh ->" - xem
+# resource aws_organizations_policy.scp trong scp.tf. Khong co ten
+# project thi khong tim duoc policy nao de so.
+#
+# --------------------------------------------------------------
+# VI SAO KHONG DUNG `terraform output -raw project`
+#
+# Ban dau cho nay doc output cua state, va no lam pipeline van hanh
+# dung ngay o lan chay dau (loi 116). Hai ly do, ca hai deu khong sua
+# duoc bang cach them mot output:
+#
+#   1. `terraform output` doc STATE, tuc gia tri cua lan APPLY TRUOC.
+#      lint chay TRUOC plan va apply, nen o dung lan chay quan trong
+#      nhat - lan dau sau khi them output - state con chua co no.
+#   2. Layer organization khong khai output `project`. Lenh do tra ve
+#      khoi canh bao "No outputs found" ra STDOUT va thoat 0 (loi 114),
+#      nen `|| echo ""` khong bat duoc gi.
+#
+# terraform.tfvars thi nguoc lai: no la DAU VAO sinh ra chinh cai ten
+# do, va buildspec keo no ve truoc khi lint chay (khong co file thi
+# buildspec da thoat 1 tu truoc). Khong phu thuoc vao mot lan apply nao.
+########################################
+doc_project() {
+  # 1. Bien moi truong - nguoi chay tu quyet, thang moi thu khac.
+  if [[ -n "${PROJECT:-}" ]]; then
+    NGUON_PROJECT="bien PROJECT"
+    return 0
   fi
 
-  if [[ -z "$PROJECT" ]]; then
+  # 2. terraform.tfvars - dau vao that cua layer.
+  #
+  # `^[[:space:]]*project[[:space:]]*=` co chu dich: neo dau dong nen
+  # dong bat dau bang `#` khong khop, va doi dau `=` ngay sau nen
+  # `project_name = ...` khong khop.
+  if [[ -f terraform.tfvars ]]; then
+    local v
+    v=$(sed -n 's/^[[:space:]]*project[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+      terraform.tfvars | head -1)
+    if [[ -n "$v" ]]; then
+      PROJECT="$v"
+      NGUON_PROJECT="terraform.tfvars"
+      return 0
+    fi
+  fi
+
+  # 3. TF_VAR_project - Terraform cung doc cho nay.
+  if [[ -n "${TF_VAR_project:-}" ]]; then
+    PROJECT="$TF_VAR_project"
+    NGUON_PROJECT="TF_VAR_project"
+    return 0
+  fi
+
+  return 1
+}
+
+if [[ "$MODE_AWS" == "1" ]]; then
+  NGUON_PROJECT=""
+
+  if ! doc_project; then
     echo "  ⚠ --aws can ten project de tim policy o AWS, nhung khong doc duoc."
+    echo "    Da thu: bien PROJECT, terraform.tfvars, TF_VAR_project."
     echo "    Chay: PROJECT=<ten> ./lint.sh --aws"
     echo "    Day KHONG phai 'khong co gi de so' - la CHUA SO DUOC."
     exit 1
   fi
+
+  # In ra NGUON, khong chi gia tri. Mot ten project SAI khong gay loi
+  # nao o duoi (xem chot chan "policy nao cung moi") - no cho ra mot lan
+  # PASS trong tru. Nen cho doc phai thay no lay ten tu dau.
+  echo "  project = ${PROJECT}  (tu ${NGUON_PROJECT})"
 
   # Dump moi SCP dang co, kem target cua tung cai. Mot file JSON de
   # python doc - khong parse output cua aws trong bash.
@@ -169,7 +234,8 @@ if [[ "$MODE_AWS" == "1" ]]; then
 fi
 
 CATALOG="$CATALOG" AWS_DUMP="$AWS_DUMP" PROJECT="$PROJECT" \
-  MODE_EXPIRY="$MODE_EXPIRY" STRICT="$STRICT" python3 <<'PY'
+  MODE_EXPIRY="$MODE_EXPIRY" STRICT="$STRICT" LAN_DAU="${LAN_DAU:-no}" \
+  python3 <<'PY'
 import json, os, re, sys, datetime
 
 CATALOG   = os.environ["CATALOG"]
@@ -177,6 +243,7 @@ AWS_DUMP  = os.environ.get("AWS_DUMP") or ""
 PROJECT   = os.environ.get("PROJECT") or ""
 MODE_EXP  = os.environ.get("MODE_EXPIRY") == "1"
 STRICT    = os.environ.get("STRICT") == "1"
+LAN_DAU   = os.environ.get("LAN_DAU") == "yes"
 
 try:
     import yaml
@@ -419,6 +486,47 @@ noi_long = []          # (policy, sid, ly do)
 
 if AWS_DUMP and os.path.exists(AWS_DUMP):
     aws = json.load(open(AWS_DUMP))
+
+    ####################################
+    # CHOT CHAN: MOT TEN PROJECT SAI TRONG NHU MOT TO CHUC SACH
+    #
+    # Ben duoi, `cu is None` (khong thay policy o AWS) duoc coi la
+    # POLICY MOI - tuc THAT, tuc khong loi. Dieu do dung khi that su
+    # them mot policy moi.
+    #
+    # Nhung neu ten project sai thi KHONG policy nao tim thay, nen MOI
+    # policy deu "moi", nen ket qua la "0 thay doi NOI" va lint xanh.
+    # Do la mot lan PASS GIA: lint vua bao cao rang khong ai noi long
+    # guardrail nao, trong khi su that la no khong nhin thay guardrail
+    # nao ca.
+    #
+    # Day dung la khuyet diem da lap lai muoi lan trong doc 22: mot phep
+    # loc khong khop tra ve rong, va rong bi doc thanh mot cau tra loi.
+    #
+    # 0 trong so N khop thi chi co hai kha nang, va lint khong phan biet
+    # duoc: ten project sai, hoac day that su la lan dau (chua apply SCP
+    # nao bao gio). Nguoi chay phai noi ro bang LAN_DAU=yes.
+    ####################################
+    ten_mong = {f"{PROJECT}-{p['name'].replace('_', '-')}"
+                for p in POLICIES if p.get("enabled") is not False}
+    khop = {t for t in ten_mong if t in aws}
+
+    if ten_mong and not khop:
+        co_o_aws = sorted(aws)[:5]
+        if LAN_DAU:
+            print(f"  (LAN_DAU=yes: 0/{len(ten_mong)} policy co o AWS - coi la lan"
+                  " apply dau tien, moi policy deu la THAT)")
+        else:
+            E(f"{R}KHONG tim thay policy nao o AWS{N}: 0/{len(ten_mong)} ten mong doi"
+              f" co tien to `{PROJECT}-`."
+              + (f" O AWS dang co: {', '.join(co_o_aws)}."
+                 if co_o_aws else " Danh sach SCP o AWS RONG.")
+              + " Bo phan loai coi 'khong thay o AWS' la policy MOI, tuc THAT, tuc"
+                " khong loi - nen neu cu chay tiep thi lint se bao 'sach' ma khong"
+                " he so voi gi. Hai kha nang: (1) ten project sai - kiem `project`"
+                " trong terraform.tfvars va so voi ten that o AWS ben tren;"
+                " (2) day that su la lan dau, chua tung apply SCP - khi do chay"
+                " lai voi LAN_DAU=yes de noi ro dieu do.")
 
     for p in POLICIES:
         if p.get("enabled") is False:
