@@ -260,7 +260,7 @@ locals {
     # Chay trong CHINH account management, khong can role lien account.
     ####################################
     {
-      key     = "cloud-permission-set"
+      key     = "cloudops-permission-set"
       layer   = "landing-zone/permission-sets/ops"
       enabled = var.enable_permission_set_ops
 
@@ -289,7 +289,7 @@ locals {
     # role da hoan lai den sau phep do app-prod-5.
     ####################################
     {
-      key     = "cloud-config-rules"
+      key     = "cloudops-config-rules"
       layer   = "landing-zone/config-detective/ops"
       enabled = var.enable_config_rules_ops
 
@@ -312,7 +312,7 @@ locals {
     # khoa state.
     ####################################
     {
-      key     = "net-ops"
+      key     = "cloudops-network"
       layer   = "landing-zone/network/ops"
       enabled = var.enable_network_ops
 

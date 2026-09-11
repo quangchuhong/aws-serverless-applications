@@ -365,14 +365,24 @@ LUAT = {
 
 # KHOA STAGE PHAI DUY NHAT TOAN CUC, VA MANG TEN CHU SO HUU
 #
-# Bang nay la MOT ban dung chung cho MOI pipeline van hanh. Ba pipeline
-# duoc tach theo phong ban:
+# Bang nay la MOT ban dung chung cho MOI pipeline van hanh. HAI pipeline,
+# tach theo CHU SO HUU chu khong theo layer:
 #
-#   sec     landing-zone/organization          SCP, OU, tag policy
-#   cloud   landing-zone/permission-sets/ops   ai vao account nao
-#           landing-zone/config-detective/ops  Config rule
-#           landing-zone/org-trail             CloudTrail
-#   net     landing-zone/network/ops           DNS, endpoint, firewall
+#   sec       landing-zone/organization          SCP, OU, tag policy
+#   cloudops  landing-zone/permission-sets/ops   ai vao account nao
+#             landing-zone/config-detective/ops  Config rule
+#             landing-zone/org-trail             CloudTrail
+#             landing-zone/network/ops           DNS, endpoint, firewall
+#
+# Van hanh la viec cua cloudops; sec chi giu guardrail o organization.
+# Hai pipeline, hai role, hai luong thong bao, hai nut re-run.
+#
+# HE QUA VE QUYEN, va no lon hon truoc: role cua cloudops se phai assume
+# sang account SECURITY (config-detective), LOG-ARCHIVE (org-trail va
+# config-detective) va NETWORK (network/ops). Ba account, mot role. Dieu
+# do lam viec "role rieng day xuong bang StackSet" thanh QUAN TRONG HON,
+# khong phai it hon: hom nay o ba account do chi co
+# OrganizationAccountAccessRole, tuc full admin.
 #
 # Hai pipeline cung co mot stage ten "ou" se DE LEN NHAU trong bang nay,
 # va cai bi de len se lang le nhan pham vi cua cai kia. Nen khoa mang
@@ -427,7 +437,7 @@ PHAM_VI = {
     # duoc chung la mot pipeline co the tat ca he thong phat hien cua to
     # chuc. Chung nam o layer cha, sua bang tay.
     ####################################
-    "cloud-config-rules": [
+    "cloudops-config-rules": [
         "aws_config_organization_managed_rule",
         "aws_config_config_rule",
     ],
@@ -440,7 +450,7 @@ PHAM_VI = {
     # quyen cua MOI nguoi dang dung set do, o MOI account, ngay lap tuc.
     # Do khong phai viec hang ngay.
     ####################################
-    "cloud-permission-set": [
+    "cloudops-permission-set": [
         "aws_ssoadmin_account_assignment",
         "aws_identitystore_group_membership",
     ],
@@ -448,7 +458,7 @@ PHAM_VI = {
     ####################################
     # network/ops - da co state rieng tu truoc
     ####################################
-    "net-ops": [
+    "cloudops-network": [
         "aws_route53_record",
         "aws_vpc_endpoint",
         "aws_route53_zone",

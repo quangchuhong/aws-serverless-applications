@@ -152,26 +152,26 @@ TAO_GAN = rc('aws_ssoadmin_account_assignment.this["g|ps|111"]',
              before=None, after={"target_id": "111122223333"})
 
 chay("TAO account assignment     -> NOI, thoat 1", 1,
-     plan(NO_OP, TAO_GAN), stage="cloud-permission-set")
+     plan(NO_OP, TAO_GAN), stage="cloudops-permission-set")
 
 # Va chieu con lai: bo mot assignment la THU HOI quyen - THAT.
 chay("XOA account assignment     -> sach", 0, plan(NO_OP,
      rc('aws_ssoadmin_account_assignment.this["g|ps|111"]',
         "aws_ssoadmin_account_assignment", ["delete"],
         before={"target_id": "111122223333"}, after=None)),
-     stage="cloud-permission-set")
+     stage="cloudops-permission-set")
 
 chay("TAO group membership       -> NOI, thoat 1", 1, plan(NO_OP,
      rc('aws_identitystore_group_membership.this["a|b"]',
         "aws_identitystore_group_membership", ["create"],
         before=None, after={"member_id": "u-1"})),
-     stage="cloud-permission-set")
+     stage="cloudops-permission-set")
 
 chay("XOA group membership       -> sach", 0, plan(NO_OP,
      rc('aws_identitystore_group_membership.this["a|b"]',
         "aws_identitystore_group_membership", ["delete"],
         before={"member_id": "u-1"}, after=None)),
-     stage="cloud-permission-set")
+     stage="cloudops-permission-set")
 
 print()
 print("── THAY THE: xoa roi tao lai, ke ca khi ket qua giong het ──")
@@ -240,14 +240,14 @@ chay("excluded_accounts THEM     -> NOI, thoat 1", 1, plan(NO_OP,
         "aws_config_organization_managed_rule", ["update"],
         before=BASE_RULE,
         after={"name": "r", "excluded_accounts": ["111111111111", "222222222222"]})),
-     stage="cloud-config-rules")
+     stage="cloudops-config-rules")
 
 chay("excluded_accounts BOT      -> sach", 0, plan(NO_OP,
      rc("aws_config_organization_managed_rule.this[\"r\"]",
         "aws_config_organization_managed_rule", ["update"],
         before={"name": "r", "excluded_accounts": ["1", "2"]},
         after={"name": "r", "excluded_accounts": ["1"]})),
-     stage="cloud-config-rules")
+     stage="cloudops-config-rules")
 
 print()
 print("── thu_tu: phep so CHUOI noi nguoc, nen phai co bang xep ──")
@@ -313,13 +313,13 @@ chay("TAO ingress rule           -> NOI, thoat 1", 1, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["create"],
         before=None, after={"cidr_ipv4": "0.0.0.0/0", "from_port": 443})),
-     stage="net-ops")
+     stage="cloudops-network")
 
 chay("XOA ingress rule           -> sach", 0, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["delete"],
         before={"cidr_ipv4": "10.0.0.0/8"}, after=None)),
-     stage="net-ops")
+     stage="cloudops-network")
 
 print()
 print("── Khai bao con lai sau khi thay doi da di qua ──")
