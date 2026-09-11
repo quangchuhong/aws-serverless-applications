@@ -1,0 +1,465 @@
+# ==============================================================
+# SCP - CATALOG
+#
+# Day la nguon su that duy nhat cho SCP. scp.tf khong con gõ cứng
+# statement nao; no doc file nay.
+#
+# --------------------------------------------------------------
+# HAI GIOI HAN CUA AWS quyet dinh cach file nay duoc viet:
+#
+#   1. Toi da 5 policy gan vao MOT root/OU/account.
+#      FullAWSAccess da chiem 1 -> con 4.
+#      => Khong viet 10 policy nho. Gom thanh vai policy lon.
+#
+#   2. Moi policy toi da 5120 KY TU sau khi render.
+#      => lint.sh do do dai THAT truoc khi apply.
+#
+# NHAC LAI: SCP la TRAN QUYEN, khong cap quyen. Mot action chay duoc
+# chi khi CA permission set LAN SCP cho phep. Va SCP KHONG ap dung
+# cho management account - dung tim cach bao ve no bang SCP.
+#
+# --------------------------------------------------------------
+# TRUONG CUA MOT POLICY
+#
+#   name         BAT BUOC  khoa trong state. DOI TEN = TAO POLICY MOI
+#                          roi xoa cai cu - co mot khoang thoi gian
+#                          OU khong duoc bao ve. Dung doi ten.
+#   description  BAT BUOC  mot cau tieng nguoi
+#   targets      BAT BUOC  "ROOT" hoac ten OU. Cap 2 viet duong dan:
+#                          "Workloads/Production"
+#   enabled                mac dinh true
+#   statements   BAT BUOC  danh sach, xem duoi
+#
+# TRUONG CUA MOT STATEMENT
+#
+#   sid          BAT BUOC  duy nhat trong TOAN catalog, khong chi
+#                          trong mot policy. lint.sh chan trung.
+#   effect       BAT BUOC  Deny (Allow trong SCP gan nhu luon la nham)
+#   action                 chuoi HOAC mang. Loai tru voi not_action
+#   not_action             chuoi HOAC mang
+#   resource     BAT BUOC  chuoi HOAC mang
+#   condition              TEN mot builder trong scp-catalog.tf.
+#                          KHONG phai JSON tu do - xem duoi.
+#   locked                 true = lint tu choi moi thay doi lam yeu
+#                          muc nay, KE CA khi co khoi `loosen`
+#   reason       BAT BUOC  vi sao ton tai. Day la thu nguoi doc ba nam
+#                          sau can, khong phai ten action
+#   ticket                 phe duyet ban dau
+#   loosen                 BAT BUOC khi diff la NOI - xem duoi
+#
+# --------------------------------------------------------------
+# VO HUONG HAY MANG: GIU NGUYEN NHU DANG VIET
+#
+# jsonencode("*") ra `"*"`, jsonencode(["*"]) ra `["*"]`. Hai chuoi
+# JSON KHAC NHAU, nen policy document khac nhau, nen Terraform thay
+# mot thay doi. Doi mot `resource: "*"` thanh `resource: ["*"]` la
+# mot diff that o AWS du y nghia khong doi.
+#
+# Vi vay: cho nao dang la vo huong thi GIU vo huong.
+#
+# --------------------------------------------------------------
+# CONDITION: CHI DUOC GOI TEN, KHONG DUOC KHAI TU DO
+#
+# Them mot Condition vao mot Deny la cach NOI guardrail tinh vi nhat:
+# no khong xoa gi, khong thu hep gi, va diff trong nhu "them mot
+# dong". Mot catalog cho khai Condition tu do la mot catalog cho phep
+# tao ngoai le ma khong ai doc ra.
+#
+# Nen catalog chi GOI TEN mot builder da dinh nghia trong
+# scp-catalog.tf. Builder hien co:
+#
+#   exempt_roles          mien tru var.scp_exempt_role_names.
+#                         Rong thi KHONG sinh Condition nao ca.
+#   root_user_only        chi ap cho root user cua account con
+#   s3_pab_automation     mien tru var.s3_pab_automation_roles.
+#                         Rong thi khong sinh Condition -> va luc do
+#                         KHONG AI bat duoc public access block
+#   region_lock           RequestedRegion ngoai var.allowed_regions,
+#                         gop them exempt_roles
+#   network_account_exempt  mien tru var.network_account_id.
+#                         Rong thi khong sinh Condition
+#   public_ip_on_launch   ec2:AssociatePublicIpAddress = true
+#
+# Can mot condition moi = them mot builder trong code, qua review.
+# Do la co y.
+#
+# --------------------------------------------------------------
+# THAT vs NOI - VA VI SAO CHUNG KHONG BANG NHAU
+#
+# lint.sh so catalog voi POLICY DANG GAN THAT o AWS (describe-policy),
+# khong so voi commit truoc. So voi git thi bo sot nguoi sua tay trong
+# console - va mot SCP bi noi trong console roi catalog "trung khop"
+# la dung cai can bat.
+#
+#   THAT  them Deny moi, mo rong action/resource cua mot Deny
+#         -> tu apply, khong ma sat
+#
+#   NOI   xoa Deny, thu hep action/resource, THEM condition,
+#         them not_action, go policy khoi mot OU
+#         -> lint exit 1, tru khi statement mang khoi `loosen`
+#
+#     loosen:
+#       ticket: SEC-2291
+#       reason: Doi payments can xoa snapshot thu nghiem trong sprint nay
+#       approved_by: security-lead@example.com
+#       expires: 2026-10-31
+#
+# `loosen` KHONG lam gi o AWS. No chi lam viec noi long hien ra trong
+# diff cua PR, noi co nguoi doc duoc - thay vi hien trong mot ban plan
+# CodeBuild noi nguoi ta bam tu dien thoai.
+#
+# `expires` o day CHI lam CI do. Khong tu dong that lai: that mot
+# guardrail luc nua dem ma khong ai biet la mot su co luc nua dem.
+#
+# locked: true thi KHONG co `loosen` nao du. Muon doi thi sua code,
+# bang tay, ngoai pipeline.
+#
+# --------------------------------------------------------------
+# GIOI HAN CUA locked
+#
+# locked do lint.sh cuong che, va lint.sh cung nam trong git. No chan
+# SAI SOT, khong chan nguoi co tinh sua ca lint trong cung mot PR.
+# Muon manh hon thi can mot lop NGOAI repo: SCP o to chuc cha, hoac
+# bat buoc review tren duong dan lint.sh.
+# ==============================================================
+
+policies:
+
+  ####################################################
+  # 1. BASELINE - gan vao Root
+  #
+  # Bao ve chinh co che kiem soat. Neu chi bat duoc MOT policy thi
+  # bat cai nay.
+  ####################################################
+  - name: baseline
+    description: "Bao ve co che kiem soat: roi to chuc, audit trail, root user, IAM user"
+    targets: ["ROOT"]
+    statements:
+
+      - sid: ProtectOrganizationMembership
+        effect: Deny
+        action:
+          - organizations:LeaveOrganization
+          - organizations:DeleteOrganization
+          - organizations:RemoveAccountFromOrganization
+          - organizations:DisablePolicyType
+          - organizations:DetachPolicy
+          - organizations:DeletePolicy
+          - account:CloseAccount
+        resource: "*"
+        condition: exempt_roles
+        locked: true
+        reason: >-
+          Mot account roi to chuc la mot account roi khoi MOI SCP, MOI
+          Config rule va MOI trail cung mot luc. Day la hanh dong duy
+          nhat co the vo hieu hoa toan bo phan con lai cua landing zone
+          trong mot lenh.
+        ticket: LZ-0001
+
+      - sid: ProtectAuditTrail
+        effect: Deny
+        action:
+          - cloudtrail:StopLogging
+          - cloudtrail:DeleteTrail
+          - cloudtrail:UpdateTrail
+          - cloudtrail:PutEventSelectors
+          - config:DeleteConfigurationRecorder
+          - config:StopConfigurationRecorder
+          - config:DeleteDeliveryChannel
+          - config:DeleteRetentionConfiguration
+          - guardduty:DeleteDetector
+          - guardduty:UpdateDetector
+          - guardduty:DisassociateFromMasterAccount
+          - securityhub:DisableSecurityHub
+          - access-analyzer:DeleteAnalyzer
+        resource: "*"
+        condition: exempt_roles
+        locked: true
+        reason: >-
+          Tat audit truoc khi lam viec khac la buoc dau tien cua moi
+          vu xam nhap co chu dich. Chan no khong ngan duoc hanh vi,
+          nhung bao dam con lai BANG CHUNG - va bang chung la thu duy
+          nhat khong tai tao lai duoc sau su co.
+        ticket: LZ-0001
+
+      - sid: DenyRootUserActions
+        effect: Deny
+        not_action:
+          - iam:CreateVirtualMFADevice
+          - iam:EnableMFADevice
+          - iam:ResyncMFADevice
+          - iam:ChangePassword
+        resource: "*"
+        condition: root_user_only
+        locked: true
+        reason: >-
+          Root user cua account con khong co MFA bat buoc, khong di qua
+          Identity Center, va khong xuat hien trong bat ky bao cao truy
+          cap nao. Chi chua lai duong tu cuu minh (dat MFA, doi mat
+          khau) de khong tu khoa.
+        ticket: LZ-0001
+
+      - sid: DenyIamUserCreation
+        effect: Deny
+        action:
+          - iam:CreateUser
+          - iam:CreateAccessKey
+          - iam:CreateLoginProfile
+        resource: "*"
+        condition: exempt_roles
+        reason: >-
+          IAM user co access key dai han - thu de ro nhat va kho thu
+          hoi nhat. Ep moi truy cap di qua Identity Center, noi
+          credential het han theo phien.
+        ticket: LZ-0001
+
+      # MOT API CHO CA BAT LAN TAT - va do la ca van de.
+      #
+      # s3:PutAccountPublicAccessBlock dat CA BON co ve true hay
+      # false. SCP khong doc duoc noi dung request, va khong co
+      # condition key nao cho gia tri ben trong
+      # PublicAccessBlockConfiguration. Nen cam ca cum nghia la KHONG
+      # AI BAT DUOC NO, ke ca lop hardening sinh ra de bat.
+      #
+      # Truoc day statement nay khong co Condition - khac han cac
+      # statement con lai trong cung policy. Hau qua: setting khong
+      # bao gio duoc dat, va SCP canh mot can phong trong. Trieu
+      # chung duy nhat la mot chu "SKIP" trong SweepResult:
+      #
+      #   s3/pab:SKIP:ClientError
+      #
+      # Nen s3_pab_automation phai co it nhat mot role. Danh sach do
+      # KHONG co mac dinh - ten role tuy tung ban trien khai, va mot
+      # gia tri doan bua se tao ra mot lo hong im lang thay vi mot
+      # loi. check "s3_pab_co_the_bat_duoc" keu khi no rong.
+      - sid: ProtectS3PublicAccessBlock
+        effect: Deny
+        action: ["s3:PutAccountPublicAccessBlock"]
+        resource: "*"
+        condition: s3_pab_automation
+        reason: >-
+          Public access block o muc account la chot chan cuoi khi mot
+          bucket policy bi go nham. Tat no la thao tac khong bao gio
+          dung trong van hanh binh thuong.
+        ticket: LZ-0001
+
+  ####################################################
+  # 2. REGION LOCK - gan vao Root
+  #
+  # not_action liet ke dich vu TOAN CAU. Goi API cua chung luon di
+  # toi mot region cu the (thuong us-east-1) va khong the ep theo
+  # allowed_regions - chan chung la tu khoa minh ra ngoai.
+  ####################################################
+  - name: region_lock
+    description: "Chi cho phep region trong var.allowed_regions"
+    targets: ["ROOT"]
+    statements:
+
+      - sid: DenyOutsideAllowedRegions
+        effect: Deny
+        not_action:
+          - "iam:*"
+          - "organizations:*"
+          - "sts:*"
+          - "account:*"
+          - "route53:*"
+          - "route53domains:*"
+          - "cloudfront:*"
+          - "waf:*"
+          - "waf-regional:*"
+          - "wafv2:*"
+          - "shield:*"
+          - "globalaccelerator:*"
+          - "networkmanager:*"
+          - "support:*"
+          - "trustedadvisor:*"
+          - "health:*"
+          - "budgets:*"
+          - "ce:*"
+          - "cur:*"
+          - "billing:*"
+          - "payments:*"
+          - "tax:*"
+          - "consolidatedbilling:*"
+          - "invoicing:*"
+          - "freetier:*"
+          - "sso:*"
+          - "sso-directory:*"
+          - "identitystore:*"
+          - "artifact:*"
+          - "quicksight:*"
+          - "chatbot:*"
+          - cloudtrail:LookupEvents
+          - kms:DescribeKey
+        resource: "*"
+        condition: region_lock
+        reason: >-
+          Gioi han be mat tan cong va gioi han chi phi. Resource chay
+          o region khong ai nhin toi la thu de bi bo quen nhat - va
+          khong ai giam sat mot region ho khong biet la dang duoc dung.
+        ticket: LZ-0002
+
+  ####################################################
+  # 3. NETWORK LOCK
+  #
+  # Gan vao Workloads / Data Analytics / Sandbox - KHONG gan vao
+  # Infrastructure (account network song o do va can dung nhung
+  # action nay).
+  #
+  # Nguon: doc 13.
+  ####################################################
+  - name: network_lock
+    description: "Khoa duong ra Internet truc tiep - moi traffic qua account network"
+    targets: ["Workloads", "Data Analytics", "Sandbox"]
+    statements:
+
+      - sid: DenyInternetGateways
+        effect: Deny
+        action:
+          - ec2:CreateInternetGateway
+          - ec2:AttachInternetGateway
+          - ec2:CreateEgressOnlyInternetGateway
+          - ec2:CreateCarrierGateway
+          - ec2:CreateDefaultVpc
+          - ec2:CreateDefaultSubnet
+          - ec2:CreateNatGateway
+          - ec2:AllocateAddress
+          - ec2:AssociateAddress
+        resource: "*"
+        condition: network_account_exempt
+        reason: >-
+          Mot IGW trong account workload la mot duong ra Internet
+          KHONG qua security VPC, tuc khong qua firewall va khong co
+          trong log nao. No vo hieu hoa ca thiet ke tap trung kiem
+          tra ma khong lam gi hong - nen khong ai phat hien.
+        ticket: LZ-0003
+
+      - sid: DenyCrossVpcShortcuts
+        effect: Deny
+        action:
+          - ec2:CreateVpcPeeringConnection
+          - ec2:AcceptVpcPeeringConnection
+          - ec2:CreateTransitGateway
+          - ec2:CreateVpnGateway
+          - ec2:CreateVpnConnection
+          - ec2:CreateClientVpnEndpoint
+          - directconnect:CreateConnection
+          - directconnect:CreateDirectConnectGateway
+        resource: "*"
+        condition: network_account_exempt
+        reason: >-
+          Cung ly do voi IGW, o chieu ngang: mot peering giua hai spoke
+          la mot duong khong qua firewall east-west. Luoi TGW trung tam
+          chi co y nghia neu no la duong DUY NHAT.
+        ticket: LZ-0003
+
+      - sid: DenyPublicIpOnLaunch
+        effect: Deny
+        action: ec2:RunInstances
+        resource: "arn:${partition}:ec2:*:*:instance/*"
+        condition: public_ip_on_launch
+        reason: >-
+          Khong co dong nay thi mot instance co IP public di thang ra
+          Internet ngay tu luc launch, khong can IGW moi nao - subnet
+          co san IGW la du.
+        ticket: LZ-0003
+
+  ####################################################
+  # 4. PROD GUARD - gan vao Workloads/Production
+  #
+  # Chan thao tac PHA HUY KHONG PHUC HOI DUOC.
+  #
+  # KHONG chan sua doi thong thuong - viec do da do permission set lo
+  # (lz-app-operator chi doc o prod, doc 19 muc 2).
+  ####################################################
+  - name: prod_guard
+    description: "Chan thao tac pha huy khong phuc hoi duoc o production"
+    targets: ["Workloads/Production"]
+    statements:
+
+      - sid: ProtectBackupsAndSnapshots
+        effect: Deny
+        action:
+          - rds:DeleteDBClusterSnapshot
+          - rds:DeleteDBSnapshot
+          - ec2:DeleteSnapshot
+          - backup:DeleteBackupVault
+          - backup:DeleteRecoveryPoint
+          - backup:DeleteBackupPlan
+          - backup:PutBackupVaultAccessPolicy
+          - dynamodb:DeleteBackup
+        resource: "*"
+        reason: >-
+          Ranh gioi o day khong phai "pha huy" ma la "khong phuc hoi
+          duoc". Xoa mot database con khoi phuc duoc tu snapshot; xoa
+          SNAPSHOT thi khong con duong nao.
+        ticket: LZ-0004
+
+      - sid: ProtectEncryptionKeys
+        effect: Deny
+        action:
+          - kms:ScheduleKeyDeletion
+          - kms:DisableKey
+          - kms:DisableKeyRotation
+        resource: "*"
+        reason: >-
+          Mat key la mat du lieu, ke ca khi du lieu con nguyen ven tren
+          dia. Va ScheduleKeyDeletion co do tre 7-30 ngay, nen hau qua
+          hien ra rat lau sau khi nguoi gay ra no da quen.
+        ticket: LZ-0004
+
+      - sid: ProtectS3Recovery
+        effect: Deny
+        action:
+          - s3:PutBucketVersioning
+          - s3:PutBucketPolicy
+          - s3:DeleteBucketPolicy
+          - s3:PutBucketLogging
+        resource: "*"
+        reason: >-
+          Tat versioning tren bucket state hay bucket log la mat kha
+          nang khoi phuc, va la thao tac gan nhu khong bao gio dung o
+          prod.
+        ticket: LZ-0004
+
+  ####################################################
+  # 5. SUSPENDED - dong bang account khong con dung
+  #
+  # Account khong xoa duoc, chi dong duoc - va dong la quyet dinh
+  # khong lui duoc: 90 ngay moi roi to chuc, email chay vinh vien.
+  # OU nay la duong o giua: account van ton tai, nhung khong lam
+  # duoc gi.
+  #
+  # MOT statement duy nhat, va co y de no tho nhu vay. "Dong bang" ma
+  # con ngoai le thi khong con la dong bang, va moi ngoai le la mot
+  # cho phai kiem lai sau nay.
+  #
+  # HE QUA PHAI BIET TRUOC:
+  #
+  #   - KHONG don duoc tai nguyen trong account dang o day. Muon don
+  #     thi park-account.sh --restore dua no ra truoc.
+  #   - SCP chan HANH DONG, khong tat may. Tai nguyen dang chay VAN
+  #     TINH TIEN. Don sach TRUOC khi park, dung sau.
+  #   - Khong ap len management account - SCP khong bao gio ap len no.
+  #   - KHONG giai phong han muc account: account van ACTIVE va van
+  #     dem vao gioi han so account cua to chuc.
+  #
+  # FullAWSAccess van gan o OU nay va khong sao ca: Deny tuong minh
+  # luon thang Allow.
+  ####################################################
+  - name: suspended
+    description: "Dong bang account trong OU Suspended - chan moi hanh dong"
+    targets: ["Suspended"]
+    statements:
+
+      - sid: DenyAll
+        effect: Deny
+        action: "*"
+        resource: "*"
+        locked: true
+        reason: >-
+          Mot account ngung su dung ma con lam duoc bat cu viec gi la
+          mot account khong ai theo doi nhung van co kha nang hanh
+          dong. Khong co ngoai le nao o day - "dong bang co ngoai le"
+          la mot cho phai kiem lai mai mai.
+        ticket: LZ-0005
