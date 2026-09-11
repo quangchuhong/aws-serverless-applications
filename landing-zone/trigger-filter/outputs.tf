@@ -1,5 +1,20 @@
 locals {
   ####################################
+  # LE CUA DONG DAU KHAC LE CUA DONG SAU
+  #
+  # `<<-EOT` cat le theo dong THUT IT NHAT trong ca khoi. Mot bieu thuc
+  # noi cac dong bang "\n    " thi bon dau cach do la NOI DUNG, khong
+  # phai le - chung khong bi cat, con le cua dong dau thi bi. Ket qua:
+  # dong dau sat trai, nhung dong sau thut vao.
+  #
+  # Chua bang cach de bieu thuc sinh ra dung mot dong lien, va viec thut
+  # le do heredoc lo - tuc chi mot cho quyet dinh.
+  ####################################
+  bang_ban_do = join("\n", [
+    for t, p in local.ban_do : format("%-34s %s", t, join(" ", p))
+  ])
+
+  ####################################
   # Heredoc phai nam o local, khong nam trong mot ternary.
   #
   # Dat <<-EOT ben trong `cond ? <<-EOT ... : ""` lam Terraform bao
@@ -11,7 +26,7 @@ locals {
     ═══════════ ${local.name} ═══════════
 
     BAN DO HIEN TAI
-    ${join("\n    ", [for t, p in local.ban_do : format("%-34s %s", t, join(" ", p))])}
+    ${local.bang_ban_do}
 
     Kiem do phu: ${var.kiem_do_phu ? "BAT - moi pipeline mang tien to \"${var.project}-\" ma thieu o ban do se lam ham bao hong" : "TAT"}
     Bao khi hong: ${local.loi_topic == "" ? "KHONG AI DUOC BAO" : local.loi_topic}

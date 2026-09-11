@@ -294,6 +294,31 @@ def bai_liet_ke_hong():
     )
     kiem("khong liet ke duoc thi van loc binh thuong", chay_gi == [OPS], (loi, chay_gi))
 
+    # DIEM QUAN TRONG: "dat" va "khong chay" phai TRONG khac nhau.
+    #
+    # Truoc day ca hai deu ra ket qua giong het, va thu duy nhat phan
+    # biet la mot dong log. Mot lan chay that da cho thay van de: khong
+    # co cach nao biet kiem_do_phu da chay hay da im lang bien mat.
+    kiem("  va noi ro la phep kiem KHONG chay",
+         r and r.get("kiem_ban_do", "").startswith("THIEU"), r)
+
+    r2, loi2, _ = chay(BAN_DO, doi=["landing-zone/organization/a.tf"])
+    kiem("liet ke duoc thi noi ro la DAY DU",
+         r2 and r2.get("kiem_ban_do", "").startswith("DAY DU"), r2)
+    # .get() chu khong r["..."]: mot dot bien bo han truong nay lam bai
+    # kiem NEM KeyError, va mot bai kiem nem thi nhung bai sau no khong
+    # chay nua - bo kiem bao "1 hong" trong khi that ra no dung giua
+    # chung. Do la mot cach khac de mot phep kiem lang le bien mat.
+    kiem("  va hai truong hop do KHAC nhau",
+         r and r2 and r.get("kiem_ban_do") != r2.get("kiem_ban_do"),
+         (r and r.get("kiem_ban_do"), r2 and r2.get("kiem_ban_do")))
+
+    # Duong fail-open cung phai mang trang thai do - cau hoi "phep kiem
+    # co chay khong" khong lien quan gi den viec doc duoc diff hay khong.
+    r3, _, _ = chay(BAN_DO, nem_diff=RuntimeError("het gio"))
+    kiem("duong fail-open cung mang trang thai phep kiem",
+         r3 and r3.get("kiem_ban_do", "").startswith("DAY DU"), r3)
+
     # Nhung phep kiem KHONG can AWS thi van phai chay.
     _, loi, _ = chay({}, nem_liet_ke=RuntimeError("AccessDenied"))
     kiem("ban do rong van bi bat du khong liet ke duoc",

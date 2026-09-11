@@ -71,7 +71,12 @@ def ten_pipeline_o_aws():
 
 
 def kiem_ban_do(ban_do, tien_to_phu):
-    """Ba phep kiem cau truc + mot phep kiem do phu. Loi CUNG."""
+    """Ba phep kiem cau truc + mot phep kiem do phu. Loi CUNG.
+
+    Tra ve (loi, kiem) - `kiem` noi hai phep kiem can AWS co CHAY hay
+    khong. Xem chu thich trong than ham: "dat" va "khong chay" phai
+    trong khac nhau tu ben ngoai.
+    """
     loi = []
 
     # 1. BAN_DO rong khong phai "khong co gi de chay".
@@ -92,12 +97,24 @@ def kiem_ban_do(ban_do, tien_to_phu):
 
     # 3 va 4 can biet AWS co gi. Doc hong thi NOI RA chu khong bo qua -
     #    bo qua o day nghia la hai phep kiem duoi im lang bien mat.
+    #
+    # ---------------------------------------------------------------
+    # "DAT" VA "KHONG CHAY" PHAI TRONG KHAC NHAU
+    #
+    # Truoc day ca hai deu tra ve `loi` rong, va thu duy nhat phan biet
+    # chung la mot dong CANH BAO trong log. Mot lan chay that da cho thay
+    # van de: ket qua ra {"loc": true, ...} va khong co cach nao biet
+    # `kiem_do_phu` da chay hay da im lang bien mat - phai mo log ra doc,
+    # va phai biet TRUOC la can tim dong nao.
+    #
+    # Do dung la khuyet diem ca file nay duoc viet de chong. Nen trang
+    # thai di theo gia tri TRA VE, khong chi nam trong log.
     try:
         co_that = ten_pipeline_o_aws()
     except Exception as e:
         print(f"CANH BAO: khong liet ke duoc pipeline ({type(e).__name__}: {e}).")
         print("  -> hai phep kiem 'ten co that' va 'do phu' KHONG chay lan nay.")
-        return loi
+        return loi, f"THIEU: khong liet ke duoc pipeline ({type(e).__name__})"
 
     # 3. Ten go sai. Khong sua duoc bang cach thu lai, nhung van phai on ao.
     thua = sorted(set(ban_do) - co_that)
@@ -125,7 +142,15 @@ def kiem_ban_do(ban_do, tien_to_phu):
                 "khong chay nua."
             )
 
-    return loi
+    # Dong nay la mot khang dinh CO NOI DUNG, khong phai su vang mat cua
+    # mot canh bao: no noi da doi chieu voi bao nhieu pipeline that.
+    phu = f"{len(ban_do)}/{len(co_that)} pipeline"
+    if tien_to_phu:
+        mang_tien_to = [t for t in co_that if t.startswith(tien_to_phu)]
+        phu = f"{len(ban_do)} trong ban do, {len(mang_tien_to)} mang tien to '{tien_to_phu}', {len(co_that)} tong"
+    print(f"Ban do da doi chieu voi AWS: {phu}")
+
+    return loi, f"DAY DU: {phu}"
 
 
 def duong_dan_da_doi(repo, truoc, sau):
@@ -173,7 +198,7 @@ def handler(event, context):
     ban_do = json.loads(os.environ["BAN_DO"])
     tien_to_phu = os.environ.get("TIEN_TO_PHU", "")
 
-    loi = kiem_ban_do(ban_do, tien_to_phu)
+    loi, kiem = kiem_ban_do(ban_do, tien_to_phu)
     if loi:
         # Nem TRUOC khi cham vao pipeline nao: mot ban do sai thi khong
         # co ket qua nao cua no dang tin, ke ca phan "khop".
@@ -204,6 +229,11 @@ def handler(event, context):
 
     if ket_qua is None:
         ket_qua = doi_chieu(ban_do, duong_dan, hong)
+
+    # Di theo MOI duong tra ve, ke ca duong fail-open: cau hoi "hai phep
+    # kiem can AWS co chay khong" khong phu thuoc vao viec doc duoc diff
+    # hay khong, nen no khong duoc bien mat o nhanh nao.
+    ket_qua["kiem_ban_do"] = kiem
 
     if hong:
         # Lambda phai BAO HONG o day. So Errors cua ham nay la cho duy
