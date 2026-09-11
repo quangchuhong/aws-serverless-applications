@@ -362,7 +362,7 @@ PHAM_VI = {
     # duoc chung la mot pipeline co the tat ca he thong phat hien cua to
     # chuc. Chung nam o layer cha, sua bang tay.
     ####################################
-    "B-config-rules": [
+    "C-config-rules": [
         "aws_config_organization_managed_rule",
         "aws_config_config_rule",
     ],
@@ -375,7 +375,7 @@ PHAM_VI = {
     # quyen cua MOI nguoi dang dung set do, o MOI account, ngay lap tuc.
     # Do khong phai viec hang ngay.
     ####################################
-    "C-permission-set-assignment": [
+    "B-permission-set-assignment": [
         "aws_ssoadmin_account_assignment",
         "aws_identitystore_group_membership",
     ],

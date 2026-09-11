@@ -181,6 +181,31 @@ locals {
     },
 
     ####################################
+    # permission-sets/ops - STATE RIENG
+    #
+    # CHI "ai vao account nao". Noi dung quyen o layer cha: doi mot
+    # managed policy attachment la doi quyen cua MOI nguoi dang dung
+    # permission set do, o MOI account, ngay lap tuc - va Identity
+    # Center day thay doi do xuong moi role da sinh ma khong ai phai
+    # dang nhap lai. Do khong phai viec hang ngay.
+    #
+    # Chay trong CHINH account management, khong can role lien account.
+    ####################################
+    {
+      key     = "B-permission-set-assignment"
+      layer   = "landing-zone/permission-sets/ops"
+      enabled = var.enable_permission_set_ops
+
+      targets = [
+        "aws_ssoadmin_account_assignment.ops",
+        "aws_identitystore_group_membership.ops",
+      ]
+
+      lint  = "./lint.sh --aws --strict"
+      mo_ta = "Ai vao account nao. TAO mot assignment la NOI - chieu nguoc voi SCP."
+    },
+
+    ####################################
     # config-detective/ops - STATE RIENG
     #
     # Config rule doi hang ngay (them mot rule, doi mot tham so), nen no
@@ -196,7 +221,7 @@ locals {
     # role da hoan lai den sau phep do app-prod-5.
     ####################################
     {
-      key     = "B-config-rules"
+      key     = "C-config-rules"
       layer   = "landing-zone/config-detective/ops"
       enabled = var.enable_config_rules_ops
 
@@ -206,31 +231,6 @@ locals {
 
       lint  = "./lint.sh --aws --strict"
       mo_ta = "Config rule tu catalog. Xoa rule hoac them account vao excluded_accounts la NOI."
-    },
-
-    ####################################
-    # permission-sets/ops - STATE RIENG
-    #
-    # CHI "ai vao account nao". Noi dung quyen o layer cha: doi mot
-    # managed policy attachment la doi quyen cua MOI nguoi dang dung
-    # permission set do, o MOI account, ngay lap tuc - va Identity
-    # Center day thay doi do xuong moi role da sinh ma khong ai phai
-    # dang nhap lai. Do khong phai viec hang ngay.
-    #
-    # Chay trong CHINH account management, khong can role lien account.
-    ####################################
-    {
-      key     = "C-permission-set-assignment"
-      layer   = "landing-zone/permission-sets/ops"
-      enabled = var.enable_permission_set_ops
-
-      targets = [
-        "aws_ssoadmin_account_assignment.ops",
-        "aws_identitystore_group_membership.ops",
-      ]
-
-      lint  = "./lint.sh --aws --strict"
-      mo_ta = "Ai vao account nao. TAO mot assignment la NOI - chieu nguoc voi SCP."
     },
 
     ####################################
