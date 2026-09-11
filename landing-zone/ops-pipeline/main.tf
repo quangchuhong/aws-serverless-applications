@@ -1,206 +1,49 @@
 ########################################
-# PIPELINE VAN HANH - CAC LAYER DOI HANG NGAY
+# PIPELINE VAN HANH CUA SEC - layer organization
 #
-# Chay o ACCOUNT MANAGEMENT, canh vending-pipeline nhung TACH HAN.
+# Chay o ACCOUNT MANAGEMENT.
 #
-# --------------------------------------------------------------
-# VI SAO KHONG GOP VAO vending-pipeline
+# Ha tang cua pipeline nam o ../../modules/tf-pipeline. File nay chi
+# KHAI BAO ba thu, va ca ba deu la thu chi dung cho pipeline nay:
 #
-# Hai pipeline nay doi lap nhau o moi chieu:
+#   local.stages          stage nao, theo thu tu nao, gioi han vao gi
+#   local.catalogs        catalog nao duoc lint offline o stage dau
+#   local.quyen_*         RANH GIOI GHI cua role CodeBuild
 #
-#                 vending              ops
-#   Tan so        khi can account moi  hang ngay
-#   Ban kinh      lon nhat (tao        nho, DO THIET KE
-#                 account, sua TGW)
-#   Cong duyet    bat buoc o stage A   khong nen co
-#   Dau vao       catalog + tfvars     catalog (da nam trong git)
+# Ba thu do nam canh nhau co chu dich: mot nguoi review chi can doc mot
+# file de tra loi "pipeline nay cham duoc vao gi".
 #
-# Gop lai thi moi lan mo mot port hay them mot Deny se:
+# =======================================================================
+# CAC LAYER DA TACH STATE TU DAU - KHONG CAN LAYER `<layer>/ops` MOI
 #
-#   1. Chay stage B va D - layer network, tuc TGW, firewall va moi
-#      VPC cua to chuc.
-#   2. Dung o cong duyet cua stage A, vi stage do LUON chay.
+# Moi layer trong landing-zone/ da co khoa state rieng (xem
+# tf-backend/outputs.tf, local.layers). Nen de "van hanh" mot layer thi
+# KHONG can dung mot layer con moi - chi can mot stage tro vao no, kem
+# -target gioi han pham vi.
 #
-# Dieu thu hai mot minh da du lam pipeline vo dung cho van hanh hang
-# ngay: khong ai bam duyet mot thay doi DNS record ba lan mot ngay.
+# Dung khuon dang dung cho organization: SCP, OU va tag policy nam cung
+# MOT state, tach nhau bang -target va bang bang PHAM_VI trong
+# ops-gate/gate.py.
 #
-# --------------------------------------------------------------
-# CONG DUYET: CHI O NHUNG STAGE MA MOT THAY DOI SAI IM LANG
+# Ngoai le duy nhat la network/ops - no da la mot layer con that tu
+# truoc, vi mot ly do khac: no doc layer cha qua terraform_remote_state.
 #
-# Ban dau khoi nay ghi "KHONG CO CONG DUYET, VA DO LA MOT LUA CHON CO
-# LY", va ly do neu ra van dung: khong ai bam duyet mot thay doi DNS
-# record ba lan mot ngay, va mot cong duyet bi bam theo phan xa la mot
-# cong da ngung duoc doc.
+# =======================================================================
+# SEC KHONG VAN HANH - SEC DUYET
 #
-# Nhung ket luan "nen khong co cong duyet nao" la SAI o mot cho: no coi
-# moi stage nhu nhau. Chung khong nhu nhau:
+# Pipeline nay thuoc sec ve NOI DUNG (SCP, OU, tag policy la guardrail),
+# nhung sec khong bam apply. Sec doc, o hai cho:
 #
-#   DNS record sai      co trieu chung ngay - co nguoi goi
-#   SCP sai             KHONG co trieu chung. Mot Deny bi go khong lam
-#                       gi "hong", no chi lam mot viec truoc day bi chan
-#                       gio chay duoc
-#   permission set sai  mot group vao duoc mot account moi. Khong ai
-#                       thay, va no co hieu luc ngay - Identity Center
-#                       day thay doi xuong moi role da sinh
-#   firewall rule sai   luu luong truoc day bi chan gio di qua, va
-#                       khong co log nao noi rang mot luat vua bien mat
+#   review code   PR tren CodeCommit - doc duoc Y DINH.
+#                 Co che: ../codecommit-guard/ (dang TAT).
+#   approval      stage trong var.approve_stages - doc duoc BAN PLAN.
 #
-# Ba dong duoi la dung chuyen sec can doc. Nen cong duyet nam o DUNG
-# nhung stage do - var.approve_stages - va khong nam o dau khac.
-#
-# Cai nay giu duoc ca hai: viec hang ngay cua cloudops khong bi chan, va
-# thay doi guardrail khong di den AWS ma khong ai doc.
-#
-# --------------------------------------------------------------
-# HAI CHO SEC DUYET, VA CHUNG KHAC NHAU
-#
-#   review code   tren PULL REQUEST cua CodeCommit. Doc duoc Y DINH:
-#                 diff cua catalog noi ro hon bat ky ban plan nao.
-#                 Xem landing-zone/codecommit-guard/.
-#   approval      trong pipeline, TRUOC apply. Doc duoc BAN PLAN va ket
-#                 qua cua lint/gate - tuc hau qua THAT tren ha tang dang
-#                 chay.
-#
-# Cai thu nhat khong thay duoc cai thu hai: mot dong catalog dung van co
-# the cho ra mot plan thay the resource, vi state khong khop code. Va
-# nguoc lai: mot ban plan sach khong noi duoc rang viec go Deny nay CO
-# NEN xay ra.
-#
-# --------------------------------------------------------------
-# PHAN CON LAI CUA LUA CHON BAN DAU VAN GIU
-#
-# Nhung stage KHONG nam trong var.approve_stages thi khong co cong duyet,
-# va do van la co y. Voi chung, diff cua catalog CHINH LA thay doi:
-#
-#   + - sid: DenyRdsDeleteProd
-#   +   action: ["rds:DeleteDBInstance"]
-#   +   ticket: SEC-2291
-#
-# Ba dong do doc duoc trong mot PR, va chung noi ro hon bat ky ban plan
-# Terraform nao. Doi lai cho chung la ba lop tu dong: Lint o stage dau,
-# gate.py sau plan, FAIL_ON_DESTROY cuoi cung.
-#
-# --------------------------------------------------------------
-# REVIEW CODE: LOP CHAN DO CHUA TON TAI - DO DUOC, KHONG PHONG DOAN
-#
-#   git log --merges     chi co merge tu-nhanh, CHUA CO PR NAO
-#   duong len repo       `git push codecommit HEAD:main` = PUSH TRUC TIEP
-#
-# Ban dau toi them .github/CODEOWNERS. SAI CHO: cong ty khong dung
-# GitHub, nen file do la mot lop chan khong bao gio chay duoc. Da xoa.
-#
-# Co che dung nam o landing-zone/codecommit-guard/ - approval rule
-# template cua CodeCommit, cong mot IAM Deny chan push truc tiep. Layer
-# do dang TAT, nen hom nay:
-#
-#   review code   CHUA co
-#   approval      co, o nhung stage trong var.approve_stages
-#
-# Nghia la cong duyet trong pipeline dang la cho DUY NHAT mot nguoi doc
-# thay doi SCP truoc khi no den AWS. Dung mot lop, va lop do doc BAN PLAN
-# chu khong doc Y DINH - no khong tra loi duoc "viec go Deny nay co nen
-# xay ra khong".
-#
-# Doi lai, hai lop bu:
-#
-#   1. FAIL_ON_DESTROY=yes - plan co xoa hoac thay the thi dung ngay o
-#      buoc plan, chua apply gi.
-#   2. lint cua tung layer chay TRUOC moi stage. Voi SCP, lint phan
-#      biet THAT voi NOI va tu choi moi thay doi noi long khong mang
-#      khoi `loosen`. Xem organization/lint.sh.
-#
-# --------------------------------------------------------------
-# LAP LAI CODE VOI vending-pipeline - CO Y, TAM THOI
-#
-# Layer nay khong dung chung module voi vending-pipeline, nen buildspec
-# va phan IAM co cho giong nhau. Do la mot khoan no ky thuat CO Y:
-#
-#   - vending-pipeline dang la duong chay cho phep do mot-luot
-#     (app-prod-5). Tach module la sua ca hai cung luc, va sua mot thu
-#     dang duoc do la cach chac chan nhat de khong biet ket qua do la
-#     cua cai gi.
-#
-# Sau khi phep do do xong, buoc dung la tach modules/tf-pipeline/ va
-# cho ca hai dung chung. Ghi ra day de no khong thanh no im lang.
+# Hom nay codecommit-guard tat, nen cong duyet la cho DUY NHAT mot nguoi
+# doc thay doi SCP truoc khi no den AWS.
 ########################################
 
 locals {
-  enabled = var.enable
-  name    = "${var.project}-ops"
-
-  ####################################
-  # TOPIC BAO DRIFT: TU TAO HAY DUNG SAN
-  #
-  # drift_topic_arn thang neu khai ca hai - va check
-  # "khong_khai_ca_hai_nguon_topic" keu ve dieu do, vi im lang chon mot
-  # trong hai nghia la nhung dia chi trong drift_emails khong nhan duoc
-  # gi ma khong ai biet.
-  ####################################
-  tao_topic   = var.drift_topic_arn == "" && length(var.drift_emails) > 0
-  drift_topic = var.drift_topic_arn != "" ? var.drift_topic_arn : try(aws_sns_topic.drift[0].arn, "")
-
-  ####################################
-  # CATALOG - LINT OFFLINE, CHAY TRUOC MOI THU
-  #
-  # HAI LINT KHAC NHAU, va cho nay tung bi lan:
-  #
-  #   offline   schema, sid trung, do dai 5120, tu khoa chinh minh.
-  #             Khong can AWS, khong can state, khong can credential.
-  #   --aws     doi chieu voi policy DANG GAN THAT. Can backend va
-  #             credential cua layer.
-  #
-  # Ban dau pipeline.tf ghi rang lint "KHONG the la mot stage rieng", va
-  # ly do no neu la `--aws` can backend cua tung layer. Ly do do dung -
-  # nhung chi cho `--aws`. Lint OFFLINE khong can gi ca, nen no la mot
-  # stage rieng duoc, va NEN la:
-  #
-  #   mot loi schema o catalog cua layer thu ba phai dung pipeline TRUOC
-  #   khi stage dau cham vao AWS - khong phai sau khi hai stage dau da
-  #   apply xong.
-  #
-  # Nen: offline lint gom het vao mot stage dau, `--aws` giu nguyen cho
-  # cu trong action Plan cua tung layer.
-  ####################################
-  catalogs = [
-    {
-      layer  = "landing-zone/organization"
-      ten    = "SCP (catalog/scp.yaml)"
-      lint   = "./lint.sh --strict"
-      expiry = "./lint.sh --expiry"
-    },
-    # Them layer khi catalog cua no ton tai:
-    #   landing-zone/config-detective/ops   Config rule
-    #   landing-zone/permission-sets/ops    ai vao account nao
-  ]
-
-  # "<layer>=<lenh>", cach nhau bang ';' - lenh co dau cach nen khong
-  # tach bang dau cach duoc.
-  lint_jobs = join(";", [for c in local.catalogs : "${c.layer}=${c.lint}"])
-  expiry_jobs = join(";", [
-    for c in local.catalogs : "${c.layer}=${c.expiry}" if try(c.expiry, "") != ""
-  ])
-
-  ####################################
-  # STAGE, KHAI THANH DU LIEU
-  #
-  # Them mot layer vao pipeline la them MOT DONG o day.
-  #
-  # Thu tu trong danh sach la thu tu chay - xem for_each o pipeline.tf.
-  # KHONG dua vao ten stage de sap xep: do la loi 113, va no da xay ra
-  # mot lan o vending-pipeline.
-  #
-  # --------------------------------------------------------------
-  # `enabled` KHONG PHAI CO CHO SANG TRONG
-  #
-  # Mot stage tro vao layer CHUA TON TAI, hoac vao layer co state RONG,
-  # se dung o chot chan "state RONG" cua buildspec - va thong bao o do
-  # noi ve SAI KHOA STATE, khong noi rang layer chua duoc dung. Doc log
-  # do se dan nguoi ta di sua backend, dung cho khong hong.
-  #
-  # network/ops la vi du dang co that: layer ton tai, da tach state tu
-  # truoc, nhung state dang RONG vi network vua bi xoa de do tien.
-  ####################################
-  stages_all = [
+  stages = [
     ####################################
     # OU - TRUOC SCP, VA THU TU DO CO LY DO DO DUOC
     #
@@ -304,303 +147,168 @@ locals {
         "aws_organizations_policy_attachment.tag",
       ]
 
-      khong_co_lint = "tag policy sinh tu var.tag_policy_keys chu khong tu catalog - phep kiem y nghia la gate.py, muc aws_organizations_policy_attachment"
+      khong_co_lint = "tag policy sinh tu bien tag_policy_keys chu khong tu catalog - phep kiem y nghia la gate.py, muc aws_organizations_policy_attachment"
 
       mo_ta = "Tag policy. Go khoi mot target la NOI."
     },
-
   ]
 
-  # CHI stage duoc bat. thu_tu danh lai TU DAU tren tap da loc, nen tat
-  # mot stage giua khong de lai mot so thu tu trong - va mot so trong se
-  # thanh mot stage khong co ten trong CodePipeline.
-  #
-  # ----------------------------------
-  # THU TU CHAY CUA ACTION TRONG MOT STAGE
-  #
-  # Co cong duyet:      Plan 1  ->  Duyet 2  ->  Apply 3
-  # Khong co cong duyet: Plan 1  ->  Apply 2
-  #
-  # Tinh o day chu khong trong pipeline.tf: hai cho tinh doc lap la hai
-  # cho de lech, va mot run_order lech khong gay loi - no chi lam Apply
-  # chay SONG SONG voi cong duyet, tuc apply xong truoc khi co nguoi bam.
-  # ----------------------------------
-  stages = [
-    for i, s in [for s in local.stages_all : s if s.enabled] :
-    merge(s, {
-      thu_tu   = i
-      co_duyet = contains(var.approve_stages, s.key)
-      ro_duyet = 2
-      ro_apply = contains(var.approve_stages, s.key) ? 3 : 2
-    })
+  catalogs = [
+    {
+      layer  = "landing-zone/organization"
+      ten    = "SCP (catalog/scp.yaml)"
+      lint   = "./lint.sh --strict"
+      expiry = "./lint.sh --expiry"
+    },
   ]
 
-  stages_tat = [for s in local.stages_all : s.key if !s.enabled]
-
-  # Khoa state cua tung layer. Tra cuu truc tiep chu khong try(): mot
-  # layer nam trong stages ma thieu o layer_keys phai hong NGAY o day,
-  # kem ten khoa - chu khong lang le thanh chuoi rong roi di toi tan
-  # `terraform init` voi mot backend khong co key.
+  ####################################
+  # RANH GIOI GHI CUA PIPELINE NAY
   #
-  # Duyet local.stages (da loc) chu khong stages_all: bat buoc khai
-  # layer_keys cho mot layer CHUA BAT se lam layer nay khong apply duoc
-  # cho toi khi nguoi ta dien mot khoa cho thu ho chua dung.
-  stage_keys = {
-    for l in distinct([for s in local.stages : s.layer]) :
-    l => var.layer_keys[l]
-  }
+  # Nam o day chu khong trong module: moi pipeline co mot ranh gioi khac
+  # nhau, va neu chung nam trong module thi tap quyen se la HOP cua moi
+  # thu tung can.
+  ####################################
+  quyen_dich_vu = [
+    ####################################
+    # ORGANIZATIONS - DOC RONG
+    #
+    # plan refresh toan bo state cua layer organization, nen phai doc
+    # duoc cay OU, delegated admin va tag policy - du khong sua.
+    ####################################
+    {
+      Sid    = "DocToChuc"
+      Effect = "Allow"
+      Action = [
+        "organizations:Describe*",
+        "organizations:List*",
+      ]
+      Resource = "*"
+    },
 
-  next_steps = <<-EOT
+    ####################################
+    # ORGANIZATIONS - GHI HEP
+    #
+    # DAY LA RANH GIOI THAT CUA PIPELINE NAY. Chin action, va chung
+    # chi cham vao POLICY:
+    #
+    #   khong CreateAccount        khong tao account
+    #   khong MoveAccount          khong doi OU cua account
+    #   khong CreateOrganizationalUnit / Update / Delete
+    #                              khong sua cay OU
+    #   khong RegisterDelegatedAdministrator
+    #                              khong cap quyen cho account khac
+    #   khong EnablePolicyType / DisablePolicyType
+    #                              khong tat ca loai policy - mot
+    #                              lenh do go SACH moi SCP cung luc
+    #
+    # Loai cuoi dang chu y nhat: DisablePolicyType khong xoa policy
+    # nao, no chi lam chung thoi co hieu luc. Console van hien day du
+    # danh sach SCP, va khong con cai nao chan gi.
+    ####################################
+    {
+      Sid    = "GhiChinhSach"
+      Effect = "Allow"
+      Action = concat([
+        "organizations:CreatePolicy",
+        "organizations:UpdatePolicy",
+        "organizations:DeletePolicy",
+        "organizations:AttachPolicy",
+        "organizations:DetachPolicy",
+        "organizations:TagResource",
+        "organizations:UntagResource",
+        ],
+        ####################################
+        # CAY OU - CHI KHI STAGE sec-ou DUOC BAT
+        #
+        # Ba action nay nam trong khoi Deny ben duoi khi stage tat. Do
+        # la mot mau thuan CO THAT ma ban dau toi de lai: stage sec-ou
+        # duoc them de quan cay OU, con IAM thi Deny dung nhung action
+        # no can. Bat stage len se trot voi AccessDenied tren
+        # UpdateOrganizationalUnit - va nguoi doc log se di tim loi
+        # trong code OU, khong tim o day.
+        #
+        # Hai phia phai doi cung luc, nen ca hai deu doc
+        # var.enable_ou_stage. Deny thang Allow trong IAM, nen KHONG du
+        # neu chi them vao Allow.
+        ####################################
+        var.enable_ou_stage ? [
+          "organizations:CreateOrganizationalUnit",
+          "organizations:UpdateOrganizationalUnit",
+          "organizations:DeleteOrganizationalUnit",
+      ] : [])
+      Resource = "*"
+    }
+  ]
 
-    ═══════════════ SAU KHI APPLY ═══════════════
+  tu_choi_dich_vu = [{
+    Sid    = "TuChoiViecNgoaiPhamVi"
+    Effect = "Deny"
+    Action = concat([
+      "organizations:CreateAccount",
+      "organizations:CloseAccount",
+      "organizations:MoveAccount",
+      "organizations:RemoveAccountFromOrganization",
 
-    1. DAY tfvars CUA CAC LAYER OPS LEN KHO
-       Pipeline doc tfvars tu s3://${var.tfvars_bucket}, KHONG tu git
-       (tfvars nam trong .gitignore). Them layer moi thi phai day file
-       cua no len, neu khong stage se dung lai voi mot loi ro rang.
+      # EnablePolicyType / DisablePolicyType KHONG BAO GIO duoc mo,
+      # ke ca khi stage sec-tagging bat. DisablePolicyType khong xoa
+      # policy nao - no lam TOAN BO mot loai policy thoi co hieu luc,
+      # va console van hien day du danh sach SCP.
+      "organizations:EnablePolicyType",
+      "organizations:DisablePolicyType",
 
-         cd ../vending-pipeline && ./push-tfvars.sh
-
-       LUU Y: push-tfvars.sh phai biet ve ${join(", ", keys(local.stage_keys))}.
-       Thieu thi khong co loi luc day - chi co loi luc pipeline chay.
-
-    2. DAY CODE LEN CODECOMMIT
-       Repo GitHub KHONG kich hoat gi ca.
-
-    3. LAN CHAY DAU TIEN PHAI LA MOT LAN KHONG CO THAY DOI
-       Moi stage phai ra "KHONG CO THAY DOI". De xem duong di co thong
-       khong TRUOC khi mot thay doi that di qua no.
-
-    4. KHONG CO CONG DUYET - do la co y
-       Cho duyet la PR tren git. Doi lai BA lop, khong phai mot:
-
-         Lint (stage dau)  moi catalog, offline. Mot loi schema dung
-                           pipeline TRUOC khi stage nao cham vao AWS.
-         gate.py           doc BAN PLAN sau plan. Biet chieu khac nhau:
-                           xoa mot Deny la NOI, ma TAO mot assignment
-                           cung la NOI.
-         FAIL_ON_DESTROY   dem so resource bi xoa. Lop cuoi, va la lop
-                           tho nhat - no khong biet y nghia.
-
-    5. STAGE DANG TAT: ${length(local.stages_tat) == 0 ? "khong co" : join(", ", local.stages_tat)}
-       Mot stage tro vao layer chua ton tai, hoac vao layer co state
-       RONG, se dung o chot chan "state RONG" cua buildspec - va thong
-       bao o do noi ve SAI KHOA STATE chu khong noi rang layer chua duoc
-       dung. Xem mo ta cua tung bien enable_* de biet phai co gi truoc.
-
-    6. DRIFT: mot CodeBuild rieng chay theo lich "${var.drift_cron}"
-       No chi `plan -lock=false`, khong bao gio apply. Mot lan chay ra
-       KHAC "khong co thay doi" nghia la co nguoi sua tay.
-
-       ${local.drift_topic == "" ? "CHUA khai drift_emails hay drift_topic_arn - khong ai duoc bao." : "Bao ve: ${local.drift_topic}"}
-
-    ═════════════════════════════════════════════
-
-  EOT
+      "organizations:RegisterDelegatedAdministrator",
+      "organizations:DeregisterDelegatedAdministrator",
+      "organizations:LeaveOrganization",
+      "organizations:DeleteOrganization",
+      ],
+      # Cay OU: Deny khi stage sec-ou TAT.
+      var.enable_ou_stage ? [] : [
+        "organizations:CreateOrganizationalUnit",
+        "organizations:UpdateOrganizationalUnit",
+        "organizations:DeleteOrganizationalUnit",
+    ])
+    Resource = "*"
+    }
+  ]
 }
 
 ########################################
-# KIEM TRA CHEO
+# HA TANG PIPELINE
 ########################################
 
-########################################
-# KHOA STAGE KHONG TRUNG
-#
-# Bang PHAM_VI trong ops-gate/gate.py la MOT ban dung chung cho moi
-# pipeline van hanh, nen khoa stage phai duy nhat TOAN CUC - do la ly do
-# khoa mang tien to chu so huu (sec-, cloud-, net-).
-#
-# Trong pham vi mot layer thi Terraform tu bat trung khoa (for_each o
-# pipeline.tf dung format("%02d-%s", ...) nen hai stage cung key se cho
-# hai khoa khac nhau va KHONG bao loi - do la ly do phai kiem o day).
-########################################
-########################################
-# TEN TRONG approve_stages PHAI LA TEN STAGE THAT
-#
-# Go sai mot ten o day KHONG gay loi: contains() tra ve false, stage do
-# khong co cong duyet, va pipeline chay binh thuong. Ket qua la mot cong
-# duyet duoc khai ma khong ton tai - va no tra loi cau hoi "SCP co can
-# duyet khong" bang "co" trong tfvars trong khi thuc te la khong.
-########################################
-########################################
-# STAGE sec-ou VA IAM PHAI DOI CUNG LUC
-#
-# iam.tf Deny organizations:*OrganizationalUnit khi enable_ou_stage =
-# false, va Allow khi true. Hai phia doc CUNG mot bien nen chung khong
-# lech duoc - check nay chi de ghi lai su rang buoc do cho nguoi doc sau,
-# va de keu neu ai do tach chung ra.
-#
-# Vi sao rang buoc nay quan trong: Deny THANG Allow trong IAM, nen mo
-# Allow ma quen bo khoi Deny thi KHONG co gi doi - stage van trot, va
-# thong bao la AccessDenied tren UpdateOrganizationalUnit, tuc no chi ve
-# cay OU chu khong ve IAM.
-########################################
-check "sec_ou_va_iam_khop_nhau" {
-  assert {
-    condition = !var.enable_ou_stage || length([
-      for s in local.stages_all : s.key
-      if s.key == "sec-ou" && s.enabled
-    ]) == 1
-    error_message = join(" ", [
-      "enable_ou_stage = true nhung stage sec-ou khong duoc bat.",
-      "Khi do iam.tf da mo quyen ghi cay OU cho role CodeBuild ma khong",
-      "stage nao dung no - tuc mot quyen rong hon can thiet, khong co ai su",
-      "dung, va khong co gi loi ra.",
-    ])
-  }
-}
+module "pipeline" {
+  source = "../../modules/tf-pipeline"
 
-check "approve_stages_la_ten_that" {
-  assert {
-    condition = length(setsubtract(
-      toset(var.approve_stages),
-      toset([for s in local.stages_all : s.key]),
-    )) == 0
-    error_message = join(" ", [
-      "approve_stages co ten khong phai stage nao:",
-      join(", ", tolist(setsubtract(
-        toset(var.approve_stages),
-        toset([for s in local.stages_all : s.key]),
-      ))),
-      ". Ten stage co the la:",
-      join(", ", [for s in local.stages_all : s.key]),
-      ". Go sai o day KHONG gay loi luc chay - no chi lam cong duyet do",
-      "khong ton tai, trong khi tfvars noi rang co.",
-    ])
-  }
-}
+  ten     = "ops"
+  enable  = var.enable
+  project = var.project
+  region  = var.region
 
-check "khoa_stage_khong_trung" {
-  assert {
-    condition = length(local.stages_all) == length(distinct([
-      for s in local.stages_all : s.key
-    ]))
-    error_message = join(" ", [
-      "Hai stage dung CUNG mot key:",
-      join(", ", [for s in local.stages_all : s.key]),
-      ". for_each o pipeline.tf dung format(\"%02d-%s\", thu_tu, key) nen hai",
-      "stage cung key van cho hai khoa map khac nhau - Terraform KHONG bao loi.",
-      "Nhung bang PHAM_VI trong ops-gate/gate.py tra theo key, nen cai thu hai",
-      "se lang le nhan pham vi cua cai thu nhat.",
-    ])
-  }
-}
+  stages          = local.stages
+  catalogs        = local.catalogs
+  quyen_dich_vu   = local.quyen_dich_vu
+  tu_choi_dich_vu = local.tu_choi_dich_vu
 
-check "khoa_state_khong_trung" {
-  assert {
-    condition = length(values(var.layer_keys)) == length(distinct(values(var.layer_keys)))
-    error_message = join(" ", [
-      "Hai layer dang tro vao CUNG mot khoa state:",
-      join(", ", [for k, v in var.layer_keys : "${k} -> ${v}"]),
-      ". Hai layer dung chung mot state se giam len nhau, va cai apply sau se",
-      "coi resource cua cai truoc la thu can xoa.",
-    ])
-  }
-}
+  source_type       = var.source_type
+  repository_name   = var.repository_name
+  branch_name       = var.branch_name
+  source_bucket     = var.source_bucket
+  source_object_key = var.source_object_key
 
-########################################
-# MOI STAGE PHAI CO lint, HOAC NOI RO VI SAO KHONG CO
-#
-# Khong phai stage nao cung co catalog. OU va tag policy khong co, nen
-# khong co lint offline cho chung - phep kiem y nghia cua chung la
-# gate.py, doc tu ban plan.
-#
-# Nhung "khong co lint" phai duoc VIET RA kem ly do, khong duoc la mot
-# truong bi bo trong. Mot truong bo trong doc giong het mot truong bi
-# quen, va cai thu hai la mot stage di qua ma khong ai kiem y nghia.
-########################################
-check "moi_stage_co_lint" {
-  assert {
-    condition = length([
-      for s in local.stages_all : s.key
-      if try(s.lint, "") == "" && try(s.khong_co_lint, "") == ""
-    ]) == 0
-    error_message = join(" ", [
-      "Stage khong co lenh lint va cung khong khai khong_co_lint:",
-      join(", ", [
-        for s in local.stages_all : s.key
-        if try(s.lint, "") == "" && try(s.khong_co_lint, "") == ""
-      ]),
-      ". Pipeline nay KHONG co cong duyet, nen lint la lop kiem duy nhat chay",
-      "truoc khi Terraform cham vao AWS. Mot stage khong lint la mot stage",
-      "chi con FAIL_ON_DESTROY - va FAIL_ON_DESTROY khong biet gi ve y nghia",
-      "cua thay doi, no chi dem so resource bi xoa.",
-    ])
-  }
-}
+  state_bucket     = var.state_bucket
+  state_lock_table = var.state_lock_table
+  layer_keys       = var.layer_keys
+  tfvars_bucket    = var.tfvars_bucket
 
-########################################
-# CHECK NAY CHI PHU MOT LAYER - VA DO LA GIOI HAN CUA NO
-#
-# Dieu kien viet cung `layer == "landing-zone/organization"`. Nen
-# permission-sets/ops hay org-trail co the khai thieu targets ma check
-# nay khong keu.
-#
-# Cho chan tong quat KHONG o day ma o gate/gate.py: bang PHAM_VI khai
-# type nao mot stage duoc doi, va no kiem o BAN PLAN chu khong o bien
-# moi truong - nen no thay thu that su sap doi, bat ke TF_TARGETS duoc
-# dat dung hay bi de len thanh rong.
-#
-# Giu check nay lai vi no bat SOM hon (luc plan cua chinh layer
-# ops-pipeline, khong phai luc pipeline chay), va vi layer organization
-# la layer duy nhat mot dong thieu se thao SCP cua ca to chuc.
-########################################
-check "stage_khong_cham_ngoai_pham_vi" {
-  assert {
-    condition = length([
-      for s in local.stages_all : s.key
-      if s.layer == "landing-zone/organization" && length(try(s.targets, [])) == 0
-    ]) == 0
-    error_message = join(" ", [
-      "Stage tro vao layer organization ma KHONG khai targets.",
-      "Layer do quan ca cay OU, delegated administrator va tag policy.",
-      "Khong gioi han thi pipeline nay apply duoc CA CHUNG - va mot lan doi",
-      "cay OU tu dong la mot lan moi target cua SCP phai giai lai, tuc ca to",
-      "chuc co the khong con SCP nao gan vao dau.",
-    ])
-  }
-}
+  approve_stages  = var.approve_stages
+  approval_emails = var.approval_emails
 
-########################################
-# CATALOG PHAI CO IT NHAT MOT MUC
-#
-# local.catalogs rong lam JOBS thanh chuoi rong, va stage Lint se chay 0
-# vong lap. buildspec co chot chan cho viec do, nhung bat o day thi bat
-# duoc SOM hon mot vong - luc apply layer nay, khong phai luc pipeline
-# chay.
-########################################
-check "co_catalog_de_lint" {
-  assert {
-    condition = length(local.catalogs) > 0
-    error_message = join(" ", [
-      "local.catalogs RONG, nen stage Lint se khong kiem catalog nao va van",
-      "bao THANH CONG neu chot chan trong buildspec bi bo. Mot cong kiem bao",
-      "dat vi no khong kiem gi la kieu hong im lang nhat.",
-    ])
-  }
-}
+  drift_cron      = var.drift_cron
+  drift_emails    = var.drift_emails
+  drift_topic_arn = var.drift_topic_arn
 
-########################################
-# MOI STAGE DUOC BAT PHAI CO KHOA STATE
-#
-# Tra cuu var.layer_keys[l] o local.stage_keys da hong san khi thieu,
-# nhung thong bao cua Terraform cho viec do noi ve "key not found" va
-# khong noi phai lam gi. Check nay noi.
-########################################
-check "stage_bat_thi_co_khoa_state" {
-  assert {
-    condition = length(setsubtract(
-      toset([for s in local.stages : s.layer]),
-      toset(keys(var.layer_keys)),
-    )) == 0
-    error_message = join(" ", [
-      "Stage duoc BAT nhung layer cua no khong co trong layer_keys:",
-      join(", ", tolist(setsubtract(
-        toset([for s in local.stages : s.layer]),
-        toset(keys(var.layer_keys)),
-      ))),
-      ". Them khoa state cho no vao layer_keys, hoac tat stage do bang bien",
-      "enable_* tuong ung.",
-    ])
-  }
+  expiry_blocks_pipeline = var.expiry_blocks_pipeline
+  build_timeout_minutes  = var.build_timeout_minutes
+  log_retention_days     = var.log_retention_days
 }

@@ -1,14 +1,25 @@
 ########################################
-# PIPELINE VAN HANH
+# PIPELINE VAN HANH CUA SEC - layer organization
 #
-# Chay o ACCOUNT MANAGEMENT. Xem main.tf muc "Vi sao khong gop vao
-# vending-pipeline".
+# Ha tang o ../../modules/tf-pipeline. File nay chi khai provider.
+#
+# MODULE KHONG KHAI provider, va do la co y: mot provider trong module se
+# khoa region va default_tags cho moi caller.
 #
 # ---------------------------------------------------------------
-# BACKEND CUA CHINH LAYER NAY
+# BACKEND
 #
-# Nhu moi layer khac: khoa khai o landing-zone/tf-backend/outputs.tf,
-# file backend.tf do wire-backends.sh sinh. KHONG go tay vao day.
+# Khoa khai o landing-zone/tf-backend/outputs.tf (local.layers),
+# backend.tf do wire-backends.sh sinh. KHONG go tay.
+#
+# LUU Y: layer nay THIEU trong local.layers cho toi 2026-09-11, nen state
+# cua no co the dang nam LOCAL. Kiem:
+#
+#   ls backend.tf && terraform state list | wc -l
+#
+# Neu chua co backend.tf: `terraform init -migrate-state` va tra loi yes.
+# `init` tron voi -input=false cau hinh backend moi ma KHONG chuyen
+# state, va plan sau do doi tao lai toan bo. Loi 90.
 ########################################
 
 terraform {
@@ -36,6 +47,3 @@ provider "aws" {
     }
   }
 }
-
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}

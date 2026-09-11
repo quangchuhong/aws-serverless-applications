@@ -7,6 +7,20 @@
 # plan doi xoa nhung thu dang chay.
 ########################################
 
+# HA TANG PIPELINE NAM O ../../modules/tf-pipeline
+#
+# Layer nay chi KHAI BAO: stage nao, catalog nao, quyen gi - xem main.tf.
+# Bien duoi day duoc truyen xuong module.
+#
+# LAN APPLY DAU TIEN SAU KHI TACH MODULE: plan PHAI ra
+#
+#   0 to add, 0 to change, 0 to destroy
+#
+# kem 30 dong chuyen dia chi. Con so khac 0 nghia la mot `moved` block bi
+# thieu - xem moved.tf. KHONG apply khi thay so khac: tach module doi dia
+# chi cua moi resource, va khong co moved thi apply XOA ROI TAO LAI ca 30
+# cai, gom KMS key va bucket artifact.
+
 # MAC DINH TAT.
 #
 # Bat cai nay tao mot duong TU DONG co quyen sua SCP cua ca to chuc.

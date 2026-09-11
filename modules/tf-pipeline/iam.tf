@@ -135,106 +135,34 @@ resource "aws_iam_role_policy" "codebuild" {
           }
         }
       },
-
-      ####################################
-      # ORGANIZATIONS - DOC RONG
-      #
-      # plan refresh toan bo state cua layer organization, nen phai doc
-      # duoc cay OU, delegated admin va tag policy - du khong sua.
-      ####################################
-      {
-        Sid    = "DocToChuc"
-        Effect = "Allow"
-        Action = [
-          "organizations:Describe*",
-          "organizations:List*",
-        ]
-        Resource = "*"
-      },
-
-      ####################################
-      # ORGANIZATIONS - GHI HEP
-      #
-      # DAY LA RANH GIOI THAT CUA PIPELINE NAY. Chin action, va chung
-      # chi cham vao POLICY:
-      #
-      #   khong CreateAccount        khong tao account
-      #   khong MoveAccount          khong doi OU cua account
-      #   khong CreateOrganizationalUnit / Update / Delete
-      #                              khong sua cay OU
-      #   khong RegisterDelegatedAdministrator
-      #                              khong cap quyen cho account khac
-      #   khong EnablePolicyType / DisablePolicyType
-      #                              khong tat ca loai policy - mot
-      #                              lenh do go SACH moi SCP cung luc
-      #
-      # Loai cuoi dang chu y nhat: DisablePolicyType khong xoa policy
-      # nao, no chi lam chung thoi co hieu luc. Console van hien day du
-      # danh sach SCP, va khong con cai nao chan gi.
-      ####################################
-      {
-        Sid    = "GhiChinhSach"
-        Effect = "Allow"
-        Action = concat([
-          "organizations:CreatePolicy",
-          "organizations:UpdatePolicy",
-          "organizations:DeletePolicy",
-          "organizations:AttachPolicy",
-          "organizations:DetachPolicy",
-          "organizations:TagResource",
-          "organizations:UntagResource",
-          ],
-          ####################################
-          # CAY OU - CHI KHI STAGE sec-ou DUOC BAT
-          #
-          # Ba action nay nam trong khoi Deny ben duoi khi stage tat. Do
-          # la mot mau thuan CO THAT ma ban dau toi de lai: stage sec-ou
-          # duoc them de quan cay OU, con IAM thi Deny dung nhung action
-          # no can. Bat stage len se trot voi AccessDenied tren
-          # UpdateOrganizationalUnit - va nguoi doc log se di tim loi
-          # trong code OU, khong tim o day.
-          #
-          # Hai phia phai doi cung luc, nen ca hai deu doc
-          # var.enable_ou_stage. Deny thang Allow trong IAM, nen KHONG du
-          # neu chi them vao Allow.
-          ####################################
-          var.enable_ou_stage ? [
-            "organizations:CreateOrganizationalUnit",
-            "organizations:UpdateOrganizationalUnit",
-            "organizations:DeleteOrganizationalUnit",
-        ] : [])
-        Resource = "*"
-      },
-      {
-        Sid    = "TuChoiViecNgoaiPhamVi"
-        Effect = "Deny"
-        Action = concat([
-          "organizations:CreateAccount",
-          "organizations:CloseAccount",
-          "organizations:MoveAccount",
-          "organizations:RemoveAccountFromOrganization",
-
-          # EnablePolicyType / DisablePolicyType KHONG BAO GIO duoc mo,
-          # ke ca khi stage sec-tagging bat. DisablePolicyType khong xoa
-          # policy nao - no lam TOAN BO mot loai policy thoi co hieu luc,
-          # va console van hien day du danh sach SCP.
-          "organizations:EnablePolicyType",
-          "organizations:DisablePolicyType",
-
-          "organizations:RegisterDelegatedAdministrator",
-          "organizations:DeregisterDelegatedAdministrator",
-          "organizations:LeaveOrganization",
-          "organizations:DeleteOrganization",
-          ],
-          # Cay OU: Deny khi stage sec-ou TAT.
-          var.enable_ou_stage ? [] : [
-            "organizations:CreateOrganizationalUnit",
-            "organizations:UpdateOrganizationalUnit",
-            "organizations:DeleteOrganizationalUnit",
-        ])
-        Resource = "*"
-      },
       ],
+
+      ####################################
+      # QUYEN CUA DICH VU - DO CALLER TRUYEN VAO
+      #
+      # Day la RANH GIOI THAT cua tung pipeline, va no KHAC NHAU o moi
+      # pipeline nen no khong the nam trong module:
+      #
+      #   pipeline SCP       organizations:CreatePolicy, AttachPolicy...
+      #   pipeline cloudops  config:*, ssoadmin:*, route53:*,
+      #                      networkfirewall:*, va sts:AssumeRole sang
+      #                      ba account khac
+      #
+      # Truyen tu caller nghia la ranh gioi ghi nam CANH danh sach stage,
+      # trong cung mot file - dung cho nguoi review nhin. Neu no nam
+      # trong module thi moi pipeline se dung chung mot tap quyen, va tap
+      # do se la HOP cua moi thu tung can.
+      #
+      # var.quyen_dich_vu    Allow - thu pipeline nay duoc ghi
+      # var.tu_choi_dich_vu  Deny  - thu no KHONG duoc ghi, viet ro
+      #
+      # Vi sao can ca hai chu khong chi Allow hep: Deny THANG Allow, nen
+      # mot Deny viet ro van chan duoc ke ca khi mot policy khac gan vao
+      # cung role mo rong hon. Va no doc duoc: mot nguoi doc Allow khong
+      # biet duoc thu gi CO Y khong cho.
+      ####################################
+      var.quyen_dich_vu,
+      var.tu_choi_dich_vu,
 
       ####################################
       # BANG KHOA STATE
