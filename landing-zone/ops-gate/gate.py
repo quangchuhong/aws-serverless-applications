@@ -2,7 +2,7 @@
 """Cong chan SAU plan, TRUOC apply cho pipeline van hanh.
 
     python3 gate.py --plan tfplan.json --layer landing-zone/organization \
-                    --stage A-scp [--loosen ops-loosen.yaml] [--strict]
+                    --stage sec-scp [--loosen ops-loosen.yaml] [--strict]
 
 =========================================================================
 VI SAO DOC BAN PLAN CHU KHONG DOC CATALOG
@@ -363,9 +363,29 @@ LUAT = {
 # co pham vi GIONG NHAU, tuc stage tagging duoc phep sua SCP va nguoc
 # lai - dung cai ma pham_vi ton tai de chan.
 
+# KHOA STAGE PHAI DUY NHAT TOAN CUC, VA MANG TEN CHU SO HUU
+#
+# Bang nay la MOT ban dung chung cho MOI pipeline van hanh. Ba pipeline
+# duoc tach theo phong ban:
+#
+#   sec     landing-zone/organization          SCP, OU, tag policy
+#   cloud   landing-zone/permission-sets/ops   ai vao account nao
+#           landing-zone/config-detective/ops  Config rule
+#           landing-zone/org-trail             CloudTrail
+#   net     landing-zone/network/ops           DNS, endpoint, firewall
+#
+# Hai pipeline cung co mot stage ten "ou" se DE LEN NHAU trong bang nay,
+# va cai bi de len se lang le nhan pham vi cua cai kia. Nen khoa mang
+# tien to chu so huu.
+#
+# VA KHONG CON CHU CAI A/B/C. Thu tu chay do VI TRI trong danh sach
+# stages_all quyet dinh (local.stages danh lai thu_tu tu dau) - chu cai
+# chi la trang trai, va mot chu cai lech vi tri la dung cai bay cua loi
+# 113 o dang khac.
+
 PHAM_VI = {
     ####################################
-    # organization - MOT layer, MOT state, BA stage
+    # sec - organization: MOT layer, MOT state, BA stage
     #
     # SCP, OU va tag policy nam cung mot layer va cung mot state. Chung
     # KHONG tach ra thanh ba layer: tach state la them hai lan init, hai
@@ -384,17 +404,17 @@ PHAM_VI = {
     # attachment cho toi luot sau - state va cau hinh lech nhau trong im
     # lang suot khoang giua.
     ####################################
-    "A-ou": [
+    "sec-ou": [
         "aws_organizations_organizational_unit.level1",
         "aws_organizations_organizational_unit.level2",
     ],
 
-    "B-scp": [
+    "sec-scp": [
         "aws_organizations_policy.scp",
         "aws_organizations_policy_attachment.scp",
     ],
 
-    "C-tagging": [
+    "sec-tagging": [
         "aws_organizations_policy.tag",
         "aws_organizations_policy_attachment.tag",
     ],
@@ -407,7 +427,7 @@ PHAM_VI = {
     # duoc chung la mot pipeline co the tat ca he thong phat hien cua to
     # chuc. Chung nam o layer cha, sua bang tay.
     ####################################
-    "E-config-rules": [
+    "cloud-config-rules": [
         "aws_config_organization_managed_rule",
         "aws_config_config_rule",
     ],
@@ -420,7 +440,7 @@ PHAM_VI = {
     # quyen cua MOI nguoi dang dung set do, o MOI account, ngay lap tuc.
     # Do khong phai viec hang ngay.
     ####################################
-    "D-permission-set-assignment": [
+    "cloud-permission-set": [
         "aws_ssoadmin_account_assignment",
         "aws_identitystore_group_membership",
     ],
@@ -428,7 +448,7 @@ PHAM_VI = {
     ####################################
     # network/ops - da co state rieng tu truoc
     ####################################
-    "F-network-ops": [
+    "net-ops": [
         "aws_route53_record",
         "aws_vpc_endpoint",
         "aws_route53_zone",

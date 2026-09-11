@@ -161,7 +161,7 @@ locals {
     # Stage nay chi -target vao resource da co.
     ####################################
     {
-      key     = "A-ou"
+      key     = "sec-ou"
       layer   = "landing-zone/organization"
       enabled = var.enable_ou_stage
 
@@ -179,7 +179,7 @@ locals {
     },
 
     {
-      key     = "B-scp"
+      key     = "sec-scp"
       layer   = "landing-zone/organization"
       enabled = true
 
@@ -234,7 +234,7 @@ locals {
     # gi la kieu hong im lang.
     ####################################
     {
-      key     = "C-tagging"
+      key     = "sec-tagging"
       layer   = "landing-zone/organization"
       enabled = var.enable_tagging_stage
 
@@ -260,7 +260,7 @@ locals {
     # Chay trong CHINH account management, khong can role lien account.
     ####################################
     {
-      key     = "D-permission-set-assignment"
+      key     = "cloud-permission-set"
       layer   = "landing-zone/permission-sets/ops"
       enabled = var.enable_permission_set_ops
 
@@ -289,7 +289,7 @@ locals {
     # role da hoan lai den sau phep do app-prod-5.
     ####################################
     {
-      key     = "E-config-rules"
+      key     = "cloud-config-rules"
       layer   = "landing-zone/config-detective/ops"
       enabled = var.enable_config_rules_ops
 
@@ -312,7 +312,7 @@ locals {
     # khoa state.
     ####################################
     {
-      key     = "F-network-ops"
+      key     = "net-ops"
       layer   = "landing-zone/network/ops"
       enabled = var.enable_network_ops
 
@@ -398,6 +398,33 @@ locals {
 ########################################
 # KIEM TRA CHEO
 ########################################
+
+########################################
+# KHOA STAGE KHONG TRUNG
+#
+# Bang PHAM_VI trong ops-gate/gate.py la MOT ban dung chung cho moi
+# pipeline van hanh, nen khoa stage phai duy nhat TOAN CUC - do la ly do
+# khoa mang tien to chu so huu (sec-, cloud-, net-).
+#
+# Trong pham vi mot layer thi Terraform tu bat trung khoa (for_each o
+# pipeline.tf dung format("%02d-%s", ...) nen hai stage cung key se cho
+# hai khoa khac nhau va KHONG bao loi - do la ly do phai kiem o day).
+########################################
+check "khoa_stage_khong_trung" {
+  assert {
+    condition = length(local.stages_all) == length(distinct([
+      for s in local.stages_all : s.key
+    ]))
+    error_message = join(" ", [
+      "Hai stage dung CUNG mot key:",
+      join(", ", [for s in local.stages_all : s.key]),
+      ". for_each o pipeline.tf dung format(\"%02d-%s\", thu_tu, key) nen hai",
+      "stage cung key van cho hai khoa map khac nhau - Terraform KHONG bao loi.",
+      "Nhung bang PHAM_VI trong ops-gate/gate.py tra theo key, nen cai thu hai",
+      "se lang le nhan pham vi cua cai thu nhat.",
+    ])
+  }
+}
 
 check "khoa_state_khong_trung" {
   assert {
