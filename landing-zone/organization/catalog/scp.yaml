@@ -251,7 +251,9 @@ policies:
   # allowed_regions - chan chung la tu khoa minh ra ngoai.
   ####################################################
   - name: region_lock
-    description: "Chi cho phep region trong var.allowed_regions"
+    # ${allowed_regions} thay bang join(", ", var.allowed_regions).
+    # Danh sach cho thay the la DONG - xem local.scp_subst.
+    description: "Chi cho phep ${allowed_regions}"
     targets: ["ROOT"]
     statements:
 

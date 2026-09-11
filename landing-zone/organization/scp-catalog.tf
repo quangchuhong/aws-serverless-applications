@@ -117,6 +117,27 @@ locals {
   ])
 
   ####################################
+  # CHO THAY THE TRONG CATALOG
+  #
+  # Catalog la van ban tinh, nhung vai cho phai theo bien - vi du mo
+  # ta cua region_lock phai liet ke dung nhung region dang cho phep.
+  #
+  # Danh sach DONG va nho, khong phai co che template tong quat:
+  # mot catalog noi suy duoc bat ky thu gi la mot catalog sinh ra
+  # duoc noi dung khong ai doc truoc duoc trong PR.
+  #
+  # LOI: mo ta region_lock ban dau bi chep thanh chu chet
+  # ("Chi cho phep region trong var.allowed_regions"), va terraform
+  # plan bat duoc ngay - no la thay doi DUY NHAT trong ca lan refactor
+  # 13 statement. Phep nghiem thu "plan phai ra 0 changes" da lam dung
+  # viec cua no.
+  ####################################
+  scp_subst = {
+    partition       = local.partition
+    allowed_regions = join(", ", var.allowed_regions)
+  }
+
+  ####################################
   # GIU NGUYEN VO HUONG HAY MANG
   #
   # jsonencode("*") ra `"*"`, jsonencode(["*"]) ra `["*"]`. Hai chuoi
@@ -133,8 +154,13 @@ locals {
           Sid    = s.sid
           Effect = s.effect
 
-          Resource = try(tostring(s.resource), null) != null ? replace(s.resource, "$${partition}", local.partition) : [
-            for r in s.resource : replace(r, "$${partition}", local.partition)
+          Resource = try(tostring(s.resource), null) != null ? replace(
+            replace(s.resource, "$${partition}", local.scp_subst.partition),
+            "$${allowed_regions}", local.scp_subst.allowed_regions
+            ) : [
+            for r in s.resource : replace(
+              replace(r, "$${partition}", local.scp_subst.partition),
+            "$${allowed_regions}", local.scp_subst.allowed_regions)
           ]
         },
 
@@ -163,10 +189,12 @@ locals {
   ####################################
   scp_definitions = {
     for p in local.scp_raw.policies : p.name => {
-      enabled     = try(var.enable_scp[p.name], true) && try(p.enabled, true)
-      description = p.description
-      statements  = local.scp_stmt_rendered[p.name]
-      targets     = p.targets
+      enabled = try(var.enable_scp[p.name], true) && try(p.enabled, true)
+      description = replace(
+        replace(p.description, "$${partition}", local.scp_subst.partition),
+      "$${allowed_regions}", local.scp_subst.allowed_regions)
+      statements = local.scp_stmt_rendered[p.name]
+      targets    = p.targets
     }
   }
 }
