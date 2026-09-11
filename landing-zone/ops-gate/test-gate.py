@@ -186,7 +186,7 @@ print("── PHAM VI: chot chan cho TF_TARGETS rong ──")
 
 # `terraform plan` KHONG bao loi khi TF_TARGETS rong - no chi plan CA
 # layer. Voi organization, ca layer nghia la cay OU.
-chay("OU doi trong stage B-scp   -> ngoai pham vi, thoat 1", 1, plan(NO_OP,
+chay("OU doi trong stage sec-scp   -> ngoai pham vi, thoat 1", 1, plan(NO_OP,
      rc('aws_organizations_organizational_unit.level1["Sandbox"]',
         "aws_organizations_organizational_unit", ["update"],
         before={"name": "Sandbox", "parent_id": "r-1"},
@@ -210,24 +210,24 @@ SUA_TAG = rc("aws_organizations_policy.tag[0]",
              "aws_organizations_policy", ["update"],
              before={"content": "a"}, after={"content": "b"})
 
-chay("stage B-scp sua SCP        -> trong pham vi", 0,
+chay("stage sec-scp sua SCP        -> trong pham vi", 0,
      plan(NO_OP, SUA_SCP), stage="sec-scp")
-chay("stage B-scp sua TAG        -> NGOAI pham vi, thoat 1", 1,
+chay("stage sec-scp sua TAG        -> NGOAI pham vi, thoat 1", 1,
      plan(NO_OP, SUA_TAG), stage="sec-scp")
-chay("stage C-tagging sua TAG    -> trong pham vi", 0,
+chay("stage sec-tagging sua TAG    -> trong pham vi", 0,
      plan(NO_OP, SUA_TAG), stage="sec-tagging")
-chay("stage C-tagging sua SCP    -> NGOAI pham vi, thoat 1", 1,
+chay("stage sec-tagging sua SCP    -> NGOAI pham vi, thoat 1", 1,
      plan(NO_OP, SUA_SCP), stage="sec-tagging")
 
 # Stage OU: chi duoc cham cay OU. Mot attachment doi trong stage nay la
 # dau hieu TF_TARGETS rong.
-chay("stage A-ou doi OU          -> trong pham vi", 0, plan(NO_OP,
+chay("stage sec-ou doi OU          -> trong pham vi", 0, plan(NO_OP,
      rc('aws_organizations_organizational_unit.level1["Sandbox"]',
         "aws_organizations_organizational_unit", ["update"],
         before={"name": "Sandbox", "parent_id": "r-1"},
         after={"name": "Sandbox2", "parent_id": "r-1"})),
      stage="sec-ou")
-chay("stage A-ou doi attachment  -> NGOAI pham vi, thoat 1", 1,
+chay("stage sec-ou doi attachment  -> NGOAI pham vi, thoat 1", 1,
      plan(NO_OP, XOA_ATTACH), stage="sec-ou")
 
 print()
@@ -330,6 +330,30 @@ chay("khai bao khong dung toi    -> canh bao, sach", 0, plan(NO_OP),
      loosen=KHAI_DU)
 chay("khai bao khong dung + strict -> thoat 1", 1, plan(NO_OP),
      loosen=KHAI_DU, strict=True)
+
+########################################
+# NHAN PHAI KHOP KHOA STAGE THAT
+#
+# Nhan cua test la chuoi tu do, con `stage=` la thu duoc truyen vao
+# gate.py. Chung tung LECH NHAU: sau mot lan doi khoa, nhan van ghi
+# "stage B-scp" trong khi khoa da la "sec-scp" - va khong phep kiem nao
+# thay, vi test van xanh.
+#
+# Mot nhan sai lam nguoi doc ket qua di tim mot stage khong ton tai.
+########################################
+import re as _re
+
+_nguon = open(__file__).read()
+_lech = []
+for _m in _re.finditer(r'chay\(\s*"([^"]*stage ([a-z-]+)[^"]*)"[^)]*?stage="([^"]+)"', _nguon, _re.S):
+    if _m.group(2) != _m.group(3):
+        _lech.append((_m.group(2), _m.group(3)))
+
+if _lech:
+    for _a, _b in _lech:
+        printf = print
+        printf(f"  {R}x{N} NHAN LECH KHOA: nhan ghi '{_a}' nhung stage= la '{_b}'")
+        truot += 1
 
 print()
 print("════════════════════════════════════════════")
