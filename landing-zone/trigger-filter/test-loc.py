@@ -89,7 +89,17 @@ import loc  # noqa: E402
 DIEM = [0, 0]
 
 
-def su_kien(repo="kho", truoc="aaa", sau="bbb", nhanh="refs/heads/main"):
+# nhanh="main", KHONG phai "refs/heads/main".
+#
+# Do tu su kien that trong log:
+#   repo=diy-aws-landing-zone truoc=cde1071... sau=4d1ad06... nhanh=main
+#
+# Toi da viet "refs/heads/main" theo tri nho. Lan nay vo hai - loc.py chi
+# IN referenceName ra chu khong loc theo no, va event_pattern dung
+# [var.branch_name] nen van khop. Nhung mot fixture sai hinh la mot cai
+# bay de danh: ai do them logic doc referenceName sau nay se thay bo kiem
+# xanh tren mot hinh dang khong ton tai.
+def su_kien(repo="kho", truoc="aaa", sau="bbb", nhanh="main"):
     d = {"repositoryName": repo, "commitId": sau, "referenceName": nhanh}
     if truoc is not None:
         d["oldCommitId"] = truoc
