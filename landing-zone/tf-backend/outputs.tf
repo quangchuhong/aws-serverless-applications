@@ -85,6 +85,35 @@ locals {
     # nen khong can dong backend_profiles nao.
     "landing-zone/vending-pipeline" = "vending-pipeline/terraform.tfstate"
 
+    ####################################
+    # PIPELINE VAN HANH, VA CHOT DUYET REPO
+    #
+    # Hai dong nay THIEU tu dau. Hau qua: wire-backends.sh khong sinh
+    # backend.tf cho hai layer do, nen state cua chung nam LOCAL - tren
+    # may nguoi da apply.
+    #
+    # Voi ops-pipeline do la state cua layer so huu mot pipeline co quyen
+    # UpdatePolicy va AttachPolicy tren SCP cua CA TO CHUC. Mat may =
+    # khong con ai quan duong tu dong do, va `terraform destroy` tu mot
+    # ban clone moi se chay tren state RONG roi bao "da sach".
+    #
+    # Dung khuon voi canh bao da ghi cho layer network o tren.
+    #
+    # ---- CHUYEN STATE: KHONG CHI CHAY wire-backends.sh ----
+    #
+    # Neu state dang LOCAL thi sau khi sinh backend.tf phai NOI RO viec
+    # chuyen:
+    #
+    #   cd ../ops-pipeline
+    #   terraform init -migrate-state     # Terraform se hoi, tra loi yes
+    #   terraform state list | wc -l      # phai KHAC 0
+    #
+    # `terraform init` tron voi -input=false se cau hinh backend moi ma
+    # KHONG chuyen state - va plan sau do doi tao lai toan bo. Loi 90.
+    ####################################
+    "landing-zone/ops-pipeline"     = "ops-pipeline/terraform.tfstate"
+    "landing-zone/codecommit-guard" = "codecommit-guard/terraform.tfstate"
+
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.
