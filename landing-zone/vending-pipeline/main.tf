@@ -206,6 +206,17 @@ locals {
 
   name = "${var.project}-vending"
 
+  ####################################
+  # PIPELINE NAY CO RULE COMMIT RIENG KHONG
+  #
+  # Tinh MOT LAN: rule va target cua no phai dong y voi nhau. Hai bieu
+  # thuc doc lap la hai cho de lech, va lech o day nghia la mot target
+  # tro vao mot rule khong ton tai.
+  #
+  # aws_iam_role.events CO Y khong nam trong so do - xem cho khai no.
+  ####################################
+  kich_hoat_rieng = local.enabled && var.source_type == "codecommit" && var.tu_kich_hoat
+
   # Toan bo role o account khac ma CodeBuild duoc phep assume.
   #
   # Gom hai nguon: role mang (stage B, D) va role o cac account thanh

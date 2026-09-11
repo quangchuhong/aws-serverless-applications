@@ -49,6 +49,43 @@ variable "source_type" {
   }
 }
 
+variable "tu_kich_hoat" {
+  description = <<-EOT
+    Pipeline nay co rule EventBridge RIENG bat moi commit vao nhanh hay
+    khong.
+
+    -------------------------------------------------------------------
+    VI SAO CAN TAT DUOC
+
+    Rule rieng do KHONG loc theo duong dan - no khong the. Su kien
+    "CodeCommit Repository State Change" chi mang repositoryName,
+    commitId, oldCommitId, referenceName; danh sach file khong co trong
+    do. Nen sua mot dong trong docs/ cung lam MOI pipeline chay.
+
+    landing-zone/trigger-filter dung mot ham o giua: no goi
+    GetDifferences roi khoi dong dung nhung pipeline co duong dan bi
+    cham. Khi layer do BAT, rule rieng o day phai TAT - neu khong thi ca
+    hai duong cung no va bo loc thanh vo nghia.
+
+    -------------------------------------------------------------------
+    THU TU
+
+    BAT trigger-filter TRUOC, roi moi dat false o day.
+
+    Lam nguoc lai thi giua hai lan apply khong co gi kich hoat pipeline
+    nao - va do la kieu hong khong co trieu chung.
+
+    -------------------------------------------------------------------
+    CAI NAY KHONG TAT LICH DRIFT
+
+    Lich drift la mot rule khac (aws_cloudwatch_event_rule.drift) va no
+    KHONG lien quan den commit. Hai rule dung CHUNG mot IAM role
+    (aws_iam_role.events), nen role do co y KHONG bi tat theo bien nay.
+  EOT
+  type        = bool
+  default     = true
+}
+
 variable "repository_name" {
   description = <<-EOT
     Repo phai chua CA BO landing-zone/, khong chi layer nay: buildspec

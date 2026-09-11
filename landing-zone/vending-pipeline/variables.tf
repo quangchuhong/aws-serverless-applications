@@ -76,6 +76,35 @@ variable "branch_name" {
   default     = "main"
 }
 
+########################################
+# RULE COMMIT RIENG CUA PIPELINE NAY
+#
+# ---------------------------------------------------------------
+# DAY LA PIPELINE BI CHAY THUA NHIEU NHAT
+#
+# Rule EventBridge khong loc duoc theo duong dan - su kien
+# "CodeCommit Repository State Change" khong mang danh sach file, chi co
+# repositoryName, commitId, oldCommitId, referenceName.
+#
+# Hau qua: sua mot dong trong docs/ cung lam pipeline nay chay CA BAY
+# stage vending account. Voi pipeline van hanh thi mot luot no-op la re;
+# voi pipeline nay thi khong - no la duong tu dong tao account.
+#
+# ---------------------------------------------------------------
+# false = CHI chay khi landing-zone/trigger-filter goi ten no
+#
+# Ban do o layer do khai vending chi quan tam
+# "landing-zone/account-baseline/".
+#
+# THU TU: bat trigger-filter TRUOC, roi moi dat false o day. Nguoc lai
+# thi giua hai lan apply khong co gi kich hoat pipeline nay - va do la
+# kieu hong khong co trieu chung.
+########################################
+variable "tu_kich_hoat" {
+  type    = bool
+  default = true
+}
+
 variable "source_bucket" {
   description = "Chi dung khi source_type = \"s3\". Bucket chua zip nguon."
   type        = string

@@ -192,6 +192,7 @@ module "pipeline" {
   source_type       = var.source_type
   repository_name   = var.repository_name
   branch_name       = var.branch_name
+  tu_kich_hoat      = var.tu_kich_hoat
   source_bucket     = var.source_bucket
   source_object_key = var.source_object_key
 

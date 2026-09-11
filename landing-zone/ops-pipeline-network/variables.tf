@@ -67,6 +67,23 @@ variable "branch_name" {
   default = "main"
 }
 
+########################################
+# RULE COMMIT RIENG CUA PIPELINE NAY
+#
+# true  = moi commit vao nhanh deu lam pipeline nay chay (khong loc duoc
+#         theo duong dan - su kien CodeCommit khong mang danh sach file)
+# false = chi chay khi landing-zone/trigger-filter goi ten no
+#
+# THU TU: bat trigger-filter TRUOC, roi moi dat false o day. Nguoc lai
+# thi giua hai lan apply khong co gi kich hoat pipeline nao.
+#
+# Mo ta day du o ../../modules/tf-pipeline/variables.tf.
+########################################
+variable "tu_kich_hoat" {
+  type    = bool
+  default = true
+}
+
 variable "source_bucket" {
   type    = string
   default = ""

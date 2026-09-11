@@ -19,6 +19,19 @@ locals {
   # trong hai nghia la nhung dia chi trong drift_emails khong nhan duoc
   # gi ma khong ai biet.
   ####################################
+  ####################################
+  # PIPELINE NAY CO RULE COMMIT RIENG KHONG
+  #
+  # Tinh MOT LAN o day vi ba cho phai dong y: rule, target cua rule, va
+  # dong "KICH HOAT" trong next_steps. Ba bieu thuc doc lap la ba cho de
+  # lech - va cho de lech nhat la next_steps, vi no chi la van ban: no
+  # noi sai ma khong hong gi ca.
+  #
+  # aws_iam_role.events CO Y khong nam trong so do: lich drift dung
+  # chung role do, va lich drift khong lien quan gi den commit.
+  ####################################
+  kich_hoat_rieng = local.enabled && var.source_type == "codecommit" && var.tu_kich_hoat
+
   tao_topic   = var.drift_topic_arn == "" && length(var.drift_emails) > 0
   drift_topic = var.drift_topic_arn != "" ? var.drift_topic_arn : try(aws_sns_topic.drift[0].arn, "")
 
@@ -119,6 +132,9 @@ locals {
        duoc Y DINH - no tra loi "viec nay CO NEN xay ra khong".
 
     5. STAGE DANG TAT: ${length(local.stages_tat) == 0 ? "khong co" : join(", ", local.stages_tat)}
+
+    5b. DUONG KICH HOAT: ${local.kich_hoat_rieng ? "RULE RIENG - MOI commit vao ${var.branch_name} deu lam pipeline nay chay, ke ca commit khong cham vao layer cua no." : (var.tu_kich_hoat ? "KHONG CO (source_type khong phai codecommit hoac pipeline dang tat)" : "QUA landing-zone/trigger-filter - rule rieng da TAT.")}
+       ${local.kich_hoat_rieng ? "Tat no di bang tu_kich_hoat = false SAU KHI da bat landing-zone/trigger-filter." : (var.tu_kich_hoat ? "" : "Pipeline nay gio CHI chay khi ban do trong trigger-filter goi ten no. Thieu ten o do = khong bao gio chay nua, va khong co trieu chung.")}
 
     6. DRIFT: mot CodeBuild rieng chay theo lich "${var.drift_cron}"
        No chi `plan -lock=false`, khong bao gio apply.

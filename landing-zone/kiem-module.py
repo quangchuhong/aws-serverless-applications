@@ -12,7 +12,7 @@ registry.terraform.io. Trong moi truong bi chan mang (va trong mot CI
 khong co quyen ra ngoai) thi khong chay duoc, va luc do thu duy nhat con
 lai la doc bang mat.
 
-Bay phep kiem, khong can mang:
+Chin phep kiem, khong can mang:
 
   1. dung var.X ma khong khai
   2. module khai var khong ai dung
@@ -22,6 +22,8 @@ Bay phep kiem, khong can mang:
   6. dung local.X ma khong khai
   7. bien module dung type = list(any)
   8. layer doc state cua layer khac ma caller khong khai state_chi_doc
+  9. phep 1 va 6 ap ca cho layer KHONG dung module (trigger-filter,
+     vending-pipeline, organization, ...) - xem kiem_layer_don()
 
 Phep thu 7 la mot bai hoc duoc ma hoa: list(any) buoc MOI phan tu cung
 mot type, va IAM statement thi luon khac hinh - mot cai co Condition, cai
@@ -101,14 +103,26 @@ def locals_khai(raw):
     """MOI khoi locals, khong chi khoi dau."""
     ra = set()
     for m in re.finditer(r"^locals \{(.*?)^\}", raw, re.S | re.M):
-        ra |= set(re.findall(r"^\s{2}([a-z_]+)\s*=", m.group(1), re.M))
+        ra |= set(re.findall(rf"^\s{{2}}({TEN})\s*=", m.group(1), re.M))
     return ra
 
 
-khai = lambda t: set(re.findall(r'variable "([a-z_]+)"', t))
-dung = lambda t: set(re.findall(r"\bvar\.([a-z_]+)", t))
-outs = lambda t: set(re.findall(r'output "([a-z_]+)"', t))
-lc = lambda t: set(re.findall(r"\blocal\.([a-z_]+)", t))
+# TEN CO CHU SO: `[a-z_]+` dung LAI o chu so dau tien.
+#
+# Khong phai mot phep khop hut - la mot phep khop LECH. Voi `c_ec2 = ...`
+# thi mau KHAI doi `\s*=` ngay sau `c_ec`, gap `2`, va khong khop gi ca -
+# tuc local do coi nhu khong duoc khai. Con mau DUNG thi `local.c_ec2` van
+# ra `c_ec`. Hai ben cat khac nhau, nen ra bon bao sai tren bon ten dang
+# dung binh thuong: harden_s3, c_ec2, c_f5, deny_ec2_*.
+#
+# Duong tinh gia la ke thu o day - xem docstring. Bon cai nay du de mot
+# nguoi bat dau bo qua ca bo kiem.
+TEN = r"[a-z_][a-z0-9_]*"
+
+khai = lambda t: set(re.findall(rf'variable "({TEN})"', t))
+dung = lambda t: set(re.findall(rf"\bvar\.({TEN})", t))
+outs = lambda t: set(re.findall(rf'output "({TEN})"', t))
+lc = lambda t: set(re.findall(rf"\blocal\.({TEN})", t))
 
 
 def kiem_module(mt_raw, mt):
@@ -121,7 +135,7 @@ def kiem_module(mt_raw, mt):
         loi.append(f"module: dung local khong khai: {sorted(lc(mt) - locals_khai(mt_raw))}")
 
     # 7. list(any) - xem docstring.
-    for m in re.finditer(r'variable "([a-z_]+)" \{(.*?)\n\}\n', mt_raw, re.S):
+    for m in re.finditer(rf'variable "({TEN})" \{{(.*?)\n\}}\n', mt_raw, re.S):
         if re.search(r"^\s+type\s*=\s*list\(any\)", m.group(2), re.M):
             loi.append(
                 f"module: var.{m.group(1)} dung type = list(any) - buoc moi phan tu "
@@ -146,20 +160,20 @@ def kiem_caller(C, mt_raw, ten_caller):
     m = re.search(r'module "pipeline" \{(.*?)\n\}', ct_raw, re.S)
     if not m:
         return loi + [f'{ten_caller}: khong tim thay khoi module "pipeline"']
-    truyen = set(re.findall(r"^\s{2}([a-z_]+)\s*=", m.group(1), re.M)) - {"source"}
+    truyen = set(re.findall(rf"^\s{{2}}({TEN})\s*=", m.group(1), re.M)) - {"source"}
 
     if truyen - khai(mt_raw):
         loi.append(f"{ten_caller}: truyen input module khong co: {sorted(truyen - khai(mt_raw))}")
 
     bat_buoc = {
         x.group(1)
-        for x in re.finditer(r'variable "([a-z_]+)" \{(.*?)\n\}\n', mt_raw, re.S)
+        for x in re.finditer(rf'variable "({TEN})" \{{(.*?)\n\}}\n', mt_raw, re.S)
         if not re.search(r"^\s+default\s*=", x.group(2), re.M)
     }
     if bat_buoc - truyen:
         loi.append(f"{ten_caller}: bien module BAT BUOC ma khong truyen: {sorted(bat_buoc - truyen)}")
 
-    ref = set(re.findall(r"module\.pipeline\.([a-z_]+)", ct))
+    ref = set(re.findall(rf"module\.pipeline\.({TEN})", ct))
     if ref - outs(mt_raw):
         loi.append(f"{ten_caller}: doc output module khong co: {sorted(ref - outs(mt_raw))}")
 
@@ -197,6 +211,45 @@ def kiem_caller(C, mt_raw, ten_caller):
     return loi
 
 
+def kiem_layer_don(d, ten):
+    """Layer KHONG goi modules/tf-pipeline - chi hai phep kiem tu than.
+
+    Phep 3, 4, 5 va 8 khong ap duoc (khong co khoi module "pipeline"),
+    nhung "dung var khong khai" va "dung local khong khai" thi ap cho MOI
+    layer. Truoc day chung chi chay tren caller, nen mot layer doc lap
+    nhu trigger-filter hay vending-pipeline khong duoc kiem gi ca - va do
+    la mot khoang trong im lang, khong phai mot ket luan "khong co gi
+    sai".
+
+    KHONG kiem "khai ma khong dung" o day. Layer thuong khai bien de dat
+    tu tfvars roi truyen thang xuong, va nhieu layer co bien chi dung
+    trong mot nhanh dang tat. Bao cai do se on - va mot bo kiem hay bao
+    sai thi khong ai doc nua.
+    """
+    raw = doc(d)
+    if not raw.strip():
+        return []
+    t = boc(raw)
+    loi = []
+    if dung(t) - khai(raw):
+        loi.append(f"{ten}: dung var khong khai: {sorted(dung(t) - khai(raw))}")
+    if lc(t) - locals_khai(raw):
+        loi.append(f"{ten}: dung local khong khai: {sorted(lc(t) - locals_khai(raw))}")
+    return loi
+
+
+def tim_layer_don(callers):
+    """Moi thu muc landing-zone/* co file .tf ma KHONG phai caller."""
+    bo = {os.path.abspath(c.rstrip("/")) for c in callers}
+    return [
+        d
+        for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/*")))
+        if os.path.isdir(d)
+        and os.path.abspath(d) not in bo
+        and glob.glob(os.path.join(d, "*.tf"))
+    ]
+
+
 def main():
     callers = sys.argv[1:] or tim_caller()
 
@@ -222,11 +275,23 @@ def main():
         print(f"  {'x' if l else 'v'} {ten}")
         loi += l
 
+    # Chi quet layer don khi TU TIM caller. Neu nguoi ta neu ro thu muc
+    # tren dong lenh thi ho dang hoi ve nhung thu muc do, khong phai ve
+    # ca cay.
+    don = [] if sys.argv[1:] else tim_layer_don(callers)
+    if don:
+        print(f"layer khong dung module: {len(don)}")
+        for d in don:
+            ten = os.path.basename(d.rstrip("/"))
+            l = kiem_layer_don(d, ten)
+            print(f"  {'x' if l else 'v'} {ten}")
+            loi += l
+
     print()
     if loi:
         print("\n".join("  LOI  " + x for x in loi))
         return 1
-    print(f"  Khop het: module + {len(callers)} caller.")
+    print(f"  Khop het: module + {len(callers)} caller + {len(don)} layer don.")
     return 0
 
 

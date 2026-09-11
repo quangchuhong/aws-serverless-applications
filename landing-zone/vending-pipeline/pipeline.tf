@@ -315,13 +315,28 @@ resource "aws_codepipeline" "vending" {
 # KICH HOAT KHI CO COMMIT
 #
 # PollForSourceChanges = false o tren nghia la pipeline KHONG tu hoi.
-# Khong co rule nay thi no chi chay khi co nguoi bam tay - va do la
-# kieu hong im lang: moi thu deu "thanh cong", chi la khong bao gio
+# Khong co duong kich hoat nao thi no chi chay khi co nguoi bam tay - va
+# do la kieu hong im lang: moi thu deu "thanh cong", chi la khong bao gio
 # chay.
+#
+# ---------------------------------------------------------------
+# RULE NAY KHONG LOC DUOC THEO DUONG DAN
+#
+# Khong phai chua ai viet luat do - la khong the viet. Su kien
+# "CodeCommit Repository State Change" chi mang repositoryName, commitId,
+# oldCommitId, referenceName. Danh sach file khong nam trong su kien.
+# (CodePipeline V2 loc duoc theo file path, nhung chi voi nguon
+# CodeConnections. Cong ty chi dung CodeCommit noi bo.)
+#
+# Nen moi push - ke ca mot dong trong docs/ - deu lam ca bay stage vending
+# chay. Do la ly do landing-zone/trigger-filter ton tai.
+#
+# Khi layer do BAT thi dat tu_kich_hoat = false. Hai duong cung no se lam
+# bo loc thanh vo nghia.
 ########################################
 
 resource "aws_cloudwatch_event_rule" "commit" {
-  count = local.enabled && var.source_type == "codecommit" ? 1 : 0
+  count = local.kich_hoat_rieng ? 1 : 0
 
   name        = "${local.name}-commit"
   description = "Chay pipeline vending khi co commit vao ${var.branch_name}"
@@ -338,6 +353,15 @@ resource "aws_cloudwatch_event_rule" "commit" {
   })
 }
 
+########################################
+# ROLE CHO EVENTBRIDGE
+#
+# CO Y giu o `local.enabled && codecommit` chu KHONG theo
+# local.kich_hoat_rieng: tat rule commit di thi role nay van can ton tai
+# cho bat cu target EventBridge nao them vao sau. Buoc no theo bien kia
+# se lam mot lan "tat rule" thanh mot lan xoa role - va role bi xoa thi
+# bat lai khong du, phai tao lai.
+########################################
 resource "aws_iam_role" "events" {
   count = local.enabled && var.source_type == "codecommit" ? 1 : 0
 
@@ -370,7 +394,7 @@ resource "aws_iam_role_policy" "events" {
 }
 
 resource "aws_cloudwatch_event_target" "pipeline" {
-  count = local.enabled && var.source_type == "codecommit" ? 1 : 0
+  count = local.kich_hoat_rieng ? 1 : 0
 
   rule     = aws_cloudwatch_event_rule.commit[0].name
   arn      = aws_codepipeline.vending[0].arn

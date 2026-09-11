@@ -1,0 +1,85 @@
+########################################
+# BO LOC KICH HOAT
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# tfvars nam trong .gitignore. Layer nay chay bang TAY (no khong tu kich
+# hoat chinh no), nen khong can day len s3 tfvars store.
+########################################
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+enable = true
+
+repository_name = "aws-serverless-applications"
+branch_name     = "main"
+
+########################################
+# BAN DO
+#
+# Khoa la ten NGAN. Ten day du = "<project>-<khoa>", vi du
+# "qh11-lz-ops-permission-set".
+#
+# Gia tri la TIEN TO CHUOI, nen dau / o cuoi la bat buoc - khong co no
+# thi "landing-zone/network" bat ca "landing-zone/network-cu/".
+#
+# CHI KHAI PIPELINE DANG BAT. Goi ten mot pipeline chua ton tai se lam
+# ham bao hong moi lan chay.
+########################################
+ban_do = {
+  # Vending chi quan tam account-baseline. Day la ly do ca layer nay ton
+  # tai: truoc do moi push - ke ca sua mot dong trong docs/ - deu lam
+  # pipeline vending chay ca bay stage.
+  "vending" = ["landing-zone/account-baseline/"]
+
+  # SCP + OU + tag policy. Ba stage, mot layer.
+  "ops" = ["landing-zone/organization/"]
+
+  # Ai vao account nao.
+  #
+  # Hai tien to: layer permission-sets la thu no apply, con ops-gate la
+  # bo phan loai ban plan ma MOI pipeline dung. Sua gate.py ma khong chay
+  # lai pipeline nao nghia la luat moi chua bao gio duoc thu.
+  "ops-permission-set" = [
+    "landing-zone/permission-sets/",
+    "landing-zone/ops-gate/",
+  ]
+
+  ####################################
+  # BON PIPELINE CON LAI DANG TAT (enable = false)
+  #
+  # Mo dong tuong ung KHI VA CHI KHI da apply pipeline do. Ten mot
+  # pipeline chua ton tai lam ham bao hong moi lan chay.
+  #
+  # Chung deu can mot role lien account chua day xuong - xem doc 22.
+  ####################################
+  # "ops-network"      = ["landing-zone/network/ops/", "landing-zone/ops-gate/"]
+  # "ops-config-rules" = ["landing-zone/config-detective/", "landing-zone/ops-gate/"]
+  # "ops-trail"        = ["landing-zone/org-trail/", "landing-zone/ops-gate/"]
+}
+
+########################################
+# DO PHU
+#
+# BAT: ham liet ke pipeline that o AWS moi lan chay, va bao HONG neu co
+# cai nao mang tien to "qh11-lz-" ma khong co trong ban_do.
+#
+# Do la chieu hong nguy hiem nhat cua ca thiet ke nay: mot pipeline da
+# tat rule rieng va bi quen trong ban_do thi khong con duong nao den no.
+# No van ton tai, van xanh, va khong bao gio chay nua.
+########################################
+kiem_do_phu = true
+
+########################################
+# BAO KHI BO LOC HONG
+#
+# Dia chi phai bam xac nhan trong email SNS gui, neu khong thi topic co
+# ma khong ai nhan - va do lai la mot cai im lang nua.
+########################################
+loi_emails = ["platform@example.com"]
+# loi_topic_arn = "arn:aws:sns:ap-southeast-1:111122223333:topic-co-san"
+
+log_retention_days = 90

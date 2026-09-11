@@ -284,18 +284,37 @@ resource "aws_codepipeline" "ops" {
 # KICH HOAT
 #
 # PollForSourceChanges = false o tren nghia la pipeline KHONG tu hoi.
-# Khong co rule nay thi no chi chay khi co nguoi bam tay - va do la
-# kieu hong im lang: moi thu deu "thanh cong", chi la khong bao gio
+# Khong co duong kich hoat nao thi no chi chay khi co nguoi bam tay - va
+# do la kieu hong im lang: moi thu deu "thanh cong", chi la khong bao gio
 # chay.
 #
-# KHONG loc theo duong dan, va khong can: mot luot chay toan
-# "KHONG CO THAY DOI" la nhanh va gan nhu mien phi. Do la dac tinh cua
-# layer catalog-driven. (CodePipeline V2 loc duoc theo file path, nhung
-# chi voi nguon CodeConnections - CodeCommit thi khong.)
+# ---------------------------------------------------------------
+# RULE NAY KHONG LOC DUOC THEO DUONG DAN
+#
+# Khong phai chua ai viet luat do - la khong the viet. Su kien
+# "CodeCommit Repository State Change" chi mang repositoryName, commitId,
+# oldCommitId, referenceName. Danh sach file khong co trong su kien.
+# (CodePipeline V2 loc duoc theo file path, nhung chi voi nguon
+# CodeConnections - CodeCommit thi khong.)
+#
+# Truoc day day duoc coi la chap nhan duoc: mot luot chay toan "KHONG CO
+# THAY DOI" la nhanh va gan nhu mien phi. Dieu do dung cho pipeline van
+# hanh, nhung KHONG dung cho pipeline vending - no dung bay stage vending
+# account, va no chay ca khi chi co mot dong trong docs/ doi.
+#
+# ---------------------------------------------------------------
+# DUONG THU HAI: landing-zone/trigger-filter
+#
+# Mot ham Lambda dung giua su kien va pipeline: no co hai commit id, goi
+# GetDifferences, roi khoi dong dung nhung pipeline co duong dan bi cham.
+#
+# Khi layer do BAT thi dat tu_kich_hoat = false o day. Hai duong cung no
+# se lam bo loc thanh vo nghia (pipeline van chay voi moi push, chi la
+# chay hai lan).
 ########################################
 
 resource "aws_cloudwatch_event_rule" "commit" {
-  count = local.enabled && var.source_type == "codecommit" ? 1 : 0
+  count = local.kich_hoat_rieng ? 1 : 0
 
   name        = "${local.name}-commit"
   description = "Chay pipeline van hanh khi co commit vao ${var.branch_name}"
@@ -313,7 +332,7 @@ resource "aws_cloudwatch_event_rule" "commit" {
 }
 
 resource "aws_cloudwatch_event_target" "commit" {
-  count = local.enabled && var.source_type == "codecommit" ? 1 : 0
+  count = local.kich_hoat_rieng ? 1 : 0
 
   rule     = aws_cloudwatch_event_rule.commit[0].name
   arn      = aws_codepipeline.ops[0].arn

@@ -122,6 +122,13 @@ locals {
     "landing-zone/ops-pipeline-config-rules"   = "ops-pipeline-config-rules/terraform.tfstate"
     "landing-zone/ops-pipeline-trail"          = "ops-pipeline-trail/terraform.tfstate"
 
+    # Bo loc kich hoat: mot ham Lambda dung GIUA su kien commit va MOI
+    # pipeline o tren. Mat state cua no nghia la khong con ai quan cai
+    # duy nhat quyet dinh pipeline nao chay - va `terraform destroy` tu
+    # mot ban clone moi se chay tren state RONG roi bao "da sach", trong
+    # khi ham that van ngoi do kich hoat pipeline.
+    "landing-zone/trigger-filter" = "trigger-filter/terraform.tfstate"
+
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.

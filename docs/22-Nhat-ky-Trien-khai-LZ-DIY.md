@@ -3930,6 +3930,114 @@ Một chi tiết về phương pháp: truy vấn token bằng CLI ra `None`, vì
 
 ---
 
+### Lỗi 118 — sửa một dòng trong `docs/` làm pipeline vending chạy cả bảy stage
+
+Người vận hành báo: *"cứ push code lên thì vending pipeline cũng chạy, vending pipeline nó chỉ nhận event ở code account-baseline thôi"*.
+
+Đúng, và **không sửa được ở tầng luật**. Rule EventBridge lọc theo nội dung sự kiện, còn sự kiện `CodeCommit Repository State Change` mang đúng bốn trường:
+
+```json
+{ "repositoryName": "...", "commitId": "...",
+  "oldCommitId": "...", "referenceName": "refs/heads/main" }
+```
+
+Danh sách file **không có trong đó**. Đây không phải "chưa ai viết luật lọc" mà là **không có dữ liệu để viết**.
+
+Hai đường vòng đều đóng:
+
+| Đường | Vì sao đóng |
+|---|---|
+| `CodePipeline V2` path filter (`triggers { … file_paths }`) | chỉ hoạt động với nguồn kiểu *connection* — GitHub, GitLab, Bitbucket. Với CodeCommit thì trường đó không có tác dụng |
+| Đổi sang GitHub làm nguồn | công ty không cho dùng GitHub, chỉ nội bộ |
+
+Thứ **có** trong sự kiện là hai commit id. Nên chỗ lọc duy nhất còn lại là một hàm đứng giữa: gọi `codecommit:GetDifferences(oldCommitId, commitId)`, lấy đường dẫn đã đổi, rồi khởi động đúng những pipeline có đường dẫn bị chạm. Đó là `landing-zone/trigger-filter/`.
+
+#### Quyết định trung tâm: hỏng thì chạy
+
+Khi không đọc được diff — API lỗi, hết giờ, thiếu quyền, commit bị ép đẩy — hàm khởi động **mọi** pipeline trong bản đồ.
+
+Vì hai vế không cân nhau. Một lần chạy thừa là vài phút CodeBuild và một dòng log. Một lần **không** chạy là một thay đổi đã merge vào `main` mà không bao giờ đến AWS — và không có gì báo, vì pipeline "không chạy" trông giống hệt "không có gì để chạy".
+
+Đúng dạng khuyết điểm đã ghi mười lần trong nhật ký này: **một phép đọc hỏng trả về rỗng, và rỗng bị đọc thành một câu trả lời.** Ở đây rỗng sẽ có nghĩa là "không file nào liên quan" — rất dễ tin và rất sai.
+
+Ngoại lệ có chủ đích: **diff rỗng thật sự** (commit rỗng, merge không đổi gì) *không* fail-open. Đó là một kết luận đọc được, không phải một phép đọc hỏng. Hai thứ đó trông giống nhau trong code và khác hẳn nhau về ý nghĩa, nên chúng đi hai nhánh riêng.
+
+#### Bốn cách bản đồ có thể sai, và cả bốn đều im lặng
+
+Bộ lọc này đứng **giữa** sự kiện và mọi pipeline, nên khi nó sai theo chiều "chặn nhầm" thì không có gì báo. Bốn phép kiểm chạy ở **mỗi** lần gọi, và đều là lỗi cứng:
+
+| Sai | Hậu quả nếu không kiểm |
+|---|---|
+| `BAN_DO` rỗng | chặn sạch mọi thay đổi và báo thành công |
+| một pipeline có danh sách tiền tố `[]` | `str.startswith(())` luôn `False` → pipeline đó không bao giờ chạy |
+| tên pipeline gõ sai | `StartPipelineExecution` bị IAM từ chối |
+| **pipeline có thật nhưng thiếu trong `BAN_DO`** | sau khi tắt rule riêng, không còn đường nào đến nó |
+
+Dòng thứ hai đáng dừng lại: trong tfvars, `vending = []` đọc giống **"chưa điền xong"** và chạy giống **"đã tắt"**. Muốn "chạy với mọi commit" thì phải viết `[""]`.
+
+Dòng thứ tư là chiều nguy hiểm nhất của cả thiết kế — và nó là chiều mà *chính việc sửa lỗi 118 tạo ra*. Trước khi có bộ lọc, mỗi pipeline có đường kích hoạt riêng; sau khi có, bản đồ là đường **duy nhất**. Một pipeline bị quên ở đó vẫn tồn tại, vẫn xanh trong console, và không bao giờ chạy nữa. `kiem_do_phu = true` bắt nó bằng cách liệt kê pipeline thật ở AWS mỗi lần chạy.
+
+#### Thứ tự bật — một chiều vô hại, một chiều im lặng
+
+Bật `trigger-filter` **trước**, rồi mới đặt `tu_kich_hoat = false` ở từng pipeline.
+
+Giữa hai lần apply mỗi pipeline bị kích hoạt **hai lần** — vô hại, CodePipeline thay bản đang chờ bằng bản mới. Làm ngược lại thì giữa hai lần apply **không có gì** kích hoạt pipeline nào, và không có triệu chứng nào.
+
+Một chi tiết suýt sai: `tu_kich_hoat` **không** được tắt `aws_iam_role.events`. Role đó dùng chung với lịch drift, và lịch drift không liên quan gì đến commit. Buộc nó theo biến kia sẽ biến một lần "tắt rule" thành một lần **xoá role** — mà role bị xoá thì bật lại không đủ, phải tạo lại.
+
+#### Ba phép thử, và chỉ một phép chứng minh được điều gì
+
+| | Phép thử | Phân biệt được gì |
+|---|---|---|
+| (a) | push thay đổi chỉ trong `docs/` → không pipeline nào chạy | **không** — "không ai chạy" trông giống "chạy hết rồi không có gì để làm" |
+| (b) | push vào `account-baseline/` → vending chạy | **không** — vẫn đạt nếu mọi pipeline đều chạy |
+| (c) | push vào `organization/` → `ops` chạy **và** `vending` **không** chạy | **có** |
+
+Chỉ (c) đòi một pipeline chạy *và* một pipeline không chạy trong cùng một lần push, nên chỉ nó phân biệt được "bộ lọc hoạt động" với "bộ lọc bị bỏ qua hoàn toàn".
+
+#### Bộ kiểm: 28 phép, 5 đột biến
+
+`test-loc.py` chạy không cần mạng và không cần `boto3` thật. Năm đột biến, cả năm đều làm bộ kiểm kêu:
+
+| Đột biến | Kết quả |
+|---|---|
+| bỏ chốt "tiền tố rỗng" | 27/28 |
+| đổi fail-open thành fail-closed khi `GetDifferences` hỏng | 26/28 |
+| bỏ `beforeBlob` (đổi tên file) | 27/28 |
+| bỏ chốt độ phủ | 27/28 |
+| ném ngay khi một pipeline khởi động hỏng | 27/28 |
+
+Đột biến thứ năm nói về một quyết định dễ bỏ qua: nếu `StartPipelineExecution` ném ra khỏi vòng lặp, **một tên gõ sai sẽ chặn mọi pipeline đứng sau nó trong vòng lặp** — một lỗi gõ phím thành một lần bỏ sót. Nên lỗi được **ghi lại** rồi ném ở cuối, sau khi đã thử hết.
+
+#### Và chính bộ kiểm tự sai một lần, đúng dạng nó đi tìm
+
+Bài kiểm *"sự kiện rỗng hoàn toàn"* đạt — vì lý do sai. Hàm dựng bài kiểm viết:
+
+```python
+loc.handler(su_kien_ or su_kien(), None)
+```
+
+`{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
+
+#### Một lỗi cũ lộ ra khi mở rộng `kiem-module.py`
+
+Bộ kiểm HCL trước đây chỉ chạy trên **caller** của `modules/tf-pipeline`, nên một layer độc lập như `trigger-filter` không được kiểm gì cả — im lặng, không phải kết luận "không có gì sai". Thêm phép quét layer đơn (phép 9) làm lộ bốn báo sai:
+
+```
+account-baseline  var: ['harden_s']
+network           var: ['f']   local: ['c_ec', 'c_f']
+organization      var: ['s']
+permission-sets                local: ['deny_ec']
+```
+
+Nguyên nhân: `[a-z_]+` **dừng lại ở chữ số đầu tiên**. Và nó không dừng đều hai bên — với `c_ec2 = 0.0116`, mẫu **khai** đòi `\s*=` ngay sau `c_ec`, gặp `2`, nên **không khớp gì cả**; mẫu **dùng** thì `local.c_ec2` vẫn ra `c_ec`. Hai bên cắt khác nhau nên sinh ra bốn cái tên ma: `harden_s3`, `c_ec2`, `c_f5`, `deny_ec2_*`.
+
+Đây là dương tính giả, và dương tính giả là kẻ thù ở đây — bốn cái đủ để một người bắt đầu bỏ qua cả bộ kiểm. Sửa: `[a-z_][a-z0-9_]*`.
+
+**Lỗi này đã nằm trong `kiem-module.py` từ đầu và không ai thấy**, vì nó chỉ lộ ra khi bộ kiểm được chỉ vào những layer có tên chứa chữ số. Mở rộng phạm vi của một bộ kiểm là một cách tìm lỗi *của chính bộ kiểm*.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
