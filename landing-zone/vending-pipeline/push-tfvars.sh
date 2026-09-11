@@ -33,11 +33,23 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# DANH SACH NAY PHUC VU CA HAI PIPELINE.
+#
+# Kho tfvars dung chung giua vending-pipeline va ops-pipeline - mot
+# kho, mot script, mot cho de nham. Doi lai: them mot layer vao
+# ops-pipeline thi PHAI them vao day.
+#
+# Thieu buoc do KHONG gay loi luc day file. No gay loi luc pipeline
+# chay, va thong bao noi ve S3 chu khong noi ve script nay.
 LAYERS=(
+  # vending-pipeline
   "landing-zone/account-baseline"
   "landing-zone/network"
   "landing-zone/config-detective"
   "landing-zone/permission-sets"
+
+  # ops-pipeline
+  "landing-zone/organization"
 )
 
 REGION=$(terraform output -raw region 2>/dev/null || echo "ap-southeast-1")

@@ -1,0 +1,135 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# PIPELINE VAN HANH - chay o ACCOUNT MANAGEMENT.
+#
+# `-n` co chu dich: mot lan cp de len tfvars cua layer da apply la mot
+# plan doi xoa nhung thu dang chay.
+########################################
+
+# MAC DINH TAT.
+#
+# Bat cai nay tao mot duong TU DONG co quyen sua SCP cua ca to chuc.
+# SCP la tran quyen cho MOI account - mot thay doi sai o day khong lam
+# gi "hong", no chi lam mot viec truoc day bi chan gio chay duoc. Kieu
+# su co do khong co trieu chung.
+#
+# Doc README truoc, nhat la muc "Khong co cong duyet".
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# 1. NGUON
+#
+# CUNG repo, CUNG nhanh voi vending-pipeline. Hai pipeline cung nghe
+# mot nhanh, va moi commit kich hoat CA HAI - do la chu y:
+#
+#   vending  moi stage ra "KHONG CO THAY DOI" khi catalog account
+#            khong doi
+#   ops      moi stage ra "KHONG CO THAY DOI" khi catalog ops khong doi
+#
+# Mot luot chay rong la nhanh va gan nhu mien phi. Doi lai, khong co
+# chuyen mot commit di vao pipeline nay ma khong di vao pipeline kia -
+# tuc khong co chuyen hai pipeline doc hai phien ban code khac nhau.
+########################################
+
+source_type     = "codecommit"
+repository_name = "diy-aws-landing-zone"
+branch_name     = "main"
+
+########################################
+# 2. STATE
+#
+# PHAI khop chinh xac. Sai khoa thi Terraform mo mot state RONG, va
+# buildspec dung lai o chot chan "state RONG" - do la lop chan duy nhat
+# giua mot khoa sai va mot plan doi tao lai toan bo.
+#
+#   cd ../tf-backend && terraform output bucket
+#   cd ../tf-backend && terraform output lock_table
+#   cd ../tf-backend && terraform output layers
+########################################
+
+state_bucket     = "qh11-lz-tfstate-609320954321"
+state_lock_table = "qh11-lz-tfstate-lock"
+
+layer_keys = {
+  "landing-zone/organization" = "organization/terraform.tfstate"
+}
+
+########################################
+# 3. KHO tfvars - DUNG CHUNG voi vending-pipeline
+#
+#   cd ../vending-pipeline && terraform output -raw tfvars_bucket
+#
+# Vi sao dung chung chu khong tao kho rieng: hai kho la hai cho phai
+# day file, va mot kho cu la mot ban plan SAI ma khong co loi nao.
+#
+# SAU KHI DAT BIEN NAY, PHAI THEM LAYER VAO push-tfvars.sh:
+#
+#   cd ../vending-pipeline
+#   grep -n 'landing-zone/' push-tfvars.sh
+#
+# Thieu buoc do thi khong co loi luc day - chi co loi luc pipeline
+# chay, va no noi ve S3 chu khong noi ve script.
+########################################
+
+tfvars_bucket = ""
+# tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
+
+########################################
+# 4. PHAT HIEN DRIFT
+#
+# Mot lan `terraform plan -lock=false` theo lich. KHONG bao gio apply -
+# buildspec cua no khong co nhanh apply nao.
+#
+# Day co the la phan gia tri nhat cua ca layer: ops la cho DRIFT xay
+# ra. Ai do mo mot port trong console, go mot Config rule, sua mot
+# assignment bang tay. Mot lan plan hang dem ma KHONG ra "khong co
+# thay doi" chinh la bao dong.
+#
+# Mac dinh 19:00 UTC = 2 gio sang Viet Nam: sau gio lam, va ket qua co
+# nguoi doc vao buoi sang.
+########################################
+
+drift_cron = "cron(0 19 * * ? *)"
+
+# De rong thi buoc drift van chay nhung KHONG bao ai - no chi con la
+# mot dong log luc 2 gio sang. Dung duoc topic co san:
+#   cd ../config-detective && terraform output -raw alarm_topic_arn
+drift_topic_arn = ""
+# drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:qh11-lz-security-alerts"
+
+########################################
+# 5. NGUONG
+########################################
+
+# Layer organization apply nhanh (chi SCP), nhung `plan` refresh CA
+# state - gom cay OU va tag policy.
+build_timeout_minutes = 30
+
+log_retention_days = 90
+
+########################################
+# SAU KHI APPLY: MOT BUOC KHONG BO DUOC
+#
+# Lay ten role cua CodeBuild va them vao scp_exempt_role_names cua
+# layer organization:
+#
+#   terraform output -raw codebuild_role_name
+#   # -> them vao ../organization/terraform.tfvars
+#   cd ../organization && terraform apply
+#
+# VI SAO BAT BUOC: statement ProtectOrganizationMembership chan
+# organizations:DetachPolicy va organizations:DeletePolicy - hai hanh
+# dong ma chinh pipeline nay phai goi duoc de sua SCP.
+#
+# Thieu mien tru thi pipeline apply duoc LAN DAU (luc SCP chua gan),
+# roi tu do khong sua duoc SCP nua - VA KHONG SUA DUOC BANG CHINH NO.
+# Phai vao bang tay de go.
+#
+# organization/lint.sh keu ve dieu nay o muc canh bao, kem ten role.
+########################################

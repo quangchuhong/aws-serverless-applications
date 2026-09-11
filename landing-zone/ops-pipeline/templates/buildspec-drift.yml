@@ -1,0 +1,197 @@
+version: 0.2
+
+# PHAT HIEN DRIFT - CHI PLAN, KHONG BAO GIO APPLY
+#
+# Khong co nhanh apply trong file nay. Khong phai vi mot bien duoc dat
+# dung, ma vi doan code apply KHONG TON TAI. Mot bien co the bi de len
+# sai; mot doan code khong co thi khong.
+#
+# -lock=false: buoc nay chay theo lich va co the trung voi mot lan
+# apply that. Mot phep KIEM lam chan mot lan SUA la mot phep kiem gay
+# ra su co.
+#
+# --------------------------------------------------------------
+# KHONG DUOC DUNG CHUOI NHIEU DONG TRONG FILE NAY
+#
+# Noi dung cua `- |` la mot YAML block scalar: moi dong PHAI thut sau
+# hon muc goc cua khoi. Mot chuoi bash nhu
+#
+#     BAO="${BAO}
+#   ${LAYER}: hong"
+#
+# co dong thu hai o cot 3, tuc THAP hon muc goc 8 - va dieu do KET
+# THUC block scalar ngay tai do. Phan con lai cua script bi doc nhu
+# YAML, va thong bao loi tro toi mot dong cach do ba muoi dong, noi ve
+# "expected <block end>".
+#
+# Nen bao cao duoc tich luy vao MOT FILE, khong phai mot bien nhieu
+# dong. Moi dong giu dung muc thut.
+#
+# Bien:
+#   LAYERS           "<duong dan>=<khoa state>" cach nhau bang dau cach
+#   DRIFT_TOPIC_ARN  SNS nhan bao. Rong = chi ghi log
+
+phases:
+  install:
+    commands:
+      - |
+        set -euo pipefail
+        curl -sS -o /tmp/tf.zip \
+          "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+        unzip -q -o /tmp/tf.zip -d /usr/local/bin
+        terraform version
+
+  build:
+    commands:
+      - |
+        set -uo pipefail
+
+        BAO=/tmp/bao-drift.txt
+        : > "$BAO"
+        SO_DRIFT=0
+        SO_HONG=0
+
+        for muc in ${LAYERS}; do
+          LAYER="${muc%%=*}"
+          KEY="${muc#*=}"
+
+          echo ""
+          echo "════════════════════════════════════════════"
+          echo " ${LAYER}"
+          echo "════════════════════════════════════════════"
+
+          if ! cd "${CODEBUILD_SRC_DIR}/${LAYER}"; then
+            echo "LOI: khong vao duoc ${LAYER}"
+            SO_HONG=$((SO_HONG + 1))
+            echo "  ${LAYER}: khong vao duoc thu muc" >> "$BAO"
+            continue
+          fi
+
+          # tfvars: thieu thi KHONG duoc chay plan. Plan khong co tfvars
+          # se "thanh cong" va mo ta mot to chuc khong co SCP - tuc bao
+          # drift gia o muc toi da. Loi 97.
+          if ! aws s3api get-object \
+                 --bucket "${TFVARS_BUCKET}" \
+                 --key "tfvars/${LAYER}/terraform.tfvars" \
+                 terraform.tfvars >/dev/null 2>&1; then
+            echo "LOI: khong lay duoc tfvars cho ${LAYER} - BO QUA layer nay."
+            echo "     Khong chay plan thieu tfvars: no se bao drift gia o muc"
+            echo "     toi da, vi moi bien deu co mac dinh."
+            SO_HONG=$((SO_HONG + 1))
+            echo "  ${LAYER}: thieu tfvars, chua kiem duoc" >> "$BAO"
+            continue
+          fi
+
+          printf 'terraform {\n  backend "s3" {}\n}\n' > backend.tf
+
+          ARGS="-backend-config=bucket=${STATE_BUCKET}"
+          ARGS="$ARGS -backend-config=key=${KEY}"
+          ARGS="$ARGS -backend-config=region=${STATE_REGION}"
+          ARGS="$ARGS -backend-config=encrypt=true"
+          if [ -n "${STATE_LOCK_TABLE:-}" ]; then
+            ARGS="$ARGS -backend-config=dynamodb_table=${STATE_LOCK_TABLE}"
+          fi
+
+          if ! terraform init -input=false $ARGS; then
+            SO_HONG=$((SO_HONG + 1))
+            echo "  ${LAYER}: terraform init hong" >> "$BAO"
+            continue
+          fi
+
+          N=$(terraform state list 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$N" = "0" ]; then
+            echo "LOI: state RONG - sai khoa, khong phai drift."
+            SO_HONG=$((SO_HONG + 1))
+            echo "  ${LAYER}: state rong (khoa ${KEY}) - sai khoa chu khong phai drift" >> "$BAO"
+            continue
+          fi
+          echo "   $N resource trong state"
+
+          # KHONG dung -target o day. Drift la cau hoi "thuc te co khop
+          # state khong", va gioi han pham vi se bo qua dung nhung thu
+          # khong ai apply - tuc dung nhung thu de troi nhat.
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color \
+            > /tmp/plan.txt 2>&1
+          CODE=$?
+          set -e
+
+          case "$CODE" in
+            0)
+              echo "   KHONG CO THAY DOI"
+              ;;
+            2)
+              echo "   CO THAY DOI - xem duoi"
+              tail -60 /tmp/plan.txt | sed 's/^/     /'
+              SO_DRIFT=$((SO_DRIFT + 1))
+              TOM=$(grep -E '^Plan:' /tmp/plan.txt | head -1)
+              echo "  ${LAYER}: ${TOM:-co thay doi}" >> "$BAO"
+              ;;
+            *)
+              echo "   PLAN HONG"
+              tail -40 /tmp/plan.txt | sed 's/^/     /'
+              SO_HONG=$((SO_HONG + 1))
+              echo "  ${LAYER}: plan hong" >> "$BAO"
+              ;;
+          esac
+        done
+
+        echo ""
+        echo "════════════════════════════════════════════"
+        echo " ${SO_DRIFT} layer co thay doi, ${SO_HONG} layer khong kiem duoc"
+        echo "════════════════════════════════════════════"
+        cat "$BAO"
+
+        # ----------------------------------------------------
+        # "KHONG KIEM DUOC" KHONG PHAI "SACH"
+        #
+        # Mot layer thieu tfvars hay sai khoa state se khong sinh ra
+        # dong drift nao - va neu chi dem SO_DRIFT thi bao cao se noi
+        # "0 drift" cho mot he thong chua he duoc nhin. Dem rieng, va
+        # bao rieng.
+        # ----------------------------------------------------
+        if [ "$SO_DRIFT" = "0" ] && [ "$SO_HONG" = "0" ]; then
+          echo "Moi layer khop state."
+          exit 0
+        fi
+
+        if [ -n "${DRIFT_TOPIC_ARN:-}" ]; then
+          TIEU_DE="[LZ] drift: ${SO_DRIFT} layer doi, ${SO_HONG} khong kiem duoc"
+
+          # Soan thu vao file, cung ly do voi $BAO: khong chuoi nhieu
+          # dong trong block scalar.
+          THU=/tmp/thu-drift.txt
+          {
+            echo "Buoc phat hien drift cua ops-pipeline vua chay."
+            echo ""
+            echo "${SO_DRIFT} layer co thay doi ngoai Terraform."
+            echo "${SO_HONG} layer KHONG kiem duoc - day khong phai 'sach', la 'chua nhin'."
+            echo ""
+            cat "$BAO"
+            echo ""
+            echo "Mot layer 'co thay doi' co hai nguyen nhan, can hai cach xu ly:"
+            echo ""
+            echo "  1. Co nguoi sua tay o console. Doc plan roi dua thay doi do"
+            echo "     vao catalog, hoac apply de dua no ve."
+            echo "  2. Mot lan apply truoc do chua hoan tat. Xem lich su pipeline."
+            echo ""
+            echo "Log day du: CodeBuild ${CODEBUILD_BUILD_ID}"
+          } > "$THU"
+
+          if aws sns publish \
+               --topic-arn "${DRIFT_TOPIC_ARN}" \
+               --subject "${TIEU_DE:0:99}" \
+               --message "file://${THU}" >/dev/null; then
+            echo "Da bao ve ${DRIFT_TOPIC_ARN}"
+          else
+            echo "CANH BAO: khong bao duoc ve SNS - xem quyen sns:Publish"
+          fi
+        else
+          echo "DRIFT_TOPIC_ARN de rong - khong bao ai."
+          echo "Ket qua nay chi ton tai trong log cua mot job chay luc 2 gio sang."
+        fi
+
+        # Thoat khac 0 de lan chay hien ra la THAT BAI trong console va
+        # trong moi bang theo doi. Mot job xanh mang tin xau ben trong
+        # la mot job khong ai mo ra.
+        exit 1
