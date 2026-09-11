@@ -28,6 +28,11 @@ locals {
   # "<layer>=<lenh>", cach nhau bang ';' - lenh co dau cach nen khong
   # tach bang dau cach duoc.
   ####################################
+  # Tinh MOT LAN o day. Ba cho dung no - project CodeBuild, stage Lint va
+  # quyen StartBuild - phai dong y voi nhau, va ba bieu thuc doc lap la
+  # ba cho de lech.
+  co_catalog = length(var.catalogs) > 0
+
   lint_jobs = join(";", [for c in var.catalogs : "${c.layer}=${c.lint}"])
   expiry_jobs = join(";", [
     for c in var.catalogs : "${c.layer}=${c.expiry}" if c.expiry != ""
@@ -204,11 +209,12 @@ check "moi_stage_co_lint" {
 ########################################
 check "co_catalog_de_lint" {
   assert {
-    condition = length(var.catalogs) > 0
+    condition = length(var.catalogs) > 0 || var.khong_co_catalog != ""
     error_message = join(" ", [
-      "var.catalogs RONG, nen stage Lint se khong kiem catalog nao va van bao",
-      "THANH CONG neu chot chan trong buildspec bi bo. Mot cong kiem bao dat vi",
-      "no khong kiem gi la kieu hong im lang nhat.",
+      "var.catalogs RONG va cung khong khai khong_co_catalog.",
+      "Rong la hop le - khong phai layer nao cung co catalog - nhung no phai",
+      "duoc VIET RA kem ly do. Mot truong bo trong doc giong het mot truong bi",
+      "quen, va cai thu hai la mot pipeline di qua ma khong ai kiem catalog.",
     ])
   }
 }

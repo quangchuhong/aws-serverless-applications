@@ -458,17 +458,30 @@ PHAM_VI = {
     ####################################
     # network/ops - da co state rieng tu truoc
     ####################################
+    ####################################
+    # network/ops - HAI stage, hai muc rui ro
+    #
+    # Tach vi mot thay doi DNS co trieu chung ngay, con mot ingress rule
+    # moi thi khong co gi. Chi cloudops-firewall nam trong approve_stages.
+    ####################################
+    "cloudops-firewall": [
+        "aws_networkfirewall_rule_group",
+        "aws_vpc_security_group_ingress_rule",
+    ],
+
+    "cloudops-trail": [
+        "aws_cloudtrail",
+    ],
+
     "cloudops-network": [
         "aws_route53_record",
         "aws_vpc_endpoint",
         "aws_route53_zone",
         "aws_route53profiles_resource_association",
-        "aws_networkfirewall_rule_group",
         "aws_ec2_transit_gateway_route",
         "aws_lb_target_group",
         "aws_lb_target_group_attachment",
         "aws_lb_listener",
-        "aws_vpc_security_group_ingress_rule",
         "aws_vpn_connection_route",
         "aws_cloudwatch_metric_alarm",
     ],

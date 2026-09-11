@@ -87,25 +87,41 @@ resource "aws_codepipeline" "ops" {
   # Dung TRUOC moi layer. Mot loi schema o day nghia la khong stage nao
   # phia sau duoc chay, tuc khong co gi o AWS bi cham.
   ####################################
-  stage {
-    name = "Lint"
+  ####################################
+  # KHONG CO CATALOG THI KHONG CO STAGE NAY
+  #
+  # Hai viec khac nhau, va cho nay de lan:
+  #
+  #   stage khong ton tai          khong ai doi no bao gi
+  #   stage ton tai, khong lam gi  LUON xanh, va cai xanh do duoc doc
+  #                                thanh "moi catalog deu sach"
+  #
+  # var.khong_co_catalog bat nguoi khai phai noi ro ly do - xem check
+  # "co_catalog_de_lint".
+  ####################################
+  dynamic "stage" {
+    for_each = local.co_catalog ? [1] : []
 
-    action {
-      name            = "Lint"
-      category        = "Build"
-      owner           = "AWS"
-      provider        = "CodeBuild"
-      version         = "1"
-      run_order       = 1
-      input_artifacts = ["nguon"]
+    content {
+      name = "Lint"
 
-      configuration = {
-        ProjectName = aws_codebuild_project.catalog[0].name
-        EnvironmentVariables = jsonencode([
-          { name = "MODE", value = "lint", type = "PLAINTEXT" },
-          { name = "JOBS", value = local.lint_jobs, type = "PLAINTEXT" },
-          { name = "CHAN", value = "yes", type = "PLAINTEXT" },
-        ])
+      action {
+        name            = "Lint"
+        category        = "Build"
+        owner           = "AWS"
+        provider        = "CodeBuild"
+        version         = "1"
+        run_order       = 1
+        input_artifacts = ["nguon"]
+
+        configuration = {
+          ProjectName = aws_codebuild_project.catalog[0].name
+          EnvironmentVariables = jsonencode([
+            { name = "MODE", value = "lint", type = "PLAINTEXT" },
+            { name = "JOBS", value = local.lint_jobs, type = "PLAINTEXT" },
+            { name = "CHAN", value = "yes", type = "PLAINTEXT" },
+          ])
+        }
       }
     }
   }

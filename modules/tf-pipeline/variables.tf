@@ -420,8 +420,9 @@ variable "catalogs" {
 
     expiry rong = khong co che do bao cao het han cho catalog do.
 
-    RONG = stage Lint khong kiem gi ca va van bao THANH CONG. Check
-    "co_catalog_de_lint" keu ve dieu do.
+    RONG LA HOP LE, nhung phai NOI RO bang var.khong_co_catalog. Rong ma
+    im lang thi stage Lint chay 0 vong lap va van bao THANH CONG - mot
+    cong kiem bao dat vi no khong kiem gi.
   EOT
   type = list(object({
     layer  = string
@@ -429,6 +430,28 @@ variable "catalogs" {
     lint   = string
     expiry = optional(string, "")
   }))
+  default = []
+}
+
+variable "khong_co_catalog" {
+  description = <<-EOT
+    Ly do pipeline nay KHONG co catalog nao de lint offline.
+
+    Bat buoc khi var.catalogs rong. Khi do stage Lint va Expiry KHONG
+    duoc tao - khong phai duoc tao roi bo qua.
+
+    HAI VIEC KHAC NHAU, va cho nay tung lan:
+
+      stage khong ton tai      khong ai doi no bao gi
+      stage ton tai, khong lam gi  LUON xanh, va cai xanh do duoc doc
+                               thanh "moi catalog deu sach"
+
+    Hom nay chi layer organization co catalog (catalog/scp.yaml). Bon
+    pipeline con lai chua co, nen chung khai ly do o day. Khi mot layer
+    co catalog thi them vao var.catalogs va XOA dong nay.
+  EOT
+  type        = string
+  default     = ""
 }
 
 ########################################

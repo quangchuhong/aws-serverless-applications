@@ -282,10 +282,13 @@ resource "aws_iam_role_policy" "pipeline" {
       {
         Effect = "Allow"
         Action = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
-        Resource = [
+        # compact() bo phan tu rong: project catalog khong ton tai khi
+        # pipeline nay khong co catalog nao. Liet ke mot ARN rong se lam
+        # IAM tu choi ca policy voi mot loi ve dinh dang ARN.
+        Resource = compact([
           aws_codebuild_project.terraform[0].arn,
-          aws_codebuild_project.catalog[0].arn,
-        ]
+          try(aws_codebuild_project.catalog[0].arn, ""),
+        ])
       },
       ],
 

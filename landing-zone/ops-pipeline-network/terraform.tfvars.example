@@ -1,0 +1,106 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# PIPELINE: DNS, ENDPOINT, TUONG LUA
+########################################
+
+# MAC DINH TAT - va hai stage ben duoi cung tat, vi hai ly do KHAC NHAU.
+# Xem versions.tf.
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+source_type     = "codecommit"
+repository_name = "diy-aws-landing-zone"
+branch_name     = "main"
+
+########################################
+# STATE - PHAI KHOP CHINH XAC
+#
+# Sai khoa thi Terraform mo mot state RONG, va buildspec dung lai o chot
+# chan "state RONG" - do la lop chan duy nhat giua mot khoa sai va mot
+# plan doi tao lai toan bo.
+#
+#   cd ../tf-backend && terraform output bucket
+#   cd ../tf-backend && terraform output layers
+########################################
+
+state_bucket     = "qh11-lz-tfstate-609320954321"
+state_lock_table = "qh11-lz-tfstate-lock"
+
+########################################
+# KHO tfvars - DUNG CHUNG voi cac pipeline khac
+#
+#   cd ../vending-pipeline && terraform output -raw tfvars_bucket
+#
+# SAU KHI DAT BIEN NAY, PHAI THEM LAYER VAO push-tfvars.sh:
+#   cd ../vending-pipeline && grep -n 'landing-zone/' push-tfvars.sh
+#
+# Thieu buoc do thi khong co loi luc day - chi co loi luc pipeline chay,
+# va no noi ve S3 chu khong noi ve script.
+########################################
+
+tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
+
+########################################
+# DRIFT
+#
+# Day co the la phan gia tri nhat cua ca layer: mot lan plan hang dem ma
+# KHONG ra "khong co thay doi" chinh la bao dong.
+########################################
+
+drift_cron      = "cron(0 19 * * ? *)"
+drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
+
+build_timeout_minutes = 30
+log_retention_days    = 90
+
+########################################
+# LAYER MA PIPELINE NAY APPLY
+#
+# KHOA KHONG KHOP DUONG DAN - do KHONG phai loi go nham.
+#
+# Layer network/ops truoc o demo/network-lz-full va DA APPLY THAT. Khi no
+# thay the landing-zone/network, duong dan doi nhung khoa state GIU
+# NGUYEN. Xem khoi chu thich o tf-backend/outputs.tf.
+#
+# Go thanh "network-ops/terraform.tfstate" theo truc giac se mo mot state
+# RONG, va plan doi tao lai ca layer.
+########################################
+
+layer_keys = {
+  "landing-zone/network/ops" = "demo-network-lz-full/ops/terraform.tfstate"
+}
+
+########################################
+# HAI STAGE, HAI MUC RUI RO
+#
+# Ca hai dang TAT, va hai ly do khac ban chat:
+#
+#   1. State cua network/ops dang RONG (layer network vua bi xoa)
+#   2. network/ops dung `profile`, khong dung assume_role - CodeBuild
+#      khong co profile. Xem versions.tf muc 2.
+#
+# Diem 2 phai sua trong network/ops, khong sua duoc tu day.
+########################################
+
+enable_network_stage  = false
+enable_firewall_stage = false
+
+# Chi FIREWALL co cong duyet. DNS thi khong - mot thay doi DNS sai co
+# trieu chung ngay, con mot ingress rule moi thi khong co gi bao.
+approve_stages  = ["cloudops-firewall"]
+approval_emails = []
+
+########################################
+# ROLE LIEN ACCOUNT
+#
+# RONG la dung khi chua co role rieng. DUNG dien
+# OrganizationAccountAccessRole: do la full admin trong account network,
+# va pipeline nay chi can sua DNS record voi rule group.
+########################################
+
+network_pipeline_role_arns = []

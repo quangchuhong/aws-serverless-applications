@@ -1,0 +1,87 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# PIPELINE: AI VAO ACCOUNT NAO
+#
+# `-n` co chu dich: mot lan cp de len tfvars cua layer da apply la mot
+# plan doi xoa nhung thu dang chay.
+########################################
+
+# MAC DINH TAT.
+#
+# Bat cai nay tao mot duong TU DONG co quyen gan permission set vao
+# account. Mot assignment sai khong lam gi "hong" - no chi lam mot group
+# vao duoc mot account ma truoc do khong vao duoc, va no co hieu luc
+# ngay. Kieu su co do khong co trieu chung.
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+source_type     = "codecommit"
+repository_name = "diy-aws-landing-zone"
+branch_name     = "main"
+
+########################################
+# STATE - PHAI KHOP CHINH XAC
+#
+# Sai khoa thi Terraform mo mot state RONG, va buildspec dung lai o chot
+# chan "state RONG" - do la lop chan duy nhat giua mot khoa sai va mot
+# plan doi tao lai toan bo.
+#
+#   cd ../tf-backend && terraform output bucket
+#   cd ../tf-backend && terraform output layers
+########################################
+
+state_bucket     = "qh11-lz-tfstate-609320954321"
+state_lock_table = "qh11-lz-tfstate-lock"
+
+########################################
+# KHO tfvars - DUNG CHUNG voi cac pipeline khac
+#
+#   cd ../vending-pipeline && terraform output -raw tfvars_bucket
+#
+# SAU KHI DAT BIEN NAY, PHAI THEM LAYER VAO push-tfvars.sh:
+#   cd ../vending-pipeline && grep -n 'landing-zone/' push-tfvars.sh
+#
+# Thieu buoc do thi khong co loi luc day - chi co loi luc pipeline chay,
+# va no noi ve S3 chu khong noi ve script.
+########################################
+
+tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
+
+########################################
+# DRIFT
+#
+# Day co the la phan gia tri nhat cua ca layer: mot lan plan hang dem ma
+# KHONG ra "khong co thay doi" chinh la bao dong.
+########################################
+
+drift_cron      = "cron(0 19 * * ? *)"
+drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
+
+build_timeout_minutes = 30
+log_retention_days    = 90
+
+########################################
+# LAYER MA PIPELINE NAY APPLY
+########################################
+
+layer_keys = {
+  "landing-zone/permission-sets" = "permission-sets/terraform.tfstate"
+}
+
+########################################
+# CONG DUYET
+#
+# Sec review: SCP, permission set, firewall rule. Day la mot trong ba.
+#
+# MOI DIA CHI PHAI BAM XAC NHAN. Truoc do subscription o
+# PendingConfirmation va khong nhan gi - Terraform van bao tao thanh cong.
+########################################
+
+approve_stages  = ["cloudops-permission-set"]
+approval_emails = []
+# approval_emails = ["DIA-CHI-DOI-BAO-MAT@example.com"]

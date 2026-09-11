@@ -128,7 +128,9 @@ resource "aws_codebuild_project" "terraform" {
 ########################################
 
 resource "aws_codebuild_project" "catalog" {
-  count = local.enabled ? 1 : 0
+  # KHONG tao khi khong co catalog nao. Mot project ton tai ma khong stage
+  # nao goi la mot thu nguoi doc se tuong dang chay.
+  count = local.enabled && local.co_catalog ? 1 : 0
 
   name          = "${local.name}-catalog"
   description   = "Lint offline moi catalog + bao cao loosen het han. Khong goi AWS."

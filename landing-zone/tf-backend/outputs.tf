@@ -114,6 +114,14 @@ locals {
     "landing-zone/ops-pipeline"     = "ops-pipeline/terraform.tfstate"
     "landing-zone/codecommit-guard" = "codecommit-guard/terraform.tfstate"
 
+    # Bon pipeline van hanh con lai, moi cai mot layer va mot khoa rieng.
+    # Chung dung CHUNG modules/tf-pipeline nhung KHONG dung chung state:
+    # mot state chung se lam bon pipeline giam len nhau.
+    "landing-zone/ops-pipeline-permission-set" = "ops-pipeline-permission-set/terraform.tfstate"
+    "landing-zone/ops-pipeline-network"        = "ops-pipeline-network/terraform.tfstate"
+    "landing-zone/ops-pipeline-config-rules"   = "ops-pipeline-config-rules/terraform.tfstate"
+    "landing-zone/ops-pipeline-trail"          = "ops-pipeline-trail/terraform.tfstate"
+
     # Ban Control Tower - mac dinh TAT, nhung van can key rieng neu
     # ban bat no. KHONG dung chung key voi organization: hai layer do
     # thay the nhau, dung chung state se giam len nhau.

@@ -1,0 +1,80 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# PIPELINE: CONFIG RULE
+########################################
+
+# MAC DINH TAT - can role rieng o account SECURITY truoc. Xem versions.tf.
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+source_type     = "codecommit"
+repository_name = "diy-aws-landing-zone"
+branch_name     = "main"
+
+########################################
+# STATE - PHAI KHOP CHINH XAC
+#
+# Sai khoa thi Terraform mo mot state RONG, va buildspec dung lai o chot
+# chan "state RONG" - do la lop chan duy nhat giua mot khoa sai va mot
+# plan doi tao lai toan bo.
+#
+#   cd ../tf-backend && terraform output bucket
+#   cd ../tf-backend && terraform output layers
+########################################
+
+state_bucket     = "qh11-lz-tfstate-609320954321"
+state_lock_table = "qh11-lz-tfstate-lock"
+
+########################################
+# KHO tfvars - DUNG CHUNG voi cac pipeline khac
+#
+#   cd ../vending-pipeline && terraform output -raw tfvars_bucket
+#
+# SAU KHI DAT BIEN NAY, PHAI THEM LAYER VAO push-tfvars.sh:
+#   cd ../vending-pipeline && grep -n 'landing-zone/' push-tfvars.sh
+#
+# Thieu buoc do thi khong co loi luc day - chi co loi luc pipeline chay,
+# va no noi ve S3 chu khong noi ve script.
+########################################
+
+tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
+
+########################################
+# DRIFT
+#
+# Day co the la phan gia tri nhat cua ca layer: mot lan plan hang dem ma
+# KHONG ra "khong co thay doi" chinh la bao dong.
+########################################
+
+drift_cron      = "cron(0 19 * * ? *)"
+drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
+
+build_timeout_minutes = 30
+log_retention_days    = 90
+
+layer_keys = {
+  "landing-zone/config-detective" = "config-detective/terraform.tfstate"
+}
+
+enable_config_rules_stage = false
+
+########################################
+# ROLE LIEN ACCOUNT
+#
+# RONG la dung khi chua co role rieng. Hom nay o account security chi co
+# OrganizationAccountAccessRole = FULL ADMIN, va cap cho pipeline quyen
+# assume vao do de sua Config rule la cap quyen sua moi thu trong account
+# bao mat.
+########################################
+
+config_pipeline_role_arns = []
+
+# Config rule khong nam trong danh sach sec review (SCP, permission set,
+# firewall rule). Muon them thi: ["cloudops-config-rules"]
+approve_stages  = []
+approval_emails = []

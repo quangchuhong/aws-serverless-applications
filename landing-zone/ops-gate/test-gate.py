@@ -313,13 +313,13 @@ chay("TAO ingress rule           -> NOI, thoat 1", 1, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["create"],
         before=None, after={"cidr_ipv4": "0.0.0.0/0", "from_port": 443})),
-     stage="cloudops-network")
+     stage="cloudops-firewall")
 
 chay("XOA ingress rule           -> sach", 0, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["delete"],
         before={"cidr_ipv4": "10.0.0.0/8"}, after=None)),
-     stage="cloudops-network")
+     stage="cloudops-firewall")
 
 print()
 print("── Khai bao con lai sau khi thay doi da di qua ──")
