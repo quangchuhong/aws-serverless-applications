@@ -25,38 +25,81 @@
 # ngay: khong ai bam duyet mot thay doi DNS record ba lan mot ngay.
 #
 # --------------------------------------------------------------
-# KHONG CO CONG DUYET, VA DO LA MOT LUA CHON CO LY
+# CONG DUYET: CHI O NHUNG STAGE MA MOT THAY DOI SAI IM LANG
 #
-# Voi vending, thu can doc la BAN PLAN: hau qua (mot account voi email
-# vinh vien) khong hien ra trong diff cua catalog.
+# Ban dau khoi nay ghi "KHONG CO CONG DUYET, VA DO LA MOT LUA CHON CO
+# LY", va ly do neu ra van dung: khong ai bam duyet mot thay doi DNS
+# record ba lan mot ngay, va mot cong duyet bi bam theo phan xa la mot
+# cong da ngung duoc doc.
 #
-# Voi ops thi nguoc lai - diff cua catalog CHINH LA thay doi:
+# Nhung ket luan "nen khong co cong duyet nao" la SAI o mot cho: no coi
+# moi stage nhu nhau. Chung khong nhu nhau:
+#
+#   DNS record sai      co trieu chung ngay - co nguoi goi
+#   SCP sai             KHONG co trieu chung. Mot Deny bi go khong lam
+#                       gi "hong", no chi lam mot viec truoc day bi chan
+#                       gio chay duoc
+#   permission set sai  mot group vao duoc mot account moi. Khong ai
+#                       thay, va no co hieu luc ngay - Identity Center
+#                       day thay doi xuong moi role da sinh
+#   firewall rule sai   luu luong truoc day bi chan gio di qua, va
+#                       khong co log nao noi rang mot luat vua bien mat
+#
+# Ba dong duoi la dung chuyen sec can doc. Nen cong duyet nam o DUNG
+# nhung stage do - var.approve_stages - va khong nam o dau khac.
+#
+# Cai nay giu duoc ca hai: viec hang ngay cua cloudops khong bi chan, va
+# thay doi guardrail khong di den AWS ma khong ai doc.
+#
+# --------------------------------------------------------------
+# HAI CHO SEC DUYET, VA CHUNG KHAC NHAU
+#
+#   review code   tren PULL REQUEST cua CodeCommit. Doc duoc Y DINH:
+#                 diff cua catalog noi ro hon bat ky ban plan nao.
+#                 Xem landing-zone/codecommit-guard/.
+#   approval      trong pipeline, TRUOC apply. Doc duoc BAN PLAN va ket
+#                 qua cua lint/gate - tuc hau qua THAT tren ha tang dang
+#                 chay.
+#
+# Cai thu nhat khong thay duoc cai thu hai: mot dong catalog dung van co
+# the cho ra mot plan thay the resource, vi state khong khop code. Va
+# nguoc lai: mot ban plan sach khong noi duoc rang viec go Deny nay CO
+# NEN xay ra.
+#
+# --------------------------------------------------------------
+# PHAN CON LAI CUA LUA CHON BAN DAU VAN GIU
+#
+# Nhung stage KHONG nam trong var.approve_stages thi khong co cong duyet,
+# va do van la co y. Voi chung, diff cua catalog CHINH LA thay doi:
 #
 #   + - sid: DenyRdsDeleteProd
 #   +   action: ["rds:DeleteDBInstance"]
 #   +   ticket: SEC-2291
 #
-# Ba dong do noi ro hon bat ky ban plan Terraform nao. Nen cho duyet
-# dung la PR tren git, khong phai mot cong trong CodeBuild noi nguoi
-# ta bam tu dien thoai.
+# Ba dong do doc duoc trong mot PR, va chung noi ro hon bat ky ban plan
+# Terraform nao. Doi lai cho chung la ba lop tu dong: Lint o stage dau,
+# gate.py sau plan, FAIL_ON_DESTROY cuoi cung.
 #
 # --------------------------------------------------------------
-# NHUNG LOP BU DO HIEN CHUA TON TAI - DO DUOC, KHONG PHAI PHONG DOAN
+# REVIEW CODE: LOP CHAN DO CHUA TON TAI - DO DUOC, KHONG PHONG DOAN
 #
-#   git log --merges     chi co merge tu-nhanh, chua co PR nao
-#   .github/CODEOWNERS   vua them, va no KHONG chan gi neu khong co
-#                        branch protection + PR
-#   duong len CodeCommit `git push codecommit HEAD:main` - PUSH TRUC TIEP
+#   git log --merges     chi co merge tu-nhanh, CHUA CO PR NAO
+#   duong len repo       `git push codecommit HEAD:main` = PUSH TRUC TIEP
 #
-# Nen cau "cho duyet la PR tren git" o tren dang la mot LOI HUA, khong
-# phai mot phep chan. Mot thay doi SCP di tu may nguoi viet den AWS ma
-# khong ai khac doc: Lint, gate.py va FAIL_ON_DESTROY deu khong phai
-# NGUOI, va khong lop nao trong so do doc duoc y DINH.
+# Ban dau toi them .github/CODEOWNERS. SAI CHO: cong ty khong dung
+# GitHub, nen file do la mot lop chan khong bao gio chay duoc. Da xoa.
 #
-# Xem .github/CODEOWNERS - muc "PHAI LAM GI DE NO THANH THAT". Buoc quan
-# trong nhat la buoc de bo qua nhat: chung nao con push truc tiep vao
-# main cua CodeCommit thi branch protection tren GitHub chi bao ve mot
-# ban sao, khong bao ve duong chay.
+# Co che dung nam o landing-zone/codecommit-guard/ - approval rule
+# template cua CodeCommit, cong mot IAM Deny chan push truc tiep. Layer
+# do dang TAT, nen hom nay:
+#
+#   review code   CHUA co
+#   approval      co, o nhung stage trong var.approve_stages
+#
+# Nghia la cong duyet trong pipeline dang la cho DUY NHAT mot nguoi doc
+# thay doi SCP truoc khi no den AWS. Dung mot lop, va lop do doc BAN PLAN
+# chu khong doc Y DINH - no khong tra loi duoc "viec go Deny nay co nen
+# xay ra khong".
 #
 # Doi lai, hai lop bu:
 #
@@ -271,9 +314,25 @@ locals {
   # CHI stage duoc bat. thu_tu danh lai TU DAU tren tap da loc, nen tat
   # mot stage giua khong de lai mot so thu tu trong - va mot so trong se
   # thanh mot stage khong co ten trong CodePipeline.
+  #
+  # ----------------------------------
+  # THU TU CHAY CUA ACTION TRONG MOT STAGE
+  #
+  # Co cong duyet:      Plan 1  ->  Duyet 2  ->  Apply 3
+  # Khong co cong duyet: Plan 1  ->  Apply 2
+  #
+  # Tinh o day chu khong trong pipeline.tf: hai cho tinh doc lap la hai
+  # cho de lech, va mot run_order lech khong gay loi - no chi lam Apply
+  # chay SONG SONG voi cong duyet, tuc apply xong truoc khi co nguoi bam.
+  # ----------------------------------
   stages = [
     for i, s in [for s in local.stages_all : s if s.enabled] :
-    merge(s, { thu_tu = i })
+    merge(s, {
+      thu_tu   = i
+      co_duyet = contains(var.approve_stages, s.key)
+      ro_duyet = 2
+      ro_apply = contains(var.approve_stages, s.key) ? 3 : 2
+    })
   ]
 
   stages_tat = [for s in local.stages_all : s.key if !s.enabled]
@@ -355,6 +414,62 @@ locals {
 # pipeline.tf dung format("%02d-%s", ...) nen hai stage cung key se cho
 # hai khoa khac nhau va KHONG bao loi - do la ly do phai kiem o day).
 ########################################
+########################################
+# TEN TRONG approve_stages PHAI LA TEN STAGE THAT
+#
+# Go sai mot ten o day KHONG gay loi: contains() tra ve false, stage do
+# khong co cong duyet, va pipeline chay binh thuong. Ket qua la mot cong
+# duyet duoc khai ma khong ton tai - va no tra loi cau hoi "SCP co can
+# duyet khong" bang "co" trong tfvars trong khi thuc te la khong.
+########################################
+########################################
+# STAGE sec-ou VA IAM PHAI DOI CUNG LUC
+#
+# iam.tf Deny organizations:*OrganizationalUnit khi enable_ou_stage =
+# false, va Allow khi true. Hai phia doc CUNG mot bien nen chung khong
+# lech duoc - check nay chi de ghi lai su rang buoc do cho nguoi doc sau,
+# va de keu neu ai do tach chung ra.
+#
+# Vi sao rang buoc nay quan trong: Deny THANG Allow trong IAM, nen mo
+# Allow ma quen bo khoi Deny thi KHONG co gi doi - stage van trot, va
+# thong bao la AccessDenied tren UpdateOrganizationalUnit, tuc no chi ve
+# cay OU chu khong ve IAM.
+########################################
+check "sec_ou_va_iam_khop_nhau" {
+  assert {
+    condition = !var.enable_ou_stage || length([
+      for s in local.stages_all : s.key
+      if s.key == "sec-ou" && s.enabled
+    ]) == 1
+    error_message = join(" ", [
+      "enable_ou_stage = true nhung stage sec-ou khong duoc bat.",
+      "Khi do iam.tf da mo quyen ghi cay OU cho role CodeBuild ma khong",
+      "stage nao dung no - tuc mot quyen rong hon can thiet, khong co ai su",
+      "dung, va khong co gi loi ra.",
+    ])
+  }
+}
+
+check "approve_stages_la_ten_that" {
+  assert {
+    condition = length(setsubtract(
+      toset(var.approve_stages),
+      toset([for s in local.stages_all : s.key]),
+    )) == 0
+    error_message = join(" ", [
+      "approve_stages co ten khong phai stage nao:",
+      join(", ", tolist(setsubtract(
+        toset(var.approve_stages),
+        toset([for s in local.stages_all : s.key]),
+      ))),
+      ". Ten stage co the la:",
+      join(", ", [for s in local.stages_all : s.key]),
+      ". Go sai o day KHONG gay loi luc chay - no chi lam cong duyet do",
+      "khong ton tai, trong khi tfvars noi rang co.",
+    ])
+  }
+}
+
 check "khoa_stage_khong_trung" {
   assert {
     condition = length(local.stages_all) == length(distinct([

@@ -185,3 +185,41 @@ enable_ou_stage = false
 # hai resource nay co 0 instance - mot stage luon xanh ma khong kiem gi.
 #   cd ../organization && terraform output tag_policy
 enable_tagging_stage = false
+
+########################################
+# 9. CONG DUYET - CHI O NHUNG STAGE CAN
+#
+# Sec duyet rule o HAI cho, va chung khac nhau:
+#
+#   review code   tren PULL REQUEST cua CodeCommit. Doc duoc Y DINH -
+#                 diff cua catalog noi ro hon bat ky ban plan nao.
+#                 Co che: ../codecommit-guard/ (dang TAT).
+#   approval      trong pipeline nay, TRUOC apply. Doc duoc BAN PLAN va
+#                 ket qua lint/gate - hau qua THAT tren ha tang dang chay.
+#
+# Cai thu nhat khong thay duoc cai thu hai: mot dong catalog dung van co
+# the cho ra mot plan thay the resource, vi state khong khop code.
+#
+# HOM NAY codecommit-guard dang tat, nen cong duyet duoi day la cho DUY
+# NHAT mot nguoi doc thay doi SCP truoc khi no den AWS.
+########################################
+
+# Ten stage, khong phai ten layer. Go sai KHONG gay loi luc chay - check
+# "approve_stages_la_ten_that" bat luc plan.
+#
+# Vi sao khong phai moi stage: mot cong bi bam theo phan xa la mot cong
+# da ngung duoc doc. Chi dat o cho ma thay doi sai KHONG co trieu chung.
+approve_stages = ["sec-scp"]
+
+# MOI DIA CHI PHAI BAM XAC NHAN trong thu SNS dau tien.
+#
+# Truoc khi bam, subscription o PendingConfirmation va khong nhan gi -
+# Terraform van bao tao thanh cong. Kiem bang phep do:
+#
+#   aws sns list-subscriptions-by-topic --topic-arn <arn> \
+#     --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output text
+#
+# Rong + approve_stages khong rong = check keu: cong duyet se dung
+# pipeline lai, khong ai duoc bao, va het gio sau 7 ngay.
+approval_emails = []
+# approval_emails = ["DIA-CHI-DOI-BAO-MAT@example.com"]

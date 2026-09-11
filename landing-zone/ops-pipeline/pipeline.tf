@@ -3,8 +3,15 @@
 #
 # Nguon -> mot stage cho moi layer trong local.stages.
 #
-# Moi stage co HAI action: Plan roi Apply. Khong co action cho, khong
-# co cong duyet - xem main.tf.
+# Moi stage co HAI hoac BA action:
+#
+#   Plan 1  ->  Apply 2                 stage khong trong approve_stages
+#   Plan 1  ->  Duyet 2  ->  Apply 3    stage trong approve_stages
+#
+# run_order do local.stages tinh (ro_duyet / ro_apply), khong tinh o day:
+# hai cho tinh doc lap la hai cho de lech, va mot run_order lech KHONG
+# gay loi - no chi lam Apply chay SONG SONG voi cong duyet, tuc apply
+# xong truoc khi co nguoi bam.
 #
 # HAI LINT, HAI CHO
 #
@@ -187,6 +194,42 @@ resource "aws_codepipeline" "ops" {
       }
 
       ####################################
+      # CONG DUYET - CHI STAGE TRONG var.approve_stages
+      #
+      # KHONG co input_artifacts: manual approval khong doc duoc file.
+      # Nguoi duyet phai mo log CodeBuild de xem ban plan va ket qua cua
+      # lint/gate. Do la mot buoc them, va no co chu dich - mot cong duyet
+      # ma noi dung hien ngay canh nut bam se bi bam ma khong doc.
+      #
+      # ExternalEntityLink tro toi console cua pipeline, khong tro toi log:
+      # CodePipeline khong biet truoc id cua lan build, nen mot lien ket
+      # "toi log" chi dung duoc o mot lan chay va sai o moi lan sau.
+      ####################################
+      dynamic "action" {
+        for_each = stage.value.co_duyet ? [1] : []
+
+        content {
+          name      = "Duyet"
+          category  = "Approval"
+          owner     = "AWS"
+          provider  = "Manual"
+          version   = "1"
+          run_order = stage.value.ro_duyet
+
+          configuration = {
+            NotificationArn = aws_sns_topic.approval[0].arn
+            CustomData = join(" ", [
+              "${stage.value.key}:",
+              stage.value.mo_ta,
+              "-- DOC LOG CodeBuild truoc khi duyet: tim dong 'Doi chieu AWS',",
+              "'tom tat: N tao, N sua, N xoa' va ket qua cua gate.py.",
+            ])
+            ExternalEntityLink = "https://${var.region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/${local.name}/view?region=${var.region}"
+          }
+        }
+      }
+
+      ####################################
       # APPLY DUNG BAN PLAN DA LUU
       #
       # input_artifacts lay tu chinh stage nay, khong phai tu "nguon":
@@ -200,7 +243,7 @@ resource "aws_codepipeline" "ops" {
         owner           = "AWS"
         provider        = "CodeBuild"
         version         = "1"
-        run_order       = 2
+        run_order       = stage.value.ro_apply
         input_artifacts = ["plan_${replace(stage.value.key, "-", "_")}"]
 
         configuration = {

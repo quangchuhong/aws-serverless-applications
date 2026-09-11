@@ -322,3 +322,65 @@ variable "enable_tagging_stage" {
   type        = bool
   default     = false
 }
+
+########################################
+# CONG DUYET - CHI O NHUNG STAGE CAN
+########################################
+
+variable "approve_stages" {
+  description = <<-EOT
+    Stage nao dung lai cho nguoi bam duyet TRUOC khi apply. Dung KHOA
+    cua stage.
+
+    Ten stage co the dung (xem local.stages_all trong main.tf):
+
+      sec-ou   sec-scp   sec-tagging
+
+    VI SAO KHONG PHAI MOI STAGE, VA CUNG KHONG PHAI KHONG STAGE NAO
+
+    Cac stage khong nhu nhau o mot diem: thay doi sai co trieu chung hay
+    khong.
+
+      DNS record sai      co trieu chung ngay, co nguoi goi
+      SCP sai             KHONG co trieu chung. Mot Deny bi go khong lam
+                          gi "hong" - no chi lam mot viec truoc day bi
+                          chan gio chay duoc
+      permission set sai  mot group vao duoc mot account moi, co hieu luc
+                          ngay, khong ai thay
+      firewall rule sai   luu luong truoc day bi chan gio di qua, khong
+                          co log nao noi mot luat vua bien mat
+
+    Ba dong duoi la dung cho sec can doc. Dat cong duyet o moi stage se
+    lam no bi bam theo phan xa - va mot cong bi bam theo phan xa la mot
+    cong da ngung duoc doc.
+
+    GO SAI TEN O DAY KHONG GAY LOI LUC CHAY: contains() tra ve false,
+    stage do khong co cong duyet, pipeline chay binh thuong. Check
+    "approve_stages_la_ten_that" bat viec do luc plan.
+  EOT
+  type        = list(string)
+  default     = ["sec-scp"]
+}
+
+variable "approval_emails" {
+  description = <<-EOT
+    Dia chi nhan thu "co viec can duyet".
+
+    MOI DIA CHI PHAI BAM XAC NHAN. Truoc khi bam, subscription o
+    PendingConfirmation va KHONG nhan gi - ma Terraform van bao tao thanh
+    cong. Nen mot cong duyet co topic, co subscription va khong ai duoc
+    bao la mot cau hinh "dung" hoan toan.
+
+    Kiem bang phep do, khong bang state:
+
+      aws sns list-subscriptions-by-topic --topic-arn <arn> \
+        --query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output text
+      # SubscriptionArn = "PendingConfirmation" -> chua bam
+
+    Rong + approve_stages khong rong = check "co_cong_duyet_thi_co_nguoi_nhan"
+    se keu: cong duyet se dung pipeline lai va khong ai duoc bao, roi het
+    gio sau 7 ngay - va ket qua doc nhu pipeline bi treo.
+  EOT
+  type        = list(string)
+  default     = []
+}

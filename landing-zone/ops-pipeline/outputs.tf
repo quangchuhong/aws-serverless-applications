@@ -77,6 +77,23 @@ output "drift_project" {
   } : null
 }
 
+output "cong_duyet" {
+  description = "Stage nao dung lai cho nguoi bam, va ai duoc bao."
+  value = local.enabled ? {
+    stage = var.approve_stages
+    topic = try(aws_sns_topic.approval[0].arn, "(khong co stage nao can duyet)")
+
+    # Terraform bao tao subscription thanh cong ke ca khi chua ai bam xac
+    # nhan. Nen state KHONG tra loi duoc cau hoi "co ai duoc bao khong".
+    kiem_ai_duoc_bao = length(var.approve_stages) == 0 ? "(khong can)" : join(" ", [
+      "aws sns list-subscriptions-by-topic --topic-arn",
+      try(aws_sns_topic.approval[0].arn, ""),
+      "--query 'Subscriptions[].[Endpoint,SubscriptionArn]' --output text",
+      "# SubscriptionArn = PendingConfirmation -> chua bam, se KHONG nhan thu",
+    ])
+  } : null
+}
+
 output "layers" {
   description = "Layer nao dang di qua pipeline nay, va khoa state cua tung cai."
   value       = local.stage_keys

@@ -175,7 +175,7 @@ resource "aws_iam_role_policy" "codebuild" {
       {
         Sid    = "GhiChinhSach"
         Effect = "Allow"
-        Action = [
+        Action = concat([
           "organizations:CreatePolicy",
           "organizations:UpdatePolicy",
           "organizations:DeletePolicy",
@@ -183,27 +183,55 @@ resource "aws_iam_role_policy" "codebuild" {
           "organizations:DetachPolicy",
           "organizations:TagResource",
           "organizations:UntagResource",
-        ]
+          ],
+          ####################################
+          # CAY OU - CHI KHI STAGE sec-ou DUOC BAT
+          #
+          # Ba action nay nam trong khoi Deny ben duoi khi stage tat. Do
+          # la mot mau thuan CO THAT ma ban dau toi de lai: stage sec-ou
+          # duoc them de quan cay OU, con IAM thi Deny dung nhung action
+          # no can. Bat stage len se trot voi AccessDenied tren
+          # UpdateOrganizationalUnit - va nguoi doc log se di tim loi
+          # trong code OU, khong tim o day.
+          #
+          # Hai phia phai doi cung luc, nen ca hai deu doc
+          # var.enable_ou_stage. Deny thang Allow trong IAM, nen KHONG du
+          # neu chi them vao Allow.
+          ####################################
+          var.enable_ou_stage ? [
+            "organizations:CreateOrganizationalUnit",
+            "organizations:UpdateOrganizationalUnit",
+            "organizations:DeleteOrganizationalUnit",
+        ] : [])
         Resource = "*"
       },
       {
         Sid    = "TuChoiViecNgoaiPhamVi"
         Effect = "Deny"
-        Action = [
+        Action = concat([
           "organizations:CreateAccount",
           "organizations:CloseAccount",
           "organizations:MoveAccount",
           "organizations:RemoveAccountFromOrganization",
-          "organizations:CreateOrganizationalUnit",
-          "organizations:UpdateOrganizationalUnit",
-          "organizations:DeleteOrganizationalUnit",
+
+          # EnablePolicyType / DisablePolicyType KHONG BAO GIO duoc mo,
+          # ke ca khi stage sec-tagging bat. DisablePolicyType khong xoa
+          # policy nao - no lam TOAN BO mot loai policy thoi co hieu luc,
+          # va console van hien day du danh sach SCP.
           "organizations:EnablePolicyType",
           "organizations:DisablePolicyType",
+
           "organizations:RegisterDelegatedAdministrator",
           "organizations:DeregisterDelegatedAdministrator",
           "organizations:LeaveOrganization",
           "organizations:DeleteOrganization",
-        ]
+          ],
+          # Cay OU: Deny khi stage sec-ou TAT.
+          var.enable_ou_stage ? [] : [
+            "organizations:CreateOrganizationalUnit",
+            "organizations:UpdateOrganizationalUnit",
+            "organizations:DeleteOrganizationalUnit",
+        ])
         Resource = "*"
       },
       ],
@@ -332,6 +360,21 @@ resource "aws_iam_role_policy" "pipeline" {
         ]
       },
       ],
+
+      ####################################
+      # BAO CO VIEC CAN DUYET
+      #
+      # HAI PHIA phai mo: cai nay (IAM cua role pipeline) va topic policy
+      # o approval.tf. Mot phia mo mot minh thi KHONG co loi nao ca -
+      # pipeline chi lang le khong gui thu, va cong duyet treo o do cho
+      # toi khi het gio 7 ngay. Cung khuon voi SNS lien account, loi 82.
+      ####################################
+      length(var.approve_stages) == 0 ? [] : [{
+        Sid      = "BaoCoViecCanDuyet"
+        Effect   = "Allow"
+        Action   = ["sns:Publish"]
+        Resource = aws_sns_topic.approval[0].arn
+      }],
       var.source_type == "codecommit" ? [{
         Effect = "Allow"
         Action = [

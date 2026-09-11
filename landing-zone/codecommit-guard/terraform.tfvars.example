@@ -1,0 +1,72 @@
+########################################
+# cp -n terraform.tfvars.example terraform.tfvars
+#
+# CHOT DUYET CHO REPO CODECOMMIT - chay o ACCOUNT MANAGEMENT.
+########################################
+
+# MAC DINH TAT.
+#
+# Bat cai nay lam mot viec khong hoan tac duoc bang Terraform: nguoi lam
+# viec hang ngay se khong push thang vao nhanh chinh duoc nua. Khai
+# pool_duyet sai thi khong ai merge duoc gi, ke ca ban - va duong sua la
+# vao IAM console thao policy ra bang tay.
+#
+# Doc output `phai_lam_gi` truoc khi bat.
+enable = false
+
+region      = "ap-southeast-1"
+project     = "qh11-lz"
+cost_center = "CC-0000"
+owner       = "platform@example.com"
+
+########################################
+# REPO VA NHANH
+#
+# PHAI khop voi ca hai pipeline. Bao ve sai nhanh la truong hop te nhat:
+# apply thanh cong, approval rule co that, duong chay that van khong bi
+# chan.
+#
+#   aws codecommit list-repositories --region ap-southeast-1
+#   grep branch_name ../ops-pipeline/terraform.tfvars
+########################################
+
+repository_name = "diy-aws-landing-zone"
+branch_name     = "main"
+
+########################################
+# AI DUOC DUYET - DO, KHONG DOAN
+#
+# Nho mot nguoi trong doi bao mat dang nhap roi chay:
+#
+#   aws sts get-caller-identity --query Arn --output text
+#
+# Ket qua co dang:
+#   arn:aws:sts::609320954321:assumed-role/AWSReservedSSO_lz-sec_abc123/ten.nguoi
+#
+# Doi phan cuoi thanh * de trum ca doi.
+#
+# HAU TO _abc123 do Identity Center sinh va no DOI khi permission set
+# duoc tao lai. Luc do pool thanh rong ma KHONG co loi nao - moi PR chi
+# lang le khong du luot duyet.
+########################################
+
+pool_duyet = []
+# pool_duyet = [
+#   "arn:aws:sts::609320954321:assumed-role/AWSReservedSSO_TEN-PERMISSION-SET-THAT_HAUTO/*",
+# ]
+
+so_nguoi_duyet = 1
+
+########################################
+# SAU KHI APPLY: MOI XONG MOT NUA
+#
+# Approval rule ap dung cho PULL REQUEST. No KHONG chan push truc tiep.
+#
+#   terraform output policy_chan_push_arn
+#   # -> gan vao permission set cua NGUOI PHAT TRIEN, khong gan vao role
+#   #    cua pipeline (pipeline chi doc repo)
+#
+# Roi chay ba phep thu trong `terraform output phai_lam_gi`. Phep thu
+# thu BA - merge khi chua du luot duyet - la phep duy nhat chung minh
+# chot duyet co hieu luc. Hai phep dau chi chung minh no ton tai.
+########################################
