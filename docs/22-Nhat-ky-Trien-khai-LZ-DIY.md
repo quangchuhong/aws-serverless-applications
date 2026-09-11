@@ -3859,6 +3859,77 @@ Một giới hạn đã biết, ghi để không thành nợ im lặng: bước 
 
 ---
 
+### Lỗi 117 — `list(any)` không phải "danh sách gì cũng được"
+
+Tách `modules/tf-pipeline/` để hai phòng ban mỗi phòng một pipeline. Hai biến nhận IAM statement được khai:
+
+```hcl
+variable "quyen_dich_vu" { type = list(any) }
+```
+
+`terraform plan` trên máy người vận hành:
+
+```
+Error: Invalid value for input variable
+  on main.tf line 290, in module "pipeline":
+  quyen_dich_vu = local.quyen_dich_vu
+element types must all match for conversion to list
+```
+
+`list(any)` **hợp nhất type của mọi phần tử**, và thất bại nếu chúng khác hình. IAM statement thì **luôn** khác hình: một cái có `Condition`, cái khác không; `Action` là `["a","b"]` ở chỗ này và `concat(...)` độ dài chưa biết ở chỗ kia; `Resource` là chuỗi ở chỗ này, danh sách ở chỗ kia.
+
+Và thông báo nói về **"list"**, không nói về IAM. Đọc nó xong vẫn không biết phải sửa gì. `any` thì không hợp nhất gì — giá trị đi thẳng vào `jsonencode`, và `jsonencode` nhận mọi hình.
+
+**Điều đáng ghi là vì sao tôi không tự bắt được.** Đây là lỗi chuyển đổi type của biến module, và chỉ `terraform validate` / `plan` thấy — cả hai đòi provider tải từ `registry.terraform.io`, bị chặn trong môi trường tôi chạy. Nên toàn bộ 2000 dòng HCL được tái cấu trúc mà không một lần `validate`.
+
+Thứ thay thế được viết ra vì thiếu `validate`: `landing-zone/kiem-module.py`, sáu phép kiểm không cần mạng — dùng `var.X` không khai, khai không dùng, truyền input module không có, biến bắt buộc không truyền, đọc output module không có, dùng `local.X` không khai. **Nó tự sai ba lần, và cả ba đúng dạng khuyết điểm của dự án này:**
+
+| Lỗi của bộ kiểm | Nó kết luận sai điều gì |
+|---|---|
+| chạy từ thư mục khác → `glob` rỗng | chạy 6 phép trên chuỗi rỗng rồi in *"Khớp hết"* |
+| strip cả chuỗi thường → mọi `${var.x}` biến mất | *"khai biến không dùng"* trên 7 biến đang dùng |
+| bắt `locals {` **đầu tiên** (ở `codebuild.tf`) | mọi local của `main.tf` thành *"không khai"* |
+
+Sau khi sửa, thêm phép kiểm thứ bảy: kêu khi một biến module dùng `type = list(any)`. Bài học được mã hoá, không để trong đầu.
+
+#### Một phép đột biến THẤT BẠI, và nó nói về code chứ không về bộ kiểm
+
+Bỏ `layer_keys = var.layer_keys` khỏi module block → bộ kiểm báo *"Khớp hết"*. Đúng, vì module có:
+
+```hcl
+default = { "landing-zone/organization" = "organization/terraform.tfstate" }
+```
+
+Mặc định đó vô hại khi file chỉ thuộc **một** pipeline. Khi nó thành module **dùng chung** thì nó là cái bẫy: pipeline của cloudops quên truyền `layer_keys` sẽ **lặng lẽ** dùng khoá state của layer `organization`, và các stage của nó plan trên state của SCP.
+
+Và chính mô tả của biến đó đã nói vì sao: *"Sai khoá thì Terraform mở một state RỖNG: plan đòi tạo lại toàn bộ"*. **Một mặc định ở đây là một cách sai khoá mà không ai gõ sai gì.**
+
+Bỏ default → đột biến chạy lại → bắt được. Một đột biến không bắt được đôi khi nói về **code**, không về bộ kiểm.
+
+#### Kết quả — `0 to destroy`, và một con số tôi đưa sai
+
+30 khối `moved` cho 30 resource. Plan: `3 to add, 2 to change, **0 to destroy**`. Apply: `3 added, 2 changed, 0 destroyed` — KMS key giữ nguyên `7652dca8-…`, bucket artifact giữ nguyên tên.
+
+Nhưng tôi nói *"số dòng chuyển địa chỉ phải là 30, ít hơn nghĩa là một khối không khớp"*. Thực tế **25**, và 25 là đúng: 5 khối còn lại không có nguồn trong state (`aws_sns_topic.drift` + subscription vì `drift_topic_arn` đã khai nên `count = 0`; ba resource approval vì chúng đang được **tạo**, không phải chuyển). Một `moved` trỏ vào địa chỉ không có trong state là hợp lệ và im lặng — nên phép đếm đó **không phân biệt được** "không có gì để chuyển" với "gõ sai địa chỉ". Con số nói được điều đó là `0 to destroy`.
+
+Lần thứ hai trong cùng ngày tôi đưa một con số làm mốc mà nó sinh từ một lệnh khác: trong log CodeBuild, `gate.py` in `21 resource trong ban plan` còn tôi bảo chờ `25`. `25` lấy từ bản plan chạy tay **không có `-target`**; plan trong pipeline **có**. Chênh đúng 4, và giải được: 12 instance được target, cộng 8 OU + 1 organization mà attachment phụ thuộc vào; loại 3 `delegated_administrator` và `terraform_data.scp_guard`. `25 − 4 = 21`.
+
+**Dạng lỗi:** so hai con số sinh từ hai lệnh khác nhau. Mốc đúng không phải con số tuyệt đối mà là quan hệ — `0 co thay doi`, `0 to destroy`.
+
+#### Cổng duyệt: đo được là nó GIỮ, không chỉ là nó tồn tại
+
+```
+22:25:13  Plan   Succeeded
+22:29:26  Duyet  Succeeded   Approved by …/AWSReservedSSO_lz-account-admin_…/quang
+22:30:29  Apply  Succeeded   (run_order 3)
+```
+
+Bốn phút giữa `Plan` và `Duyet` là phép đo: cổng chặn thật, không đi qua. Và `summary` ghi **ai** duyệt — dấu vết mà `FAIL_ON_DESTROY` không bao giờ tạo được.
+
+Một chi tiết về phương pháp: truy vấn token bằng CLI ra `None`, vì lúc đó người dùng đã duyệt trong console. Nên đường duyệt bằng CLI **chưa được kiểm**, không phải *đã sai*. Hai điều đó khác nhau, và không có cơ sở nào để chọn một trong hai.
+
+---
+
 ### Ghi chú — hai lỗi của chính công cụ đọc log, cùng một dạng
 
 `log.sh` viết ra để khỏi phải lần mò lấy log lần thứ năm. Nó hỏng hai lần, và cả hai lần đều **kết luận chắc chắn một điều sai**:
