@@ -164,13 +164,41 @@ variable "drift_cron" {
   default     = "cron(0 19 * * ? *)"
 }
 
+variable "drift_emails" {
+  description = <<-EOT
+    Dia chi nhan bao drift. Khai o day thi layer nay TU TAO topic o
+    account management.
+
+    NEN DUNG CACH NAY thay vi drift_topic_arn tro sang account khac.
+    Publish lien account can CA HAI phia cho phep: IAM cua role o day,
+    VA resource policy cua topic ben kia. Topic cua config-detective
+    chi cho Principal = events.amazonaws.com, nen mot ARN tro sang do
+    se bi tu choi - va buoc drift se in "khong bao duoc ve SNS" moi
+    dem ma khong ai doc.
+
+    Moi dia chi nhan mot thu tu SNS va PHAI BAM XAC NHAN. Truoc do
+    subscription o PendingConfirmation va khong nhan gi - Terraform van
+    bao tao thanh cong.
+  EOT
+  type        = list(string)
+  default     = []
+}
+
 variable "drift_topic_arn" {
   description = <<-EOT
-    SNS topic nhan bao khi phat hien drift. De rong = khong ai duoc
-    bao, va buoc drift chi con la mot dong log luc 2 gio sang.
+    Dung mot topic CO SAN thay vi tao moi. Loai tru voi drift_emails.
 
-    Dung duoc topic cua layer khac:
-      cd ../config-detective && terraform output -raw alarm_topic_arn
+    Neu topic nam o ACCOUNT KHAC thi phai tu them statement cho phep
+    role cua layer nay publish - Terraform o day khong sua duoc
+    resource policy cua topic o account khac.
+
+    Lay ARN topic cua config-detective (o account security):
+      cd ../config-detective && terraform output alert_topic
+
+    LUU Y ten: topic do la "<project>-security-findings", va output ten
+    la `alert_topic`. Dung doan ten - mot ARN go tay trong nhu that se
+    duoc dung nhu that, va loi duy nhat la mot dong canh bao trong log
+    luc 2 gio sang.
   EOT
   type        = string
   default     = ""

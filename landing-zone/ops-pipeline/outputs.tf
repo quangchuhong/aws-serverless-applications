@@ -61,7 +61,7 @@ output "drift_project" {
   value = local.enabled ? {
     ten    = aws_codebuild_project.drift[0].name
     lich   = var.drift_cron
-    bao_ve = var.drift_topic_arn == "" ? "KHONG BAO AI - drift_topic_arn de rong" : var.drift_topic_arn
+    bao_ve = local.drift_topic == "" ? "KHONG BAO AI - chua khai drift_emails hay drift_topic_arn" : local.drift_topic
     chay_tay = join(" ", [
       "aws codebuild start-build --project-name",
       aws_codebuild_project.drift[0].name,

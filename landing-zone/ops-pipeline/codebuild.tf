@@ -162,7 +162,7 @@ resource "aws_codebuild_project" "drift" {
     }
     environment_variable {
       name  = "DRIFT_TOPIC_ARN"
-      value = var.drift_topic_arn
+      value = local.drift_topic
     }
 
     # Danh sach "<duong dan layer>=<khoa state>", cach nhau bang dau

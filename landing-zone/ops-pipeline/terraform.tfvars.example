@@ -97,11 +97,27 @@ tfvars_bucket = ""
 
 drift_cron = "cron(0 19 * * ? *)"
 
-# De rong thi buoc drift van chay nhung KHONG bao ai - no chi con la
-# mot dong log luc 2 gio sang. Dung duoc topic co san:
-#   cd ../config-detective && terraform output -raw alarm_topic_arn
+# CACH DUOC KHUYEN: khai dia chi, layer nay tu tao topic o account
+# management. Khong co phu thuoc lien account nao.
+#
+# Moi dia chi nhan mot thu tu SNS va PHAI BAM XAC NHAN. Truoc do
+# subscription o PendingConfirmation va khong nhan gi - Terraform van
+# bao tao thanh cong.
+drift_emails = []
+# drift_emails = ["DIA-CHI-CUA-BAN@example.com"]
+
+# Cach kia: dung mot topic CO SAN. Loai tru voi drift_emails.
+#
+# NEU TOPIC O ACCOUNT KHAC thi phai TU them statement cho phep role cua
+# layer nay publish - Terraform o day khong sua duoc resource policy
+# cua topic o account khac. Topic cua config-detective nam o account
+# security va chi cho Principal = events.amazonaws.com, nen mot ARN tro
+# sang do se bi tu choi, va loi duy nhat la mot dong canh bao trong log
+# luc 2 gio sang.
+#
+# LAY ARN THAT, DUNG GO TAY:
+#   cd ../config-detective && terraform output alert_topic
 drift_topic_arn = ""
-# drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:qh11-lz-security-alerts"
 
 ########################################
 # 5. NGUONG

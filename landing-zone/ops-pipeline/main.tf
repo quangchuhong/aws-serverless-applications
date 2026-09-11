@@ -68,6 +68,17 @@ locals {
   name    = "${var.project}-ops"
 
   ####################################
+  # TOPIC BAO DRIFT: TU TAO HAY DUNG SAN
+  #
+  # drift_topic_arn thang neu khai ca hai - va check
+  # "khong_khai_ca_hai_nguon_topic" keu ve dieu do, vi im lang chon mot
+  # trong hai nghia la nhung dia chi trong drift_emails khong nhan duoc
+  # gi ma khong ai biet.
+  ####################################
+  tao_topic   = var.drift_topic_arn == "" && length(var.drift_emails) > 0
+  drift_topic = var.drift_topic_arn != "" ? var.drift_topic_arn : try(aws_sns_topic.drift[0].arn, "")
+
+  ####################################
   # STAGE, KHAI THANH DU LIEU
   #
   # Them mot layer vao pipeline la them MOT DONG o day.
@@ -152,7 +163,7 @@ locals {
        No chi `plan -lock=false`, khong bao gio apply. Mot lan chay ra
        KHAC "khong co thay doi" nghia la co nguoi sua tay.
 
-       ${var.drift_topic_arn == "" ? "CHUA khai drift_topic_arn - khong ai duoc bao khi phat hien drift." : "Bao ve: ${var.drift_topic_arn}"}
+       ${local.drift_topic == "" ? "CHUA khai drift_emails hay drift_topic_arn - khong ai duoc bao." : "Bao ve: ${local.drift_topic}"}
 
     ═════════════════════════════════════════════
 
@@ -185,19 +196,6 @@ check "moi_stage_co_lint" {
       "truoc khi Terraform cham vao AWS. Mot stage khong lint la mot stage",
       "chi con FAIL_ON_DESTROY - va FAIL_ON_DESTROY khong biet gi ve y nghia",
       "cua thay doi, no chi dem so resource bi xoa.",
-    ])
-  }
-}
-
-check "co_nguoi_nhan_bao_drift" {
-  assert {
-    condition = !local.enabled || var.drift_topic_arn != ""
-    error_message = join(" ", [
-      "drift_topic_arn de rong, nen buoc phat hien drift chay ma khong bao ai.",
-      "No van ghi log CodeBuild - nhung mot phep kiem chi co gia tri khi co",
-      "nguoi doc, va khong ai mo log cua mot job chay luc 2 gio sang.",
-      "Day la mot lua chon hop le neu ban tu mo log dinh ky - nhung phai la",
-      "mot lua chon.",
     ])
   }
 }

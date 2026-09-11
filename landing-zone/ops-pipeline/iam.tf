@@ -228,11 +228,11 @@ resource "aws_iam_role_policy" "codebuild" {
       }],
 
       # Bao drift. Chi Publish, dung topic da khai.
-      var.drift_topic_arn == "" ? [] : [{
+      local.drift_topic == "" ? [] : [{
         Sid      = "BaoDrift"
         Effect   = "Allow"
         Action   = ["sns:Publish"]
-        Resource = var.drift_topic_arn
+        Resource = local.drift_topic
     }])
   })
 }
