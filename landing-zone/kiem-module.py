@@ -88,6 +88,24 @@ bat_buoc={m.group(1) for m in re.finditer(r'variable "([a-z_]+)" \{(.*?)\n\}\n',
           if not re.search(r'^\s+default\s*=', m.group(2), re.M)}
 if bat_buoc-truyen: loi.append(f"bien module BAT BUOC ma caller khong truyen: {sorted(bat_buoc-truyen)}")
 
+# 7. `list(any)` - CAI BAY BUOC MOI PHAN TU CUNG MOT TYPE
+#
+# list(any) khong phai "danh sach gi cung duoc": Terraform hop nhat type
+# cua moi phan tu, va that bai neu chung khac hinh. Voi IAM statement thi
+# chung LUON khac hinh - mot cai co Condition, cai khac khong; Action la
+# ["a","b"] o cho nay va concat(...) o cho kia.
+#
+# Thong bao khi vuong noi ve "list", khong noi ve IAM:
+#   element types must all match for conversion to list
+#
+# Da vuong that o lan plan dau tien sau khi tach module. `any` khong hop
+# nhat gi, va gia tri di thang vao jsonencode - nhan moi hinh.
+for m in re.finditer(r'variable "([a-z_]+)" \{(.*?)\n\}\n', mt_raw, re.S):
+    if re.search(r'^\s+type\s*=\s*list\(any\)', m.group(2), re.M):
+        loi.append(f"module: var.{m.group(1)} dung type = list(any) - "
+                   "buoc moi phan tu cung mot type. Dung `any` neu cac phan tu "
+                   "khac hinh (vi du IAM statement).")
+
 ref=set(re.findall(r'module\.pipeline\.([a-z_]+)', ct))
 if ref-outs(mt_raw): loi.append(f"caller doc output module khong co: {sorted(ref-outs(mt_raw))}")
 

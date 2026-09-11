@@ -448,7 +448,31 @@ variable "quyen_dich_vu" {
     BO state cua layer. Nen o day phai co ca quyen DOC rong cho dich vu
     do, khong chi quyen ghi hep.
   EOT
-  type        = list(any)
+
+  ####################################
+  # `any`, KHONG PHAI `list(any)`
+  #
+  # list(any) buoc MOI PHAN TU phai cung mot type. IAM statement thi hop
+  # le khi khac hinh:
+  #
+  #   mot statement co Condition, mot cai khong
+  #   Action la ["a","b"] o cho nay, va concat(...) do dai chua biet o
+  #   cho kia
+  #   Resource la chuoi o cho nay, la danh sach o cho kia
+  #
+  # Terraform khong hop nhat duoc, va no bao:
+  #
+  #   Error: Invalid value for input variable
+  #   element types must all match for conversion to list
+  #
+  # Mot thong bao noi ve "list" chu khong noi rang IAM statement khong
+  # the cung hinh. Da vuong that o lan plan dau tien sau khi tach module.
+  #
+  # `any` khong hop nhat gi. Gia tri di thang vao jsonencode trong
+  # iam.tf, va jsonencode nhan moi hinh.
+  ####################################
+  type    = any
+  default = []
 }
 
 variable "tu_choi_dich_vu" {
@@ -463,6 +487,8 @@ variable "tu_choi_dich_vu" {
     Rong la hop le, nhung hay tu hoi lai: mot pipeline khong co Deny nao
     la mot pipeline ma ranh gioi chi ton tai trong dau nguoi viet no.
   EOT
-  type        = list(any)
-  default     = []
+
+  # `any` chu khong list(any) - xem ly do o var.quyen_dich_vu.
+  type    = any
+  default = []
 }
