@@ -85,6 +85,11 @@ resource "aws_codebuild_project" "terraform" {
       value = ""
     }
 
+    environment_variable {
+      name  = "GATE_STAGE"
+      value = "chua-dat"
+    }
+
     # Pipeline nay KHONG co cong duyet, nen day la lop bu: plan co xoa
     # hoac thay the thi dung ngay o buoc plan. Xem main.tf.
     environment_variable {
@@ -106,6 +111,62 @@ resource "aws_codebuild_project" "terraform" {
   source {
     type      = "CODEPIPELINE"
     buildspec = file("${path.module}/templates/buildspec-terraform.yml")
+  }
+}
+
+########################################
+# CATALOG - LINT OFFLINE VA BAO CAO HET HAN
+#
+# Tach khoi project terraform vi no khac o dieu quan trong nhat: no
+# KHONG co backend, KHONG co tfvars, KHONG goi AWS, va khong cai
+# Terraform. Nen no chay duoc o DAU pipeline, truoc khi bat ky layer nao
+# duoc init.
+#
+# Do la ca ly do ton tai cua no: mot loi schema o catalog cua layer thu
+# ba phai dung pipeline TRUOC khi stage dau cham vao AWS - khong phai o
+# stage thu ba, sau khi hai stage dau da apply xong.
+########################################
+
+resource "aws_codebuild_project" "catalog" {
+  count = local.enabled ? 1 : 0
+
+  name          = "${local.name}-catalog"
+  description   = "Lint offline moi catalog + bao cao loosen het han. Khong goi AWS."
+  service_role  = aws_iam_role.codebuild[0].arn
+  build_timeout = 15
+
+  artifacts { type = "CODEPIPELINE" }
+
+  environment {
+    compute_type = "BUILD_GENERAL1_SMALL"
+    image        = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
+    type         = "LINUX_CONTAINER"
+
+    # Gia tri MAC DINH. Hai action trong pipeline de len nhung cai chung
+    # can - xem pipeline.tf.
+    environment_variable {
+      name  = "MODE"
+      value = "lint"
+    }
+    environment_variable {
+      name  = "JOBS"
+      value = local.lint_jobs
+    }
+    environment_variable {
+      name  = "CHAN"
+      value = "no"
+    }
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name = aws_cloudwatch_log_group.build[0].name
+    }
+  }
+
+  source {
+    type      = "CODEPIPELINE"
+    buildspec = file("${path.module}/templates/buildspec-catalog.yml")
   }
 }
 

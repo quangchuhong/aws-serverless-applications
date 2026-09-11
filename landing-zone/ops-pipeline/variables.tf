@@ -227,3 +227,98 @@ variable "log_retention_days" {
   type    = number
   default = 90
 }
+
+########################################
+# BAT/TAT TUNG STAGE
+#
+# Mac dinh TAT het tru A-scp. Mot stage tro vao layer chua ton tai, hoac
+# vao layer co state RONG, se dung o chot chan "state RONG" cua
+# buildspec - va thong bao o do noi ve SAI KHOA STATE chu khong noi rang
+# layer chua duoc dung. Doc log do se dan nguoi ta di sua backend, dung
+# cho khong hong.
+#
+# Nen ba bien duoi day khong phai co cho sang trong: chung la cach noi
+# "layer nay da ton tai va da apply mot lan".
+########################################
+
+variable "enable_config_rules_ops" {
+  description = <<-EOT
+    Bat stage B-config-rules (layer landing-zone/config-detective/ops).
+
+    CAN TRUOC KHI BAT:
+
+      1. Layer do ton tai va da apply mot lan (state khong rong).
+      2. Role CodeBuild cua pipeline nay assume duoc vao ACCOUNT
+         SECURITY. Config rule song o do - aggregator-rules.tf:80 ghi
+         `provider = aws.security`.
+
+    Diem 2 la ly do that su cua viec bien nay mac dinh false. Hom nay o
+    account security chi co OrganizationAccountAccessRole, tuc FULL
+    ADMIN. Cap cho pipeline quyen do de sua Config rule la cap quyen sua
+    moi thu trong account bao mat.
+
+    Duong dung: mot role rieng cho pipeline, day xuong bang CloudFormation
+    StackSet, chi co quyen tren Config. Viec do da hoan lai den sau phep
+    do app-prod-5.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "enable_permission_set_ops" {
+  description = <<-EOT
+    Bat stage C-permission-set-assignment (layer
+    landing-zone/permission-sets/ops).
+
+    Layer nay chay trong CHINH account management nen KHONG can role lien
+    account. Dieu duy nhat can truoc khi bat: layer ton tai va da apply
+    mot lan.
+
+    Pham vi cua no la "ai vao account nao" - assignment va thanh vien
+    group. Noi dung quyen nam o layer cha va KHONG di qua pipeline.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "enable_network_ops" {
+  description = <<-EOT
+    Bat stage D-network-ops (layer landing-zone/network/ops).
+
+    Layer nay DA co state rieng tu truoc va da tung apply
+    (bootstrap_done = true). Ly do no mac dinh tat la khac hai cai tren:
+    state dang RONG vi layer network vua bi xoa de do tien.
+
+    Dung lai network roi hay bat:
+
+      cd ../network && terraform apply
+      cd ops && terraform apply
+      terraform state list | wc -l     # phai khac 0
+  EOT
+  type        = bool
+  default     = false
+}
+
+########################################
+# STAGE Expiry
+########################################
+
+variable "expiry_blocks_pipeline" {
+  description = <<-EOT
+    Mot khoi `loosen` HET HAN co lam pipeline dung hay khong.
+
+    false (mac dinh) = stage Expiry chi BAO CAO. Dung voi chu "bao cao"
+    trong thiet ke, va dung voi mo ta cua lint.sh: che do --expiry sinh
+    ra cho mot job chay theo lich, khong cho duong apply.
+
+    NHUNG PHAI BIET DIEU NAY: mot stage khong bao gio that bai la mot
+    stage khong ai doc ket qua. Neu de false thi phep thi hanh THAT phai
+    nam o job drift hang dem - va phai co nguoi doc bao dong cua no.
+    Khong co ca hai thi moi khoi loosen deu song vinh vien.
+
+    true = het han thi dung pipeline. Chon cai nay khi khong chac co ai
+    doc bao cao hang dem.
+  EOT
+  type        = bool
+  default     = false
+}

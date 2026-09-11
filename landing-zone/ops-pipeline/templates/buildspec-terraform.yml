@@ -213,6 +213,43 @@ phases:
 
           echo "== tom tat: ${TAO} tao, ${SUA} sua, ${XOA} xoa, ${THAY} thay the"
 
+          # --------------------------------------------------
+          # CONG CHAN: DOC BAN PLAN, PHAN LOAI THAT / NOI
+          #
+          # FAIL_ON_DESTROY o duoi chi DEM so resource bi xoa. No khong
+          # biet `+ aws_ssoadmin_account_assignment` nghia la mot group
+          # vua vao duoc mot account moi - mot thay doi 0 xoa, 0 thay
+          # the, va no la mot cap quyen.
+          #
+          # gate.py doc before/after cua tung thuoc tinh, va no biet
+          # chieu khac nhau giua cac dich vu: xoa mot Deny la NOI, con
+          # TAO mot assignment cung la NOI.
+          #
+          # Chay TRUOC FAIL_ON_DESTROY: khi ca hai deu chan, thong bao
+          # cua gate.py noi duoc VI SAO, con FAIL_ON_DESTROY chi noi
+          # duoc BAO NHIEU.
+          # --------------------------------------------------
+          terraform show -json tfplan > tfplan.json
+
+          GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-pipeline/gate/gate.py"
+          if [ ! -f "$GATE" ]; then
+            echo "LOI: khong thay $GATE"
+            echo "     Cong chan la lop kiem duy nhat o pipeline nay doc duoc"
+            echo "     Y NGHIA cua thay doi. Thieu no thi chi con phep dem."
+            exit 1
+          fi
+
+          LOOSEN=""
+          if [ -f ops-loosen.yaml ]; then
+            LOOSEN="--loosen ops-loosen.yaml"
+          fi
+
+          python3 "$GATE" \
+            --plan tfplan.json \
+            --layer "${LAYER_DIR}" \
+            --stage "${GATE_STAGE:-chua-dat}" \
+            --strict $LOOSEN
+
           if [ "$XOA" != "0" ] || [ "$THAY" != "0" ]; then
             echo ""
             echo "!!! PLAN NAY XOA ${XOA} VA THAY THE ${THAY} RESOURCE"

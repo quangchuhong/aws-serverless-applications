@@ -1,0 +1,143 @@
+version: 0.2
+
+# Lint OFFLINE moi catalog, hoac bao cao khoi `loosen` het han.
+#
+# KHONG Terraform. KHONG state. KHONG tfvars. KHONG goi AWS.
+#
+# Do la ca diem manh: stage nay chay duoc o dau pipeline, truoc khi bat
+# ky layer nao duoc init, nen mot loi schema o catalog cua layer thu ba
+# dung pipeline TRUOC khi stage dau cham vao AWS.
+#
+# Bien do pipeline.tf de len:
+#   MODE   lint | expiry
+#   JOBS   "<layer>=<lenh>;<layer>=<lenh>"  (';' vi lenh co dau cach)
+#   CHAN   yes | no   - che do expiry co lam stage that bai hay khong
+
+phases:
+  install:
+    commands:
+      - |
+        set -euo pipefail
+        # PyYAML: lint cua layer organization doc catalog YAML. Cai o day
+        # chu khong giua buoc lint - mot loi "thieu PyYAML" giua buoc
+        # lint doc nhu mot loi cua catalog.
+        pip3 install --quiet pyyaml
+
+  build:
+    commands:
+      - |
+        set -uo pipefail
+
+        echo "== Che do: ${MODE}"
+        echo ""
+
+        # ------------------------------------------------------
+        # JOBS RONG KHONG PHAI "KHONG CO GI DE KIEM"
+        #
+        # Neu local.catalogs rong, hoac bien bi de len thanh chuoi rong,
+        # thi vong lap duoi day chay 0 lan va stage nay THANH CONG - mot
+        # cong kiem bao dat vi no khong kiem gi.
+        #
+        # Day la khuyet diem da lap muoi lan trong du an nay (doc 22),
+        # nen no phai la loi cung o day.
+        # ------------------------------------------------------
+        if [ -z "${JOBS:-}" ]; then
+          echo "LOI: JOBS rong - khong co catalog nao de kiem."
+          echo ""
+          echo "     Day KHONG phai 'moi catalog deu sach' - la KHONG KIEM GI."
+          echo "     Xem local.catalogs trong ops-pipeline/main.tf."
+          exit 1
+        fi
+
+        # Bao nhieu job, dem TRUOC khi chay. So nay in ra o cuoi de so
+        # lai: chay it hon so khai la mot vong lap bi cat giua.
+        TONG=$(echo "${JOBS}" | tr ';' '\n' | grep -c . || true)
+        echo "   ${TONG} catalog"
+        echo ""
+
+        DA_CHAY=0
+        SO_HONG=0
+
+        # ------------------------------------------------------
+        # QUA FILE, KHONG QUA ONG
+        #
+        # `... | while read` chay vong lap trong MOT SHELL CON, nen moi
+        # phep tang DA_CHAY va SO_HONG o trong do bien mat khi ong dong.
+        # Ket qua: hai bien deu bang 0 sau vong lap, va `SO_HONG = 0`
+        # doc giong het mot lan chay sach.
+        #
+        # `done < file` thi vong lap chay trong shell hien tai.
+        # ------------------------------------------------------
+        echo "${JOBS}" | tr ';' '\n' | grep . > /tmp/jobs.txt || true
+
+        while IFS= read -r job; do
+          LAYER="${job%%=*}"
+          LENH="${job#*=}"
+
+          echo "────────────────────────────────────────────"
+          echo "== ${LAYER}"
+          echo "   ${LENH}"
+
+          if [ ! -d "${CODEBUILD_SRC_DIR}/${LAYER}" ]; then
+            echo "   LOI: khong co thu muc ${LAYER} trong ban checkout."
+            echo "        Kiem local.catalogs trong ops-pipeline/main.tf."
+            SO_HONG=$((SO_HONG + 1))
+            continue
+          fi
+
+          cd "${CODEBUILD_SRC_DIR}/${LAYER}"
+
+          # KHONG `set +e` / `set -e` quanh day: dau khoi nay la
+          # `set -uo pipefail`, tuc -e da TAT san. Viet `set -e` sau eval
+          # se BAT no len giua vong lap, va tu vong sau mot lenh tra ve
+          # khac 0 se giet ca script - ke ca mot lenh binh thuong.
+          eval "${LENH}"
+          RC=$?
+
+          DA_CHAY=$((DA_CHAY + 1))
+          if [ "$RC" -ne 0 ]; then
+            echo "   -> THOAT ${RC}"
+            SO_HONG=$((SO_HONG + 1))
+          else
+            echo "   -> sach"
+          fi
+        done < /tmp/jobs.txt
+
+        echo "────────────────────────────────────────────"
+        echo ""
+
+        # ------------------------------------------------------
+        # DEM LAI: CHAY DU SO KHAI CHUA
+        #
+        # Mot vong lap bi cat giua (thu muc thieu, eval chet bat thuong)
+        # se cho ra it job hon so da khai - va neu chi xem SO_HONG thi
+        # ket qua doc giong het mot lan chay sach.
+        # ------------------------------------------------------
+        echo "== ${DA_CHAY}/${TONG} catalog da kiem, ${SO_HONG} hong"
+
+        if [ "$DA_CHAY" != "$TONG" ]; then
+          echo ""
+          echo "LOI: khai ${TONG} catalog nhung chi kiem duoc ${DA_CHAY}."
+          echo "     Cho con lai KHONG phai 'sach' - la CHUA KIEM."
+          exit 1
+        fi
+
+        if [ "$SO_HONG" != "0" ]; then
+          if [ "${MODE}" = "expiry" ] && [ "${CHAN:-no}" != "yes" ]; then
+            echo ""
+            echo "CANH BAO: ${SO_HONG} catalog co khoi \`loosen\` HET HAN."
+            echo ""
+            echo "Stage nay dang o che do BAO CAO nen no khong dung pipeline."
+            echo "Nghia la phep thi hanh THAT phai nam o job drift hang dem,"
+            echo "va phai co nguoi doc bao dong cua no. Khong co ca hai thi moi"
+            echo "khoi loosen deu song vinh vien."
+            echo ""
+            echo "Muon no chan: expiry_blocks_pipeline = true"
+            exit 0
+          fi
+          echo ""
+          echo "LOI: ${SO_HONG} catalog khong sach."
+          exit 1
+        fi
+
+        echo "   Moi catalog sach."

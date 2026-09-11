@@ -312,10 +312,24 @@ resource "aws_iam_role_policy" "pipeline" {
         ]
         Resource = aws_kms_key.artifacts[0].arn
       },
+      ####################################
+      # HAI PROJECT, LIET KE CA HAI
+      #
+      # Thieu mot cai o day KHONG hong luc apply - no hong luc pipeline
+      # chay, va thong bao la AccessDenied tren StartBuild. Mot stage
+      # moi them ma quen dong nay se doc nhu la pipeline bi hong quyen,
+      # chu khong nhu la mot dong con thieu.
+      #
+      # Liet ke thay vi dung "*" tren moi project: role nay khong can
+      # khoi duoc bat ky build nao khac trong account.
+      ####################################
       {
-        Effect   = "Allow"
-        Action   = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
-        Resource = aws_codebuild_project.terraform[0].arn
+        Effect = "Allow"
+        Action = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
+        Resource = [
+          aws_codebuild_project.terraform[0].arn,
+          aws_codebuild_project.catalog[0].arn,
+        ]
       },
       ],
       var.source_type == "codecommit" ? [{

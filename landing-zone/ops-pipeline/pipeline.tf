@@ -6,12 +6,25 @@
 # Moi stage co HAI action: Plan roi Apply. Khong co action cho, khong
 # co cong duyet - xem main.tf.
 #
-# Lint KHONG la mot stage rieng: no chay trong CHINH action Plan cua
-# tung stage, truoc `terraform plan`. Ly do la lint cua moi layer doc
-# state cua layer do (organization/lint.sh --aws doi chieu voi policy
-# dang gan that), nen no can dung backend va dung credential ma action
-# do da co. Mot stage lint chung o dau pipeline se phai tu cau hinh
-# lai bon thu do cho tung layer.
+# HAI LINT, HAI CHO
+#
+# Khoi chu thich nay truoc day ghi rang lint "KHONG the la mot stage
+# rieng", va ly do neu ra la: lint doc state cua layer do nen no can
+# backend va credential ma action Plan da co.
+#
+# Ly do do dung - nhung chi cho `--aws`. Va no da lam bo mat mot thu:
+#
+#   Lint (offline)   stage RIENG o dau pipeline. Schema, sid trung, do
+#                    dai 5120, tu khoa chinh minh. Khong can AWS, khong
+#                    can state, khong can credential.
+#   Lint (--aws)     giu nguyen cho cu, trong action Plan cua tung
+#                    stage. No doi chieu voi policy DANG GAN THAT nen no
+#                    phai o noi co backend cua layer.
+#
+# Vi sao phai tach cai thu nhat ra: mot loi schema o catalog cua layer
+# THU BA se dung pipeline o stage thu ba - nghia la sau khi hai stage
+# dau DA APPLY. Mot loi doc duoc ma khong can AWS thi khong co ly do gi
+# de no duoc phat hien sau mot lan apply.
 ########################################
 
 resource "aws_codepipeline" "ops" {
@@ -62,6 +75,70 @@ resource "aws_codepipeline" "ops" {
   }
 
   ####################################
+  # LINT - MOI CATALOG, KHONG GOI AWS
+  #
+  # Dung TRUOC moi layer. Mot loi schema o day nghia la khong stage nao
+  # phia sau duoc chay, tuc khong co gi o AWS bi cham.
+  ####################################
+  stage {
+    name = "Lint"
+
+    action {
+      name            = "Lint"
+      category        = "Build"
+      owner           = "AWS"
+      provider        = "CodeBuild"
+      version         = "1"
+      run_order       = 1
+      input_artifacts = ["nguon"]
+
+      configuration = {
+        ProjectName = aws_codebuild_project.catalog[0].name
+        EnvironmentVariables = jsonencode([
+          { name = "MODE", value = "lint", type = "PLAINTEXT" },
+          { name = "JOBS", value = local.lint_jobs, type = "PLAINTEXT" },
+          { name = "CHAN", value = "yes", type = "PLAINTEXT" },
+        ])
+      }
+    }
+  }
+
+  ####################################
+  # EXPIRY - BAO CAO KHOI `loosen` HET HAN
+  #
+  # Mac dinh KHONG chan (xem var.expiry_blocks_pipeline). Mot stage
+  # khong bao gio that bai la mot stage khong ai doc ket qua, nen mo ta
+  # cua bien do noi ro: de false thi phep thi hanh THAT nam o job drift
+  # hang dem, va phai co nguoi doc bao dong cua no.
+  ####################################
+  dynamic "stage" {
+    for_each = local.expiry_jobs == "" ? [] : [1]
+
+    content {
+      name = "Expiry"
+
+      action {
+        name            = "Expiry"
+        category        = "Build"
+        owner           = "AWS"
+        provider        = "CodeBuild"
+        version         = "1"
+        run_order       = 1
+        input_artifacts = ["nguon"]
+
+        configuration = {
+          ProjectName = aws_codebuild_project.catalog[0].name
+          EnvironmentVariables = jsonencode([
+            { name = "MODE", value = "expiry", type = "PLAINTEXT" },
+            { name = "JOBS", value = local.expiry_jobs, type = "PLAINTEXT" },
+            { name = "CHAN", value = var.expiry_blocks_pipeline ? "yes" : "no", type = "PLAINTEXT" },
+          ])
+        }
+      }
+    }
+  }
+
+  ####################################
   # MOT STAGE MOI LAYER
   #
   # KHOA MANG SO THU TU - loi 113.
@@ -102,6 +179,9 @@ resource "aws_codepipeline" "ops" {
             { name = "TF_ACTION", value = "plan", type = "PLAINTEXT" },
             { name = "TF_TARGETS", value = join(" ", try(stage.value.targets, [])), type = "PLAINTEXT" },
             { name = "LINT_CMD", value = try(stage.value.lint, ""), type = "PLAINTEXT" },
+            # Khoa de gate.py tra bang PHAM_VI. Dung CHINH key cua stage
+            # nen khong co ban sao thu hai de lech.
+            { name = "GATE_STAGE", value = stage.value.key, type = "PLAINTEXT" },
           ])
         }
       }
