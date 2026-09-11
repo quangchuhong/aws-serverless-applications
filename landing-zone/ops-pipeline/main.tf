@@ -140,8 +140,46 @@ locals {
   # truoc, nhung state dang RONG vi network vua bi xoa de do tien.
   ####################################
   stages_all = [
+    ####################################
+    # OU - TRUOC SCP, VA THU TU DO CO LY DO DO DUOC
+    #
+    # Khoa cua aws_organizations_policy_attachment.scp la
+    # "<policy>|<TEN OU>" (xem local.ou_ids). Doi TEN mot OU khong doi id
+    # cua no o AWS, nhung doi KHOA trong Terraform - nen Terraform thay
+    # mot destroy + create tren cung mot OU id. Khong doi gi o AWS, va
+    # van la destroy, nen FAIL_ON_DESTROY se chan.
+    #
+    # Chan la dung. Dieu quan trong la chan trong CUNG mot luot:
+    #
+    #   OU truoc SCP   OU doi -> stage SCP ngay sau thay attachment phai
+    #                  thay the -> dung lai, co nguoi doc
+    #   SCP truoc OU   OU doi xong, khong co gi doi chieu lai attachment
+    #                  cho toi luot SAU. State va cau hinh lech nhau
+    #                  trong im lang suot khoang giua.
+    #
+    # GIU NGUYEN CODE TF CUA OU: khong catalog hoa, khong tach state.
+    # Stage nay chi -target vao resource da co.
+    ####################################
     {
-      key     = "A-scp"
+      key     = "A-ou"
+      layer   = "landing-zone/organization"
+      enabled = var.enable_ou_stage
+
+      targets = [
+        "aws_organizations_organizational_unit.level1",
+        "aws_organizations_organizational_unit.level2",
+      ]
+
+      # KHONG co catalog nen khong co lint offline. Phep kiem y nghia cho
+      # stage nay la gate.py: no biet xoa mot OU la NOI (account roi ve
+      # root, moi SCP gan vao OU do het ap dung) va doi parent_id la NOI.
+      khong_co_lint = "OU khong co catalog - phep kiem y nghia la gate.py, xem bang LUAT muc aws_organizations_organizational_unit"
+
+      mo_ta = "Cay OU. Xoa mot OU hoac doi parent_id la NOI."
+    },
+
+    {
+      key     = "B-scp"
       layer   = "landing-zone/organization"
       enabled = true
 
@@ -181,6 +219,36 @@ locals {
     },
 
     ####################################
+    # TAG POLICY - CUNG LAYER, CUNG STATE, PHAM VI KHAC
+    #
+    # aws_organizations_policy.tag CUNG TYPE voi
+    # aws_organizations_policy.scp. Nen bang PHAM_VI trong gate.py phai
+    # khop theo DIA CHI cho hai stage nay, khong khop theo type - neu
+    # khop theo type thi stage nay duoc phep sua SCP va nguoc lai, tuc
+    # dung cai ma pham vi ton tai de chan.
+    #
+    # MAC DINH TAT vi mot ly do do duoc, khong phai vi than trong:
+    # tag_policy.enabled = false o layer, nen hai resource nay dang co 0
+    # instance. Mot stage cho resource khong ton tai se ra
+    # "KHONG CO THAY DOI" mai mai - va mot stage luon xanh ma khong kiem
+    # gi la kieu hong im lang.
+    ####################################
+    {
+      key     = "C-tagging"
+      layer   = "landing-zone/organization"
+      enabled = var.enable_tagging_stage
+
+      targets = [
+        "aws_organizations_policy.tag",
+        "aws_organizations_policy_attachment.tag",
+      ]
+
+      khong_co_lint = "tag policy sinh tu var.tag_policy_keys chu khong tu catalog - phep kiem y nghia la gate.py, muc aws_organizations_policy_attachment"
+
+      mo_ta = "Tag policy. Go khoi mot target la NOI."
+    },
+
+    ####################################
     # permission-sets/ops - STATE RIENG
     #
     # CHI "ai vao account nao". Noi dung quyen o layer cha: doi mot
@@ -192,7 +260,7 @@ locals {
     # Chay trong CHINH account management, khong can role lien account.
     ####################################
     {
-      key     = "B-permission-set-assignment"
+      key     = "D-permission-set-assignment"
       layer   = "landing-zone/permission-sets/ops"
       enabled = var.enable_permission_set_ops
 
@@ -221,7 +289,7 @@ locals {
     # role da hoan lai den sau phep do app-prod-5.
     ####################################
     {
-      key     = "C-config-rules"
+      key     = "E-config-rules"
       layer   = "landing-zone/config-detective/ops"
       enabled = var.enable_config_rules_ops
 
@@ -244,7 +312,7 @@ locals {
     # khoa state.
     ####################################
     {
-      key     = "D-network-ops"
+      key     = "F-network-ops"
       layer   = "landing-zone/network/ops"
       enabled = var.enable_network_ops
 
@@ -343,12 +411,29 @@ check "khoa_state_khong_trung" {
   }
 }
 
+########################################
+# MOI STAGE PHAI CO lint, HOAC NOI RO VI SAO KHONG CO
+#
+# Khong phai stage nao cung co catalog. OU va tag policy khong co, nen
+# khong co lint offline cho chung - phep kiem y nghia cua chung la
+# gate.py, doc tu ban plan.
+#
+# Nhung "khong co lint" phai duoc VIET RA kem ly do, khong duoc la mot
+# truong bi bo trong. Mot truong bo trong doc giong het mot truong bi
+# quen, va cai thu hai la mot stage di qua ma khong ai kiem y nghia.
+########################################
 check "moi_stage_co_lint" {
   assert {
-    condition = length([for s in local.stages_all : s.key if try(s.lint, "") == ""]) == 0
+    condition = length([
+      for s in local.stages_all : s.key
+      if try(s.lint, "") == "" && try(s.khong_co_lint, "") == ""
+    ]) == 0
     error_message = join(" ", [
-      "Stage khong co lenh lint:",
-      join(", ", [for s in local.stages_all : s.key if try(s.lint, "") == ""]),
+      "Stage khong co lenh lint va cung khong khai khong_co_lint:",
+      join(", ", [
+        for s in local.stages_all : s.key
+        if try(s.lint, "") == "" && try(s.khong_co_lint, "") == ""
+      ]),
       ". Pipeline nay KHONG co cong duyet, nen lint la lop kiem duy nhat chay",
       "truoc khi Terraform cham vao AWS. Mot stage khong lint la mot stage",
       "chi con FAIL_ON_DESTROY - va FAIL_ON_DESTROY khong biet gi ve y nghia",

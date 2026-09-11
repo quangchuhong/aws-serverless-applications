@@ -200,3 +200,24 @@ expiry_blocks_pipeline = false
 #   "landing-zone/network/ops"               = "network-ops/terraform.tfstate"
 # }
 ########################################
+
+########################################
+# 8. HAI STAGE CUNG LAYER organization
+#
+# SCP, OU va tag policy CUNG mot layer, CUNG mot state. Tach o day la
+# tach PHAM VI (bang -target va bang PHAM_VI trong ops-gate/gate.py),
+# khong tach state.
+#
+# Thu tu chay: A-ou -> B-scp -> C-tagging. OU dat TRUOC SCP co ly do -
+# xem mo ta cua enable_ou_stage.
+########################################
+
+# Cay OU. Doi TEN mot OU se bi FAIL_ON_DESTROY chan o stage B-scp ngay
+# sau - do la co y, va do la ly do OU dat truoc SCP. Them OU moi thi
+# khong vuong.
+enable_ou_stage = false
+
+# Tag policy. Hien tag_policy.enabled = false o layer organization nen
+# hai resource nay co 0 instance - mot stage luon xanh ma khong kiem gi.
+#   cd ../organization && terraform output tag_policy
+enable_tagging_stage = false

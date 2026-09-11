@@ -345,13 +345,58 @@ LUAT = {
 # thu do DOI HANG NGAY. SCP doi nhieu nhung no la MOT resource trong mot
 # layer da co -target giu pham vi, nen tach state khong mua duoc gi.
 
+# MOT MUC LA TYPE, HAY LA TIEN TO DIA CHI
+#
+# Co dau `.` -> tien to DIA CHI ("aws_organizations_policy.scp").
+# Khong co   -> TYPE           ("aws_config_config_rule").
+#
+# Type khong co dau `.`, dia chi thi luon co, nen phep phan biet nay
+# khong nhap nhang.
+#
+# VI SAO CAN CA HAI: mot layer co the co hai resource CUNG TYPE thuoc hai
+# stage khac nhau. Layer organization la vi du that:
+#
+#   aws_organizations_policy.scp   SCP      -> stage SCP
+#   aws_organizations_policy.tag   tag      -> stage tagging
+#
+# Cung type `aws_organizations_policy`. Khop theo type thi hai stage do
+# co pham vi GIONG NHAU, tuc stage tagging duoc phep sua SCP va nguoc
+# lai - dung cai ma pham_vi ton tai de chan.
+
 PHAM_VI = {
     ####################################
-    # organization - sua tai cho, giu pham vi bang -target
+    # organization - MOT layer, MOT state, BA stage
+    #
+    # SCP, OU va tag policy nam cung mot layer va cung mot state. Chung
+    # KHONG tach ra thanh ba layer: tach state la them hai lan init, hai
+    # khoa, va hai cho de lech.
+    #
+    # Tach o day la tach PHAM VI, bang -target va bang bang nay.
+    #
+    # Thu tu chay: OU TRUOC SCP. Ly do do duoc: doi ten mot OU lam khoa
+    # cua aws_organizations_policy_attachment.scp doi theo (khoa la
+    # "<policy>|<ten OU>"), nen Terraform thay mot destroy + create -
+    # tren cung mot OU id, tuc khong doi gi o AWS, nhung VAN la destroy.
+    # FAIL_ON_DESTROY se chan no.
+    #
+    # Chan la dung. Dieu quan trong la chan trong CUNG mot luot chay:
+    # neu SCP chay truoc OU thi OU doi xong va khong co gi doi chieu lai
+    # attachment cho toi luot sau - state va cau hinh lech nhau trong im
+    # lang suot khoang giua.
     ####################################
-    "A-scp": [
-        "aws_organizations_policy",
-        "aws_organizations_policy_attachment",
+    "A-ou": [
+        "aws_organizations_organizational_unit.level1",
+        "aws_organizations_organizational_unit.level2",
+    ],
+
+    "B-scp": [
+        "aws_organizations_policy.scp",
+        "aws_organizations_policy_attachment.scp",
+    ],
+
+    "C-tagging": [
+        "aws_organizations_policy.tag",
+        "aws_organizations_policy_attachment.tag",
     ],
 
     ####################################
@@ -362,7 +407,7 @@ PHAM_VI = {
     # duoc chung la mot pipeline co the tat ca he thong phat hien cua to
     # chuc. Chung nam o layer cha, sua bang tay.
     ####################################
-    "C-config-rules": [
+    "E-config-rules": [
         "aws_config_organization_managed_rule",
         "aws_config_config_rule",
     ],
@@ -375,7 +420,7 @@ PHAM_VI = {
     # quyen cua MOI nguoi dang dung set do, o MOI account, ngay lap tuc.
     # Do khong phai viec hang ngay.
     ####################################
-    "B-permission-set-assignment": [
+    "D-permission-set-assignment": [
         "aws_ssoadmin_account_assignment",
         "aws_identitystore_group_membership",
     ],
@@ -383,7 +428,7 @@ PHAM_VI = {
     ####################################
     # network/ops - da co state rieng tu truoc
     ####################################
-    "D-network-ops": [
+    "F-network-ops": [
         "aws_route53_record",
         "aws_vpc_endpoint",
         "aws_route53_zone",
@@ -632,7 +677,20 @@ def main():
             "kiem duoc pham vi cho no. Them vao gate.py."
         )
     else:
-        ngoai = sorted({r["type"] for r in doi} - set(pham_vi))
+        # Tach bang thanh hai tap: type va tien to dia chi. Xem chu thich
+        # dau bang PHAM_VI.
+        cho_type = {p for p in pham_vi if "." not in p}
+        cho_dia_chi = tuple(p for p in pham_vi if "." in p)
+
+        def trong_pham_vi(r):
+            if r["type"] in cho_type:
+                return True
+            return bool(cho_dia_chi) and r["address"].startswith(cho_dia_chi)
+
+        # Bao theo DIA CHI, khong theo type: hai resource cung type ma
+        # khac stage thi mot thong bao noi ten type khong chi duoc ra cai
+        # nao dang ngoai pham vi.
+        ngoai = sorted({r["address"] for r in doi if not trong_pham_vi(r)})
         if ngoai:
             loi.append(
                 f"{R}NGOAI PHAM VI{N} cua stage {a.stage}: {', '.join(ngoai)}. "

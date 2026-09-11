@@ -322,3 +322,58 @@ variable "expiry_blocks_pipeline" {
   type        = bool
   default     = false
 }
+
+########################################
+# HAI STAGE CUNG LAYER organization
+#
+# SCP, OU va tag policy nam cung mot layer va CUNG MOT STATE. Chung
+# khong tach ra thanh ba layer - tach state la them hai lan init, hai
+# khoa, va hai cho de lech. Tach o day la tach PHAM VI, bang -target va
+# bang bang PHAM_VI trong ops-gate/gate.py.
+########################################
+
+variable "enable_ou_stage" {
+  description = <<-EOT
+    Bat stage A-ou: cay OU, cung layer organization.
+
+    GIU NGUYEN CODE TF CUA OU - khong catalog hoa, khong tach state.
+    Stage nay chi -target vao resource da co.
+
+    PHAI BIET TRUOC KHI BAT: doi TEN mot OU se bi chan, va chan o stage
+    B-scp chu khong o day.
+
+    Khoa cua aws_organizations_policy_attachment.scp la
+    "<policy>|<TEN OU>". Doi ten OU khong doi id cua no o AWS, nhung doi
+    khoa trong Terraform - nen Terraform thay mot destroy + create tren
+    cung mot OU id. Khong doi gi o AWS, va van la destroy, nen
+    FAIL_ON_DESTROY tu choi.
+
+    Do la ly do stage A-ou dat TRUOC B-scp: de viec chan xay ra trong
+    CUNG mot luot chay, co nguoi doc. Neu SCP chay truoc thi OU doi xong
+    va khong co gi doi chieu lai attachment cho toi luot sau.
+
+    THEM mot OU moi thi khong vuong dieu nay.
+  EOT
+  type        = bool
+  default     = false
+}
+
+variable "enable_tagging_stage" {
+  description = <<-EOT
+    Bat stage C-tagging: tag policy, cung layer organization.
+
+    MAC DINH TAT vi mot ly do do duoc, khong phai vi than trong:
+    tag_policy.enabled = false o layer organization, nen
+    aws_organizations_policy.tag dang co 0 instance.
+
+    Mot stage cho resource khong ton tai se ra "KHONG CO THAY DOI" mai
+    mai - va mot stage luon xanh ma khong kiem gi la kieu hong im lang.
+
+    Kiem truoc khi bat:
+
+      cd ../organization && terraform output tag_policy
+      # "enabled" = true  thi bat duoc
+  EOT
+  type        = bool
+  default     = false
+}

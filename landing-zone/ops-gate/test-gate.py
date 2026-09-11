@@ -55,7 +55,7 @@ def plan(*changes):
     return {"format_version": "1.2", "resource_changes": list(changes)}
 
 
-def chay(ten, mong, noi_dung, stage="A-scp", loosen=None, strict=False):
+def chay(ten, mong, noi_dung, stage="B-scp", loosen=None, strict=False):
     """noi_dung = dict plan, hoac chuoi tho, hoac None de khong tao file."""
     global dat, truot
     d = tempfile.mkdtemp()
@@ -152,26 +152,26 @@ TAO_GAN = rc('aws_ssoadmin_account_assignment.this["g|ps|111"]',
              before=None, after={"target_id": "111122223333"})
 
 chay("TAO account assignment     -> NOI, thoat 1", 1,
-     plan(NO_OP, TAO_GAN), stage="B-permission-set-assignment")
+     plan(NO_OP, TAO_GAN), stage="D-permission-set-assignment")
 
 # Va chieu con lai: bo mot assignment la THU HOI quyen - THAT.
 chay("XOA account assignment     -> sach", 0, plan(NO_OP,
      rc('aws_ssoadmin_account_assignment.this["g|ps|111"]',
         "aws_ssoadmin_account_assignment", ["delete"],
         before={"target_id": "111122223333"}, after=None)),
-     stage="B-permission-set-assignment")
+     stage="D-permission-set-assignment")
 
 chay("TAO group membership       -> NOI, thoat 1", 1, plan(NO_OP,
      rc('aws_identitystore_group_membership.this["a|b"]',
         "aws_identitystore_group_membership", ["create"],
         before=None, after={"member_id": "u-1"})),
-     stage="B-permission-set-assignment")
+     stage="D-permission-set-assignment")
 
 chay("XOA group membership       -> sach", 0, plan(NO_OP,
      rc('aws_identitystore_group_membership.this["a|b"]',
         "aws_identitystore_group_membership", ["delete"],
         before={"member_id": "u-1"}, after=None)),
-     stage="B-permission-set-assignment")
+     stage="D-permission-set-assignment")
 
 print()
 print("── THAY THE: xoa roi tao lai, ke ca khi ket qua giong het ──")
@@ -186,7 +186,7 @@ print("── PHAM VI: chot chan cho TF_TARGETS rong ──")
 
 # `terraform plan` KHONG bao loi khi TF_TARGETS rong - no chi plan CA
 # layer. Voi organization, ca layer nghia la cay OU.
-chay("OU doi trong stage A-scp   -> ngoai pham vi, thoat 1", 1, plan(NO_OP,
+chay("OU doi trong stage B-scp   -> ngoai pham vi, thoat 1", 1, plan(NO_OP,
      rc('aws_organizations_organizational_unit.level1["Sandbox"]',
         "aws_organizations_organizational_unit", ["update"],
         before={"name": "Sandbox", "parent_id": "r-1"},
@@ -198,6 +198,39 @@ chay("stage khong co + --strict  -> thoat 1", 1, plan(NO_OP),
      stage="Z-chua-khai", strict=True)
 
 print()
+print("── PHAM VI khop theo DIA CHI, khong theo type ──")
+print("   (SCP va tag policy CUNG type aws_organizations_policy)")
+
+# Neu pham_vi khop theo type thi ca bon test duoi day deu trot: hai stage
+# se co pham vi giong nhau, tuc stage tagging duoc phep sua SCP.
+SUA_SCP = rc('aws_organizations_policy.scp["baseline"]',
+             "aws_organizations_policy", ["update"],
+             before={"content": "a"}, after={"content": "b"})
+SUA_TAG = rc("aws_organizations_policy.tag[0]",
+             "aws_organizations_policy", ["update"],
+             before={"content": "a"}, after={"content": "b"})
+
+chay("stage B-scp sua SCP        -> trong pham vi", 0,
+     plan(NO_OP, SUA_SCP), stage="B-scp")
+chay("stage B-scp sua TAG        -> NGOAI pham vi, thoat 1", 1,
+     plan(NO_OP, SUA_TAG), stage="B-scp")
+chay("stage C-tagging sua TAG    -> trong pham vi", 0,
+     plan(NO_OP, SUA_TAG), stage="C-tagging")
+chay("stage C-tagging sua SCP    -> NGOAI pham vi, thoat 1", 1,
+     plan(NO_OP, SUA_SCP), stage="C-tagging")
+
+# Stage OU: chi duoc cham cay OU. Mot attachment doi trong stage nay la
+# dau hieu TF_TARGETS rong.
+chay("stage A-ou doi OU          -> trong pham vi", 0, plan(NO_OP,
+     rc('aws_organizations_organizational_unit.level1["Sandbox"]',
+        "aws_organizations_organizational_unit", ["update"],
+        before={"name": "Sandbox", "parent_id": "r-1"},
+        after={"name": "Sandbox2", "parent_id": "r-1"})),
+     stage="A-ou")
+chay("stage A-ou doi attachment  -> NGOAI pham vi, thoat 1", 1,
+     plan(NO_OP, XOA_ATTACH), stage="A-ou")
+
+print()
 print("── tap_khong_lon: danh sach mien tru LON LEN la NOI ──")
 
 BASE_RULE = {"name": "r", "excluded_accounts": ["111111111111"]}
@@ -207,14 +240,14 @@ chay("excluded_accounts THEM     -> NOI, thoat 1", 1, plan(NO_OP,
         "aws_config_organization_managed_rule", ["update"],
         before=BASE_RULE,
         after={"name": "r", "excluded_accounts": ["111111111111", "222222222222"]})),
-     stage="C-config-rules")
+     stage="E-config-rules")
 
 chay("excluded_accounts BOT      -> sach", 0, plan(NO_OP,
      rc("aws_config_organization_managed_rule.this[\"r\"]",
         "aws_config_organization_managed_rule", ["update"],
         before={"name": "r", "excluded_accounts": ["1", "2"]},
         after={"name": "r", "excluded_accounts": ["1"]})),
-     stage="C-config-rules")
+     stage="E-config-rules")
 
 print()
 print("── thu_tu: phep so CHUOI noi nguoc, nen phai co bang xep ──")
@@ -280,13 +313,13 @@ chay("TAO ingress rule           -> NOI, thoat 1", 1, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["create"],
         before=None, after={"cidr_ipv4": "0.0.0.0/0", "from_port": 443})),
-     stage="D-network-ops")
+     stage="F-network-ops")
 
 chay("XOA ingress rule           -> sach", 0, plan(NO_OP,
      rc("aws_vpc_security_group_ingress_rule.partner_service",
         "aws_vpc_security_group_ingress_rule", ["delete"],
         before={"cidr_ipv4": "10.0.0.0/8"}, after=None)),
-     stage="D-network-ops")
+     stage="F-network-ops")
 
 print()
 print("── Khai bao con lai sau khi thay doi da di qua ──")
