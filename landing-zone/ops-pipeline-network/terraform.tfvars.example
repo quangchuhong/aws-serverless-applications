@@ -70,6 +70,13 @@ tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
 drift_cron      = "cron(0 19 * * ? *)"
 drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
 
+# CHON MOT, KHONG PHAI CA HAI. drift_topic_arn o tren THANG, nen mot
+# dong `drift_emails = [...]` them vao day se khong tao topic nao va
+# nhung dia chi do khong nhan duoc gi - check "khong_khai_ca_hai_nguon_topic"
+# trong module canh bao dung viec do.
+#
+# Bo drift_topic_arn di neu muon dung drift_emails.
+
 build_timeout_minutes = 30
 log_retention_days    = 90
 
