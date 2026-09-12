@@ -226,6 +226,16 @@ variable "organization_rules" {
     # CONG TAC mac dinh cua account. Chi co cai thu hai moi tra loi duoc
     # "volume tao ngay mai co duoc ma hoa khong".
     "ec2-ebs-encryption-by-default"            = "EC2_EBS_ENCRYPTION_BY_DEFAULT"
+
+    # Bo doi voi cloud-trail-enabled o tren. Cai kia hoi "co trail
+    # khong", cai nay hoi "trail do co ky file log khong".
+    #
+    # Khac nhau o cho: mot trail khong ky thi file log bi sua ma khong
+    # phat hien duoc - tuc ban ghi "ai lam gi" van con do nhung khong con
+    # lam bang chung duoc nua. Va no im lang: trail van "dang bat".
+    #
+    # Doi ung voi var.enable_log_file_validation cua layer org-trail.
+    "cloud-trail-log-file-validation-enabled"  = "CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED"
   }
 }
 
