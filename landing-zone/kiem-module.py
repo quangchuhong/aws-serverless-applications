@@ -459,6 +459,109 @@ def kiem_phu_layer():
     return loi, os.path.basename(nguon), ap
 
 
+####################################
+# TIEN TO TRONG ban_do MA KHONG PHAI LAYER - DANH SACH DUY NHAT
+#
+# Mot tien to hop le khi mot pipeline APPLY layer nam duoi no. Ngoai le
+# duy nhat: code duoc buildspec doc tu SOURCE luc build, chu khong phai
+# tu state.
+#
+#   buildspec-terraform.yml:268
+#     GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-gate/gate.py"
+#
+# gate.py doc tu thu muc lam viec cua CodeBuild, nen sua no la lan chay
+# sau da dung luat moi - khong can apply gi. Do la ly do ops-gate/ co
+# trong ban do cua bon pipeline, va la ly do danh sach nay ton tai thay
+# vi mot dong "cho phep tat ca".
+####################################
+TIEN_TO_KHONG_PHAI_LAYER = {
+    "landing-zone/ops-gate/": "buildspec doc gate.py tu CODEBUILD_SRC_DIR luc build",
+}
+
+
+def kiem_tien_to_co_ich(ap):
+    """11. Tien to nao trong ban_do ma chay pipeline KHONG the ap dung.
+
+    =====================================================================
+    CHIEU NGUOC CUA PHEP KIEM 10
+
+    Phep 10 hoi: layer nao duoc apply ma khong tien to nao cham toi.
+    Phep nay hoi: tien to nao co do ma khong pipeline nao apply duoc.
+
+    Hai chieu hong khac nhau han. Phep 10 bat mot layer BI BO ROI - im
+    lang. Phep nay bat mot tien to SINH RA TIN HIEU SAI - on ao, va on ao
+    theo huong te hon: pipeline chay, xanh, va nguoi doc ket luan thay
+    doi da co hieu luc.
+
+    =====================================================================
+    VI DU THAT, VA NO SUYT DUOC LAM
+
+    "modules/tf-pipeline/" trong nhu mot cho bo sot: module dung chung
+    cho ca nam pipeline, sua no xong thi khong pipeline nao chay lai.
+    Them tien to do vao ban_do nghe rat hop ly.
+
+    Nhung no SAI, vi:
+
+      modules/tf-pipeline/codebuild.tf:143
+        buildspec = file("${path.module}/templates/buildspec-terraform.yml")
+
+    buildspec duoc NHUNG vao cau hinh CodeBuild luc `terraform apply`,
+    khong doc tu source luc build. Va pipeline thi apply layer NGHIEP VU
+    cua no (organization, permission-sets, ...), khong bao gio apply dinh
+    nghia cua chinh no.
+
+    Nen chay pipeline sau khi sua module = chay mot thu KHONG THE ap dung
+    thay doi do. Muon co hieu luc thi phai apply tay nam layer caller.
+
+    Cung ly do do voi landing-zone/ops-pipeline*/,
+    landing-zone/vending-pipeline/ va landing-zone/trigger-filter/: tat
+    ca deu la code dinh nghia duong ong, apply bang tay.
+
+    =====================================================================
+    CHO HO THAT THI NAM O CHO KHAC
+
+    Khong ai `plan` nam layer caller ca - khong pipeline nao, va project
+    drift cung khong (no chi plan cac layer trong local.stage_keys). Nen
+    mot thay doi module nam do khong duoc ap dung, voi dung zero tin
+    hieu. Phep kiem nay KHONG chua duoc cho do; no chi chan cach chua
+    sai. Cho do can mot buoc apply tay co nguoi lam.
+    """
+    that = os.path.join(TF, "terraform.tfvars")
+    mau = os.path.join(TF, "terraform.tfvars.example")
+    nguon = that if os.path.exists(that) else mau
+    if not os.path.exists(nguon):
+        return [
+            "trigger-filter: khong co terraform.tfvars lan .example, nen phep kiem "
+            "tien to co ich KHONG chay. Day KHONG phai 'khong co gi sai'."
+        ]
+
+    ban_do = ban_do_theo_pipeline(boc(open(nguon).read()))
+    if not ban_do:
+        return [
+            f"khong doc duoc tien to nao tu ban_do ({os.path.basename(nguon)}). "
+            "Day KHONG phai 'moi tien to deu co ich' - la CHUA DOC DUOC."
+        ]
+
+    loi = []
+    for ten, tien_to in sorted(ban_do.items()):
+        for p in tien_to:
+            if not p or p in TIEN_TO_KHONG_PHAI_LAYER:
+                continue
+            if any((L + "/").startswith(p) for L in ap.get(ten, set())):
+                continue
+            loi.append(
+                f"ban_do['{ten}'] co tien to '{p}' ma pipeline do KHONG apply "
+                f"layer nao duoi no (no apply: {sorted(ap.get(ten, set())) or 'khong gi'}). "
+                "Sua code duoi duong dan do se lam pipeline chay MA KHONG ap dung "
+                "duoc thay doi - mot lan xanh vo nghia, va nguoi doc se tuong la da "
+                "co hieu luc. Neu day la code buildspec doc tu source luc build thi "
+                "them vao TIEN_TO_KHONG_PHAI_LAYER kem ly do; neu la code dinh nghia "
+                "duong ong (modules/tf-pipeline, ops-pipeline*, vending-pipeline, "
+                "trigger-filter) thi no phai apply BANG TAY, khong qua ban do."
+            )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -556,6 +659,11 @@ def main():
         if ap:
             print(f"  {'x' if l2 else 'v'} push-tfvars phu het layer")
         loi += l2
+
+        l3 = kiem_tien_to_co_ich(ap) if ap else []
+        if ap:
+            print(f"  {'x' if l3 else 'v'} moi tien to trong ban_do co ich")
+        loi += l3
 
     print()
     if loi:

@@ -133,6 +133,61 @@ ban_do = {
 }
 
 ########################################
+# CODE DINH NGHIA DUONG ONG KHONG NAM O DAY - VA DO LA DUNG
+#
+# Nam duong dan duoi day KHONG co trong ban_do, co y:
+#
+#   modules/tf-pipeline/            module dung chung cho 5 pipeline
+#   landing-zone/ops-pipeline*/     5 caller
+#   landing-zone/vending-pipeline/  pipeline vending
+#   landing-zone/trigger-filter/    chinh layer nay
+#
+# Doc qua thi modules/tf-pipeline/ trong nhu mot cho bo sot: mot module
+# dung chung cho ca nam pipeline, sua no xong thi khong pipeline nao chay
+# lai. Nhung them no vao day SAI, va sai theo huong gay hai:
+#
+#   modules/tf-pipeline/codebuild.tf:143
+#     buildspec = file("${path.module}/templates/buildspec-terraform.yml")
+#
+# buildspec duoc NHUNG vao cau hinh CodeBuild luc `terraform apply`, chu
+# khong doc tu source luc build. Va pipeline thi apply layer NGHIEP VU
+# cua no (organization, permission-sets, org-trail, config-detective) -
+# no khong bao gio apply dinh nghia cua chinh no.
+#
+# Nen chay pipeline sau khi sua module la chay mot thu KHONG THE ap dung
+# thay doi do: pipeline xanh, va nguoi doc ket luan module moi da co hieu
+# luc. Im lang con de nhan ra hon mot tin hieu sai.
+#
+# So sanh voi ops-gate/, thu CO trong ban do va dung:
+#
+#   buildspec-terraform.yml:268
+#     GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-gate/gate.py"
+#
+# gate.py doc tu thu muc lam viec luc build, nen sua no la lan chay sau
+# da dung luat moi. Hai thu trong giong nhau ma co che nguoc nhau.
+#
+# ------------------------------------------------------------------
+# CHO HO THAT, VA NO CHUA DUOC CHUA
+#
+# Sua modules/tf-pipeline/ chi co hieu luc sau khi co nguoi apply TAY nam
+# layer caller. Va khong ai `plan` nam layer do ca: khong pipeline nao,
+# va project drift cung khong (no chi plan cac layer trong
+# local.stage_keys). Nen mot thay doi module nam do khong duoc ap dung,
+# voi dung zero tin hieu.
+#
+# kiem-module.py phep 11 chan CACH CHUA SAI (them tien to vao day) chu
+# khong chua duoc cho ho do. Sau khi sua modules/tf-pipeline:
+#
+#   for d in ops-pipeline ops-pipeline-permission-set \
+#            ops-pipeline-config-rules ops-pipeline-trail; do
+#     ( cd $d && terraform apply )
+#   done
+#
+# Sua buildspec thi bat buoc, vi no chi vao CodeBuild qua apply. Sua
+# pipeline.tf / iam.tf cung vay.
+########################################
+
+########################################
 # DO PHU
 #
 # BAT: ham liet ke pipeline that o AWS moi lan chay, va bao HONG neu co
