@@ -258,6 +258,38 @@ policies:
           dung trong van hanh binh thuong.
         ticket: LZ-0001
 
+      ####################################################
+      # KHAC HAN ProtectS3PublicAccessBlock O NGAY TREN
+      #
+      # s3:PutAccountPublicAccessBlock la MOT API cho ca bat lan tat,
+      # nen cam ca cum = khong ai bat duoc, va phai co
+      # s3_pab_automation mien tru cho lop hardening.
+      #
+      # EBS thi AWS tach lam HAI action:
+      #
+      #   ec2:EnableEbsEncryptionByDefault    bat
+      #   ec2:DisableEbsEncryptionByDefault   tat
+      #
+      # account-baseline/vpc-sweep.tf goi dung cai THU NHAT
+      # (enable_ebs_encryption_by_default, quyen o vpc-sweep.tf:252).
+      # Nen cam cai thu hai KHONG can mien tru nao - do la ly do
+      # statement nay KHONG khai condition, khac ProtectS3PublicAccessBlock
+      # ngay tren phai co s3_pab_automation.
+      ####################################################
+      - sid: ProtectEbsEncryptionByDefault
+        effect: Deny
+        action: ["ec2:DisableEbsEncryptionByDefault"]
+        resource: "*"
+        reason: >-
+          Tat ma hoa EBS mac dinh khong lam volume dang co mat ma hoa -
+          no lam MOI volume tao ra SAU do khong duoc ma hoa, va khong co
+          trieu chung nao o cho nao. Config rule
+          ec2-ebs-encryption-by-default phat hien duoc, nhung phat hien
+          la sau khi da co volume khong ma hoa, va ma hoa mot volume
+          dang chay doi snapshot va tao lai. Day la lop NGAN, doi ung
+          voi lop PHAT HIEN da co.
+        ticket: LZ-0002
+
   ####################################################
   # 2. REGION LOCK - gan vao Root
   #

@@ -272,6 +272,14 @@ POLICIES = doc["policies"]
 # Ten builder condition hop le - PHAI khop bang scp_condition_json
 # trong scp-catalog.tf. Lech thi Terraform chet voi "Invalid index",
 # mot cau khong nhac gi toi catalog.
+#
+# MOT NGOAI LE CO Y: bang do con mot khoa "none" ma danh sach nay KHONG
+# co. Do khong phai lech - "none" la gia tri mac dinh noi bo,
+# scp-catalog.tf:172 doc bang try(s.condition, "none") khi statement
+# khong khai condition. Ghi thang "condition: none" trong catalog thi
+# Terraform van chay, nhung khi do co HAI cach viet cung mot y - va bon
+# statement hien co deu chon cach bo han khoa do. Danh sach nay giu mot
+# cach duy nhat.
 CONDITIONS = {
     "exempt_roles", "root_user_only", "s3_pab_automation",
     "region_lock", "network_account_exempt", "public_ip_on_launch",
