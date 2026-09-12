@@ -140,7 +140,7 @@ check "tru_goi_ten_co_that" {
 ########################################
 check "tru_khong_chan_sach" {
   assert {
-    condition     = length(local.tru_chan_sach) == 0
+    condition = length(local.tru_chan_sach) == 0
     error_message = join(" ", [
       "TRU chan sach tien to gom:",
       join("; ", local.tru_chan_sach),

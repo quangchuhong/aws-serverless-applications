@@ -9,11 +9,14 @@ locals {
   #
   # Chua bang cach de bieu thuc sinh ra dung mot dong lien, va viec thut
   # le do heredoc lo - tuc chi mot cho quyet dinh.
+  #
+  # Cung ly do bieu thuc duoi day noi chuoi thay vi goi format() nhieu
+  # tham so xuong dong: `terraform fmt` thut lai loi goi nhieu dong theo
+  # cach kho doan truoc, va moi truong nay khong co terraform de thu.
   ####################################
   bang_ban_do = join("\n", [
     for t, p in local.ban_do :
-    format("%-34s %s%s", t, join(" ", p),
-      length(lookup(local.tru, t, [])) == 0 ? "" : "  [tru ${join(" ", lookup(local.tru, t, []))}]")
+    "${format("%-34s", t)}${join(" ", p)}${length(lookup(local.tru, t, [])) == 0 ? "" : "  [tru ${join(" ", lookup(local.tru, t, []))}]"}"
   ])
 
   ####################################
