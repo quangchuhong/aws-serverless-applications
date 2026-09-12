@@ -95,6 +95,36 @@ locals {
         "config:List*",
         "organizations:Describe*",
         "organizations:List*",
+
+        ####################################
+        # STACKSET - CHI DOC, VA `-target` KHONG CUU DUOC CHO NAY
+        #
+        # Layer config-detective quan mot CloudFormation StackSet de rai
+        # Config recorder xuong account thanh vien
+        # (stackset-recorder.tf). Stage nay `-target` vao dung
+        # aws_config_organization_managed_rule.this, nen no khong bao gio
+        # SUA StackSet do.
+        #
+        # Nhung `-target` chi gioi han APPLY. PLAN van refresh TOAN BO
+        # state, nen no goi DescribeStackSet - va thieu quyen do lam ca
+        # plan chet:
+        #
+        #   Error: reading CloudFormation StackSet (...): 403 AccessDenied
+        #   ... not authorized to perform: cloudformation:DescribeStackSet
+        #
+        # Thong bao do khong nhac gi toi -target, nen no doc nhu mot loi
+        # cau hinh cua StackSet chu khong phai cua role.
+        #
+        # Cung dang voi loi 403 tren account-baseline/terraform.tfstate
+        # truoc day: mot phep DOC ma plan can, khong ai du doan truoc, va
+        # chi lo ra bang mot lan chay.
+        ####################################
+        "cloudformation:DescribeStackSet",
+        "cloudformation:DescribeStackSetOperation",
+        "cloudformation:ListStackSetOperations",
+        "cloudformation:ListStackInstances",
+        "cloudformation:DescribeStackInstance",
+        "cloudformation:GetTemplate",
       ]
       Resource = "*"
     },
@@ -147,6 +177,24 @@ locals {
         # Uy quyen quan tri - la quyen, khong phai cau hinh.
         "organizations:RegisterDelegatedAdministrator",
         "organizations:DeregisterDelegatedAdministrator",
+
+        ####################################
+        # STACKSET - DENY NAY CO TAC DUNG THAT
+        #
+        # Khac ba khoi Deny kia trong cac caller pipeline: StackSet nam
+        # ngay trong ACCOUNT MANAGEMENT, va CodeBuild goi thang bang danh
+        # tinh cua chinh no - khong qua sts:AssumeRole. Nen policy cua
+        # role NAY la thu quyet dinh, va Deny o day rang buoc that.
+        #
+        # Doi lai cho quyen DOC vua them o tren: doc de plan refresh
+        # duoc, ghi thi khong bao gio. Xoa StackSet nay la go Config
+        # recorder khoi moi account thanh vien - moi rule con lai van
+        # "dang bat" nhung khong con du lieu de kiem.
+        ####################################
+        "cloudformation:DeleteStackSet",
+        "cloudformation:UpdateStackSet",
+        "cloudformation:DeleteStackInstances",
+        "cloudformation:CreateStackInstances",
       ]
       Resource = "*"
     },
