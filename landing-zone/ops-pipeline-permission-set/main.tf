@@ -44,6 +44,27 @@ locals {
       #
       # LUU Y: -target gioi han APPLY. PLAN van refresh TOAN BO state,
       # nen role can doc rong - xem local.quyen_dich_vu.
+      #
+      # -------------------------------------------------------------
+      # VA -target KHONG DONG KIN THEO PHU THUOC
+      #
+      # `-target=X` nghia la "X VA NHUNG GI X CAN", khong phai "chi X".
+      # aws_ssoadmin_account_assignment.this tham chieu
+      # aws_ssoadmin_permission_set qua permission_set_arn, ma set thi
+      # KHONG nam trong danh sach nay. Nen he ai sua noi dung mot
+      # permission set la no bi keo vao ban plan cung con assignment.
+      #
+      # Luc do gate.py chan, vi bang pham vi cua stage
+      # "cloudops-permission-set" chi liet ke assignment va group
+      # membership. Do la ket qua DUNG - xem khoi chu thich dau file: doi
+      # noi dung mot permission set la doi quyen cua moi nguoi dang dung
+      # set do, o moi account, ngay lap tuc.
+      #
+      # Nen khi gap loi do, cach chua KHONG phai them ten resource vao
+      # day, cung khong phai noi bang pham vi cua gate.py. La apply layer
+      # cha bang tay, co nguoi doc, roi de pipeline chay lai.
+      #
+      # Da gap dung tinh huong nay o ops-trail voi bucket log (loi 123).
       ####################################
       targets = [
         "aws_ssoadmin_account_assignment.this",
