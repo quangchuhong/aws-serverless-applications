@@ -4086,6 +4086,53 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 122 — một lần chạy đỏ do đua tạo resource, đọc y hệt một lỗi thiếu quyền
+
+`ops-trail` vừa dựng xong đã đỏ ngay ở stage `Nguon`:
+
+```
+qh11-lz-ops-trail-pipeline is not authorized to perform: codecommit:GetBranch
+errorDetails: {"code": "PermissionError"}
+```
+
+Thông báo đó chỉ thẳng vào một chỗ: policy thiếu action. Nhưng policy **không** thiếu:
+
+```json
+{"Action": ["codecommit:GetBranch", "codecommit:GetCommit", ...],
+ "Effect": "Allow",
+ "Resource": "arn:aws:codecommit:ap-southeast-1:...:diy-aws-landing-zone"}
+```
+
+Thứ trả lời được nằm ở hai cái dấu thời gian, không ở nội dung policy:
+
+| | |
+|---|---|
+| pipeline được tạo | `17:45:03` UTC |
+| lần chạy đỏ bắt đầu | `17:45:04` UTC |
+
+Một giây. **CodePipeline tự chạy một lần ngay khi được tạo** — không ai bấm, không có commit nào. Và `aws_codepipeline` với `aws_iam_role_policy.pipeline` cùng phụ thuộc vào `aws_iam_role.pipeline` nhưng **không phụ thuộc vào nhau**, nên Terraform được phép tạo pipeline trước rồi gắn policy sau. Lần chạy tự động rơi đúng vào khe giữa hai việc đó.
+
+Nên nó không phải lỗi cấu hình, cũng không phải lỗi nhất thời của AWS: nó là **thứ tự tạo resource**, và nó sẽ lặp lại ở mọi pipeline mới dựng.
+
+#### Vì sao một lần đỏ "vô hại" vẫn phải chữa
+
+Có thể bỏ qua nó — lần chạy sau xanh. Nhưng khi đó quy ước *"pipeline đỏ nghĩa là có chuyện"* có một ngoại lệ, và ngoại lệ đó không viết ở đâu cả. Người tiếp theo thấy `codecommit:GetBranch` sẽ đi sửa IAM — sửa một thứ vốn đã đúng.
+
+Chữa bằng một khối `depends_on` trong `aws_codepipeline`, ở **cả hai** bản sao (`modules/tf-pipeline` và `vending-pipeline`):
+
+```hcl
+depends_on = [
+  aws_iam_role_policy.pipeline,
+  aws_s3_bucket_policy.artifacts,
+]
+```
+
+`aws_s3_bucket_policy.artifacts` có mặt vì cùng một lý do: bucket artifact cũng được gắn policy bởi một resource riêng, và lần chạy đầu ghi vào bucket đó.
+
+Cùng họ với lỗi 120 ngay bên dưới, nhưng ở chiều ngược lại: ở đó một cấu hình **sai** đi qua plan mà không để lại dấu vết; ở đây một cấu hình **đúng** sinh ra một thông báo lỗi mô tả một sự cố không có thật.
+
+---
+
 ### Lỗi 121 — "pipeline chạy ổn" chưa bao giờ có nghĩa là "apply được"
 
 Thay đổi thật đầu tiên đi qua một pipeline vận hành: thêm một Config rule toàn tổ chức. `plan` xanh, `gate.py` cho qua, rồi `apply` **crash**:

@@ -309,6 +309,32 @@ resource "aws_codepipeline" "vending" {
       }
     }
   }
+
+  ####################################
+  # TAO SAU KHI QUYEN DA GAN - KHONG PHAI CHO GON
+  #
+  # CodePipeline TU CHAY MOT LAN ngay khi duoc tao. Va
+  # aws_iam_role_policy.pipeline voi aws_codepipeline cung phu thuoc vao
+  # aws_iam_role.pipeline nhung KHONG phu thuoc vao nhau - nen Terraform
+  # duoc phep tao pipeline truoc khi gan policy.
+  #
+  # Ket qua: lan chay dau tien cua MOI pipeline moi dung deu do, voi
+  #
+  #   The service role or action role doesn't have the permissions
+  #   required to access the AWS CodeCommit repository named ...
+  #   not authorized to perform: codecommit:GetBranch
+  #
+  # Da do: pipeline tao luc 17:45:03 UTC, lan chay do bat dau 17:45:04.
+  #
+  # Thong bao do doc y het mot loi cau hinh that, nen nguoi ta se di tim
+  # o cho sai - va o day thi policy VAN DUNG, chi la no chua kip gan.
+  # Mot lan chay do khong co that trong mot he thong ma "do" phai co
+  # nghia la co chuyen.
+  ####################################
+  depends_on = [
+    aws_iam_role_policy.pipeline,
+    aws_s3_bucket_policy.artifacts,
+  ]
 }
 
 ########################################
