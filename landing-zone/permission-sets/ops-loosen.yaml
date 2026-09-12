@@ -29,19 +29,19 @@ loosen:
   - address: aws_ssoadmin_account_assignment.this["lz-security-operators|lz-network-operator|436908791055"]
 
     # ------------------------------------------------------------------
-    # HAI TRUONG DUOI DAY DE TRONG CO CHU DICH - PHAI DIEN TRUOC KHI PUSH
+    # HAI TRUONG NAY LA HO SO DUYET QUYEN, KHONG PHAI SIEU DU LIEU
     #
     # gate.py kiem "co gia tri hay khong", no khong kiem gia tri co that
-    # hay khong. Nen mot so ticket bia dat se di qua het moi lop - va luc
-    # do ho so duyet quyen cua to chuc nay co mot dong sai ma khong ai
-    # doi chieu duoc.
+    # hay khong. Nen khong lop nao trong he thong nay doi chieu duoc hai
+    # dong duoi day voi thuc te - viec do la cua nguoi doc.
     #
-    # De trong thi gate.py bao "Khai bao noi long thieu truong ticket,
-    # approved_by" va chan. Do la chieu hong dung: chua dien thi khong di
-    # qua duoc, thay vi di qua voi mot dong bia.
+    # approved_by = "admin" la mot VAI TRO, khong phai mot nguoi. Khi nao
+    # doi sec co danh tinh rieng trong Identity Center thi thay bang ten
+    # hoac email cu the: mot ho so noi long ma khong truy duoc ai duyet
+    # thi cho den luc can truy la luc no khong con tra loi duoc.
     # ------------------------------------------------------------------
-    ticket: ""
-    approved_by: ""
+    ticket: "permission-set-11"
+    approved_by: "admin"
 
     reason: >-
       Truc bao mat (SOC) duoc them lz-network-operator o account mang
