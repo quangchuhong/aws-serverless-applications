@@ -4019,6 +4019,83 @@ loc.handler(su_kien_ or su_kien(), None)
 
 `{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
 
+#### Lỗi 119 — layer lồng nhau, và một phép kiểm che đúng cái nó đi tìm
+
+Yêu cầu tiếp theo: *"phần network thì chỉ cần có code thay đổi là pipeline tự run"*.
+
+Pipeline apply `landing-zone/network` là **vending** (stage B, D, cả hai assume role mạng), nên đường kích hoạt phải nằm trong bản đồ của vending. Một dòng.
+
+Nhưng `landing-zone/network/ops` là một layer **riêng** — pipeline riêng, state riêng — và nó nằm **bên trong** `landing-zone/network`. So khớp là so khớp chuỗi, nên tiền tố `landing-zone/network/` cũng bắt mọi file trong `network/ops/`. Không có cách nào viết một tiền tố nghĩa là *"network/ nhưng không network/ops/"*.
+
+Hậu quả nếu bỏ qua: mỗi lần sửa lớp vận hành mạng — thứ đổi **hằng ngày** — kéo vending chạy vô ích, kèm một cổng duyệt treo mang nhãn `A-tao-account`. Không phải lỗi, chỉ là ồn. Và ồn lâu thì người ta thôi đọc, nên nó là một lỗi chậm.
+
+Nên `var.tru`: khoá giống `ban_do`, giá trị là tiền tố bị loại. Hai cách khai sai, cả hai im lặng, và cả hai bị bắt ở `loc.py` mỗi lần chạy **và** ở Terraform `check` lúc apply:
+
+| Sai | Hậu quả |
+|---|---|
+| gọi tên pipeline không có trong `ban_do` | một ngoại lệ đã hết hạn — nó nói có ngoại lệ đang áp dụng, trong khi không |
+| trừ chặn sạch một tiền tố `gom` | pipeline coi như mất tiền tố đó |
+
+Cái thứ hai là dạng khó thấy nhất từng gặp trong dự án này: **hai dòng đều có nội dung**, và phải đọc *cả hai* mới biết cái sau vô hiệu hoá cái trước. Không có dòng nào trống để ai đó thấy là thiếu.
+
+##### Và phép kiểm độ phủ đã che đúng cái nó đi tìm
+
+`kiem-module.py` phép 10 (thêm ở lỗi 118) gộp tiền tố của **mọi** pipeline lại rồi hỏi *"có tiền tố nào chạm vào layer L không"*. Câu đó trả lời **sai** khi layer lồng nhau:
+
+```
+landing-zone/network/       trong ban_do cua vending
+landing-zone/network/ops/   layer RIENG, pipeline rieng
+```
+
+`"landing-zone/network/ops/"` bắt đầu bằng `"landing-zone/network/"`, nên `network/ops` trông như **đã được phủ** — trong khi pipeline phủ nó (vending) *không apply layer đó*. Một dương tính giả theo chiều nguy hiểm: nó che đúng cái chỗ trống mà phép kiểm sinh ra để tìm.
+
+Câu đúng là: layer `L` được phủ khi có **một** pipeline vừa apply `L` vừa có tiền tố chạm vào `L`.
+
+Đột biến chứng minh phép sửa là thật, và nó chứng minh theo chiều **im lặng**: quay về logic gộp rồi bỏ `network/ops` khỏi `layer_thu_cong` → bộ kiểm **không kêu gì**. Một đột biến không làm bộ kiểm kêu thường nói về bộ kiểm; lần này nó nói rằng bản cũ đã hỏng.
+
+##### `ten_ngan()` tự sai ngay lần đầu — lần thứ ba cùng một dạng
+
+Để so theo từng pipeline thì phải biết thư mục nào là pipeline nào. `ops-pipeline/main.tf` có **hai** dòng khớp `ten = "..."`:
+
+```
+dong 159    ten = "SCP (catalog/scp.yaml)"   <- mot muc catalog
+dong 283    ten = "ops"                      <- cai can tim
+```
+
+Khớp tràn lấy cái đầu tiên, nên bản đồ được tra bằng khoá `"SCP (catalog/scp.yaml)"` — không tồn tại — và layer `organization` bị báo là không được phủ. Chữa: neo vào khối `module "pipeline"`.
+
+**Lần thứ ba trong cùng bộ kiểm này một phép khớp văn bản tràn bắt nhầm thứ khác** (trước đó: `modules/tf-pipeline` trong một chú thích kéo `tf-backend` vào danh sách caller; `locals {` đầu tiên ở `codebuild.tf` làm mọi local của `main.tf` thành "không khai"). Dạng lỗi không đổi: **một mẫu regex đủ lỏng để khớp đúng chỗ cần, cũng đủ lỏng để khớp một chỗ khác trước đó.**
+
+##### Đo trên một diff thật
+
+Commit `8fbe351` chạm 3 đường dẫn, hai trong số đó dưới `landing-zone/network/`:
+
+```
+landing-zone/network/ops/versions.tf     <- bi tru
+landing-zone/network/outputs.tf          <- khop
+KHOI DONG  qh11-lz-vending  (1 duong dan khop, vi du landing-zone/network/outputs.tf)
+```
+
+**1**, không phải 2. Chênh đúng một đường dẫn, và đó là toàn bộ bằng chứng — trên một diff thật đọc từ CodeCommit.
+
+##### Một phép thử đạt vì lý do sai, lần thứ hai trong cùng ngày
+
+Lần chạy **trước** apply cho ra `"da_khoi_dong": []` — kết quả đúng như mong đợi cho phép thử `tru`. Nhưng log nói khác:
+
+```
+bo qua  qh11-lz-vending  (khong duong dan nao khop ['landing-zone/account-baseline/'])
+```
+
+Một tiền tố, không có `landing-zone/network/`, không có phần `tru`. Hàm đang chạy cấu hình **cũ** — `terraform apply` chưa chạy. Vending bị loại vì nó chưa bao giờ quan tâm tới `network/`, không phải vì bị trừ ra.
+
+Đọc `[]` thành *"phần trừ có tác dụng"* là đúng cái bẫy cả layer này sinh ra để chống. Thứ chữa được nó không phải cẩn thận hơn, mà là `loc.py` **in ra lý do** kèm phần `tru [...]` — nên hai trạng thái trông khác nhau, và không cần ai nhớ là phải nghi ngờ.
+
+##### Cái giá còn lại, chưa sửa
+
+Từ giờ mọi thay đổi code mạng sẽ chạy vending và dừng ở cổng duyệt mang nhãn `A-tao-account`, trong khi stage A thực tế là no-op. Cổng đó đang có nghĩa *"cho phép apply thay đổi mạng này"* — **nhãn nói sai việc nó đang làm**. Sửa được bằng `approve_stages`, nhưng đó là pipeline vending đã được quyết định để nguyên.
+
+---
+
 #### Một lỗi cũ lộ ra khi mở rộng `kiem-module.py`
 
 Bộ kiểm HCL trước đây chỉ chạy trên **caller** của `modules/tf-pipeline`, nên một layer độc lập như `trigger-filter` không được kiểm gì cả — im lặng, không phải kết luận "không có gì sai". Thêm phép quét layer đơn (phép 9) làm lộ bốn báo sai:
