@@ -68,6 +68,37 @@ variable "ban_do" {
 }
 
 ########################################
+# TRU RA: LAYER LONG NHAU TRONG CAY THU MUC
+#
+# Khoa giong ban_do (ten NGAN). Gia tri la tien to bi loai khoi pipeline
+# do, KE CA khi mot tien to trong ban_do cua no co bat.
+#
+# Vi sao can, khi ban_do da noi ro cai gi thuoc ai: vi layer long nhau.
+#
+#   landing-zone/network/       vending apply (stage B, D)
+#   landing-zone/network/ops/   layer RIENG, pipeline rieng, state rieng
+#
+# So khop la so khop CHUOI, nen tien to "landing-zone/network/" bat ca
+# moi file trong "network/ops/". Khong co cach nao viet mot tien to nghia
+# la "network/ nhung khong network/ops/".
+#
+# Khong khai thi moi lan sua lop van hanh mang - thu doi HANG NGAY - se
+# keo vending chay vo ich, kem mot cong duyet treo mang nhan "tao
+# account". Do khong phai loi, chi la on - va on lau thi nguoi ta thoi
+# doc.
+#
+# HAI CACH KHAI SAI, ca hai duoc loc.py bat moi lan chay (phep 4 va 5):
+#   - goi ten mot pipeline khong co trong ban_do -> ngoai le da het han
+#   - tru chan sach mot tien to gom -> pipeline coi nhu mat tien to do,
+#     va phai doc CA HAI dong moi thay
+########################################
+variable "tru" {
+  type        = map(list(string))
+  description = "Ten ngan cua pipeline -> tien to bi loai tru, ke ca khi ban_do co bat."
+  default     = {}
+}
+
+########################################
 # DO PHU: CHIEU HONG NGUY HIEM NHAT
 #
 # Sau khi rule rieng cua tung pipeline bi tat, ban_do la duong DUY NHAT

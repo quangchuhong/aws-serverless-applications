@@ -11,7 +11,9 @@ locals {
   # le do heredoc lo - tuc chi mot cho quyet dinh.
   ####################################
   bang_ban_do = join("\n", [
-    for t, p in local.ban_do : format("%-34s %s", t, join(" ", p))
+    for t, p in local.ban_do :
+    format("%-34s %s%s", t, join(" ", p),
+      length(lookup(local.tru, t, [])) == 0 ? "" : "  [tru ${join(" ", lookup(local.tru, t, []))}]")
   ])
 
   ####################################

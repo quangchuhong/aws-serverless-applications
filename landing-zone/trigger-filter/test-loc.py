@@ -117,7 +117,7 @@ def su_kien(repo="kho", truoc="aaa", sau="bbb", nhanh="main"):
 KHONG_TRUYEN = object()
 
 
-def chay(ban_do, doi=(), *, tien_to_phu="", co_that=None, nem_diff=None,
+def chay(ban_do, doi=(), *, tru=None, tien_to_phu="", co_that=None, nem_diff=None,
          nem_khoi_dong=None, nem_liet_ke=None, su_kien_=KHONG_TRUYEN, trang=None):
     """Dung mot lan goi handler. Tra ve (ket_qua, loi, da_khoi_dong)."""
     cc = KhachCodeCommit()
@@ -135,6 +135,7 @@ def chay(ban_do, doi=(), *, tien_to_phu="", co_that=None, nem_diff=None,
 
     loc.cc, loc.cp = cc, cp
     os.environ["BAN_DO"] = json.dumps(ban_do)
+    os.environ["TRU"] = json.dumps(tru or {})
     os.environ["TIEN_TO_PHU"] = tien_to_phu
 
     try:
@@ -199,6 +200,50 @@ def bai_ban_do_sai():
         co_that=[VENDING, OPS],
     )
     kiem("khong khai TIEN_TO_PHU thi phep kiem do phu tat", loi is None, loi)
+
+
+def bai_tru():
+    """TRU RA - layer long nhau trong cay thu muc.
+
+    landing-zone/network/ops la layer RIENG nhung nam BEN TRONG
+    landing-zone/network. So khop chuoi khong the noi "network/ nhung
+    khong network/ops/", nen phai co danh sach tru.
+    """
+    print("\nTRU RA - layer long nhau")
+
+    BD = {VENDING: ["landing-zone/account-baseline/", "landing-zone/network/"]}
+    TRU = {VENDING: ["landing-zone/network/ops/"]}
+
+    # Khong tru: sua lop van hanh mang keo vending chay vo ich.
+    r, loi, chay_gi = chay(BD, doi=["landing-zone/network/ops/rule.tf"])
+    kiem("khong tru: network/ops keo vending chay", chay_gi == [VENDING], (loi, chay_gi))
+
+    r, loi, chay_gi = chay(BD, tru=TRU, doi=["landing-zone/network/ops/rule.tf"])
+    kiem("co tru: network/ops KHONG keo vending chay", chay_gi == [], (loi, chay_gi))
+
+    # Va tru khong duoc lam mat cai dang can: network/ (khong phai ops).
+    r, loi, chay_gi = chay(BD, tru=TRU, doi=["landing-zone/network/tgw.tf"])
+    kiem("co tru: network/ VAN keo vending chay", chay_gi == [VENDING], (loi, chay_gi))
+
+    # Mot commit cham CA HAI: van phai chay, vi co file khong bi tru.
+    r, loi, chay_gi = chay(
+        BD, tru=TRU,
+        doi=["landing-zone/network/ops/rule.tf", "landing-zone/network/tgw.tf"],
+    )
+    kiem("cham ca hai: chay (vi con file khong bi tru)", chay_gi == [VENDING], (loi, chay_gi))
+
+    # HAI CACH KHAI SAI, ca hai im lang neu khong kiem.
+    _, loi, chay_gi = chay(BD, tru={"khong-ton-tai": ["x/"]}, doi=["landing-zone/network/a.tf"])
+    kiem("tru goi ten pipeline khong co trong ban do thi nem",
+         loi and "khong co trong BAN_DO" in loi, loi)
+    kiem("  va khong khoi dong gi", chay_gi == [], chay_gi)
+
+    # Cai nay kho thay nhat: hai dong deu co noi dung, phai doc CA HAI
+    # moi biet cai sau vo hieu hoa cai truoc.
+    _, loi, _ = chay(
+        BD, tru={VENDING: ["landing-zone/"]}, doi=["landing-zone/network/a.tf"]
+    )
+    kiem("tru chan sach mot tien to gom thi nem", loi and "chan sach" in loi, loi)
 
 
 def bai_loc_dung():
@@ -336,7 +381,7 @@ def bai_liet_ke_hong():
 
 
 def main():
-    for b in (bai_ban_do_sai, bai_loc_dung, bai_fail_open,
+    for b in (bai_ban_do_sai, bai_tru, bai_loc_dung, bai_fail_open,
               bai_khoi_dong_hong, bai_liet_ke_hong):
         b()
 

@@ -32,10 +32,29 @@ branch_name     = "main"
 # ham bao hong moi lan chay.
 ########################################
 ban_do = {
-  # Vending chi quan tam account-baseline. Day la ly do ca layer nay ton
-  # tai: truoc do moi push - ke ca sua mot dong trong docs/ - deu lam
-  # pipeline vending chay ca bay stage.
-  "vending" = ["landing-zone/account-baseline/"]
+  ####################################
+  # VENDING: HAI VUNG, VA LY DO CA LAYER NAY TON TAI
+  #
+  # Truoc khi co bo loc, MOI push - ke ca sua mot dong trong docs/ - deu
+  # lam pipeline vending chay ca bay stage vending account.
+  #
+  # Vending apply BON layer: account-baseline (stage A, C), network
+  # (B, D), config-detective (E0, E), permission-sets (F). Hai vung duoi
+  # day la hai vung ma "doi code thi phai co pipeline chay":
+  #
+  #   account-baseline/  ly do goc cua pipeline nay
+  #   network/           stage B, D - ca hai assume role mang
+  #
+  # Vi sao KHONG tao pipeline rieng cho landing-zone/network: vending da
+  # apply no bang role san co, con mot pipeline rieng con cho role lien
+  # account day xuong bang StackSet. Khi co, duong dan nay chuyen sang no.
+  #
+  # network/ co mot thu muc con la mot layer KHAC - xem khoi `tru`.
+  ####################################
+  "vending" = [
+    "landing-zone/account-baseline/",
+    "landing-zone/network/",
+  ]
 
   # SCP + OU + tag policy. Ba stage, mot layer.
   "ops" = ["landing-zone/organization/"]
@@ -78,37 +97,56 @@ kiem_do_phu = true
 ########################################
 # LAYER CO CHU DICH KHONG CO DUONG TU DONG
 #
-# Bon layer duoi day duoc mot pipeline APPLY nhung khong duong dan nao
+# Ba layer duoi day duoc mot pipeline APPLY nhung khong duong dan nao
 # trong ban_do cham toi. Do la co y, khong phai bo sot - nhung phai viet
 # ra, vi mot layer khong ai apply thi khong co trieu chung nao.
 #
 # ------------------------------------------------------------------
-# HAI CAI DAU: pipeline vending apply chung, nhung khong "so huu" chung
+# config-detective: vending apply (E0, E) nhung khong duoc kich hoat
 #
-# Vending apply BON layer: account-baseline (stage A, C), network (B, D),
-# config-detective (E0, E), permission-sets (F). Nhiem vu cua no la "co
-# account moi, lan toa ra cac layer lien quan" - khong phai "apply moi
-# thay doi code cua bon layer do".
+# Khac voi network/, layer nay KHONG duoc them vao ban do cua vending.
+# No cho ops-pipeline-config-rules - lop phat hien thuoc doi security, va
+# de vending co duong tu dong apply no la tron lai dung thu da tach ra
+# theo phong ban.
 #
-# Truoc khi co bo loc, moi push deu chay vending voi ca bay stage, nen
-# tren THUC TE vending la pipeline apply-tat-ca. Thu hep no ve
-# account-baseline/ lam hai layer nay mat duong tu dong.
-#
-# Chung se co lai khi ops-pipeline-config-rules va mot pipeline cho
-# landing-zone/network bat len - KHONG phai bang cach noi ban do cua
-# vending, vi the la tron lai dung thu da tach ra theo phong ban.
+# Hau qua phai biet ro: thay doi trong config-detective/ vao main thi
+# khong gi chay - NHUNG lan vend account tiep theo se chay stage E0/E va
+# apply no, kem theo mot viec chang lien quan. Mot lan apply MUON va BAT
+# NGO, khong phai mot lan khong apply.
 #
 # ------------------------------------------------------------------
 # HAI CAI SAU: pipeline cua chung dang enable = false
 #
+# Khong co pipeline nao trong AWS, nen khai ten chung vao ban_do se lam
+# loc.py bao hong moi lan chay (phep 3).
+#
 # Khi bat, mo dong tuong ung trong ban_do o tren VA xoa khoi day.
 ########################################
 layer_thu_cong = [
-  "landing-zone/network",          # vending B, D  - cho pipeline network
   "landing-zone/config-detective", # vending E0, E - cho ops-pipeline-config-rules
   "landing-zone/network/ops",      # ops-pipeline-network dang tat
   "landing-zone/org-trail",        # ops-pipeline-trail dang tat
 ]
+
+########################################
+# TRU RA - LAYER LONG NHAU
+#
+# landing-zone/network/ops la layer RIENG (pipeline rieng, state rieng)
+# nhung nam BEN TRONG landing-zone/network. So khop la so khop CHUOI, nen
+# tien to "landing-zone/network/" cua vending cung bat moi file trong
+# "network/ops/".
+#
+# Khong tru ra thi moi lan sua lop van hanh mang - thu doi HANG NGAY - se
+# keo vending chay vo ich, kem mot cong duyet treo mang nhan
+# "A-tao-account". Do khong phai loi, chi la on; va on lau thi nguoi ta
+# thoi doc.
+#
+# Khi ops-pipeline-network bat len, duong dan nay thuoc ve no - dong tru
+# o day VAN dung va van can.
+########################################
+tru = {
+  "vending" = ["landing-zone/network/ops/"]
+}
 
 ########################################
 # BAO KHI BO LOC HONG

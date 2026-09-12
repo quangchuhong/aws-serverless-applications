@@ -49,9 +49,10 @@ gì để chạy".
 Ngoại lệ: **diff rỗng thật sự** (commit rỗng, merge không đổi gì) không phải
 fail-open. Đó là một kết luận đọc được, không phải một phép đọc hỏng.
 
-## Bốn cách bản đồ có thể sai — cả bốn đều im lặng
+## Năm cách bản đồ có thể sai — cả năm đều im lặng
 
-`loc.py` kiểm cả bốn ở **mỗi lần gọi**, và cả bốn đều là lỗi cứng:
+`loc.py` kiểm cả năm ở **mỗi lần gọi**, và cả năm đều là lỗi cứng (hai cách liên
+quan tới `tru` nằm ở mục *Layer lồng nhau* bên dưới):
 
 | Sai | Hậu quả nếu không kiểm |
 |---|---|
@@ -86,24 +87,31 @@ pipeline. Sửa `landing-zone/ops-pipeline/main.tf` không làm pipeline đó ch
 
 Nhưng một pipeline có thể apply **nhiều** layer. Pipeline vending apply bốn:
 `account-baseline` (stage A, C), `network` (B, D), `config-detective` (E0, E),
-`permission-sets` (F). Bản đồ chỉ cho nó `landing-zone/account-baseline/`, nên
-hai layer giữa mất đường tự động — và mất theo kiểu im lặng nhất: code vào
-`main`, không gì chạy, không gì báo.
+`permission-sets` (F). Hai trong bốn có đường kích hoạt:
 
-Đó là có chủ đích. Nhiệm vụ của vending là *"có account mới, lan toả ra các layer
-liên quan"*, không phải *"apply mọi thay đổi code của bốn layer đó"*. Hai layer
-ấy sẽ có đường trở lại khi pipeline riêng của chúng bật — **không** phải bằng
-cách nới bản đồ của vending, vì thế là trộn lại đúng thứ đã tách ra theo phòng
-ban.
+```hcl
+"vending" = [
+  "landing-zone/account-baseline/",
+  "landing-zone/network/",          # doi code mang la chay
+]
+```
 
-Nên chúng phải được **khai**:
+`config-detective` thì **không** — nó chờ `ops-pipeline-config-rules`, vì lớp
+phát hiện thuộc đội security và để vending tự động apply nó là trộn lại đúng thứ
+đã tách ra theo phòng ban.
+
+Hậu quả phải biết rõ, và nó **không** phải "không gì xảy ra": thay đổi trong
+`config-detective/` vào `main` thì không gì chạy ngay — nhưng lần vend account
+tiếp theo sẽ chạy stage E0/E và apply nó, kèm theo một việc chẳng liên quan. Một
+lần apply **muộn và bất ngờ**, khó chịu hơn một lần không apply.
+
+Nên mọi layer không có đường kích hoạt phải được **khai**:
 
 ```hcl
 layer_thu_cong = [
-  "landing-zone/network",
-  "landing-zone/config-detective",
-  "landing-zone/network/ops",
-  "landing-zone/org-trail",
+  "landing-zone/config-detective", # vending E0, E - cho ops-pipeline-config-rules
+  "landing-zone/network/ops",      # ops-pipeline-network dang tat
+  "landing-zone/org-trail",        # ops-pipeline-trail dang tat
 ]
 ```
 
@@ -111,6 +119,37 @@ layer_thu_cong = [
 các caller pipeline với `ban_do` ∪ `layer_thu_cong`, và kêu khi có layer nằm
 ngoài cả hai. Nó cũng kêu chiều ngược lại — một ngoại lệ đã hết hạn, vì nó nói
 rằng có chỗ trống ở đâu đó trong khi chỗ đó không còn.
+
+Phép kiểm đó so theo **từng pipeline**, không gộp tiền tố của mọi pipeline lại.
+Gộp thì `landing-zone/network/ops` trông như đã được phủ bởi tiền tố
+`landing-zone/network/` của vending — trong khi vending **không** apply layer đó.
+Một dương tính giả theo chiều nguy hiểm: nó che đúng cái chỗ trống mà phép kiểm
+sinh ra để tìm.
+
+## Layer lồng nhau — vì sao cần `tru`
+
+`landing-zone/network/ops` là một layer **riêng** (pipeline riêng, state riêng)
+nhưng nằm **bên trong** `landing-zone/network`. So khớp là so khớp chuỗi, nên
+tiền tố `landing-zone/network/` của vending cũng bắt mọi file trong
+`network/ops/`. Không có cách nào viết một tiền tố nghĩa là *"network/ nhưng
+không network/ops/"*.
+
+```hcl
+ban_do = { "vending" = ["landing-zone/account-baseline/", "landing-zone/network/"] }
+tru    = { "vending" = ["landing-zone/network/ops/"] }
+```
+
+Không trừ ra thì mỗi lần sửa lớp vận hành mạng — thứ đổi **hằng ngày** — sẽ kéo
+vending chạy vô ích, kèm một cổng duyệt treo mang nhãn `A-tao-account`. Đó không
+phải lỗi, chỉ là ồn; và ồn lâu thì người ta thôi đọc.
+
+Hai cách khai `tru` sai, cả hai đều im lặng nếu không kiểm — `loc.py` bắt cả hai
+ở **mỗi** lần gọi, và Terraform `check` bắt chúng sớm hơn một vòng, lúc apply:
+
+| Sai | Hậu quả |
+|---|---|
+| gọi tên pipeline không có trong `ban_do` | một ngoại lệ đã hết hạn — nó nói có ngoại lệ đang áp dụng, trong khi không |
+| trừ chặn sạch một tiền tố trong `ban_do` | pipeline coi như mất tiền tố đó. Khó thấy nhất: **hai dòng đều có nội dung**, phải đọc cả hai mới biết cái sau vô hiệu hoá cái trước |
 
 ## Thứ tự bật — một chiều an toàn, một chiều im lặng
 

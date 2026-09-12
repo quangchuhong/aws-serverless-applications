@@ -266,6 +266,48 @@ def danh_sach(raw, ten_bien):
     return re.findall(r'"([^"]+)"', m.group(1)) if m else []
 
 
+def ban_do_theo_pipeline(raw):
+    """`ban_do = { "ten" = [...] }` -> {ten: [tien to]}.
+
+    Doc tren van ban DA BOC chu thich, nen dong bi comment khong tinh.
+    """
+    m = re.search(r"^ban_do\s*=\s*\{(.*?)^\}", raw, re.S | re.M)
+    if not m:
+        return {}
+    return {
+        k: re.findall(r'"([^"]+)"', v)
+        for k, v in re.findall(r'"([^"]+)"\s*=\s*\[(.*?)\]', m.group(1), re.S)
+    }
+
+
+def ten_ngan(d, raw_d):
+    """Ten NGAN cua pipeline ma thu muc nay dung - cung khoa voi ban_do.
+
+    Caller cua modules/tf-pipeline khai `ten = "..."` TRONG khoi
+    module "pipeline". vending-pipeline khong dung module, ten cua no la
+    "vending" (local.name = "${var.project}-vending").
+
+    ---------------------------------------------------------------
+    PHAI NEO VAO KHOI module, KHONG KHOP `ten =` TRAN
+
+    ops-pipeline/main.tf co HAI dong khop `ten = "..."`:
+
+      dong 159    ten = "SCP (catalog/scp.yaml)"   <- mot muc catalog
+      dong 283    ten = "ops"                      <- cai can tim
+
+    Khop tran lay cai DAU TIEN, tuc ban_do["SCP (catalog/scp.yaml)"] -
+    khong ton tai - nen layer organization bi bao la khong duoc phu.
+    Mot duong tinh gia, va la lan thu ba trong bo kiem nay mot phep khop
+    van ban tran bat nham thu khac.
+    """
+    m = re.search(r'module "pipeline" \{(.*?)\n\}', raw_d, re.S)
+    if m:
+        t = re.search(r'^\s+ten\s*=\s*"([^"]+)"', m.group(1), re.M)
+        if t:
+            return t.group(1)
+    return "vending" if os.path.basename(d.rstrip("/")) == "vending-pipeline" else os.path.basename(d.rstrip("/"))
+
+
 def kiem_phu_layer():
     """10. Layer nao duoc pipeline APPLY ma khong duong dan nao cham toi.
 
@@ -310,14 +352,17 @@ def kiem_phu_layer():
         ], None
 
     raw = boc(open(nguon).read())
-    tien_to = danh_sach(raw, "ban_do")
     thu_cong = set(danh_sach(raw, "layer_thu_cong"))
+    ban_do = ban_do_theo_pipeline(raw)
 
-    # Moi layer ma mot pipeline nao do APPLY.
-    ap = set()
+    # Layer nao duoc pipeline nao APPLY. Khoa la ten NGAN cua pipeline -
+    # cung khoa voi ban_do.
+    ap = {}
     for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/*"))):
-        for f in sorted(glob.glob(os.path.join(d, "*.tf"))):
-            ap |= set(re.findall(r'layer\s*=\s*"(landing-zone/[^"]+)"', boc(open(f).read())))
+        raw_d = "".join(boc(open(f).read()) for f in sorted(glob.glob(os.path.join(d, "*.tf"))))
+        L = set(re.findall(r'layer\s*=\s*"(landing-zone/[^"]+)"', raw_d))
+        if L:
+            ap[ten_ngan(d, raw_d)] = L
 
     if not ap:
         return [
@@ -325,12 +370,35 @@ def kiem_phu_layer():
             "phai 'moi layer deu duoc phu' - la CHUA DOC DUOC."
         ], os.path.basename(nguon)
 
-    # Tien to la tien to CHUOI. Them "/" vao layer truoc khi so, de
-    # "landing-zone/network" khong tu khop voi tien to
-    # "landing-zone/network-cu/".
+    ####################################
+    # PHU THEO PIPELINE, KHONG THEO TAP TIEN TO CHUNG
+    #
+    # Truoc day phep kiem gop moi tien to cua moi pipeline lai roi hoi
+    # "co tien to nao cham vao layer L khong". Cau do tra loi sai khi
+    # layer LONG NHAU:
+    #
+    #   landing-zone/network/       trong ban do cua vending
+    #   landing-zone/network/ops/   layer RIENG, pipeline rieng
+    #
+    # "landing-zone/network/ops/" bat dau bang "landing-zone/network/",
+    # nen network/ops trong nhu da duoc phu - trong khi pipeline phu no
+    # (vending) KHONG apply layer do. Mot duong tinh gia theo chieu nguy
+    # hiem: no che di dung cai cho trong ma phep kiem nay sinh ra de tim.
+    #
+    # Cau dung la: layer L duoc phu khi co MOT pipeline vua APPLY L vua
+    # co mot tien to cham vao L.
+    ####################################
+    def phu(L):
+        for ten, layers in ap.items():
+            if L in layers and any((L + "/").startswith(p) for p in ban_do.get(ten, []) if p):
+                return True
+        return False
+
     sot = sorted(
-        L for L in ap
-        if L not in thu_cong and not any((L + "/").startswith(p) for p in tien_to if p)
+        L
+        for layers in ap.values()
+        for L in layers
+        if L not in thu_cong and not phu(L)
     )
 
     loi = []
@@ -345,7 +413,8 @@ def kiem_phu_layer():
     # Chieu nguoc: khai thu cong mot layer ma KHONG pipeline nao apply.
     # Vo hai luc chay, nhung no la mot ngoai le da het han - no noi rang
     # co mot cho trong o dau do, trong khi cho do khong con.
-    thua = sorted(thu_cong - ap)
+    moi_layer = set().union(*ap.values())
+    thua = sorted(thu_cong - moi_layer)
     if thua:
         loi.append(
             f"layer_thu_cong khai layer khong pipeline nao apply: {thua}. "

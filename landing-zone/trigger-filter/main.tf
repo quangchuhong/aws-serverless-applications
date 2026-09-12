@@ -9,6 +9,11 @@ locals {
     "${var.project}-${ten}" => tien_to
   }
 
+  tru = {
+    for ten, tien_to in var.tru :
+    "${var.project}-${ten}" => tien_to
+  }
+
   pipeline_arns = [
     for ten in keys(local.ban_do) :
     "arn:${data.aws_partition.current.partition}:codepipeline:${var.region}:${data.aws_caller_identity.current.account_id}:${ten}"
@@ -30,6 +35,7 @@ locals {
 
   tao_topic = var.loi_topic_arn == "" && length(var.loi_emails) > 0
   loi_topic = var.loi_topic_arn != "" ? var.loi_topic_arn : try(aws_sns_topic.loi[0].arn, "")
+
   ####################################
   # ARN KHO: TRA CUU, KHONG TU GHEP
   #
@@ -46,6 +52,16 @@ locals {
   # RepositoryDoesNotExistException, kem dung ten da go.
   ####################################
   repo_arn = local.enabled ? data.aws_codecommit_repository.kho[0].arn : ""
+
+  tru_chan_sach = flatten([
+    for ten, gom in var.ban_do : [
+      for p in gom : [
+        for e in lookup(var.tru, ten, []) :
+        "${ten}: gom \"${p}\" bi tru \"${e}\""
+        if e != "" && startswith(p, e)
+      ]
+    ]
+  ])
 
   # Tien to duong dan khong ket thuc bang "/" - xem check ben duoi.
   tien_to_lung_lo = flatten([
@@ -94,6 +110,41 @@ check "khong_co_danh_sach_rong" {
       join(", ", [for ten, ds in var.ban_do : ten if length(ds) == 0]),
       ". Danh sach rong KHONG phai 'chua dien' - no lam pipeline do khong bao",
       "gio duoc khoi dong. Muon no chay voi moi thay doi thi khai [\"\"].",
+    ])
+  }
+}
+
+########################################
+# TRU PHAI GOI TEN MOT PIPELINE CO TRONG ban_do
+#
+# loc.py cung bat, nhung do la luc CHAY. Bat o day la luc apply.
+########################################
+check "tru_goi_ten_co_that" {
+  assert {
+    condition = length(setsubtract(toset(keys(var.tru)), toset(keys(var.ban_do)))) == 0
+    error_message = join(" ", [
+      "var.tru goi ten pipeline khong co trong ban_do:",
+      join(", ", tolist(setsubtract(toset(keys(var.tru)), toset(keys(var.ban_do))))),
+      ". Muc tru do khong co hieu luc - no noi rang co mot ngoai le dang ap",
+      "dung, trong khi khong.",
+    ])
+  }
+}
+
+########################################
+# TRU KHONG DUOC CHAN SACH MOT TIEN TO GOM
+#
+# Cung dang voi danh sach tien to rong, nhung kho thay hon nhieu: hai dong
+# deu co noi dung, va phai doc CA HAI moi biet cai sau vo hieu hoa cai
+# truoc.
+########################################
+check "tru_khong_chan_sach" {
+  assert {
+    condition     = length(local.tru_chan_sach) == 0
+    error_message = join(" ", [
+      "TRU chan sach tien to gom:",
+      join("; ", local.tru_chan_sach),
+      ". Tien to do khong bao gio khop duoc nua, nen pipeline coi nhu khong co no.",
     ])
   }
 }
@@ -271,6 +322,7 @@ resource "aws_lambda_function" "loc" {
   environment {
     variables = {
       BAN_DO      = jsonencode(local.ban_do)
+      TRU         = jsonencode(local.tru)
       TIEN_TO_PHU = var.kiem_do_phu ? "${var.project}-" : ""
     }
   }

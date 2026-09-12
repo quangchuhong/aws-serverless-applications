@@ -32,10 +32,10 @@ tra ve rong, va rong bi doc thanh mot cau tra loi. O day rong se co nghia
 la "khong file nao lien quan" - mot cau tra loi rat de tin va rat sai.
 
 =========================================================================
-BA CACH BAN DO CO THE SAI, VA CA BA DEU IM LANG
+NAM CACH BAN DO CO THE SAI, VA CA NAM DEU IM LANG
 
 Bo loc nay dung GIUA su kien va pipeline. Khi no sai, khong co gi do -
-pipeline khong chay trong giong het khong co gi de chay. Nen ba phep kiem
+pipeline khong chay trong giong het khong co gi de chay. Nen nam phep kiem
 duoi day chay MOI LAN goi, va deu la loi CUNG:
 
   1. BAN_DO rong          -> chan sach moi thay doi, bao thanh cong
@@ -46,8 +46,14 @@ duoi day chay MOI LAN goi, va deu la loi CUNG:
                              "da tat".
   3. BAN_DO goi ten mot pipeline KHONG CO that (go sai)
                           -> StartPipelineExecution nem loi
+  4. TRU goi ten pipeline khong co trong BAN_DO
+                          -> mot ngoai le da het han
+  5. TRU chan sach mot tien to trong BAN_DO
+                          -> cung dang voi (2) nhung kho thay hon: hai
+                             dong deu co noi dung, phai doc CA HAI moi
+                             biet cai sau vo hieu hoa cai truoc
 
-Va mot chieu nua, chieu NGUY HIEM hon ca ba: mot pipeline CO that, da tat
+Va mot chieu nua, chieu NGUY HIEM hon ca nam: mot pipeline CO that, da tat
 rule rieng cua no, nhung KHONG CO trong BAN_DO. Luc do khong con duong
 nao kich hoat no. TIEN_TO_PHU bat chieu do - xem kiem_ban_do().
 """
@@ -70,8 +76,32 @@ def ten_pipeline_o_aws():
     return ra
 
 
-def kiem_ban_do(ban_do, tien_to_phu):
-    """Ba phep kiem cau truc + mot phep kiem do phu. Loi CUNG.
+def khop(duong_dan, gom, tru):
+    """Duong dan khop `gom` va KHONG khop `tru`.
+
+    =====================================================================
+    VI SAO CAN `tru`
+
+    Layer co the LONG NHAU trong cay thu muc:
+
+      landing-zone/network/       <- pipeline vending apply (stage B, D)
+      landing-zone/network/ops/   <- layer RIENG, pipeline rieng, state rieng
+
+    So khop la so khop CHUOI, nen tien to "landing-zone/network/" bat ca
+    moi file trong "network/ops/". Khong co cach nao viet mot tien to
+    nghia la "network/ nhung khong network/ops/".
+
+    Hau qua neu bo qua: sua lop van hanh mang - thu doi HANG NGAY - keo
+    vending chay vo ich, kem mot cong duyet treo mang nhan "tao account".
+    """
+    return sorted(
+        d for d in duong_dan
+        if d.startswith(tuple(gom)) and not (tru and d.startswith(tuple(tru)))
+    )
+
+
+def kiem_ban_do(ban_do, tru, tien_to_phu):
+    """Nam phep kiem cau truc + mot phep kiem do phu. Loi CUNG.
 
     Tra ve (loi, kiem) - `kiem` noi hai phep kiem can AWS co CHAY hay
     khong. Xem chu thich trong than ham: "dat" va "khong chay" phai
@@ -95,7 +125,36 @@ def kiem_ban_do(ban_do, tien_to_phu):
                 'voi moi commit thi khai [""], khong phai [].'
             )
 
-    # 3 va 4 can biet AWS co gi. Doc hong thi NOI RA chu khong bo qua -
+    # 4. TRU goi ten pipeline khong co trong BAN_DO.
+    #
+    # Vo hai luc chay - vong lap duyet BAN_DO nen muc do khong ai doc.
+    # Nhung no la mot phan TRU da het han: no noi rang co mot ngoai le
+    # dang co hieu luc, trong khi khong.
+    if set(tru) - set(ban_do):
+        loi.append(
+            f"TRU goi ten pipeline khong co trong BAN_DO: "
+            f"{sorted(set(tru) - set(ban_do))}. Muc tru do khong co hieu luc."
+        )
+
+    # 5. TRU CHAN SACH MOT TIEN TO GOM.
+    #
+    # Cung dang voi danh sach tien to rong, nhung kho thay hon nhieu: hai
+    # dong deu co noi dung, va phai doc CA HAI moi biet cai thu hai vo
+    # hieu hoa cai thu nhat.
+    #
+    #   gom = ["landing-zone/network/"]
+    #   tru = ["landing-zone/"]          <- gom khong bao gio khop nua
+    for ten, gom in sorted(ban_do.items()):
+        for p in gom:
+            chan = [e for e in tru.get(ten, []) if e and p.startswith(e)]
+            if chan:
+                loi.append(
+                    f"{ten}: tien to gom \"{p}\" bi TRU chan sach boi {chan}. "
+                    "No khong bao gio khop duoc, nen pipeline nay coi nhu khong "
+                    "co tien to do."
+                )
+
+    # 3 va phep do phu can biet AWS co gi. Doc hong thi NOI RA chu khong bo qua -
     #    bo qua o day nghia la hai phep kiem duoi im lang bien mat.
     #
     # ---------------------------------------------------------------
@@ -124,7 +183,7 @@ def kiem_ban_do(ban_do, tien_to_phu):
             f"Pipeline dang co: {sorted(co_that)}"
         )
 
-    # 4. CHIEU NGUY HIEM: pipeline co that ma khong ai kich hoat.
+    # DO PHU - CHIEU NGUY HIEM: pipeline co that ma khong ai kich hoat.
     #
     # Sau khi tat rule EventBridge rieng cua tung pipeline, BAN_DO la
     # duong DUY NHAT den chung. Mot pipeline bi quen o day van "ton tai",
@@ -212,9 +271,10 @@ def chay_het(ban_do, vi_sao, hong):
 
 def handler(event, context):
     ban_do = json.loads(os.environ["BAN_DO"])
+    tru = json.loads(os.environ.get("TRU", "{}"))
     tien_to_phu = os.environ.get("TIEN_TO_PHU", "")
 
-    loi, kiem = kiem_ban_do(ban_do, tien_to_phu)
+    loi, kiem = kiem_ban_do(ban_do, tru, tien_to_phu)
     if loi:
         # Nem TRUOC khi cham vao pipeline nao: mot ban do sai thi khong
         # co ket qua nao cua no dang tin, ke ca phan "khop".
@@ -244,7 +304,7 @@ def handler(event, context):
             )
 
     if ket_qua is None:
-        ket_qua = doi_chieu(ban_do, duong_dan, hong)
+        ket_qua = doi_chieu(ban_do, tru, duong_dan, hong)
 
     # Di theo MOI duong tra ve, ke ca duong fail-open: cau hoi "hai phep
     # kiem can AWS co chay khong" khong phu thuoc vao viec doc duoc diff
@@ -268,7 +328,7 @@ def handler(event, context):
     return ket_qua
 
 
-def doi_chieu(ban_do, duong_dan, hong):
+def doi_chieu(ban_do, tru, duong_dan, hong):
     """Duong binh thuong: so duong dan da doi voi ban do."""
     if not duong_dan:
         # Diff rong that su xay ra: commit rong, hoac merge khong doi gi.
@@ -282,13 +342,17 @@ def doi_chieu(ban_do, duong_dan, hong):
         print(f"    {d}")
 
     da_chay, bo_qua = [], []
-    for ten, tien_to in sorted(ban_do.items()):
-        khop = sorted(d for d in duong_dan if d.startswith(tuple(tien_to)))
-        if khop:
-            if khoi_dong(ten, f"{len(khop)} duong dan khop, vi du {khop[0]}", hong):
+    for ten, gom in sorted(ban_do.items()):
+        bo = tru.get(ten, [])
+        kh = khop(duong_dan, gom, bo)
+        if kh:
+            if khoi_dong(ten, f"{len(kh)} duong dan khop, vi du {kh[0]}", hong):
                 da_chay.append(ten)
         else:
-            print(f"bo qua     {ten}  (khong duong dan nao khop {tien_to})")
+            vi = f"khong duong dan nao khop {gom}"
+            if bo:
+                vi += f", tru {bo}"
+            print(f"bo qua     {ten}  ({vi})")
             bo_qua.append(ten)
 
     return {"loc": True, "da_khoi_dong": da_chay, "bo_qua": bo_qua}
