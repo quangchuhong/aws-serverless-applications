@@ -200,10 +200,19 @@ def kiem_ban_do(ban_do, tru, tien_to_phu):
     # local.name = "${var.project}-${var.ten}". Con pipeline dat ten tay
     # thi no khong thay.
     #
-    # Da do that: account nay co 5 pipeline, 3 mang tien to "qh11-lz-".
-    # Hai cai con lai (MyImagePipeline1, shopping-cart-pipeline) khong
-    # thuoc landing zone, nen khong sao - nhung do la mot ket luan rut ra
-    # tu viec NHIN danh sach, khong phai tu viec phep kiem im lang.
+    # Da do that, hai lan cach nhau vai ngay:
+    #
+    #   lan dau  5 pipeline, 3 mang tien to "qh11-lz-"
+    #   sau do   7 pipeline, 5 mang tien to "qh11-lz-"
+    #
+    # Hai con so deu tang khi bat them pipeline van hanh, va chung se con
+    # doi nua - dung dung con so o day de ket luan bat cu dieu gi ve hien
+    # tai, doc dong "Ban do da doi chieu voi AWS" trong log.
+    #
+    # Nhung cai KHONG mang tien to (MyImagePipeline1,
+    # shopping-cart-pipeline) khong thuoc landing zone nen khong sao -
+    # va do la mot ket luan rut ra tu viec NHIN danh sach, khong phai tu
+    # viec phep kiem im lang.
     if tien_to_phu:
         sot = sorted(
             t for t in co_that
