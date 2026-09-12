@@ -1,0 +1,56 @@
+########################################
+# KHAI BAO NOI LONG - FILE TAM, PHAI XOA SAU KHI APPLY
+#
+# gate.py doc file nay khi no nam canh layer. Moi muc cho phep DUNG MOT
+# dia chi resource di qua cong, va chi lan do.
+#
+# =======================================================================
+# XOA FILE NAY NGAY SAU KHI THAY DOI DA APPLY
+#
+# Mot khai bao con lai sau khi thay doi da di qua la mot CUA MO BO NGO:
+# lan sau co ai noi long dung dia chi do se khong bi chan, va se khong co
+# thong bao nao.
+#
+# gate.py co bat cho do - muc "KHAI BAO KHONG DUNG TOI" - va voi --strict
+# (pipeline dang bat) thi canh bao do lam pipeline DO. Nen quen xoa thi
+# no keu, khong im. Nhung no keu o lan chay SAU, va lan chay sau co the
+# la vai tuan nua.
+# =======================================================================
+#
+# DIA CHI PHAI CHEP NGUYEN VAN TU BAN PLAN
+#
+# for_each dung khoa "<group>|<permission-set>|<account-id>". Go tay sai
+# mot ky tu thi khai bao khong khop, gate.py van chan, va thong bao van
+# la "NOI ma khong khai bao" - khong noi gi ve viec go sai. Dia chi duoi
+# day chep tu log CodeBuild 2026-09-12 20:47.
+########################################
+
+loosen:
+  - address: aws_ssoadmin_account_assignment.this["lz-security-operators|lz-network-operator|436908791055"]
+
+    # ------------------------------------------------------------------
+    # HAI TRUONG DUOI DAY DE TRONG CO CHU DICH - PHAI DIEN TRUOC KHI PUSH
+    #
+    # gate.py kiem "co gia tri hay khong", no khong kiem gia tri co that
+    # hay khong. Nen mot so ticket bia dat se di qua het moi lop - va luc
+    # do ho so duyet quyen cua to chuc nay co mot dong sai ma khong ai
+    # doi chieu duoc.
+    #
+    # De trong thi gate.py bao "Khai bao noi long thieu truong ticket,
+    # approved_by" va chan. Do la chieu hong dung: chua dien thi khong di
+    # qua duoc, thay vi di qua voi mot dong bia.
+    # ------------------------------------------------------------------
+    ticket: ""
+    approved_by: ""
+
+    reason: >-
+      Truc bao mat (SOC) duoc them lz-network-operator o account mang
+      436908791055. ViewOnlyAccess + allow_network_read, khong co quyen
+      ghi nao, van chiu deny_data_access cua local.guard_data.
+      Ly do: mot su co bao mat gan nhu luon co cau hoi ve duong di -
+      security group nao mo, rule Network Firewall nao vua khop, ban ghi
+      Route 53 tro vao dau. Khong doc duoc thi truc bao mat phai danh
+      thuc doi mang de HOI, giua luc dang xu ly su co.
+      Pham vi gioi han o scope network chu khong phai lz-auditor
+      (scope = all): doi truc can doc duong mang, khong can vao account
+      nghiep vu.
