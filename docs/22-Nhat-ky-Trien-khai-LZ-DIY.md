@@ -4019,6 +4019,84 @@ loc.handler(su_kien_ or su_kien(), None)
 
 `{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
 
+### Lỗi 121 — "pipeline chạy ổn" chưa bao giờ có nghĩa là "apply được"
+
+Thay đổi thật đầu tiên đi qua một pipeline vận hành: thêm một Config rule toàn tổ chức. `plan` xanh, `gate.py` cho qua, rồi `apply` **crash**:
+
+```
+panic: checkable object status report for unexpected checkable object
+       var.security_hub_standards
+       ... evalVariableValidations
+```
+
+Không phải lỗi cấu hình — một bug của lõi Terraform, sinh ra từ 1.6.0 khi `validation` của biến trở thành *checkable object* ([#34052](https://github.com/hashicorp/terraform/issues/34052), [#35525](https://github.com/hashicorp/terraform/issues/35525)).
+
+Ba điều kiện kích hoạt **đều là thiết kế của chính pipeline này**:
+
+| Điều kiện | Vì sao nó có mặt |
+|---|---|
+| `-target` | ranh giới ghi của từng stage |
+| file plan lưu ra artifact | `gate.py` đọc *đúng bản plan đó*, và apply phải thực hiện *đúng nó* |
+| biến có `validation` | 10 ở `config-detective`, 5 ở `permission-sets`, 4 ở `organization`, 3 ở `org-trail` |
+
+Nên đây không phải một trường hợp biên. Đó là **đường đi bình thường của mọi thay đổi thật**.
+
+#### Vì sao nó ẩn được lâu đến thế
+
+Mọi lần apply xanh trước đó trong dự án này đều là **no-op**: `0 added, 0 changed, 0 destroyed`.
+
+Quy ước *"lần chạy đầu qua một đường mới phải là một lần không có thay đổi"* là một quy ước tốt — nó kiểm đường đi trước khi một thay đổi thật đi qua. Nhưng nó cũng **che đúng khúc cuối của đường đó**: khúc mà Terraform phải *làm* gì đó.
+
+Nên câu "pipeline chạy ổn", cho tới hôm nay, chỉ có nghĩa là **đường ống thông**. Nó chưa bao giờ có nghĩa là **apply được**. Hai điều đó khác nhau, và cái thứ hai vừa được thử lần đầu — sau khi năm pipeline đã được dựng, đo, và tuyên bố là chạy tốt.
+
+#### Tìm bản vá bằng một lần chạy, không bằng changelog
+
+Tôi không tra ra được bản nào sửa bug này — changelog của Terraform không có mục nào khớp, và issue thì bị đóng như trùng lặp mà không nêu bản vá.
+
+Thứ trả lời được là một lần chạy: `terraform apply` cùng plan đó trên máy vận hành, Terraform **1.11.3**, không panic. Nên `terraform_version` đi từ `1.9.8` lên `1.11.3` ở **hai** chỗ ghim (module và `vending-pipeline`, hai bản sao độc lập).
+
+Và ngay sau đó việc nâng thành **bắt buộc** chứ không còn là tuỳ chọn: state của `config-detective` vừa được 1.11.3 ghi, nên 1.9.8 từ chối đọc. Một lần chạy tay để chẩn đoán đã khoá luôn phương án "cứ để nguyên".
+
+#### Hậu quả phụ: panic không nhả khoá
+
+Lần chạy crash để lại một state lock của DynamoDB. Lần sau bất kỳ ai chạm vào layer đó — người hay pipeline — đều nhận một lỗi nói về `ConditionalCheckFailedException`, **không nhắc gì tới panic**. Nó đọc như một sự cố khác hẳn.
+
+Hai trường phân biệt được nguồn gốc nằm trong khối `Lock Info`:
+
+```
+Who:     root@19b82b8b9864     <- CodeBuild
+Version: 1.9.8                 <- ban trong pipeline
+```
+
+so với
+
+```
+Who:     laptop@MacBook-Air-...
+Version: 1.11.3
+```
+
+Trong một buổi có hai khoá kẹt từ hai nguồn khác nhau. `force-unlock` là đúng cách chữa, nhưng **chỉ sau khi `pgrep -fl terraform` xác nhận không còn tiến trình nào sống** — gỡ khoá của một apply đang chạy là cách làm hỏng state thật.
+
+#### Và một thiếu sót mà bug kia che mất
+
+Khi panic được gỡ, apply thất bại lần nữa — lần này là quyền. Caller cấp `config:Describe*`, `Get*`, `List*` và **không một action ghi nào**. Pipeline đọc được mọi thứ và ghi được không gì.
+
+Thứ che mất điều đó: khối `tu_choi_dich_vu` bên dưới dài và cụ thể, nên cả file **đọc như** một ranh giới ghi đã được cân nhắc kỹ. **Một danh sách Deny dài không hàm ý rằng có một danh sách Allow tương ứng.**
+
+#### Kết quả đo được
+
+```
+aws_config_organization_managed_rule.this["cloud-trail-log-file-validation-enabled"]:
+    Creation complete after 1m14s
+Apply complete! Resources: 1 added, 0 changed, 0 destroyed
+== ghi lai output (sau apply co -target)
+organization_rules -> 10 muc
+```
+
+Bộ lọc gọi đúng một pipeline trong số năm; `gate.py` xếp "thêm một rule" là siết và cho qua; apply tạo thật; bước `-refresh-only` cập nhật output (lỗi 106 không tái diễn).
+
+---
+
 ### Lỗi 120 — một danh sách rỗng đi qua `plan` mà không để lại dấu vết nào
 
 Bật hai pipeline vận hành còn lại (`config-rules`, `trail`). Cả hai khai:
