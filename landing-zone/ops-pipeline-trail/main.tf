@@ -134,6 +134,33 @@ locals {
   ]
 }
 
+########################################
+# BAT STAGE THI PHAI CO ROLE - DANH SACH RONG LA MOT CAI BAY
+#
+# trail_pipeline_role_arns nuoi truong Resource cua statement
+# sts:AssumeRole. Danh sach RONG lam Resource thanh [], va IAM tu choi CA
+# POLICY voi mot loi ve dinh dang ARN - khong nhac gi toi bien nao.
+#
+# Va no khong hien ra o plan: plan van xanh, resource van duoc mo ta day
+# du. Loi chi den luc APPLY, o buoc tao aws_iam_role_policy.
+#
+# Cach doc nhanh mot ban plan xem co dinh bay nay khong:
+#   grep -c "OrganizationAccountAccessRole" <file plan>
+# Ra 0 nghia la khong co ARN nao - stage se khong assume duoc sang
+# account LOG-ARCHIVE.
+########################################
+check "bat_stage_thi_co_role" {
+  assert {
+    condition     = !var.enable || !var.enable_trail_stage || length(var.trail_pipeline_role_arns) > 0
+    error_message = join(" ", [
+      "Stage dang duoc bat nhung trail_pipeline_role_arns RONG.",
+      "Statement sts:AssumeRole se co Resource = [], va IAM tu choi ca policy",
+      "voi mot loi ve dinh dang ARN khong nhac toi bien nao. Dien ARN role o",
+      "account LOG-ARCHIVE, hoac tat stage.",
+    ])
+  }
+}
+
 module "pipeline" {
   source = "../../modules/tf-pipeline"
 

@@ -77,7 +77,18 @@ layer_keys = {
 }
 
 enable_trail_stage       = true
-trail_pipeline_role_arns = []
+# DIEN TRUOC KHI BAT STAGE. Danh sach rong lam Resource cua statement
+# sts:AssumeRole thanh [], va IAM tu choi CA POLICY - loi chi den luc
+# apply, khong hien o plan. Check "bat_stage_thi_co_role" bat som hon.
+#
+# Quyet dinh tam thoi da thong qua: dung OrganizationAccountAccessRole
+# truoc, thu hep sau bang session policy.
+#
+# Lay account id tu tfvars cua layer tuong ung (org-trail):
+#   grep account_id ../org-trail/terraform.tfvars
+trail_pipeline_role_arns = [
+  # "arn:aws:iam::<log_archive_account_id>:role/OrganizationAccountAccessRole",
+]
 
 ########################################
 # CONG DUYET
