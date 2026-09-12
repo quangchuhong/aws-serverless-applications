@@ -48,9 +48,26 @@ locals {
       permission_sets = ["lz-security-admin"]
     }
 
+    ####################################
+    # SOC DOC DUOC CA DUONG MANG
+    #
+    # lz-network-operator la ViewOnlyAccess + allow_network_read, pham vi
+    # scope = "network". Khong co quyen ghi nao, va deny_data_access cua
+    # local.guard_data van ap dung.
+    #
+    # Vi sao them: mot su co bao mat gan nhu luon co cau hoi ve duong di -
+    # security group nao mo, rule nao cua Network Firewall vua khop,
+    # ban ghi Route 53 tro vao dau. Khong doc duoc thi truc bao mat phai
+    # danh thuc doi mang de HOI, giua luc dang xu ly su co.
+    #
+    # Vi sao chi scope network chu khong rong hon: doi truc can DOC duong
+    # mang, khong can vao account nghiep vu. lz-auditor (scope = all) se
+    # cho ho ca hai, va do la mot pham vi khac han - can mot quyet dinh
+    # rieng, khong phai he qua cua dong nay.
+    ####################################
     "lz-security-operators" = {
       description     = "Truc bao mat / SOC - chi doc"
-      permission_sets = ["lz-security-operator"]
+      permission_sets = ["lz-security-operator", "lz-network-operator"]
     }
 
     "lz-server-admins" = {
