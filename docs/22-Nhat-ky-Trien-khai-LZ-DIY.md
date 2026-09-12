@@ -4086,6 +4086,75 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 123 — `-target` không phải hàng rào, nó là "cái này *và những gì nó cần*"
+
+`ops-trail` chạy lần đầu với một thay đổi thật. `-target=aws_cloudtrail.this` đặt đúng, log in ra `== gioi han: -target=aws_cloudtrail.this`. Plan ra **hai** resource:
+
+```
+== tom tat: 0 tao, 2 sua, 0 xoa, 0 thay the
+    update  aws_cloudtrail.this[0]
+    update  aws_s3_bucket.trail[0]     <- khong ai target vao day
+```
+
+`gate.py` chặn: *"NGOAI PHAM VI cua stage cloudops-trail: aws_s3_bucket.trail[0]"*.
+
+Và khối chú thích trong `ops-pipeline-trail/main.tf` khi đó viết rằng điều này **không thể xảy ra**:
+
+```
+# KHONG -target VAO BUCKET
+# ... chung KHONG nam trong pham vi pipeline
+```
+
+Câu đó sai. `-target=X` không có nghĩa là *"chỉ X"*, nó có nghĩa là *"X và những gì X cần"*. `aws_cloudtrail.this` tham chiếu `aws_s3_bucket.trail` qua `s3_bucket_name`, nên hễ bucket có bất kỳ sai khác nào là nó vào bản plan cùng con trail — kể cả khi không ai định sửa nó.
+
+#### Đo được, không phải suy ra
+
+Sai khác của bucket là **một cái tag**: `Environment = "shared"` còn sót từ trước khi tag policy cấm giá trị đó. Sau khi apply tay đúng cái bucket cho khớp lại, cùng pipeline, cùng `-target`, không đổi một chữ cấu hình:
+
+```
+19:43   4 resource trong ban plan, 2 co thay doi
+19:57   4 resource trong ban plan, 1 co thay doi
+```
+
+Phụ thuộc bị kéo vào **khi nó có sai khác**, và thôi bị kéo khi nó hết. Đó là cơ chế, không phải một lần trùng hợp.
+
+#### Vì sao đây là lỗi thiết kế chứ không phải lỗi vận hành
+
+`-target` được dùng trong dự án này như **ranh giới ghi** của từng stage — mỗi pipeline chỉ được chạm vào một tập resource. Nhưng nó không thực hiện được vai trò đó: phạm vi thật của nó là *bao đóng phụ thuộc* của tập target, và bao đóng đó không ai viết ra ở đâu cả.
+
+Thứ giữ được ranh giới là `gate.py`: bảng phạm vi theo stage (`"cloudops-trail": ["aws_cloudtrail"]`) đọc bản plan **đã sinh ra** và từ chối mọi resource ngoài danh sách. Lớp thứ hai làm việc của nó; vấn đề là lớp thứ nhất được **mô tả** như một thứ nó không phải.
+
+Nên cách chữa **không** phải nới `-target`, cũng không phải nới bảng phạm vi. Là apply tay đúng resource nằm ngoài phạm vi, rồi để pipeline chạy lại — đúng quy trình mà chính file đó đã khai từ đầu.
+
+Hệ quả phải chấp nhận, và đã viết vào code: **mọi sai khác của bucket log — kể cả một cái tag — sẽ làm stage này đỏ** cho tới khi có người apply tay. Đó là chiều hỏng đúng.
+
+#### Hai thứ lộ ra kèm theo
+
+**Tag `shared` tồn tại được trên hạ tầng sống.** `versions.tf` viết `Environment = "prod" # "shared" bi tag policy tu choi` — code đúng, state cũ. Nếu tag policy đang enforce thì lần ghi tạo ra nó lẽ ra đã bị từ chối. Nó không bị. Nên tag policy hoặc chưa enforce, hoặc không phủ `s3:bucket` — cần đếm riêng.
+
+**Tên tài nguyên của layer này là `quh11-lz`, không phải `qh11-lz`.** Một chữ `u` thừa trong `project` của tfvars ở S3 store: bucket `quh11-lz-cloudtrail-654560867047`, trail `quh11-lz-org-trail`, trong khi mọi pipeline là `qh11-lz-*`. Không sửa được — đổi `project` là tạo bucket mới và bỏ toàn bộ log cũ. Nhưng nó có hậu quả: **mọi lệnh tìm tài nguyên theo tiền tố `qh11-lz-` sẽ không thấy trail và bucket log**, và trả về rỗng. Cùng họ với hơn chục lần trước trong dự án này: *một phép lọc hỏng trả về rỗng, và rỗng bị đọc thành câu trả lời.*
+
+#### Kết quả đo được
+
+```
+Apply complete! Resources: 0 added, 1 changed, 0 destroyed
+== ghi lai output (sau apply co -target)
+Apply complete! Resources: 0 added, 0 changed, 0 destroyed
+```
+
+Hỏi thẳng AWS, không qua Terraform:
+
+```
+Environment        = "prod"
+IsLogging          = true
+LatestDeliveryTime = 03:01:05 (+07)
+LatestDeliveryError = null
+```
+
+Apply xong lúc `02:58:43`, giao log lúc `03:01:05` — **sau** 2 phút 22 giây. Đó mới là phép kiểm thật: không phải "trail vẫn được cấu hình để ghi", mà "trail đã giao một lô log kể từ lúc ta chạm vào nó". Chỉ câu thứ hai loại trừ được kiểu hỏng mà layer này tồn tại để chặn.
+
+---
+
 ### Lỗi 122 — một lần chạy đỏ do đua tạo resource, đọc y hệt một lỗi thiếu quyền
 
 `ops-trail` vừa dựng xong đã đỏ ngay ở stage `Nguon`:
