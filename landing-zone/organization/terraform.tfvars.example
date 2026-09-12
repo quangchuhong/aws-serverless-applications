@@ -194,3 +194,93 @@ delegated_administrators = {}
 #   "Sandbox"        = []
 #   "Suspended"      = []
 # }
+
+########################################
+# 8. TAG POLICY - TANG THU BA, VA NO DANG TAT
+#
+# Ba tang, ba viec KHAC NHAU. Bang nay quyet dinh cach doc moi bao cao
+# chi phi va moi phep kiem tuan thu tag:
+#
+#   tag policy           ep DUNG CACH VIET va GIA TRI hop le
+#   SCP                  chan TAO resource khi thieu tag (doc 11 muc 5)
+#   Config required-tags PHAT HIEN resource da co ma thieu tag
+#
+# Khoi nay chi lam tang thu nhat.
+#
+# ------------------------------------------------------------------
+# DIEU HAY BI HIEU NHAM NHAT: TAG POLICY KHONG LAM TAG THANH BAT BUOC
+#
+# No chi quan ly GIA TRI cua mot tag KHI tag do duoc gan. Tao mot EC2
+# instance khong co tag nao ca thi tag policy khong noi gi het - ke ca
+# khi da bat enforced_for.
+#
+# ------------------------------------------------------------------
+# DE MAC DINH (TAT) THI DIEU GI XAY RA
+#
+# Environment CHI duoc la dev / staging / prod / sandbox (doc 11 muc 2,
+# khai o variables.tf tag_policy_keys). Nhung khi enable_tag_policy =
+# false thi do la mot quy uoc DUOC TON TRONG, khong phai mot quy uoc
+# DUOC THUC THI - khong co gi tu choi mot gia tri thu nam.
+#
+# Da xay ra that: mot trail va mot bucket log mang Environment = "shared"
+# trong nhieu ngay. Thu tim ra chung la mot ban `terraform plan`, khong
+# phai mot phep tu choi. Xem nhat ky loi 123.
+#
+# ------------------------------------------------------------------
+# BAT THEO HAI NHIP, DUNG NHIP MOT LAN
+#
+# 1. enable_tag_policy = true, moi enforced_for de RONG
+#
+#    Policy duoc tao va gan vao ROOT, nhung KHONG chan gi - chi bao
+#    cao. Doc bao cao o Resource Groups & Tag Editor -> Tag policies
+#    vai ngay: no cho biet ai dang gan sai, TRUOC khi viec gan sai bat
+#    dau bi tu choi giua mot lan apply.
+#
+#    Terraform check "tag_policy_is_report_only" se CANH BAO o nhip nay.
+#    Do la dung - no nhac rang dung dung lai o day va tuong tag da duoc
+#    ep buoc.
+#
+# 2. Them enforced_for cho TUNG khoa mot, sau khi bao cao da sach.
+#
+#    tag_policy_keys = {
+#      CostCenter  = {}
+#      Owner       = {}
+#      Project     = {}
+#      Environment = {
+#        allowed_values = ["dev", "staging", "prod", "sandbox"]
+#        enforced_for   = ["ec2:instance", "s3:bucket"]
+#      }
+#    }
+#
+#    Tu luc nay mot thao tac gan Environment = "shared" len ec2:instance
+#    hay s3:bucket se bi TU CHOI. Va do la phep thu duy nhat chung minh
+#    tang nay hoat dong: policy co noi dung dung KHONG co nghia la no
+#    dang chan - giong SCP, xem nhat ky loi 126.
+#
+# ------------------------------------------------------------------
+# STAGE TRONG PIPELINE PHAI BAT RIENG
+#
+# Layer nay duoc pipeline qh11-lz-ops apply, va stage cham vao tag
+# policy la sec-tagging - MAC DINH TAT o ../ops-pipeline/terraform.tfvars
+# (enable_tagging_stage = false), vi mot stage cho resource co 0 instance
+# se ra "KHONG CO THAY DOI" mai mai.
+#
+# THU TU DUNG:
+#
+#   1. enable_tagging_stage = true o ../ops-pipeline, apply BANG TAY
+#      (layer dinh nghia duong ong, khong pipeline nao apply no)
+#   2. enable_tag_policy = true o day, roi ../vending-pipeline/push-tfvars.sh
+#   3. day code len CodeCommit de bo loc chay qh11-lz-ops
+#
+# Lam nguoc lai thi tag policy duoc bat ma khong stage nao apply no -
+# khong loi, chi la khong co gi xay ra, va `terraform output tag_policy`
+# van bao enabled = false.
+########################################
+
+enable_tag_policy = false
+
+# tag_policy_targets = ["ROOT"]
+#
+# Mac dinh ROOT. Tag policy KE THUA VA TRON xuong duoi - khac SCP von
+# GIAO NHAU - nen gan o root la phu het, va OU con van tinh chinh them
+# duoc bang @@append o mot policy khac.
