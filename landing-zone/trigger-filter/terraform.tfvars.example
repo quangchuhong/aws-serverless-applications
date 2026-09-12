@@ -53,7 +53,16 @@ ban_do = {
   ####################################
   "vending" = [
     "landing-zone/account-baseline/",
-    "landing-zone/network/",
+
+    # "landing-zone/network/" - TAM BO RA, xem layer_thu_cong ben duoi.
+    #
+    # Ha tang mang da bi XOA HET va state cua layer do dang rong. De
+    # duong dan nay trong ban do thi moi lan ai sua code mang, vending
+    # chay va DUNG DO o stage B: buildspec co chot chan state rong.
+    #
+    # Mot pipeline do thuong truc la thu nguoi ta quen mat roi thoi doc,
+    # va luc do no khong con bao duoc gi nua. Mo lai dong nay ngay sau
+    # khi mang duoc dung lai.
   ]
 
   # SCP + OU + tag policy. Ba stage, mot layer.
@@ -139,18 +148,32 @@ kiem_do_phu = true
 # vending khong apply layer do.
 #
 # ------------------------------------------------------------------
-# CON MOT MUC, va no la trang thai qua do
+# HAI MUC, VA CA HAI LA TRANG THAI QUA DO
 #
-# landing-zone/network/ops: pipeline cua no (ops-pipeline-network) chua
-# bat, vi state cua layer do dang rong - layer cha tung bi xoa. Buildspec
-# co chot chan state rong, nen bat pipeline bay gio chi tao ra mot thu
-# luon do.
+# Ha tang mang da bi XOA HET. Ca hai layer duoi day co state RONG:
 #
-# Trinh tu go muc nay: apply layer network/ops mot lan bang tay -> bat
-# ops-pipeline-network -> mo dong "ops-network" trong ban_do -> xoa muc
-# nay. BON buoc, va bo thu tu thi mot trong hai phep kiem cua loc.py se
-# keu.
+#   landing-zone/network       vending apply o stage B, D
+#   landing-zone/network/ops   ops-pipeline-network (dang tat)
 #
+# Buildspec co chot chan state rong, nen de chung trong ban do chi tao ra
+# mot pipeline do thuong truc - thu nguoi ta quen mat roi thoi doc.
+#
+# TRINH TU DUNG LAI, va bo thu tu thi mot trong hai phep kiem cua loc.py
+# se keu:
+#
+#   1. dung lai landing-zone/network (bang tay, hoac vending voi
+#      FIRST_APPLY=yes)
+#   2. mo lai "landing-zone/network/" trong ban do cua vending
+#   3. apply landing-zone/network/ops mot lan bang tay
+#   4. bat ops-pipeline-network
+#   5. mo dong "ops-network" trong ban do
+#   6. xoa CA HAI muc nay
+#
+# Buoc 2 va 5 la hai buoc de quen nhat, vi bo qua chung khong gay loi -
+# chi lam mot layer khong con duong tu dong. Do la ly do danh sach nay
+# ton tai.
+#
+# ------------------------------------------------------------------
 # ------------------------------------------------------------------
 # config-detective khong con o day nua: no da co pipeline rieng
 # (ops-pipeline-config-rules) trong ban_do o tren. Truoc do no o day vi
@@ -159,7 +182,10 @@ kiem_do_phu = true
 # apply kem mot viec chang lien quan.
 ########################################
 layer_thu_cong = [
-  # Pipeline cua no (ops-pipeline-network) chua bat - xem ban_do o tren.
+  # Ha tang mang da bi xoa het; ca hai layer nay dang co state RONG va se
+  # duoc dung lai sau. Ca hai deu phai mo lai khi den luc - xem trinh tu
+  # o khoi chu thich tren.
+  "landing-zone/network",
   "landing-zone/network/ops",
 ]
 
