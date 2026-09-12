@@ -220,6 +220,12 @@ variable "organization_rules" {
     "cloud-trail-enabled"                      = "CLOUD_TRAIL_ENABLED"
     "vpc-sg-open-only-to-authorized-ports"     = "VPC_SG_OPEN_ONLY_TO_AUTHORIZED_PORTS"
     "rds-storage-encrypted"                    = "RDS_STORAGE_ENCRYPTED"
+
+    # Bo doi voi encrypted-volumes o tren, va hai cai kiem hai thu khac
+    # nhau: ENCRYPTED_VOLUMES nhin TUNG volume da tao, con cai nay nhin
+    # CONG TAC mac dinh cua account. Chi co cai thu hai moi tra loi duoc
+    # "volume tao ngay mai co duoc ma hoa khong".
+    "ec2-ebs-encryption-by-default"            = "EC2_EBS_ENCRYPTION_BY_DEFAULT"
   }
 }
 
