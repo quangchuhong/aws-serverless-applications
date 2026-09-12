@@ -4086,6 +4086,45 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 126 — "policy chứa statement" và "guardrail chặn được" là hai câu khác nhau
+
+Thêm `baseline/ProtectEbsEncryptionByDefault` (`Deny ec2:DisableEbsEncryptionByDefault`) qua pipeline `ops`. Apply thật: `0 added, 1 changed, 0 destroyed`, và `-refresh-only` đọc lại policy sống từ Organizations rồi báo `No changes` — nội dung ở AWS khớp cấu hình.
+
+Ở đó thì mọi lớp đều xanh. **Và nó vẫn chưa chứng minh guardrail hoạt động.**
+
+Một Deny gõ sai tên action — `ec2:DisableEBSEncryptionByDefault`, hoa một chữ — vẫn apply thành công, vẫn nằm trong policy, `bytes` vẫn tăng, `-refresh-only` vẫn khớp. IAM không kiểm tên action có thật hay không. Nó chặn đúng 0 thứ, và triệu chứng duy nhất là một ngày nào đó có người tắt mã hoá EBS *và thành công* — không có log nào ghi lại việc một Deny đã không cắn.
+
+Chính `next_steps` của layer đã viết: *"SCP chan sai thi IM LANG cho toi khi co nguoi vuong."*
+
+#### Phép kiểm duy nhất đọc được điều đó là một lần bị TỪ CHỐI
+
+```
+aws ec2 disable-ebs-encryption-by-default --region ap-southeast-1
+
+UnauthorizedOperation: User: arn:aws:sts::209211309702:assumed-role/
+  AWSReservedSSO_lz-account-admin_.../quang is not authorized to perform:
+  ec2:DisableEbsEncryptionByDefault with an explicit deny in a service
+  control policy: .../service_control_policy/p-2oni53yp
+```
+
+Ba chi tiết trong một dòng, và thiếu bất kỳ cái nào thì phép kiểm mất giá trị:
+
+| Chi tiết | Loại trừ được điều gì |
+|---|---|
+| `explicit deny in a service control policy` | không phải permission set chặn — một `AccessDenied` trơn không phân biệt được hai nguồn |
+| `p-2oni53yp` | đúng policy `baseline` vừa apply, không phải "một SCP nào đó" đã có từ trước |
+| `AWSReservedSSO_lz-account-admin` | danh tính có `AdministratorAccess`, tức không phải thiếu quyền mà là **bị trần** |
+
+Và một cái bẫy về nơi chạy: từ account **management** (`609320954321`) lệnh đó sẽ **thành công**, vì SCP không áp dụng cho principal ở management kể cả SCP gắn vào Root. Chạy ở đó rồi kết luận "SCP không hoạt động" là đọc sai — thứ đo được là account thành viên.
+
+#### Điều lần đầu được đo, không phải lần đầu được viết
+
+`scp.tf` khẳng định từ đầu: *"SCP la TRAN QUYEN, khong cap quyen. Mot action chay duoc chi khi CA permission set LAN SCP cho phep."*
+
+Cho tới lần gọi này, đó là một câu trong comment. Giờ nó là một lần API bị từ chối với `AdministratorAccess` trong tay. Cùng loại khác biệt với lỗi 121 (*"pipeline chạy ổn" chỉ có nghĩa đường ống thông*): một khẳng định đúng mà chưa được thử thì không phân biệt được với một khẳng định sai.
+
+---
+
 ### Lỗi 125 — mirror hai remote: `pull --rebase` bỏ commit merge, và phân kỳ tái diễn mãi
 
 Repo này sống ở hai nơi: GitHub (nơi review) và CodeCommit (nơi kích hoạt pipeline — GitHub không kích hoạt gì). Đẩy sang CodeCommit bị từ chối:
