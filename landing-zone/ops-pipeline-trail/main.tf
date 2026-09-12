@@ -39,6 +39,29 @@ locals {
       #
       # Chi trail. Neu mot ngay nao do can sua object lock thi do la mot
       # lan apply bang tay, co nguoi doc.
+      #
+      # ---------------------------------------------------------------
+      # NHUNG -target KHONG DU DE LAM DIEU DO - DOC TRUOC KHI TIN DONG TREN
+      #
+      # `-target=X` khong co nghia la "chi X". No co nghia la "X VA
+      # NHUNG GI X CAN". aws_cloudtrail.this tham chieu aws_s3_bucket.trail
+      # qua s3_bucket_name, nen HE bucket co bat ky sai khac nao la no bi
+      # keo vao ban plan cung con trail - ke ca khi khong ai dong toi no.
+      #
+      # Da do: lan plan that dau tien cua stage nay ra `0 tao, 2 sua`, cai
+      # thu hai la aws_s3_bucket.trail[0] voi dung mot tag lech
+      # (Environment = "shared" con sot lai tu truoc khi tag policy cam
+      # gia tri do). -target van duoc dat dung; no chi khong phai hang rao.
+      #
+      # Thu THUC SU giu ranh gioi la gate.py: bang pham vi theo stage
+      # (muc "cloudops-trail" chi liet ke aws_cloudtrail) doc ban plan da
+      # sinh ra va tu choi moi resource ngoai danh sach. Dong nay dung o
+      # day de lan sau khong ai di sua -target khi thay gate.py keu.
+      #
+      # He qua phai chap nhan: MOI sai khac cua bucket - ke ca mot cai
+      # tag - deu lam stage nay do, cho toi khi bucket duoc apply bang
+      # tay cho khop lai. Do la chieu hong DUNG: mot cong chan nga ve
+      # phia chan khi gap thu no khong duoc phep sua.
       ####################################
       targets = [
         "aws_cloudtrail.this",
