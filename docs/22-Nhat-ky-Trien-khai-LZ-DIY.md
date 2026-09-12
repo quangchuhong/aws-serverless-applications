@@ -4086,6 +4086,115 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 125 — mirror hai remote: `pull --rebase` bỏ commit merge, và phân kỳ tái diễn mãi
+
+Repo này sống ở hai nơi: GitHub (nơi review) và CodeCommit (nơi kích hoạt pipeline — GitHub không kích hoạt gì). Đẩy sang CodeCommit bị từ chối:
+
+```
+! [rejected]  HEAD -> main (non-fast-forward)
+```
+
+Lần đầu chữa bằng `git merge codecommit/main` rồi push — **và nó hỏng lại ngay lần sau**. Nguyên nhân không phải quyền, không phải credential:
+
+**`git pull --rebase` bỏ commit merge.** Rebase phát lại từng commit thường và *bỏ* merge (không có `--rebase-merges`). Đầu nhánh của CodeCommit khi đó **là** một commit merge mà GitHub không có. Nên mỗi lần rebase lên `origin`, cái merge đó biến mất khỏi lịch sử local, và local lại rơi về sau CodeCommit. Một vòng lặp tự tái tạo.
+
+Lời khuyên đầu tiên của tôi — *"rebase trước, mirror sau"* — **không chạm được nguyên nhân**: thứ tự không quan trọng khi cái bị mất là một commit chỉ tồn tại ở remote kia.
+
+#### Cách gỡ, và vì sao không dùng `--force`
+
+Hội tụ cả **ba** nơi về cùng một commit, rồi thôi rebase:
+
+```bash
+git fetch codecommit
+git merge codecommit/main -m "hoi tu ba noi"
+git push origin HEAD:<nhanh>      # BUOC BI BO LAN TRUOC
+git push codecommit HEAD:main
+```
+
+Lần trước merge chỉ được đẩy sang CodeCommit, không đẩy lên GitHub — nên GitHub vẫn thiếu nó, và lần rebase kế tiếp lại bỏ nó đi.
+
+Từ đó dùng `--ff-only`:
+
+```bash
+git pull --ff-only origin <nhanh>
+```
+
+`--ff-only` **báo lỗi** thay vì âm thầm dựng lại lịch sử. Có phân kỳ thì biết ngay, chứ không phát hiện qua một lần push bị chối.
+
+`--force-with-lease` ngắn hơn nhưng có một cái giá không hiện ra ở git: nó làm commit cũ thành mồ côi, và **Lambda lọc kích hoạt nhận `oldCommitId` từ sự kiện EventBridge**. Giải không ra commit cũ thì `GetDifferences` hỏng, hàm đi đường fail-open và khởi động **cả năm** pipeline. Không hỏng gì, nhưng phép thử đang làm sẽ lẫn vào bốn lần chạy khác.
+
+#### Và một cấu hình ẩn lộ ra
+
+```
+origin  https://github.com/...              (fetch)
+origin  https://git-codecommit...           (push)
+origin  https://github.com/...              (push)
+```
+
+`origin` có **hai** push URL. Một lệnh `git push origin` đẩy sang cả hai nơi — nên nó cũng tạo nhánh feature trên CodeCommit, thứ giải thích dòng `[new branch]` khi fetch. Vô hại ở đây (bộ lọc chỉ nghe `main`), nhưng nó nghĩa là **`git remote -v` phải đọc cả ba dòng, không phải dòng đầu**.
+
+---
+
+### Lỗi 124 — cổng chặn được một thay đổi mà mọi phép đếm đều cho qua
+
+Thay đổi thật đầu tiên qua `ops-permission-set`: đội trực bảo mật (`lz-security-operators`) được thêm `lz-network-operator` để đọc cấu hình mạng khi điều tra sự cố. Sửa `local.groups` trong `identity.tf` — **code**, không phải tfvars.
+
+```
+Plan: 1 to add, 0 to change, 0 to destroy.
+```
+
+`FAIL_ON_DESTROY` đếm số resource bị xoá: **0**. Nó cho qua. `grep 'must be replaced'`: không có. Cho qua. Mọi phép đếm trong dự án này đều thấy bản plan này là vô hại.
+
+`gate.py` chặn:
+
+```
+LOI  NOI ma khong khai bao: aws_ssoadmin_account_assignment.this["lz-security-operators|lz-network-operator|436908791055"]
+      TAO: gan mot permission set vao mot account cho mot group - ca group vao duoc account do
+```
+
+Đó là toàn bộ lý do lớp này tồn tại: **`+ aws_ssoadmin_account_assignment` là một lần cấp quyền, và nó đếm ra 0 xoá.** Một phép đếm không đọc được điều đó; chỉ một bảng luật biết chiều của từng dịch vụ mới đọc được — *xoá* một Deny là nới, mà *tạo* một assignment cũng là nới.
+
+#### Ba vòng, và vì sao không gộp được
+
+| Vòng | Kết quả | Chứng minh điều gì |
+|---|---|---|
+| 1 | đỏ, `NOI ma khong khai bao` | cổng **chặn** được |
+| 2 | `1 added` sau khi duyệt | khai báo **mở** được, và apply đi tới AWS |
+| 3 | `0 changed`, xanh | xoá khai báo không để lại cửa mở |
+
+Gộp lại thì không phân biệt được vòng nào đã làm việc. Vòng 1 bắt buộc còn vì một lý do thực dụng: nó **in ra địa chỉ chính xác**. `for_each` dùng khoá `"<group>|<permission-set>|<account-id>"`, và gõ tay sai một ký tự thì khai báo không khớp — lúc đó `gate.py` vẫn báo `NOI ma khong khai bao`, **không** nói gì về việc gõ sai.
+
+#### Hai trường không lớp nào kiểm được
+
+`gate.py` kiểm `ticket`/`reason`/`approved_by` **có giá trị hay không**, nó không kiểm giá trị *có thật* hay không. Nên một mã ticket bịa sẽ đi qua mọi lớp, và hồ sơ duyệt quyền có một dòng sai mà không ai đối chiếu được. Cách xử lý: để **trống** trong bản nháp — `gate.py` báo `Khai bao noi long thieu truong` và chặn tiếp. Chưa điền thì không đi qua được, thay vì đi qua với một dòng bịa.
+
+`approved_by = "admin"` là một **vai trò**, không phải một người. Đã ghi vào file: khi đội sec có danh tính riêng trong Identity Center thì thay bằng tên cụ thể — một hồ sơ nới lỏng không truy được ai duyệt thì đến lúc cần truy là lúc nó không còn trả lời được.
+
+#### Bằng chứng, và nó không nằm ở dòng "Apply complete"
+
+Bước `-refresh-only` **đọc lại AWS**:
+
+```
+aws_ssoadmin_account_assignment.this["lz-security-operators|lz-network-operator|436908791055"]:
+  Refreshing state... [id=49aa956c-...,GROUP,436908791055,...,ps-5b6b90773f62528e,...]
+
+assignment_count = 102          (truoc: 101)
+No changes. Your infrastructure still matches the configuration.
+```
+
+Một id thật từ Identity Center. Đó là khác biệt giữa *"Terraform báo thành công"* và *"thứ đó tồn tại"*.
+
+#### Một cảnh báo cũ trôi qua trong cùng bản log
+
+```
+Warning: Check block assertion failed  (assignments.tf line 119)
+  Pham vi RONG nen khong sinh assignment nao: analytics
+```
+
+Scope `analytics` rỗng, nên `lz-analytics-admin`, `lz-analytics-operator`, `lz-datalake-admin` tồn tại mà không gán cho ai (`accounts = 0`). Chính `check` đó nói đây là bình thường khi chưa có OU analytics — nhưng nó là `check` block, tức chỉ **warning**: không làm pipeline đỏ, và `gate.py` không đọc nó. Nếu một ngày `workloads` hay `prod` rỗng vì lý do thật, triệu chứng cũng chỉ là một dòng warning giữa mấy trăm dòng refresh.
+
+---
+
 ### Lỗi 123 — `-target` không phải hàng rào, nó là "cái này *và những gì nó cần*"
 
 `ops-trail` chạy lần đầu với một thay đổi thật. `-target=aws_cloudtrail.this` đặt đúng, log in ra `== gioi han: -target=aws_cloudtrail.this`. Plan ra **hai** resource:
