@@ -4019,6 +4019,29 @@ loc.handler(su_kien_ or su_kien(), None)
 
 `{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
 
+#### Ghi chú — "đã commit" và "đã apply" là hai chuyện, và nó bẫy hai lần trong một buổi
+
+Pipeline `qh11-lz-ops-permission-set` hỏng. Nghi phạm đầu tiên là lỗi 403 trên `account-baseline/terraform.tfstate` — layer `permission-sets` đọc state đó qua `terraform_remote_state`, và bản sửa (`var.state_chi_doc`) đã được viết, kiểm, commit ở `299c133`.
+
+`terraform plan` ở layer pipeline:
+
+```
+Plan: 0 to add, 1 to change, 0 to destroy.
+module.pipeline.aws_iam_role_policy.codebuild[0] will be updated in-place
+  + Sid = "DocStateCuaLayerKhac"
+  + "arn:aws:s3:::qh11-lz-tfstate-.../account-baseline/terraform.tfstate"
+```
+
+Bản sửa nằm trong git và **chưa bao giờ tới AWS**. Apply, chạy lại, xanh hết.
+
+Và cùng dạng đó vừa bẫy một lần nữa, cách đấy vài phút: phép thử `tru` cho ra `"da_khoi_dong": []` — đúng kết quả mong đợi — trong khi log nói vending bị loại vì nó *chưa bao giờ* quan tâm `network/`. Hàm đang chạy cấu hình cũ; `terraform apply` chưa chạy. Kết quả đúng, lý do sai.
+
+**Hai lần trong một buổi, cùng một khoảng trống: giữa "commit xanh" và "AWS đã biết".** Không công cụ nào trong dự án này bắc qua khoảng đó — `kiem-module.py`, `test-loc.py`, `terraform fmt` đều đọc **code**, còn drift job thì chỉ `plan` và chỉ chạy 19h mỗi ngày.
+
+Thứ duy nhất phân biệt được là một lệnh: `terraform plan` ra `No changes`. Nên với mọi layer chưa được pipeline nào apply — mà `trigger-filter`, `ops-pipeline*`, `vending-pipeline` đều thuộc loại đó, chúng apply bằng tay — `No changes` là điều kiện phải kiểm **trước** khi tin bất cứ phép thử nào chạy trên hạ tầng đó.
+
+---
+
 #### Lỗi 119 — layer lồng nhau, và một phép kiểm che đúng cái nó đi tìm
 
 Yêu cầu tiếp theo: *"phần network thì chỉ cần có code thay đổi là pipeline tự run"*.
