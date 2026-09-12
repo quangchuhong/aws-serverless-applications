@@ -4095,6 +4095,18 @@ organization_rules -> 10 muc
 
 Bộ lọc gọi đúng một pipeline trong số năm; `gate.py` xếp "thêm một rule" là siết và cho qua; apply tạo thật; bước `-refresh-only` cập nhật output (lỗi 106 không tái diễn).
 
+Và hỏi thẳng AWS, không qua Terraform:
+
+```
+10 organization config rule
+ec2-ebs-encryption-by-default            8 account  CREATE_SUCCESSFUL
+cloud-trail-log-file-validation-enabled  8 account  CREATE_SUCCESSFUL
+```
+
+**8 chứ không phải 15, và đó là đúng**: tổ chức có 15 account, `excluded_accounts` có 7 (nhóm nonprod/sandbox cộng management). 15 − 7 = 8.
+
+Phép hỏi đó suýt đọc sai một lần: gửi từ account **management** thì cả hai rule trả về `NoSuchOrganizationConfigRuleException`. Chúng được tạo bằng `provider = aws.security`, nên chúng sống ở account delegated administrator. `NoSuchOrganizationConfigRule` ở đây nghĩa là *"không có trong account này"*, không phải *"không tồn tại"* — và hai câu đó dẫn tới hai kết luận trái ngược nhau.
+
 ---
 
 ### Lỗi 120 — một danh sách rỗng đi qua `plan` mà không để lại dấu vết nào
