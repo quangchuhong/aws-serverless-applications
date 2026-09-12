@@ -4239,7 +4239,17 @@ Hệ quả phải chấp nhận, và đã viết vào code: **mọi sai khác c�
 
 #### Hai thứ lộ ra kèm theo
 
-**Tag `shared` tồn tại được trên hạ tầng sống.** `versions.tf` viết `Environment = "prod" # "shared" bi tag policy tu choi` — code đúng, state cũ. Nếu tag policy đang enforce thì lần ghi tạo ra nó lẽ ra đã bị từ chối. Nó không bị. Nên tag policy hoặc chưa enforce, hoặc không phủ `s3:bucket` — cần đếm riêng.
+**Tag `shared` tồn tại được trên hạ tầng sống.** `versions.tf` viết `Environment = "prod" # "shared" bi tag policy tu choi` — code đúng, state cũ. Nếu tag policy đang enforce thì lần ghi tạo ra nó lẽ ra đã bị từ chối. Nó không bị.
+
+Ban đầu tôi đoán *"tag policy hoặc chưa enforce, hoặc không phủ `s3:bucket`"*. **Cả hai đều sai.** Output của layer `organization`, cùng ngày:
+
+```
+tag_policy = { "enabled" = false, "policy_id" = null }
+```
+
+Nó **chưa từng được tạo**. Stage `sec-tagging` của `ops-pipeline` đang tắt, và `enable_tag_policy` chưa bật. Nên đây không phải một guardrail đang hỏng mà là một guardrail chưa có — và khác biệt đó quyết định cách chữa: không phải đi sửa `enforced_for`, mà là bật stage đó lên.
+
+Đáng ghi vì cả hai phỏng đoán đầu của tôi đều *giả định guardrail có mặt*. Câu hỏi "nó phủ những gì" chỉ có nghĩa sau khi câu "nó có tồn tại không" đã được trả lời, và tôi đã bỏ qua câu thứ hai.
 
 **Tên tài nguyên của layer này là `quh11-lz`, không phải `qh11-lz`.** Một chữ `u` thừa trong `project` của tfvars ở S3 store: bucket `quh11-lz-cloudtrail-654560867047`, trail `quh11-lz-org-trail`, trong khi mọi pipeline là `qh11-lz-*`. Không sửa được — đổi `project` là tạo bucket mới và bỏ toàn bộ log cũ. Nhưng nó có hậu quả: **mọi lệnh tìm tài nguyên theo tiền tố `qh11-lz-` sẽ không thấy trail và bucket log**, và trả về rỗng. Cùng họ với hơn chục lần trước trong dự án này: *một phép lọc hỏng trả về rỗng, và rỗng bị đọc thành câu trả lời.*
 
