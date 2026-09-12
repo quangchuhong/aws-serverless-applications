@@ -110,6 +110,27 @@ phases:
         # KHONG bao loi - script chi lang le lam it hon.
         printf 'terraform {\n  backend "s3" {}\n}\n' > backend.tf
 
+        # ------------------------------------------------------
+        # ROLE SANG ACCOUNT KHAC - KHONG assume O DAY
+        #
+        # Layer nhan var.assume_role_arn va tu assume TRONG provider
+        # block. Nen BACKEND giu credential cua CodeBuild (doc duoc
+        # bucket state o account management), con PROVIDER nhay sang
+        # account dich.
+        #
+        # Assume o day - bang `aws sts assume-role` roi export
+        # AWS_ACCESS_KEY_ID - thi CA HAI cung nhay, va CodeBuild mat
+        # quyen doc state. Hoac te hon: doc duoc mot state KHAC, va
+        # plan doi tao lai toan bo.
+        #
+        # De trong = layer chay bang chinh credential cua CodeBuild.
+        # Dung cho layer nam ngay trong account management.
+        # ------------------------------------------------------
+        if [ -n "${ASSUME_ROLE_ARN:-}" ]; then
+          echo "== provider se assume: ${ASSUME_ROLE_ARN}"
+          export TF_VAR_assume_role_arn="${ASSUME_ROLE_ARN}"
+        fi
+
         BACKEND_ARGS="-backend-config=bucket=${STATE_BUCKET}"
         BACKEND_ARGS="$BACKEND_ARGS -backend-config=key=${STATE_KEY}"
         BACKEND_ARGS="$BACKEND_ARGS -backend-config=region=${STATE_REGION}"

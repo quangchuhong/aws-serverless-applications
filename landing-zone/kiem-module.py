@@ -12,7 +12,7 @@ registry.terraform.io. Trong moi truong bi chan mang (va trong mot CI
 khong co quyen ra ngoai) thi khong chay duoc, va luc do thu duy nhat con
 lai la doc bang mat.
 
-Muoi phep kiem, khong can mang:
+Muoi mot phep kiem, khong can mang:
 
   1. dung var.X ma khong khai
   2. module khai var khong ai dung
@@ -26,6 +26,8 @@ Muoi phep kiem, khong can mang:
      vending-pipeline, organization, ...) - xem kiem_layer_don()
  10. layer duoc mot pipeline APPLY ma khong duong dan nao trong ban_do
      cua trigger-filter cham toi - xem kiem_phu_layer()
+ 11. layer duoc mot pipeline APPLY ma push-tfvars.sh khong day tfvars len
+     - xem kiem_push_tfvars()
 
 Phep thu 7 la mot bai hoc duoc ma hoa: list(any) buoc MOI phan tu cung
 mot type, va IAM statement thi luon khac hinh - mot cai co Condition, cai
@@ -349,7 +351,7 @@ def kiem_phu_layer():
         return [
             "trigger-filter: khong co terraform.tfvars lan .example, nen phep kiem "
             "do phu layer KHONG chay. Day KHONG phai 'khong co gi sai'."
-        ], None
+        ], None, None
 
     raw = boc(open(nguon).read())
     thu_cong = set(danh_sach(raw, "layer_thu_cong"))
@@ -368,7 +370,7 @@ def kiem_phu_layer():
         return [
             "khong tim thay `layer = \"landing-zone/...\"` o dau ca. Day KHONG "
             "phai 'moi layer deu duoc phu' - la CHUA DOC DUOC."
-        ], os.path.basename(nguon)
+        ], os.path.basename(nguon), None
 
     ####################################
     # PHU THEO PIPELINE, KHONG THEO TAP TIEN TO CHUNG
@@ -422,7 +424,55 @@ def kiem_phu_layer():
             "trong that su xuat hien sau nay o cung duong dan."
         )
 
-    return loi, os.path.basename(nguon)
+    return loi, os.path.basename(nguon), ap
+
+
+def kiem_push_tfvars(ap):
+    """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
+
+    =====================================================================
+    VI SAO
+
+    Buildspec keo terraform.tfvars cua layer tu S3. Thieu file do la LOI
+    CUNG trong buildspec (loi 97), nhung danh sach layer duoc day len lai
+    nam trong mot mang bash VIET TAY o push-tfvars.sh.
+
+    Hai danh sach phai dong y voi nhau, va khi lech thi:
+      - luc day file:      khong co loi, script bao xong
+      - luc pipeline chay: loi noi ve S3, khong noi ve script nao
+
+    Chinh script do da ghi canh bao nay trong chu thich cua no. Mot canh
+    bao trong chu thich khong chay duoc; phep kiem nay chay duoc.
+    """
+    p = os.path.join(GOC, "landing-zone/vending-pipeline/push-tfvars.sh")
+    if not os.path.exists(p):
+        return ["khong tim thay push-tfvars.sh. KHONG phai 'khong co gi sai' - la CHUA DOC DUOC."]
+
+    raw = open(p).read()
+    m = re.search(r"^LAYERS=\((.*?)^\)", raw, re.S | re.M)
+    if not m:
+        return ["push-tfvars.sh: khong tim thay mang LAYERS=( ... )."]
+
+    # Bo dong bi comment: mot muc bi comment la mot muc KHONG duoc day.
+    than = re.sub(r"#[^\n]*", "", m.group(1))
+    day = set(re.findall(r'"([^"]+)"', than))
+    if not day:
+        return ["push-tfvars.sh: mang LAYERS RONG. KHONG phai 'khong co gi de day'."]
+
+    can = set().union(*ap.values())
+    thieu = sorted(can - day)
+    loi = []
+    if thieu:
+        loi.append(
+            f"push-tfvars.sh thieu layer ma pipeline se apply: {thieu}. "
+            "Thieu o day khong gay loi luc day file - no gay loi luc pipeline "
+            "chay, va thong bao noi ve S3 chu khong noi ve script nao."
+        )
+
+    # Chieu nguoc chi la CANH BAO, khong phai loi: layer chua co pipeline
+    # van can tfvars tren S3 neu mot ngay nao do no duoc them vao mot
+    # stage. Nen o day khong kiem `day - can`.
+    return loi
 
 
 def main():
@@ -465,10 +515,15 @@ def main():
     # Chi khi TU TIM: phep kiem nay hoi ve ca cay, khong ve mot thu muc.
     phu_nguon = None
     if not sys.argv[1:]:
-        l, phu_nguon = kiem_phu_layer()
+        l, phu_nguon, ap = kiem_phu_layer()
         if phu_nguon:
             print(f"  {'x' if l else 'v'} do phu layer (doc {phu_nguon})")
         loi += l
+
+        l2 = kiem_push_tfvars(ap) if ap else []
+        if ap:
+            print(f"  {'x' if l2 else 'v'} push-tfvars phu het layer")
+        loi += l2
 
     print()
     if loi:

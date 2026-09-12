@@ -113,6 +113,42 @@ provider "aws" {
   # ghi trong state cua layer cha, nen lech la plan dung lai.
   profile = var.aws_profile != "" ? var.aws_profile : null
 
+  ####################################
+  # ROLE - DUONG CHO CODEBUILD
+  #
+  # `profile` o tren la duong cho MOT NGUOI o ban phim. CodeBuild khong
+  # co ~/.aws/credentials, nen profile nao cung khong ton tai o do.
+  #
+  # `dynamic` trong khoi provider: mau nay da CHAY THAT trong CodeBuild o
+  # layer cha (landing-zone/network/versions.tf) - khong phai mot phong
+  # doan ve viec Terraform co cho phep hay khong.
+  #
+  # HAI THU NAY KHONG XUNG NHAU, chung tra loi hai cau khac nhau:
+  #   profile        credential NGUON - ta la ai
+  #   assume_role    dich - ta tro thanh ai
+  # Trong CodeBuild, nguon la role cua chinh CodeBuild (o account
+  # management) va dich la role o account mang.
+  #
+  # VI SAO KHONG assume TRONG buildspec: khoi backend o tren doc state
+  # tu bucket o account management. Assume o tang shell thi CA backend
+  # LAN provider cung nhay, va CodeBuild mat quyen doc state - hoac te
+  # hon, doc duoc mot state khac roi plan doi tao lai toan bo.
+  #
+  # Chot an toan van la precondition trong main.tf: no doi chieu account
+  # THUC TE voi account ghi trong state cua layer cha. Nen mot role sai
+  # khong lang le tao resource o cho khac - plan dung lai.
+  ####################################
+  dynamic "assume_role" {
+    for_each = var.assume_role_arn == "" ? [] : [1]
+    content {
+      role_arn = var.assume_role_arn
+
+      # Ten phien hien trong CloudTrail cua account mang. Doc no la biet
+      # resource sinh ra tu pipeline van hanh hay tu tay ai.
+      session_name = "lz-network-ops-pipeline"
+    }
+  }
+
   default_tags {
     tags = merge(
       {

@@ -42,6 +42,30 @@ variable "state_config" {
   default     = {}
 }
 
+########################################
+# ROLE CHO CODEBUILD
+#
+# DE RONG khi mot nguoi chay tay - provider dung thang credential trong
+# shell (hoac var.aws_profile), y nhu tu truoc toi nay.
+#
+# KHAI VAO khi CodeBuild chay layer nay. CodeBuild chi co MOT bo
+# credential - cua account management - va no can bo do de doc bucket
+# state. Neu provider cung dung bo do thi layer nay tao rule group,
+# route va ban ghi DNS trong ACCOUNT MANAGEMENT.
+#
+# Do khong phai gia thiet: da xay ra o layer cha (mot Transit Gateway
+# thu hai moc len o account management), va do la ly do chot
+# precondition ve account ton tai.
+#
+# Pipeline KHONG dat bien nay qua tfvars - tfvars dung chung giua nguoi
+# chay tay va CodeBuild. buildspec export TF_VAR_assume_role_arn, tuc
+# no chi co gia tri trong lan chay cua pipeline.
+########################################
+variable "assume_role_arn" {
+  type    = string
+  default = ""
+}
+
 variable "aws_profile" {
   description = <<-EOT
     Profile dung de TAO RESOURCE (rule group, route, endpoint, DNS).

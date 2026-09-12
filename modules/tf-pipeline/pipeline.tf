@@ -205,6 +205,19 @@ resource "aws_codepipeline" "ops" {
             # Khoa de gate.py tra bang PHAM_VI. Dung CHINH key cua stage
             # nen khong co ban sao thu hai de lech.
             { name = "GATE_STAGE", value = stage.value.key, type = "PLAINTEXT" },
+
+            ####################################
+            # ROLE SANG ACCOUNT KHAC
+            #
+            # Rong = layer chay bang credential cua CodeBuild, tuc ngay
+            # trong account management. Co gia tri = layer tu assume
+            # trong provider block cua no (var.assume_role_arn).
+            #
+            # Co o CA Plan va Apply. Thieu o Plan thi plan doc account
+            # SAI roi bao "tao moi toan bo"; thieu o Apply thi apply
+            # TAO THAT o account sai.
+            ####################################
+            { name = "ASSUME_ROLE_ARN", value = try(stage.value.assume_role_arn, ""), type = "PLAINTEXT" },
           ])
         }
       }
@@ -273,6 +286,7 @@ resource "aws_codepipeline" "ops" {
             # cung commit. Chay lai chi lam apply co the that bai vi mot
             # ly do khong lien quan gi toi ban plan da duoc duyet.
             { name = "LINT_CMD", value = "", type = "PLAINTEXT" },
+            { name = "ASSUME_ROLE_ARN", value = try(stage.value.assume_role_arn, ""), type = "PLAINTEXT" },
           ])
         }
       }

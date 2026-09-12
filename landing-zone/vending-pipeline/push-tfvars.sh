@@ -50,7 +50,28 @@ LAYERS=(
 
   # ops-pipeline
   "landing-zone/organization"
+
+  # ops-pipeline-trail
+  "landing-zone/org-trail"
+
+  # ops-pipeline-network
+  #
+  # Layer nay dung CHUNG tfvars giua nguoi chay tay (var.aws_profile) va
+  # CodeBuild (TF_VAR_assume_role_arn do buildspec export). Hai duong do
+  # khong xung nhau - xem network/ops/versions.tf.
+  "landing-zone/network/ops"
 )
+
+########################################
+# DANH SACH NAY PHAI PHU HET STAGE CUA MOI PIPELINE
+#
+# Thieu mot layer o day KHONG gay loi luc day file - no gay loi luc
+# pipeline chay, va thong bao noi ve S3 chu khong noi ve script nay.
+#
+# landing-zone/kiem-module.py phep 11 doi chieu danh sach nay voi MOI
+# `layer = "..."` khai trong cac caller pipeline, nen mot lan quen se bi
+# bat truoc khi pipeline chay.
+########################################
 
 REGION=$(terraform output -raw region 2>/dev/null || echo "ap-southeast-1")
 
