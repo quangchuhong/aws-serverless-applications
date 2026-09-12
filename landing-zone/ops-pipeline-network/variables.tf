@@ -185,16 +185,18 @@ variable "enable_network_stage" {
   description = <<-EOT
     Bat stage cloudops-network (DNS, endpoint, route, load balancer, alarm).
 
-    HAI THU PHAI XONG TRUOC, va chung khac ban chat:
+    HAI DIEU KIEN:
 
-      1. State cua network/ops dang RONG - layer network vua bi xoa.
-      2. network/ops/versions.tf dung `profile`, khong dung assume_role.
-         CodeBuild khong co profile, nen layer se chay bang credential
-         cua role CodeBuild (account MANAGEMENT) va precondition trong
-         main.tf cua no se DUNG PLAN LAI.
+      1. State cua network/ops KHONG duoc rong. Layer cha tung bi xoa;
+         state rong nghia la buildspec dung lai (chot chan state rong),
+         chu khong phai pipeline chay tren mot to chuc trong.
+      2. network_deploy_role_arn phai duoc khai, va phai nam trong
+         network_pipeline_role_arns.
 
-    Diem 2 khong sua duoc tu layer nay - no la mot dong trong
-    network/ops. Xem versions.tf.
+    Diem 2 truoc day KHONG lam duoc: network/ops/versions.tf chi co
+    `profile`, ma CodeBuild khong co profile nao. Gio layer da co
+    `dynamic "assume_role"` (sao chep tu layer cha, mau da chay that
+    trong CodeBuild), nen dieu kien nay giai duoc.
   EOT
   type        = bool
   default     = false
@@ -222,10 +224,35 @@ variable "network_pipeline_role_arns" {
     AssumeVaoAccountNetwork co Resource rong, va IAM tu choi ca policy -
     do la ly do phai giu stage TAT khi chua co role.
 
-    DUNG dien OrganizationAccountAccessRole vao day: do la full admin
-    trong account network, va pipeline nay chi can sua DNS record voi
-    rule group.
+    ------------------------------------------------------------------
+    KHUYEN NGHI GOC: dung dien OrganizationAccountAccessRole vao day -
+    do la full admin trong account network, va pipeline nay chi can sua
+    DNS record voi rule group.
+
+    QUYET DINH HIEN TAI khac khuyen nghi do, va la co y: dung
+    OrganizationAccountAccessRole TRUOC de cac pipeline chay on, roi thu
+    hep sau. Ghi o day de lan sau khong ai doc dong tren roi tuong day
+    la mot cho bo sot.
+
+    Cach thu hep khi den luc KHONG phai la doi role, ma la them mot
+    SESSION POLICY vao khoi assume_role cua provider - xem chu thich
+    khoi tu_choi_dich_vu trong main.tf.
   EOT
   type        = list(string)
   default     = []
+}
+
+########################################
+# ROLE PROVIDER CUA LAYER SE ASSUME
+#
+# Phai la MOT phan tu cua network_pipeline_role_arns o tren: danh sach do
+# la thu role CodeBuild duoc phep assume, con dong nay la thu no THUC SU
+# assume. Lech nhau thi CodeBuild bi AccessDenied, va thong bao cua STS
+# khong nhac gi toi bien nao.
+#
+# Check "role_assume_nam_trong_danh_sach" ben duoi bat viec do luc apply.
+########################################
+variable "network_deploy_role_arn" {
+  type    = string
+  default = ""
 }

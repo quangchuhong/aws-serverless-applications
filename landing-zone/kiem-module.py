@@ -257,6 +257,41 @@ def tim_layer_don(callers):
 TF = os.path.join(GOC, "landing-zone/trigger-filter")
 
 
+def khoi(raw, ten_bien):
+    """Than cua `<ten_bien> = [ ... ]` hoac `= { ... }`, DEM NGOAC.
+
+    =====================================================================
+    VI SAO DEM NGOAC CHU KHONG REGEX
+
+    Ban dau cho nay dung `(.*?)^[\]}]` - lazy, va doi dau dong cho dau
+    dong. No dung cho khoi nhieu dong, va SAI cho khoi mot dong:
+
+        layer_thu_cong = []
+
+    Dau `]` o day khong nam dau dong, nen phep khop chay tiep toi dau
+    dong tiep theo co `]` hoac `}` - va nuot ca khoi `tru = { ... }` nam
+    sau do. Ket qua: bo kiem bao "layer_thu_cong khai
+    ['landing-zone/network/ops/', 'vending']" tren mot danh sach RONG.
+
+    Chinh bo kiem nay bat duoc loi do cua chinh no. Dem ngoac thi khong
+    phu thuoc vao viec nguoi ta viet mot dong hay nhieu dong.
+    """
+    m = re.search(rf"^{ten_bien}\s*=\s*([\[{{])", raw, re.M)
+    if not m:
+        return ""
+    mo = m.group(1)
+    dong = {"[": "]", "{": "}"}[mo]
+    sau = 0
+    for i in range(m.end() - 1, len(raw)):
+        if raw[i] == mo:
+            sau += 1
+        elif raw[i] == dong:
+            sau -= 1
+            if sau == 0:
+                return raw[m.end():i]
+    return ""
+
+
 def danh_sach(raw, ten_bien):
     """Moi chuoi trong `<ten_bien> = [ ... ]` cua mot file tfvars.
 
@@ -264,8 +299,7 @@ def danh_sach(raw, ten_bien):
     va do la dieu phai the: mot muc bi comment la mot muc KHONG co hieu
     luc, ke ca khi no van nam do va van doc duoc bang mat.
     """
-    m = re.search(rf"^{ten_bien}\s*=\s*[\[{{](.*?)^[\]}}]", raw, re.S | re.M)
-    return re.findall(r'"([^"]+)"', m.group(1)) if m else []
+    return re.findall(r'"([^"]+)"', khoi(raw, ten_bien))
 
 
 def ban_do_theo_pipeline(raw):
@@ -273,12 +307,10 @@ def ban_do_theo_pipeline(raw):
 
     Doc tren van ban DA BOC chu thich, nen dong bi comment khong tinh.
     """
-    m = re.search(r"^ban_do\s*=\s*\{(.*?)^\}", raw, re.S | re.M)
-    if not m:
-        return {}
+    than = khoi(raw, "ban_do")
     return {
         k: re.findall(r'"([^"]+)"', v)
-        for k, v in re.findall(r'"([^"]+)"\s*=\s*\[(.*?)\]', m.group(1), re.S)
+        for k, v in re.findall(r'"([^"]+)"\s*=\s*\[(.*?)\]', than, re.S)
     }
 
 

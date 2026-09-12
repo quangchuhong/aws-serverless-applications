@@ -70,16 +70,41 @@ ban_do = {
   ]
 
   ####################################
-  # BON PIPELINE CON LAI DANG TAT (enable = false)
+  # BA PIPELINE VUA BAT
   #
-  # Mo dong tuong ung KHI VA CHI KHI da apply pipeline do. Ten mot
-  # pipeline chua ton tai lam ham bao hong moi lan chay.
+  # Chung dung role OrganizationAccountAccessRole o account dich - quyet
+  # dinh tam thoi, co y, se thu hep sau. Xem tfvars cua tung caller.
   #
-  # Chung deu can mot role lien account chua day xuong - xem doc 22.
+  # THU TU BAT, va chieu nay quan trong:
+  #
+  #   1. apply ba caller pipeline  (pipeline ton tai o AWS)
+  #   2. apply layer NAY           (ban do biet ten chung)
+  #
+  # Lam nguoc lai thi phep kiem 3 cua loc.py bao hong moi lan chay -
+  # ban do goi ten pipeline chua ton tai.
+  #
+  # Lam DUNG thu tu thi giua hai buoc, kiem_do_phu bao hong moi lan chay:
+  # pipeline co that ma khong co trong ban do. Ca hai chieu deu ON AO,
+  # khong chieu nao im lang - nen cu lam lien hai buoc.
+  #
+  # ops-gate/ co trong ca ba: gate.py la bo phan loai ban plan ma MOI
+  # pipeline dung. Sua luat trong do ma khong chay lai pipeline nao nghia
+  # la luat moi chua bao gio duoc thu.
   ####################################
-  # "ops-network"      = ["landing-zone/network/ops/", "landing-zone/ops-gate/"]
-  # "ops-config-rules" = ["landing-zone/config-detective/", "landing-zone/ops-gate/"]
-  # "ops-trail"        = ["landing-zone/org-trail/", "landing-zone/ops-gate/"]
+  "ops-config-rules" = [
+    "landing-zone/config-detective/",
+    "landing-zone/ops-gate/",
+  ]
+
+  "ops-trail" = [
+    "landing-zone/org-trail/",
+    "landing-zone/ops-gate/",
+  ]
+
+  "ops-network" = [
+    "landing-zone/network/ops/",
+    "landing-zone/ops-gate/",
+  ]
 }
 
 ########################################
@@ -96,6 +121,17 @@ kiem_do_phu = true
 
 ########################################
 # LAYER CO CHU DICH KHONG CO DUONG TU DONG
+#
+# RONG bay gio, va do la mot ket luan chu khong phai mot cho chua dien:
+# ca ba layer tung nam o day (config-detective, network/ops, org-trail)
+# gio da co pipeline rieng trong ban_do o tren.
+#
+# kiem-module.py phep 10 kiem dieu do: moi `layer = "..."` khai trong cac
+# caller pipeline phai duoc mot tien to trong ban_do CUA CHINH pipeline do
+# cham toi, neu khong thi phai co ten o day.
+#
+# Phan duoi la ly do cu, giu lai vi no giai thich VI SAO danh sach nay ton
+# tai.
 #
 # Ba layer duoi day duoc mot pipeline APPLY nhung khong duong dan nao
 # trong ban_do cham toi. Do la co y, khong phai bo sot - nhung phai viet
@@ -122,11 +158,7 @@ kiem_do_phu = true
 #
 # Khi bat, mo dong tuong ung trong ban_do o tren VA xoa khoi day.
 ########################################
-layer_thu_cong = [
-  "landing-zone/config-detective", # vending E0, E - cho ops-pipeline-config-rules
-  "landing-zone/network/ops",      # ops-pipeline-network dang tat
-  "landing-zone/org-trail",        # ops-pipeline-trail dang tat
-]
+layer_thu_cong = []
 
 ########################################
 # TRU RA - LAYER LONG NHAU

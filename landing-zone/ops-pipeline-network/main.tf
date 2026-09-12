@@ -46,6 +46,11 @@ locals {
 
       khong_co_lint = "network/ops khong co catalog - phep kiem y nghia la gate.py; xoa mot alarm hay mot rule group la NOI"
 
+      # Provider cua layer tu assume role nay. Buildspec export
+      # TF_VAR_assume_role_arn; tfvars KHONG mang gia tri nay, vi tfvars
+      # dung chung voi nguoi chay tay (ho dung var.aws_profile).
+      assume_role_arn = var.network_deploy_role_arn
+
       mo_ta = "DNS record, endpoint, route, load balancer, alarm. Khong co cong duyet - thay doi sai o day co trieu chung ngay."
     },
 
@@ -68,6 +73,8 @@ locals {
 
       khong_co_lint = "luat tuong lua khai trong HCL, chua co catalog - phep kiem y nghia la gate.py, muc aws_networkfirewall_rule_group va aws_vpc_security_group_ingress_rule"
 
+      assume_role_arn = var.network_deploy_role_arn
+
       mo_ta = "Nhom luat tuong lua va ingress rule. TAO mot ingress rule la MO MOT CUA - doc ky cidr_ipv4 va khoang port."
     },
   ]
@@ -79,10 +86,14 @@ locals {
   ####################################
   # QUYEN: CHU YEU LA sts:AssumeRole
   #
-  # network/ops tao resource o ACCOUNT NETWORK. Hom nay no lam viec do
-  # bang `profile` - xem versions.tf muc 2 - nen phan duoi day CHUA dung
-  # duoc. Khi layer co duong assume_role thi role dich mang quyen that,
-  # con role nay chi can assume duoc sang no.
+  # network/ops tao resource o ACCOUNT NETWORK. Truoc day no chi lam duoc
+  # viec do bang `profile`, tuc chi chay duoc bang tay. Layer GIO DA CO
+  # duong assume_role (network/ops/versions.tf), nen phan duoi day dung
+  # duoc.
+  #
+  # Role DICH mang quyen that; role nay chi can assume duoc sang no. Do
+  # cung la ly do khoi Deny ben duoi khong phu duoc phan lien account -
+  # xem chu thich cua no.
   #
   # Phan doc rong o day danh cho nhung gi layer doc TU ACCOUNT
   # MANAGEMENT: terraform_remote_state cua layer cha nam trong bucket
@@ -114,6 +125,31 @@ locals {
     },
   ]
 
+  ####################################
+  # PHAM VI THAT CUA KHOI DENY NAY - DOC TRUOC KHI TIN NO
+  #
+  # Deny duoi day gan vao role CodeBuild o ACCOUNT MANAGEMENT. Sau
+  # `sts:AssumeRole`, phien moi mang quyen cua ROLE DICH, va policy cua
+  # danh tinh goi KHONG di theo.
+  #
+  # Nen no CHI rang buoc nhung goi API layer nay thuc hien TRUC TIEP bang
+  # danh tinh cua CodeBuild, tuc trong account management. Voi nhung
+  # resource nam o account khac - qua provider alias co assume_role - no
+  # KHONG co tac dung.
+  #
+  # Va role dich hien tai la OrganizationAccountAccessRole: FULL ADMIN
+  # trong account do. Day la QUYET DINH TAM THOI da duoc thong qua - cho
+  # cac pipeline chay on roi thu hep sau - khong phai mot cho bo sot.
+  #
+  # CACH CHUA, khi den luc: `assume_role` cua provider AWS nhan mot
+  # SESSION POLICY (truong `policy`). Session policy giao voi quyen cua
+  # role dich, nen Deny dat o do rang buoc dung phien dang lam viec. Do
+  # la cho DUY NHAT mot Deny co tac dung cho cong viec lien account.
+  #
+  # GIU khoi nay chu khong xoa: no van co tac dung cho phan chay trong
+  # account management, va no ghi lai Y DINH - danh sach nay la ban thao
+  # cua session policy tuong lai.
+  ####################################
   tu_choi_dich_vu = [
     {
       Sid    = "KhongChamTgwHayVpc"
@@ -137,6 +173,55 @@ locals {
       Resource = "*"
     },
   ]
+}
+
+########################################
+# ROLE PROVIDER ASSUME PHAI NAM TRONG DANH SACH DUOC PHEP
+#
+# network_pipeline_role_arns la thu role CodeBuild DUOC PHEP assume (mot
+# statement IAM). network_deploy_role_arn la thu provider THUC SU assume.
+#
+# Lech nhau thi khong co loi luc apply layer nay - hai bien doc lap. Loi
+# hien ra luc PIPELINE CHAY, duoi dang AccessDenied cua STS, va thong bao
+# do khong nhac gi toi bien nao ca.
+########################################
+check "role_assume_nam_trong_danh_sach" {
+  assert {
+    condition = (
+      var.network_deploy_role_arn == "" ||
+      contains(var.network_pipeline_role_arns, var.network_deploy_role_arn)
+    )
+    error_message = join(" ", [
+      "network_deploy_role_arn (${var.network_deploy_role_arn}) khong nam trong",
+      "network_pipeline_role_arns (${join(", ", var.network_pipeline_role_arns)}).",
+      "Role CodeBuild se khong duoc phep assume no, va loi chi hien ra luc",
+      "pipeline chay duoi dang AccessDenied cua STS.",
+    ])
+  }
+}
+
+########################################
+# BAT STAGE THI PHAI CO ROLE
+#
+# Stage duoc bat ma khong co role nghia la provider chay bang credential
+# cua CodeBuild - tuc account MANAGEMENT. Luc do precondition trong
+# network/ops/main.tf dung plan lai, nen khong co gi bi tao sai cho. Bat
+# o day chi de loi den som hon mot vong, kem ten bien.
+########################################
+check "stage_bat_thi_co_role" {
+  assert {
+    condition = (
+      !var.enable ||
+      !(var.enable_network_stage || var.enable_firewall_stage) ||
+      var.network_deploy_role_arn != ""
+    )
+    error_message = join(" ", [
+      "Stage cua pipeline nay dang duoc bat nhung network_deploy_role_arn rong.",
+      "Provider cua layer network/ops se chay bang credential cua CodeBuild,",
+      "tuc account management - va precondition trong layer do se dung plan lai",
+      "voi thong bao 'SAI ACCOUNT'.",
+    ])
+  }
 }
 
 module "pipeline" {

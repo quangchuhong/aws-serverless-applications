@@ -6,7 +6,22 @@
 
 # MAC DINH TAT - va hai stage ben duoi cung tat, vi hai ly do KHAC NHAU.
 # Xem versions.tf.
-enable = false
+enable = true
+
+########################################
+# DUONG KICH HOAT
+#
+# false = pipeline nay KHONG co rule EventBridge rieng; no chi chay khi
+# landing-zone/trigger-filter goi ten no.
+#
+# Dat false vi trigger-filter DA BAT. De true thi ca hai duong cung no:
+# pipeline chay hai lan moi push (vo hai) va bo loc thanh vo nghia.
+#
+# THU TU: ten pipeline nay phai co trong ban_do cua trigger-filter. Thieu
+# o do thi khong con duong nao kich hoat no - nhung kiem_do_phu se bao
+# hong moi lan chay, nen cho trong do khong im lang.
+########################################
+tu_kich_hoat = false
 
 region      = "ap-southeast-1"
 project     = "qh11-lz"
@@ -78,17 +93,21 @@ layer_keys = {
 ########################################
 # HAI STAGE, HAI MUC RUI RO
 #
-# Ca hai dang TAT, va hai ly do khac ban chat:
+# Diem chan thu hai truoc day - "network/ops dung `profile`, CodeBuild
+# khong co profile" - DA GIAI: layer gio co `dynamic "assume_role"`, sao
+# chep tu layer cha, mau da chay that trong CodeBuild.
 #
-#   1. State cua network/ops dang RONG (layer network vua bi xoa)
-#   2. network/ops dung `profile`, khong dung assume_role - CodeBuild
-#      khong co profile. Xem versions.tf muc 2.
+# CON MOT DIEU KIEN, va no phai DO chu khong doan: state cua
+# network/ops KHONG duoc rong. Layer cha tung bi xoa. Do truoc khi bat:
 #
-# Diem 2 phai sua trong network/ops, khong sua duoc tu day.
+#   cd ../network/ops && terraform state list | wc -l
+#
+# Ra 0 thi buildspec se dung lai o chot chan state rong (dung nhu the),
+# va viec can lam la apply layer do mot lan bang tay truoc.
 ########################################
 
-enable_network_stage  = false
-enable_firewall_stage = false
+enable_network_stage  = true
+enable_firewall_stage = true
 
 # Chi FIREWALL co cong duyet. DNS thi khong - mot thay doi DNS sai co
 # trieu chung ngay, con mot ingress rule moi thi khong co gi bao.
@@ -96,11 +115,36 @@ approve_stages  = ["cloudops-firewall"]
 approval_emails = []
 
 ########################################
-# ROLE LIEN ACCOUNT
+# ROLE LIEN ACCOUNT - QUYET DINH TAM THOI, CO Y
 #
-# RONG la dung khi chua co role rieng. DUNG dien
-# OrganizationAccountAccessRole: do la full admin trong account network,
-# va pipeline nay chi can sua DNS record voi rule group.
+# KHUYEN NGHI GOC o day la: dung dien OrganizationAccountAccessRole, vi
+# do la full admin trong account network con pipeline nay chi can sua DNS
+# record voi rule group.
+#
+# Quyet dinh hien tai KHAC khuyen nghi do: dung role san co truoc de cac
+# pipeline chay on, roi thu hep sau. Ghi ra day de lan sau khong ai doc
+# doan tren roi tuong day la mot cho bo sot.
+#
+# ------------------------------------------------------------------
+# VA MOT DIEU PHAI BIET RO KHI DUNG ROLE NAY
+#
+# Khoi tu_choi_dich_vu trong main.tf (Deny DeleteTransitGateway,
+# DeleteVpc, ...) KHONG phu duoc phan chay o account network. Deny do gan
+# vao role CodeBuild o account management, va sau sts:AssumeRole thi
+# policy cua danh tinh goi khong di theo - phien moi mang quyen cua role
+# DICH, tuc full admin.
+#
+# Thu con giu lai gioi han: -target cua tung stage, gate.py doc ban plan,
+# va cong duyet o stage firewall. Ba thu do o phia management nen chung
+# van co tac dung.
+#
+# Cach chua khi den luc: SESSION POLICY trong khoi assume_role cua
+# provider (network/ops/versions.tf). Session policy giao voi quyen cua
+# role dich, nen Deny dat o do rang buoc dung phien dang lam viec.
 ########################################
 
-network_pipeline_role_arns = []
+network_pipeline_role_arns = ["arn:aws:iam::436908791055:role/OrganizationAccountAccessRole"]
+
+# Thu provider THUC SU assume. Phai la mot phan tu cua danh sach tren -
+# check "role_assume_nam_trong_danh_sach" bat viec do luc apply.
+network_deploy_role_arn = "arn:aws:iam::436908791055:role/OrganizationAccountAccessRole"

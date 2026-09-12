@@ -15,6 +15,21 @@
 # ngay. Kieu su co do khong co trieu chung.
 enable = false
 
+########################################
+# DUONG KICH HOAT
+#
+# false = pipeline nay KHONG co rule EventBridge rieng; no chi chay khi
+# landing-zone/trigger-filter goi ten no.
+#
+# Dat false vi trigger-filter DA BAT. De true thi ca hai duong cung no:
+# pipeline chay hai lan moi push (vo hai) va bo loc thanh vo nghia.
+#
+# THU TU: ten pipeline nay phai co trong ban_do cua trigger-filter. Thieu
+# o do thi khong con duong nao kich hoat no - nhung kiem_do_phu se bao
+# hong moi lan chay, nen cho trong do khong im lang.
+########################################
+tu_kich_hoat = false
+
 region      = "ap-southeast-1"
 project     = "qh11-lz"
 cost_center = "CC-0000"

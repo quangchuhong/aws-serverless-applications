@@ -100,6 +100,31 @@ locals {
     },
   ]
 
+  ####################################
+  # PHAM VI THAT CUA KHOI DENY NAY - DOC TRUOC KHI TIN NO
+  #
+  # Deny duoi day gan vao role CodeBuild o ACCOUNT MANAGEMENT. Sau
+  # `sts:AssumeRole`, phien moi mang quyen cua ROLE DICH, va policy cua
+  # danh tinh goi KHONG di theo.
+  #
+  # Nen no CHI rang buoc nhung goi API layer nay thuc hien TRUC TIEP bang
+  # danh tinh cua CodeBuild, tuc trong account management. Voi nhung
+  # resource nam o account khac - qua provider alias co assume_role - no
+  # KHONG co tac dung.
+  #
+  # Va role dich hien tai la OrganizationAccountAccessRole: FULL ADMIN
+  # trong account do. Day la QUYET DINH TAM THOI da duoc thong qua - cho
+  # cac pipeline chay on roi thu hep sau - khong phai mot cho bo sot.
+  #
+  # CACH CHUA, khi den luc: `assume_role` cua provider AWS nhan mot
+  # SESSION POLICY (truong `policy`). Session policy giao voi quyen cua
+  # role dich, nen Deny dat o do rang buoc dung phien dang lam viec. Do
+  # la cho DUY NHAT mot Deny co tac dung cho cong viec lien account.
+  #
+  # GIU khoi nay chu khong xoa: no van co tac dung cho phan chay trong
+  # account management, va no ghi lai Y DINH - danh sach nay la ban thao
+  # cua session policy tuong lai.
+  ####################################
   tu_choi_dich_vu = [
     {
       Sid    = "KhongTatHeThongPhatHien"
