@@ -31,6 +31,57 @@ locals {
 
   # Management account nen loai khoi "all": SCP KHONG ap dung cho no,
   # moi quyen cap o day la quyen that khong co tran chan.
+  #
+  # =====================================================================
+  # HE QUA: KHONG GROUP NAO CO lz-account-admin O MANAGEMENT
+  #
+  # lz-account-admin dung pham vi "all", ma "all" khong co management.
+  # Nen theo Terraform, KHONG AI vao duoc account management qua Identity
+  # Center. Chi pham vi "management" ton tai, va hien chi lz-billing dung
+  # no.
+  #
+  # THUC TE THI CO MOT DUONG, VA NO NAM NGOAI TERRAFORM
+  #
+  # Do ngay 2026-09-12 tren he thong that:
+  #
+  #   aws sso-admin list-account-assignments --account-id <management> \
+  #     --permission-set-arn <lz-account-admin>
+  #   -> USER  398a851c-...      (user `quang`)
+  #
+  # MOT NGUOI, gan TRUC TIEP, khong qua group - khac han 14 account con
+  # lai von deu gan qua GROUP. Duoc tao tay luc dung Identity Center ban
+  # dau, truoc khi layer nay ton tai.
+  #
+  # DAY LA BREAK-GLASS, VA GIU NGOAI TERRAFORM LA CO LY
+  #
+  # Quyen vao management khong nen phu thuoc vao chinh pipeline chay
+  # trong management. Pipeline ops-permission-set co
+  # sso:DeleteAccountAssignment - dua duong nay vao Terraform nghia la mot
+  # thay doi sai o do xoa duoc loi vao cua chinh nguoi van hanh.
+  #
+  # NHUNG PHAI BIET NO CO NHUNG TINH CHAT NAY
+  #
+  #   1. KHONG lop kiem nao thay: `terraform plan` ra "No changes" vi
+  #      Terraform khong biet resource no khong quan; gate.py doc ban
+  #      plan, ma ban plan khong co gi. Ca hai deu DUNG - chung khong
+  #      hong, chung chi khong nhin toi do.
+  #   2. MOT NGUOI. User do mat quyen, nghi viec, hay bi xoa la khong con
+  #      ai vao duoc management qua Identity Center. Can nhac mot danh
+  #      tinh break-glass thu hai.
+  #   3. Gan truc tiep cho USER nen khong them nguoi duoc bang cach them
+  #      vao group - phai gan tay lan nua, va lan do cung vo hinh voi moi
+  #      lop kiem.
+  #
+  # KIEM LAI KHI CAN (chay o account management):
+  #
+  #   aws sso-admin list-accounts-for-provisioned-permission-set \
+  #     --instance-arn <instance> --permission-set-arn <lz-account-admin> \
+  #     --query 'AccountIds' --output text | tr '\t' '\n' | sort -u
+  #
+  # So account o do phai bang len(scope_map["all"]) + 1. Dung `--query
+  # length(AccountIds)` se cho ra mot so MOI TRANG vi CLI tu phan trang -
+  # lay danh sach roi dem, dung de CLI dem ho.
+  # =====================================================================
   all_accounts = var.exclude_management_from_all ? [
     for id in local.active_accounts : id if id != var.management_account_id
   ] : local.active_accounts

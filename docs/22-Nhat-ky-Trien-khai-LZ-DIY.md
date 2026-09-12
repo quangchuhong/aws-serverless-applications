@@ -4019,6 +4019,73 @@ loc.handler(su_kien_ or su_kien(), None)
 
 `{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
 
+### Ghi chú — 15 ≠ 14, và con số lệch đó là đường quản trị đang dùng
+
+Sau khi ba pipeline chạy xanh, kiểm kết quả bằng cách **hỏi thẳng AWS** chứ không hỏi Terraform.
+
+`ops` sạch, và đây là phép đối chiếu mạnh nhất có thể cho SCP — `lint.sh --aws` đọc chính sách *đang gắn thật* ở Organizations rồi so từng statement, nên nó phủ cả chỗ `terraform plan` mù (một SCP sửa bằng tay):
+
+```
+Catalog: 5 policy, 13 statement (4 locked)
+Doi chieu AWS: 0 thay doi NOI / 13 con lai la THAT hoac khong doi
+```
+
+`ops-permission-set` thì ra một con số không khớp:
+
+```
+lz-account-admin duoc provisioned o  15 account
+scope_map["all"]                     14 account
+chi co o AWS:                        609320954321   (management)
+```
+
+#### Không phải role sót lại
+
+Cách đọc dễ chịu nhất là *"role `AWSReservedSSO_*` còn sót sau một lần gỡ assignment"*. Sai — một role sót lại không assume được. Và bằng chứng nằm ngay trong danh tính đang chạy mọi lệnh hôm đó:
+
+```
+arn:aws:sts::609320954321:assumed-role/AWSReservedSSO_lz-account-admin_.../quang
+```
+
+Hỏi tiếp thì ra:
+
+```
+USER  398a851c-...     <- user `quang`, gan TRUC TIEP
+```
+
+**Một người, gán trực tiếp, không qua group** — khác hẳn 14 account còn lại vốn đều gán qua `GROUP`. Tạo tay lúc dựng Identity Center, trước khi layer `permission-sets` tồn tại.
+
+#### Khoảng trống này do thiết kế tạo ra, có chủ đích
+
+`exclude_management_from_all` loại management khỏi phạm vi `"all"`, với lý do viết sẵn trong code: *"SCP KHÔNG áp dụng cho management account, mọi quyền cấp ở đây là quyền thật không có trần chặn."* Mà `lz-account-admin` dùng đúng phạm vi `"all"`.
+
+Nên **theo Terraform, không ai vào được management qua Identity Center.** Thực tế có một đường, và nó nằm ngoài.
+
+Giữ nó ngoài Terraform là có lý: pipeline `ops-permission-set` có `sso:DeleteAccountAssignment`, nên đưa đường này vào code nghĩa là một thay đổi sai ở đó xoá được lối vào của chính người vận hành. Đó là break-glass đúng nghĩa.
+
+#### Nhưng ba tính chất của nó phải được viết ra
+
+| | |
+|---|---|
+| **Không lớp kiểm nào thấy** | `terraform plan` ra `No changes` vì Terraform không biết resource nó không quản; `gate.py` đọc bản plan, mà bản plan trống. Cả hai đều **đúng** — chúng không hỏng, chúng chỉ không nhìn tới đó |
+| **Một người** | user đó mất quyền, nghỉ việc, hay bị xoá là không còn ai vào được management qua Identity Center |
+| **Gán trực tiếp** | không thêm người được bằng cách thêm vào group — phải gán tay lần nữa, và lần đó cũng vô hình với mọi lớp kiểm |
+
+Đã khai vào `permission-sets/organizations.tf`, ngay cạnh `exclude_management_from_all`, kèm lệnh kiểm lại. Vì trước đó nó **trông như một chỗ bỏ sót**, và thứ phân biệt "cố ý" với "bỏ sót" chỉ có một: có ai viết nó ra hay không.
+
+#### Và cái bẫy `--query` lại xuất hiện, lần thứ hai trong ngày
+
+```
+aws ... --query 'length(AccountIds)' --output text
+10
+5
+```
+
+Không phải hai kết quả — **một kết quả bị phân trang**. CLI tự phân trang và áp `--query` cho *từng trang*, nên phép đếm in ra một số mỗi trang. Đọc `10` thành câu trả lời thì sai; đọc `15` thì phải nhận ra đó là tổng.
+
+Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào biến) và với `--query` lồng hai phép chiếu đã ghi ở lỗi 104. Cách chữa không đổi: **lấy danh sách rồi tự đếm, đừng để CLI đếm hộ.**
+
+---
+
 ### Lỗi 121 — "pipeline chạy ổn" chưa bao giờ có nghĩa là "apply được"
 
 Thay đổi thật đầu tiên đi qua một pipeline vận hành: thêm một Config rule toàn tổ chức. `plan` xanh, `gate.py` cho qua, rồi `apply` **crash**:
