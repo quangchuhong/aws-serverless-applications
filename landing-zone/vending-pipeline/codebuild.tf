@@ -17,7 +17,17 @@ locals {
   # CodeBuild tai ban moi giua luc plan va luc apply thi apply tu choi
   # file plan - va thong bao noi ve dinh dang file, khong noi rang co
   # ai do vua phat hanh mot ban Terraform.
-  terraform_version = "1.9.8"
+  # 1.9.8 -> 1.11.3. Ly do day du o modules/tf-pipeline/codebuild.tf:
+  # 1.9.8 crash khi apply mot file plan tao bang -target o layer co bien
+  # mang khoi `validation`, va pipeline nay dung ca ba thu do.
+  #
+  # BAT BUOC doi o day nua, khong phai cho dong bo cho dep: stage E0 va E
+  # cua pipeline nay apply landing-zone/config-detective, va state cua
+  # layer do da duoc 1.11.3 ghi - 1.9.8 tu choi doc state moi hon.
+  #
+  # Hai cho ghim doc lap la hai cho de lech. Chung khong tu dong bo duoc
+  # vi vending-pipeline khong dung modules/tf-pipeline.
+  terraform_version = "1.11.3"
 }
 
 resource "aws_cloudwatch_log_group" "build" {

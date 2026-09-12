@@ -16,7 +16,37 @@ locals {
   # CodeBuild tai ban moi giua luc plan va luc apply thi apply tu choi
   # file plan - va thong bao noi ve dinh dang file, khong noi rang co
   # ai do vua phat hanh mot ban Terraform.
-  terraform_version = "1.9.8"
+  #
+  # ---------------------------------------------------------------
+  # 1.9.8 -> 1.11.3: MOT BUG CUA TERRAFORM, KHONG PHAI MOT LAN NANG CAP
+  #
+  # 1.9.8 CRASH khi apply mot file plan tao bang -target, o mot layer co
+  # bien mang khoi `validation`:
+  #
+  #   panic: checkable object status report for unexpected checkable
+  #          object var.security_hub_standards
+  #          ... evalVariableValidations
+  #
+  # Ba dieu kien do deu la thiet ke cua chinh pipeline nay: -target la
+  # ranh gioi ghi, file plan la thu gate.py doc, va moi layer deu co
+  # validation. Nen no khong phai mot truong hop bien - no la duong di
+  # BINH THUONG cua mot thay doi that.
+  #
+  # Vi sao no an lau den vay: MOI lan apply xanh tu truoc toi gio deu la
+  # no-op (0 added, 0 changed, 0 destroyed). Quy uoc "lan chay dau phai
+  # la mot lan khong co thay doi" la mot quy uoc tot, va no da che dung
+  # cai duong ma mot thay doi that phai di qua. "Pipeline chay on" khi do
+  # chi co nghia la duong ong THONG, chua bao gio co nghia la APPLY DUOC.
+  #
+  # 1.11.3 khong crash - DO bang mot lan chay that (mot rule Config duoc
+  # tao), khong phai doc changelog: toi khong tra ra duoc ban nao vá.
+  #
+  # Va tu luc do viec nang nay thanh BAT BUOC chu khong con la tuy chon:
+  # state cua config-detective da duoc 1.11.3 ghi, nen 1.9.8 tu choi doc.
+  #
+  # Trung voi phien ban tren may nguoi van hanh. Giu hai ben bang nhau la
+  # cach duy nhat de khong ai bi khoa ra khoi state cua chinh minh.
+  terraform_version = "1.11.3"
 }
 
 resource "aws_cloudwatch_log_group" "build" {
