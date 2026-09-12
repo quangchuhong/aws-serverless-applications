@@ -73,11 +73,31 @@ provider "aws" {
   default_tags { tags = local.common_tags }
 }
 
+####################################
+# Environment CHI CO BON GIA TRI
+#
+# "dev" / "staging" / "prod" / "sandbox" - doc 11 muc 2, va khai o
+# organization/variables.tf:346 (allowed_values cua tag policy).
+# "shared" KHONG nam trong do va khong bao gio nam trong do.
+#
+# Ha tang quan tri lay "prod": no khong phai moi truong thu nghiem, va
+# mat no la mat ban ghi "ai da lam gi".
+#
+# CAU TRUOC O DAY GHI '"shared" bi tag policy tu choi' - va cau do SAI.
+# Tag policy chua duoc tao (output tag_policy cua layer organization:
+# enabled = false, policy_id = null; stage sec-tagging dang tat). Nen
+# khong co gi TU CHOI "shared" ca - da co mot trail va mot bucket log
+# mang dung tag do trong nhieu ngay, va thu tim ra chung la mot ban plan,
+# khong phai mot phep tu choi.
+#
+# Bon gia tri tren la mot quy uoc DUOC TON TRONG, chua phai mot quy uoc
+# DUOC THUC THI. Sua lai dong nay khi sec-tagging bat len.
+####################################
 locals {
   common_tags = {
     CostCenter  = var.cost_center
     Owner       = var.owner
-    Environment = "prod" # ha tang quan tri - "shared" bi tag policy tu choi
+    Environment = "prod"
     Project     = var.project
     ManagedBy   = "terraform"
     Repo        = "aws-serverless-applications/landing-zone/org-trail"
