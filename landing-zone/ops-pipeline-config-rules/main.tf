@@ -80,6 +80,39 @@ locals {
       Action   = ["sts:AssumeRole"]
       Resource = var.config_pipeline_role_arns
     },
+
+    ####################################
+    # GHI - HAI ACTION, VA DAY LA RANH GIOI THAT CUA PIPELINE NAY
+    #
+    # Khoi nay TRUOC DAY KHONG CO. Caller chi cap Describe/Get/List, tuc
+    # pipeline doc duoc moi thu va ghi duoc KHONG GI. No qua `plan` roi
+    # chet o `apply`, va chet nhu vay moi lan - khong phai mot truong hop
+    # bien, ma la trang thai mac dinh cua no tu khi duoc viet ra.
+    #
+    # Thu che mat dieu do: khoi `tu_choi_dich_vu` ben duoi dai va cu the,
+    # nen ca file DOC NHU mot ranh gioi ghi da duoc can nhac ky. Mot danh
+    # sach Deny dai khong ham y rang co mot danh sach Allow tuong ung.
+    #
+    # Hai action, va ca hai deu chi cham vao ORGANIZATION config rule -
+    # thu duy nhat stage nay `-target`:
+    #
+    #   Put     tao moi hoac sua mot rule toan to chuc
+    #   Delete  go mot rule - gate.py xep la NOI (xoa_la_noi), nen mot
+    #           lan xoa phai co khai bao trong ops-loosen.yaml
+    #
+    # KHONG co PutConfigRule (rule tung account), khong co
+    # PutConfigurationRecorder, khong co PutDeliveryChannel. Nhung thu do
+    # thuoc layer cha va duoc Deny viet ro ben duoi.
+    ####################################
+    {
+      Sid    = "GhiRuleToanToChuc"
+      Effect = "Allow"
+      Action = [
+        "config:PutOrganizationConfigRule",
+        "config:DeleteOrganizationConfigRule",
+      ]
+      Resource = "*"
+    },
     {
       Sid    = "DocPhanNamOManagement"
       Effect = "Allow"
