@@ -78,6 +78,40 @@ lặng.
 
 Muốn "chạy với mọi commit" thì khai `[""]`, **không phải** `[]`.
 
+## Layer không có đường tự động
+
+Bản đồ trỏ **pipeline → layer nó apply**, không phải thư mục định nghĩa của chính
+pipeline. Sửa `landing-zone/ops-pipeline/main.tf` không làm pipeline đó chạy —
+đúng, vì layer pipeline được apply bằng tay.
+
+Nhưng một pipeline có thể apply **nhiều** layer. Pipeline vending apply bốn:
+`account-baseline` (stage A, C), `network` (B, D), `config-detective` (E0, E),
+`permission-sets` (F). Bản đồ chỉ cho nó `landing-zone/account-baseline/`, nên
+hai layer giữa mất đường tự động — và mất theo kiểu im lặng nhất: code vào
+`main`, không gì chạy, không gì báo.
+
+Đó là có chủ đích. Nhiệm vụ của vending là *"có account mới, lan toả ra các layer
+liên quan"*, không phải *"apply mọi thay đổi code của bốn layer đó"*. Hai layer
+ấy sẽ có đường trở lại khi pipeline riêng của chúng bật — **không** phải bằng
+cách nới bản đồ của vending, vì thế là trộn lại đúng thứ đã tách ra theo phòng
+ban.
+
+Nên chúng phải được **khai**:
+
+```hcl
+layer_thu_cong = [
+  "landing-zone/network",
+  "landing-zone/config-detective",
+  "landing-zone/network/ops",
+  "landing-zone/org-trail",
+]
+```
+
+`landing-zone/kiem-module.py` (phép 10) đối chiếu mọi `layer = "..."` khai trong
+các caller pipeline với `ban_do` ∪ `layer_thu_cong`, và kêu khi có layer nằm
+ngoài cả hai. Nó cũng kêu chiều ngược lại — một ngoại lệ đã hết hạn, vì nó nói
+rằng có chỗ trống ở đâu đó trong khi chỗ đó không còn.
+
 ## Thứ tự bật — một chiều an toàn, một chiều im lặng
 
 1. Apply layer này (`enable = true`).

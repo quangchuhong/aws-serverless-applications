@@ -28,6 +28,12 @@ locals {
     BAN DO HIEN TAI
     ${local.bang_ban_do}
 
+    LAYER KHONG CO DUONG TU DONG (khai o layer_thu_cong)
+    ${length(var.layer_thu_cong) == 0 ? "khong co - moi layer duoc pipeline apply deu co duong kich hoat" : join("\n", var.layer_thu_cong)}
+
+    Thay doi trong nhung layer tren vao main roi NAM DO. Phai apply bang
+    tay, hoac bat pipeline cua chung len.
+
     Kiem do phu: ${var.kiem_do_phu ? "BAT - moi pipeline mang tien to \"${var.project}-\" ma thieu o ban do se lam ham bao hong" : "TAT"}
     Bao khi hong: ${local.loi_topic == "" ? "KHONG AI DUOC BAO" : local.loi_topic}
 

@@ -76,6 +76,41 @@ ban_do = {
 kiem_do_phu = true
 
 ########################################
+# LAYER CO CHU DICH KHONG CO DUONG TU DONG
+#
+# Bon layer duoi day duoc mot pipeline APPLY nhung khong duong dan nao
+# trong ban_do cham toi. Do la co y, khong phai bo sot - nhung phai viet
+# ra, vi mot layer khong ai apply thi khong co trieu chung nao.
+#
+# ------------------------------------------------------------------
+# HAI CAI DAU: pipeline vending apply chung, nhung khong "so huu" chung
+#
+# Vending apply BON layer: account-baseline (stage A, C), network (B, D),
+# config-detective (E0, E), permission-sets (F). Nhiem vu cua no la "co
+# account moi, lan toa ra cac layer lien quan" - khong phai "apply moi
+# thay doi code cua bon layer do".
+#
+# Truoc khi co bo loc, moi push deu chay vending voi ca bay stage, nen
+# tren THUC TE vending la pipeline apply-tat-ca. Thu hep no ve
+# account-baseline/ lam hai layer nay mat duong tu dong.
+#
+# Chung se co lai khi ops-pipeline-config-rules va mot pipeline cho
+# landing-zone/network bat len - KHONG phai bang cach noi ban do cua
+# vending, vi the la tron lai dung thu da tach ra theo phong ban.
+#
+# ------------------------------------------------------------------
+# HAI CAI SAU: pipeline cua chung dang enable = false
+#
+# Khi bat, mo dong tuong ung trong ban_do o tren VA xoa khoi day.
+########################################
+layer_thu_cong = [
+  "landing-zone/network",          # vending B, D  - cho pipeline network
+  "landing-zone/config-detective", # vending E0, E - cho ops-pipeline-config-rules
+  "landing-zone/network/ops",      # ops-pipeline-network dang tat
+  "landing-zone/org-trail",        # ops-pipeline-trail dang tat
+]
+
+########################################
 # BAO KHI BO LOC HONG
 #
 # Dia chi phai bam xac nhan trong email SNS gui, neu khong thi topic co

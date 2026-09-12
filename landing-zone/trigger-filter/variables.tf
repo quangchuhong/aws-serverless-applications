@@ -107,6 +107,26 @@ variable "loi_emails" {
   default     = []
 }
 
+########################################
+# LAYER CO CHU DICH KHONG CO DUONG TU DONG
+#
+# Khong phai layer nao cung co pipeline. Mot layer duoc mot pipeline
+# APPLY nhung khong duong dan nao trong ban_do cham toi thi thay doi cua
+# no vao main roi nam do - khong gi chay, khong gi bao.
+#
+# Rong la hop le, nhung phai duoc VIET RA kem ly do. Mot dong trong doc
+# giong het mot dong bi quen, va cai thu hai la mot layer khong ai apply.
+#
+# Cung loi voi khong_co_lint va khong_co_catalog: kiem-module.py doi chieu
+# danh sach nay voi MOI `layer = "..."` khai trong cac caller pipeline, va
+# keu khi co layer nao khong nam o ca hai ben.
+########################################
+variable "layer_thu_cong" {
+  type        = list(string)
+  description = "Layer duoc pipeline apply nhung CO CHU DICH khong co duong kich hoat tu dong."
+  default     = []
+}
+
 variable "log_retention_days" {
   type    = number
   default = 90

@@ -12,7 +12,7 @@ registry.terraform.io. Trong moi truong bi chan mang (va trong mot CI
 khong co quyen ra ngoai) thi khong chay duoc, va luc do thu duy nhat con
 lai la doc bang mat.
 
-Chin phep kiem, khong can mang:
+Muoi phep kiem, khong can mang:
 
   1. dung var.X ma khong khai
   2. module khai var khong ai dung
@@ -24,6 +24,8 @@ Chin phep kiem, khong can mang:
   8. layer doc state cua layer khac ma caller khong khai state_chi_doc
   9. phep 1 va 6 ap ca cho layer KHONG dung module (trigger-filter,
      vending-pipeline, organization, ...) - xem kiem_layer_don()
+ 10. layer duoc mot pipeline APPLY ma khong duong dan nao trong ban_do
+     cua trigger-filter cham toi - xem kiem_phu_layer()
 
 Phep thu 7 la mot bai hoc duoc ma hoa: list(any) buoc MOI phan tu cung
 mot type, va IAM statement thi luon khac hinh - mot cai co Condition, cai
@@ -250,6 +252,110 @@ def tim_layer_don(callers):
     ]
 
 
+TF = os.path.join(GOC, "landing-zone/trigger-filter")
+
+
+def danh_sach(raw, ten_bien):
+    """Moi chuoi trong `<ten_bien> = [ ... ]` cua mot file tfvars.
+
+    Doc tren van ban DA BOC chu thich, nen dong bi comment khong tinh -
+    va do la dieu phai the: mot muc bi comment la mot muc KHONG co hieu
+    luc, ke ca khi no van nam do va van doc duoc bang mat.
+    """
+    m = re.search(rf"^{ten_bien}\s*=\s*[\[{{](.*?)^[\]}}]", raw, re.S | re.M)
+    return re.findall(r'"([^"]+)"', m.group(1)) if m else []
+
+
+def kiem_phu_layer():
+    """10. Layer nao duoc pipeline APPLY ma khong duong dan nao cham toi.
+
+    =====================================================================
+    VI SAO PHEP KIEM NAY TON TAI
+
+    Sau khi tat rule rieng cua tung pipeline, bo loc trigger-filter la
+    duong DUY NHAT den moi pipeline. Luc do mot layer co the roi ra khoi
+    he thong theo mot cach khong ai thay:
+
+      pipeline X co mot stage apply layer L
+      nhung khong tien to nao trong ban_do cham vao L
+      -> thay doi cua L vao main roi NAM DO
+
+    Khong co trieu chung: pipeline van xanh, console van sach, chi la
+    khong ai apply L nua. Da xay ra that - thu hep ban do cua vending ve
+    account-baseline/ lam landing-zone/network va
+    landing-zone/config-detective mat duong tu dong, va khong co gi keu.
+
+    =====================================================================
+    RONG LA HOP LE, NHUNG PHAI DUOC KHAI
+
+    Cung loi voi khong_co_lint va khong_co_catalog: layer khong co duong
+    tu dong phai nam trong layer_thu_cong. Mot dong trong doc giong het
+    mot dong bi quen.
+
+    =====================================================================
+    NO DOC FILE NAO
+
+    terraform.tfvars neu co (cau hinh THAT tren may nguoi van hanh),
+    khong thi terraform.tfvars.example (ban mau da commit). Phep kiem NOI
+    RO no doc cai nao - hai cai co the lech nhau, va doc nham cai nay roi
+    ket luan cho cai kia la mot cach bao sai.
+    """
+    that = os.path.join(TF, "terraform.tfvars")
+    mau = os.path.join(TF, "terraform.tfvars.example")
+    nguon = that if os.path.exists(that) else mau
+    if not os.path.exists(nguon):
+        return [
+            "trigger-filter: khong co terraform.tfvars lan .example, nen phep kiem "
+            "do phu layer KHONG chay. Day KHONG phai 'khong co gi sai'."
+        ], None
+
+    raw = boc(open(nguon).read())
+    tien_to = danh_sach(raw, "ban_do")
+    thu_cong = set(danh_sach(raw, "layer_thu_cong"))
+
+    # Moi layer ma mot pipeline nao do APPLY.
+    ap = set()
+    for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/*"))):
+        for f in sorted(glob.glob(os.path.join(d, "*.tf"))):
+            ap |= set(re.findall(r'layer\s*=\s*"(landing-zone/[^"]+)"', boc(open(f).read())))
+
+    if not ap:
+        return [
+            "khong tim thay `layer = \"landing-zone/...\"` o dau ca. Day KHONG "
+            "phai 'moi layer deu duoc phu' - la CHUA DOC DUOC."
+        ], os.path.basename(nguon)
+
+    # Tien to la tien to CHUOI. Them "/" vao layer truoc khi so, de
+    # "landing-zone/network" khong tu khop voi tien to
+    # "landing-zone/network-cu/".
+    sot = sorted(
+        L for L in ap
+        if L not in thu_cong and not any((L + "/").startswith(p) for p in tien_to if p)
+    )
+
+    loi = []
+    if sot:
+        loi.append(
+            f"Layer duoc pipeline APPLY nhung khong duong dan nao trong ban_do "
+            f"cham toi, va cung khong khai o layer_thu_cong: {sot}. "
+            f"(doc tu {os.path.basename(nguon)}) "
+            "Thay doi cua chung vao main roi nam do - khong gi chay, khong gi bao."
+        )
+
+    # Chieu nguoc: khai thu cong mot layer ma KHONG pipeline nao apply.
+    # Vo hai luc chay, nhung no la mot ngoai le da het han - no noi rang
+    # co mot cho trong o dau do, trong khi cho do khong con.
+    thua = sorted(thu_cong - ap)
+    if thua:
+        loi.append(
+            f"layer_thu_cong khai layer khong pipeline nao apply: {thua}. "
+            "Ngoai le da het han - xoa di, neu khong no se che mat mot cho "
+            "trong that su xuat hien sau nay o cung duong dan."
+        )
+
+    return loi, os.path.basename(nguon)
+
+
 def main():
     callers = sys.argv[1:] or tim_caller()
 
@@ -286,6 +392,14 @@ def main():
             l = kiem_layer_don(d, ten)
             print(f"  {'x' if l else 'v'} {ten}")
             loi += l
+
+    # Chi khi TU TIM: phep kiem nay hoi ve ca cay, khong ve mot thu muc.
+    phu_nguon = None
+    if not sys.argv[1:]:
+        l, phu_nguon = kiem_phu_layer()
+        if phu_nguon:
+            print(f"  {'x' if l else 'v'} do phu layer (doc {phu_nguon})")
+        loi += l
 
     print()
     if loi:
