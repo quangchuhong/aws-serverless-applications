@@ -6,7 +6,7 @@
 
 # MAC DINH TAT - va hai stage ben duoi cung tat, vi hai ly do KHAC NHAU.
 # Xem versions.tf.
-enable = true
+enable = false
 
 ########################################
 # DUONG KICH HOAT
@@ -106,8 +106,8 @@ layer_keys = {
 # va viec can lam la apply layer do mot lan bang tay truoc.
 ########################################
 
-enable_network_stage  = true
-enable_firewall_stage = true
+enable_network_stage  = false
+enable_firewall_stage = false
 
 # Chi FIREWALL co cong duyet. DNS thi khong - mot thay doi DNS sai co
 # trieu chung ngay, con mot ingress rule moi thi khong co gi bao.

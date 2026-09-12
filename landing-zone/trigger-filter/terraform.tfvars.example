@@ -70,7 +70,7 @@ ban_do = {
   ]
 
   ####################################
-  # BA PIPELINE VUA BAT
+  # HAI PIPELINE VUA BAT (cai thu ba con cho - xem cuoi khoi)
   #
   # Chung dung role OrganizationAccountAccessRole o account dich - quyet
   # dinh tam thoi, co y, se thu hep sau. Xem tfvars cua tung caller.
@@ -87,7 +87,7 @@ ban_do = {
   # pipeline co that ma khong co trong ban do. Ca hai chieu deu ON AO,
   # khong chieu nao im lang - nen cu lam lien hai buoc.
   #
-  # ops-gate/ co trong ca ba: gate.py la bo phan loai ban plan ma MOI
+  # ops-gate/ co trong ca hai: gate.py la bo phan loai ban plan ma MOI
   # pipeline dung. Sua luat trong do ma khong chay lai pipeline nao nghia
   # la luat moi chua bao gio duoc thu.
   ####################################
@@ -101,10 +101,15 @@ ban_do = {
     "landing-zone/ops-gate/",
   ]
 
-  "ops-network" = [
-    "landing-zone/network/ops/",
-    "landing-zone/ops-gate/",
-  ]
+  # ops-network: CHUA bat.
+  #
+  # State cua landing-zone/network/ops dang rong (layer cha tung bi xoa),
+  # nen pipeline do se dung o chot chan state rong cua buildspec. Mo dong
+  # nay KHI VA CHI KHI da apply pipeline do - ten mot pipeline chua ton
+  # tai lam loc.py bao hong moi lan chay (phep 3).
+  #
+  # Khi mo: xoa "landing-zone/network/ops" khoi layer_thu_cong ben duoi.
+  # "ops-network" = ["landing-zone/network/ops/", "landing-zone/ops-gate/"]
 }
 
 ########################################
@@ -122,43 +127,41 @@ kiem_do_phu = true
 ########################################
 # LAYER CO CHU DICH KHONG CO DUONG TU DONG
 #
-# RONG bay gio, va do la mot ket luan chu khong phai mot cho chua dien:
-# ca ba layer tung nam o day (config-detective, network/ops, org-trail)
-# gio da co pipeline rieng trong ban_do o tren.
+# Layer duoc mot pipeline APPLY nhung khong duong dan nao trong ban_do
+# cham toi. Phai VIET RA kem ly do - mot layer khong ai apply thi khong co
+# trieu chung nao.
 #
-# kiem-module.py phep 10 kiem dieu do: moi `layer = "..."` khai trong cac
+# kiem-module.py phep 10 doi chieu: moi `layer = "..."` khai trong cac
 # caller pipeline phai duoc mot tien to trong ban_do CUA CHINH pipeline do
-# cham toi, neu khong thi phai co ten o day.
-#
-# Phan duoi la ly do cu, giu lai vi no giai thich VI SAO danh sach nay ton
-# tai.
-#
-# Ba layer duoi day duoc mot pipeline APPLY nhung khong duong dan nao
-# trong ban_do cham toi. Do la co y, khong phai bo sot - nhung phai viet
-# ra, vi mot layer khong ai apply thi khong co trieu chung nao.
+# cham toi, neu khong thi phai co ten o day. Phep kiem do so theo TUNG
+# pipeline chu khong gop tien to - neu gop thi network/ops trong nhu da
+# duoc phu boi tien to "landing-zone/network/" cua vending, trong khi
+# vending khong apply layer do.
 #
 # ------------------------------------------------------------------
-# config-detective: vending apply (E0, E) nhung khong duoc kich hoat
+# CON MOT MUC, va no la trang thai qua do
 #
-# Khac voi network/, layer nay KHONG duoc them vao ban do cua vending.
-# No cho ops-pipeline-config-rules - lop phat hien thuoc doi security, va
-# de vending co duong tu dong apply no la tron lai dung thu da tach ra
-# theo phong ban.
+# landing-zone/network/ops: pipeline cua no (ops-pipeline-network) chua
+# bat, vi state cua layer do dang rong - layer cha tung bi xoa. Buildspec
+# co chot chan state rong, nen bat pipeline bay gio chi tao ra mot thu
+# luon do.
 #
-# Hau qua phai biet ro: thay doi trong config-detective/ vao main thi
-# khong gi chay - NHUNG lan vend account tiep theo se chay stage E0/E va
-# apply no, kem theo mot viec chang lien quan. Mot lan apply MUON va BAT
-# NGO, khong phai mot lan khong apply.
+# Trinh tu go muc nay: apply layer network/ops mot lan bang tay -> bat
+# ops-pipeline-network -> mo dong "ops-network" trong ban_do -> xoa muc
+# nay. BON buoc, va bo thu tu thi mot trong hai phep kiem cua loc.py se
+# keu.
 #
 # ------------------------------------------------------------------
-# HAI CAI SAU: pipeline cua chung dang enable = false
-#
-# Khong co pipeline nao trong AWS, nen khai ten chung vao ban_do se lam
-# loc.py bao hong moi lan chay (phep 3).
-#
-# Khi bat, mo dong tuong ung trong ban_do o tren VA xoa khoi day.
+# config-detective khong con o day nua: no da co pipeline rieng
+# (ops-pipeline-config-rules) trong ban_do o tren. Truoc do no o day vi
+# vending apply no o stage E0/E ma khong duoc kich hoat boi thay doi cua
+# chinh no - tuc thay doi nam cho toi lan vend account tiep theo roi duoc
+# apply kem mot viec chang lien quan.
 ########################################
-layer_thu_cong = []
+layer_thu_cong = [
+  # Pipeline cua no (ops-pipeline-network) chua bat - xem ban_do o tren.
+  "landing-zone/network/ops",
+]
 
 ########################################
 # TRU RA - LAYER LONG NHAU
