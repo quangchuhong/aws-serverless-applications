@@ -4019,6 +4019,77 @@ loc.handler(su_kien_ or su_kien(), None)
 
 `{}` là falsy, nên sự kiện rỗng bị thay bằng sự kiện **mặc định**, và bài kiểm chưa bao giờ chạy thứ nó nói nó chạy. Chữa bằng một sentinel `KHONG_TRUYEN`. **Một giá trị rỗng bị đọc thành "không truyền" — trong chính bộ kiểm đi tìm khuyết điểm đó.**
 
+### Lỗi 120 — một danh sách rỗng đi qua `plan` mà không để lại dấu vết nào
+
+Bật hai pipeline vận hành còn lại (`config-rules`, `trail`). Cả hai khai:
+
+```hcl
+quyen_dich_vu = [{
+  Sid      = "AssumeVaoSecurityVaLogArchive"
+  Action   = ["sts:AssumeRole"]
+  Resource = var.config_pipeline_role_arns    # default = []
+}]
+```
+
+Tôi đặt `enable = true` và quên điền biến đó. `terraform plan`:
+
+```
+Plan: 22 to add, 0 to change, 0 to destroy.
+```
+
+Xanh. 22 resource mô tả đầy đủ. **Không một dòng nào trong bản plan nhắc tới việc statement đó có `Resource = []`** — vì rỗng không phải lỗi cú pháp, và Terraform không biết IAM nghĩ gì về nó.
+
+Thứ tìm ra nó là một phép đếm:
+
+```
+grep -c "OrganizationAccountAccessRole" /tmp/p1.txt   ->  0
+```
+
+`0` nghĩa là cả bản plan không chứa ARN liên account nào. Nếu apply, IAM sẽ từ chối **cả policy** với một lỗi về định dạng ARN — không nhắc tới biến nào, ở bước tạo `aws_iam_role_policy`, tức sau khi plan đã xanh và người ta đã tin.
+
+Và mô tả của chính biến đó đã cảnh báo: *"Mot danh sach rong lam statement ... co Resource rong, va IAM tu choi ca policy"*. **Một cảnh báo trong mô tả biến không chạy được.** Chữa bằng `check "bat_stage_thi_co_role"`: kêu lúc plan, nêu tên biến.
+
+Đây là dạng đã gặp nhiều lần trong dự án này, lần này ở một chỗ mới: **rỗng đi qua mọi lớp kiểm vì không lớp nào hỏi "cái này có rỗng không"**.
+
+#### `AuthorizationError` không phải `NotFound`, và khoảng giữa là chỗ dễ kết luận sai
+
+Cần biết một SNS topic ở account khác có tồn tại không:
+
+```
+AuthorizationError ... is not authorized to perform: SNS:GetTopicAttributes
+... because no resource-based policy allows the SNS:GetTopicAttributes action
+```
+
+Lỗi này **không** trả lời câu hỏi. SNS liên account trả cùng một thông báo cho *"topic không tồn tại"* và *"tồn tại nhưng bạn không đọc được"* — cố ý, để không lộ sự tồn tại. Đọc nó thành "topic không có" là sai; đọc thành "topic có" cũng sai.
+
+Cách trả lời được là hỏi từ **bên trong** account đó. Và vì đường vào chính là role mà pipeline sẽ dùng, một lệnh trả lời hai câu: tên topic, và management có assume sang được không.
+
+#### Kết quả — 5/5, đo trên một lần gọi thật
+
+```json
+{"loc": true, "da_khoi_dong": [],
+ "kiem_ban_do": "DAY DU: 5 trong ban do, 5 mang tien to 'qh11-lz-', 7 tong"}
+```
+
+Năm pipeline, tất cả trong bản đồ, không cái nào mồ côi. Hai cái còn lại trong 7 (`MyImagePipeline1`, `shopping-cart-pipeline`) không thuộc landing zone.
+
+Và một con số cũ được giải thích nhân tiện: `654560867047` từng nằm trong `unscoped_accounts` của layer `permission-sets` và bị nghi là "quên khai phạm vi". Nó là account **log-archive** — không thuộc `nonprod`/`prod`/`workloads` nào cả, giống network và security. Không có account workload nào bị quên.
+
+#### Ba con số của một lần đo hỏng
+
+Trong lúc làm, `plan` ra `18 to add` kèm `Error: Invalid value for input variable`, còn lần trước đó ra `22`. Chênh 4 không có lý do kiến trúc nào — và nó không cần một lý do:
+
+```
+terraform.tfvars line 72: drift_emails = "quang.hong.0991@gmail.com"
+list of string required
+```
+
+`18` là bản plan **dở dang** của một lần chạy hỏng. Sau khi sửa thành `["..."]`, số về lại `22`.
+
+Điều đáng giữ: một con số lấy từ một lần chạy **thất bại** trông giống hệt một con số lấy từ một lần chạy thành công. `grep '^Plan:'` không phân biệt được — chỉ `echo "exit=$?"` phân biệt được, và đó là lý do mọi lệnh đo trong nhật ký này đều đi kèm mã thoát.
+
+---
+
 #### Ghi chú — "đã commit" và "đã apply" là hai chuyện, và nó bẫy hai lần trong một buổi
 
 Pipeline `qh11-lz-ops-permission-set` hỏng. Nghi phạm đầu tiên là lỗi 403 trên `account-baseline/terraform.tfstate` — layer `permission-sets` đọc state đó qua `terraform_remote_state`, và bản sửa (`var.state_chi_doc`) đã được viết, kiểm, commit ở `299c133`.
