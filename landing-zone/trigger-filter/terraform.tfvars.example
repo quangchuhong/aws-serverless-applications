@@ -65,8 +65,19 @@ ban_do = {
     # khi mang duoc dung lai.
   ]
 
+  ####################################
   # SCP + OU + tag policy. Ba stage, mot layer.
-  "ops" = ["landing-zone/organization/"]
+  #
+  # ops-gate/ co o day vi cung ly do nhu ba pipeline duoi - va o day ly
+  # do do manh hon ca: day la pipeline SCP, tuc noi gate.py doc ra nhung
+  # thu nang nhat (xoa mot Deny, noi mot dieu kien). Thieu tien to nay
+  # thi sua luat trong gate.py se thu lai ba pipeline kia ma KHONG thu
+  # lai dung cai pipeline ma luat do quan trong nhat.
+  ####################################
+  "ops" = [
+    "landing-zone/organization/",
+    "landing-zone/ops-gate/",
+  ]
 
   # Ai vao account nao.
   #
