@@ -14,6 +14,23 @@
 # NHAC LAI: SCP la TRAN QUYEN, khong cap quyen. Mot action chay duoc
 # chi khi CA permission set LAN SCP cho phep. Va SCP KHONG ap dung
 # cho management account.
+#
+# ---------------------------------------------------------------
+# AI APPLY FILE NAY, VA KHI NAO
+#
+# Pipeline qh11-lz-ops, stage sec-scp. No KHONG tu hoi repo va khong
+# con rule EventBridge rieng: duong kich hoat duy nhat la ham
+# landing-zone/trigger-filter, va ham do chi goi ten pipeline nay khi
+# commit cham vao landing-zone/organization/ hoac landing-zone/ops-gate/.
+#
+# He qua doi voi nguoi sua file nay:
+#
+#   - Push vao main la du de pipeline chay. Khong phai bam gi.
+#   - Nhung no DUNG o cong duyet cua stage sec-scp. Mot SCP thay doi
+#     ma khong ai bam duyet thi khong bao gio duoc apply - va trang
+#     thai do trong nhu "da xong" neu chi nhin danh sach commit.
+#   - gate.py doc ban plan va coi viec XOA mot Deny la NOI. Neu do la
+#     y ban thi lint phai thay no la NOI truoc - xem ./lint.sh.
 ########################################
 
 locals {
