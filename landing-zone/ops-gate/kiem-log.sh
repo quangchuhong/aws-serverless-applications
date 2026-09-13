@@ -480,9 +480,30 @@ for i, x in enumerate(su_kien):
         continue
     if la_ma_nguon(t):
         continue
+    ####################################
+    # GOM DONG TRUNG - MOT PHAT HIEN, KHONG PHAI HAI
+    #
+    # Lan chay that cua pipeline ops bao "2 dong canh bao", va ca hai la
+    # CUNG mot check:
+    #
+    #   │ Warning: Check block assertion failed
+    #     on tag-policy.tf line 136, in check "tag_policy_is_report_only":
+    #   │ Warning: Check block assertion failed
+    #     on tag-policy.tf line 136, in check "tag_policy_is_report_only":
+    #
+    # buildspec chay `plan` roi `apply`, va check block duoc danh gia o CA
+    # HAI - nen moi phat hien xuat hien dung hai lan. Con so 2 lam nguoi
+    # doc di tim hai thu trong khi chi co mot.
+    #
+    # Gom theo (dong, chi tiet) va dem: hai lan cung mot check thanh "x2",
+    # con hai check KHAC nhau van la hai muc rieng. Cung ly do gom canh
+    # bao loai tru trong kiem-config.sh.
+    ####################################
     for mau in DANG_TIM:
         if mau in t:
-            thay.setdefault(mau, []).append((t[:160], chi_tiet(i)))
+            khoa = (t[:160], tuple(chi_tiet(i)))
+            d = thay.setdefault(mau, {})
+            d[khoa] = d.get(khoa, 0) + 1
             break
 
 print(f"    {len(su_kien)} dong log")
@@ -498,14 +519,23 @@ if not thay:
     print(f"    {XANH}Khong co canh bao nao{HET} ngoai nhung dong biet roi.")
     sys.exit(0)
 
-for mau, ds in sorted(thay.items(), key=lambda kv: -len(kv[1])):
-    print(f"    {VANG}{mau}{HET}  {len(ds)} dong")
-    for t, ct in ds[:3]:
-        print(f"      {t}")
+# In SO PHAT HIEN (so muc rieng), va so dong o trong ngoac khi chung khac
+# nhau. Hai con so tra loi hai cau hoi khac nhau: "co bao nhieu thu phai
+# xem" va "no xuat hien bao nhieu lan".
+def so_dong(d):
+    return sum(d.values())
+
+
+for mau, d in sorted(thay.items(), key=lambda kv: -so_dong(kv[1])):
+    n, tong = len(d), so_dong(d)
+    dem = f"{n} phat hien" + (f" / {tong} dong" if tong != n else "")
+    print(f"    {VANG}{mau}{HET}  {dem}")
+    for (t, ct), lan in sorted(d.items(), key=lambda kv: -kv[1])[:3]:
+        print(f"      {t}" + (f"   (x{lan})" if lan > 1 else ""))
         for c in ct[:3]:
             print(f"        {c[:200]}")
-    if len(ds) > 3:
-        print(f"      ... con {len(ds) - 3} dong nua")
+    if n > 3:
+        print(f"      ... con {n - 3} phat hien nua")
 
 nang = [m for m in thay if m in NANG]
 print()
@@ -514,7 +544,7 @@ if nang:
     print("        van xanh. Doc log truoc khi tin ket qua.")
     sys.exit(1)
 
-print(f"  {VANG}CANH BAO{HET} log co {sum(len(v) for v in thay.values())} dong canh bao "
+print(f"  {VANG}CANH BAO{HET} log co {sum(len(v) for v in thay.values())} phat hien "
       f"({', '.join(sorted(thay))}).")
 print("        Stage xanh khong co nghia la khong co gi.")
 sys.exit(0)

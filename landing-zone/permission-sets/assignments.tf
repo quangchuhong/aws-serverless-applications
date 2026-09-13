@@ -128,7 +128,11 @@ check "declared_scopes_not_empty" {
         join(", ", local.empty_core_scopes)
       )
       : "",
-      "Cac pham vi moi truong (analytics, nonprod, prod) khai trong var.accounts_by_scope; chua co OU do thi bo qua.",
+      # "chua co OU do" la cach dien dat SAI, va no day nguoi doc di tim
+      # nham cho: pham vi moi truong rong vi chua co ACCOUNT nao duoc khai
+      # trong var.accounts_by_scope, khong vi thieu OU. OU co the da ton
+      # tai va van rong. Da nham dung nhu vay mot lan khi doc bao cao nay.
+      "Cac pham vi moi truong (analytics, nonprod, prod) khai trong var.accounts_by_scope. RONG o day nghia la chua co ACCOUNT nao trong pham vi do - KHONG phai thieu OU; OU co the da co va van rong. Chua tao account thi bo qua.",
     ]))
   }
 }
