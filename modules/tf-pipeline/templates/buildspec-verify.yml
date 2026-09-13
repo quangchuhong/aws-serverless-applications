@@ -122,4 +122,33 @@ phases:
         # An toan o day vi nguon cua chuoi la code da qua review, khong
         # phai dau vao cua nguoi dung.
         # ----------------------------------------------------
+        set +e
         eval "${VERIFY_CMD}"
+        RC_LAYER=$?
+        set -e
+
+        # ----------------------------------------------------
+        # PHEP KIEM LOG - CHUNG CHO MOI PIPELINE, CHAY LUON
+        #
+        # Vi sao o day chu khong trong lenh verify cua tung pipeline: phep
+        # kiem nay khong biet gi ve layer nao ca, no chi doc log cua lan
+        # chay. Dat no vao tung lenh verify se cho ra ba ban roi bon ban,
+        # va ban lech se la ban LONG hon - vi khong ai sua mot phep kiem
+        # de no keu minh nhieu hon. Cung ly do gate.py chi co mot ban.
+        #
+        # CHAY CA KHI LENH TRUOC DA DO: neu lenh verify cua layer that
+        # bai, log cua lan chay la dung cai giup hieu VI SAO. Bo qua no o
+        # dung luc can nhat la mot thiet ke sai.
+        #
+        # Ma thoat: hong o ben nao cung lam ca stage do.
+        # ----------------------------------------------------
+        set +e
+        "${CODEBUILD_SRC_DIR}/landing-zone/ops-gate/kiem-log.sh"
+        RC_LOG=$?
+        set -e
+
+        echo
+        echo "== ket qua: layer=$RC_LAYER  log=$RC_LOG"
+        if [ "$RC_LAYER" -ne 0 ] || [ "$RC_LOG" -ne 0 ]; then
+          exit 1
+        fi

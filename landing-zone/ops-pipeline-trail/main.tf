@@ -96,6 +96,32 @@ locals {
       ]
       Resource = "*"
     },
+    ####################################
+    # CHO PHEP KIEM LOG DUNG CHUNG - CHI DOC
+    #
+    # buildspec-verify.yml goi ../ops-gate/kiem-log.sh LUON sau lenh verify
+    # cua pipeline nay. No doc log cua CHINH lan chay do de tim CANH BAO -
+    # mot check block Terraform that bai hay mot dong "changed outside of
+    # Terraform" di qua ma stage van xanh, va khong ai mo log cua mot build
+    # mau xanh.
+    #
+    # Loc theo EXECUTION chu khong theo cua so thoi gian, nen no can doc
+    # danh sach action de lay build-uuid (chinh la ten log stream).
+    #
+    # Thieu bon action nay thi buoc Verify do voi AccessDenied o mot dich
+    # vu ma khong dong nao trong file nay nhac ten.
+    ####################################
+    {
+      Sid    = "DocLogChoVerify"
+      Effect = "Allow"
+      Action = [
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "*"
+    },
     {
       Sid    = "GhiTrail"
       Effect = "Allow"
@@ -197,8 +223,20 @@ module "pipeline" {
   khong_co_catalog = local.khong_co_catalog
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
-
-  khong_co_verify = "phep do dung cho trail la IsLogging con true VA LatestDeliveryTime moi hon luc apply - ma CloudTrail giao theo lo, can ~2 phut. Mot verify chay ngay se doc dau thoi gian CU roi ket luan sai theo chieu an tam. Lam bang tay theo next_steps muc 2 cua org-trail."
+  ####################################
+  # VERIFY - SAU THUOC TINH gate.py CANH, DOC LAI TU AWS
+  #
+  # Truoc day cho nay khai khong_co_verify voi ly do "phai doi ~2 phut cho
+  # CloudTrail giao lo dau tien". Ly do do SAI: no de MOT phep do co do tre
+  # (LatestDeliveryTime) phu quyet ca buoc verify, trong khi nam thuoc tinh
+  # con lai - IsLogging, LatestDeliveryError, IsOrganizationTrail,
+  # IsMultiRegionTrail, IncludeGlobalServiceEvents, LogFileValidationEnabled
+  # - deu tuc thi va doc duoc ngay tu account management.
+  #
+  # Script xu ly do tre dung cach: BAO tuoi cua lo log gan nhat, va chi
+  # CANH BAO khi qua cu (60 phut) - khong bao gio bao LOI.
+  ####################################
+  verify = "./landing-zone/org-trail/kiem-trail.sh"
 
   source_type       = var.source_type
   repository_name   = var.repository_name

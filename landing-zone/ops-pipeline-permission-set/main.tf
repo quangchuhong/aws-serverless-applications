@@ -131,6 +131,32 @@ locals {
     },
 
     ####################################
+    # CHO PHEP KIEM LOG DUNG CHUNG - CHI DOC
+    #
+    # buildspec-verify.yml goi ../ops-gate/kiem-log.sh LUON sau lenh verify
+    # cua pipeline nay. No doc log cua CHINH lan chay do de tim CANH BAO -
+    # mot check block Terraform that bai hay mot dong "changed outside of
+    # Terraform" di qua ma stage van xanh, va khong ai mo log cua mot build
+    # mau xanh.
+    #
+    # Loc theo EXECUTION chu khong theo cua so thoi gian, nen no can doc
+    # danh sach action de lay build-uuid (chinh la ten log stream).
+    #
+    # Thieu bon action nay thi buoc Verify do voi AccessDenied o mot dich
+    # vu ma khong dong nao trong file nay nhac ten.
+    ####################################
+    {
+      Sid    = "DocLogChoVerify"
+      Effect = "Allow"
+      Action = [
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "*"
+    },
+    ####################################
     # GHI HEP - BON ACTION
     #
     # Day la ranh gioi that cua pipeline nay. Bon action, va ca bon deu
@@ -209,8 +235,30 @@ module "pipeline" {
   state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
-
-  khong_co_verify = "doc lai assignment thi luon xanh nhung khong tra loi duoc cau hoi that: nguoi trong group co vao duoc account khong. Cau do doi mot phien o ACCOUNT DICH, ma buoc verify chay bang danh tinh CodeBuild o management."
+  ####################################
+  # VERIFY - BON KIEU HONG IM LANG, DOC DUOC TU MANAGEMENT
+  #
+  # Truoc day cho nay khai khong_co_verify voi ly do "doc lai assignment thi
+  # luon xanh nhung khong tra loi duoc cau hoi that". Ly do do SAI o hai cho:
+  #
+  #   1. Identity Center nam o ACCOUNT MANAGEMENT. sso:List* va
+  #      identitystore:List* doc duoc het tu day, khong can assume.
+  #   2. "Doc lai thi luon xanh" la lap luan giet luon verify cua SCP, noi
+  #      no CO gia tri. Mot phep doc chi vo ich khi no khong the FAIL.
+  #
+  # Va no fail duoc, o bon cho - tat ca deu im lang:
+  #
+  #   permission set khong co quyen nao   vao duoc ma khong lam gi duoc
+  #   group khong co assignment nao       vao duoc 0 account
+  #   user khong thuoc group nao          dang nhap duoc, thay 0 thu
+  #   group khong co ai                   cai hop rong (CANH BAO, khong LOI)
+  #
+  # Cai script KHONG chung minh duoc - va no in ra dieu do: mot assignment
+  # ton tai khong co nghia nguoi trong group VAO DUOC account. Identity
+  # Center con phai sinh role AWSReservedSSO_<set>_<hash> o account dich, va
+  # doc thu do doi mot phien o ACCOUNT DICH.
+  ####################################
+  verify = "./landing-zone/permission-sets/kiem-quyen.sh"
 
   source_type       = var.source_type
   repository_name   = var.repository_name

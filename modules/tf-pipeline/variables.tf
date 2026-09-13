@@ -506,10 +506,20 @@ variable "verify" {
       loi 126  mot SCP go sai ten action van apply thanh cong, van nam
                trong policy, va chan dung 0 thu
 
-    Va mot khoang trong nua ma khong lop nao doc: CANH BAO. Mot check
-    block cua Terraform that bai, mot dong "Objects have changed outside
-    of Terraform", mot canh bao cua -target - tat ca deu di qua ma stage
-    van xanh. Script verify nen doc lai log cua chinh lan chay do.
+    -------------------------------------------------------------------
+    PHEP KIEM LOG CHAY LUON, KHONG PHAI VIEC CUA LENH NAY
+
+    buildspec-verify.yml goi landing-zone/ops-gate/kiem-log.sh SAU lenh
+    nay, va lay ma thoat cua ca hai. Nen lenh verify chi can lo phan cua
+    layer minh - khong ai phai nho them phep kiem log vao.
+
+    Vi sao no o ops-gate/ chu khong trong tung lenh verify: no khong biet
+    gi ve layer nao ca, no chi doc log cua lan chay. Sao chep vao tung
+    lenh se cho ra ba ban roi bon ban, va ban lech se la ban LONG hon.
+    Cung ly do gate.py chi co mot ban.
+
+    Va no chay CA KHI lenh verify da do: khi mot phep kiem layer that bai,
+    log cua lan chay la dung cai giup hieu VI SAO.
 
     -------------------------------------------------------------------
     DANH TINH: CUA CODEBUILD, O ACCOUNT MANAGEMENT
