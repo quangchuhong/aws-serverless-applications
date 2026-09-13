@@ -4086,6 +4086,94 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 129 — mã màu ANSI: màn hình làm hai chuỗi khác nhau *trông* giống nhau
+
+Phép kiểm log có một danh sách `BIET_ROI` — những cảnh báo đã biết, lọc đi để người ta không thôi đọc phần này. Trong đó có `"Warning: Deprecated Parameter"` (khuyến nghị `dynamodb_table` → `use_lockfile`, xuất hiện mỗi lần chạy).
+
+Nó không lọc được. Cảnh báo vẫn hiện ra mỗi lượt. Lọc thử offline bằng fixture tự viết thì **đúng** — nên vấn đề không ở logic so khớp.
+
+Dòng thật trong log là:
+
+```
+\x1b[33m│\x1b[0m \x1b[1mWarning: \x1b[0m\x1b[1mDeprecated Parameter\x1b[0m
+```
+
+`buildspec` chạy `terraform init/plan/apply` **không có `-no-color`**. Nên `"Warning: Deprecated Parameter"` *không còn là chuỗi con liền mạch* — có mã escape chen vào giữa `Warning: ` và `Deprecated`. Còn `"Warning:"` thì vẫn liền, nên nó khớp `DANG_TIM`. Kết quả: dòng đã được khai là biết rồi bị bắt như một cảnh báo mới.
+
+**Vì sao không thấy sớm:** `aws logs tail` in ra terminal, và terminal *diễn giải* các mã đó nên chúng vô hình. Thứ người đọc thấy là một dòng sạch sẽ, giống hệt chuỗi trong `BIET_ROI`. Đối chiếu bằng mắt hai thứ giống nhau và kết luận chúng bằng nhau — trong khi byte thì khác.
+
+Đây là lần thứ **ba** cùng một buổi màn hình nói dối theo ba đường khác nhau:
+
+| | Thứ nhìn thấy | Thứ thật sự có |
+|---|---|---|
+| CodeBuild echo lệnh | `CANH BAO: ... HET HAN.` | mã nguồn của một `echo` chưa bao giờ chạy |
+| `externalExecutionSummary` | một sự cố | cả `buildspec` được dán vào |
+| ANSI | `Warning: Deprecated Parameter` | cùng chuỗi đó, cắt bởi 4 mã escape |
+
+Hai lần đầu chữa bằng cách lọc theo **hình dạng** của dòng. Lần này khác: **chuẩn hoá trước khi so** — bỏ ANSI rồi mới khớp. Lọc theo hình dạng sẽ không cứu được, vì hình dạng *đúng*, chỉ nội dung bị cắt.
+
+> **Điều đáng giữ:** khi một phép so khớp thất bại trên dữ liệu thật nhưng thành công trên fixture tự viết, fixture đang thiếu một thứ mà mắt không thấy. Đừng sửa logic — đi lấy byte thật.
+
+`-no-color` trong `buildspec` là cách chữa ở gốc và vẫn nên làm; nhưng nó không giúp gì cho log đã có, và mọi lệnh `grep` mà bất kỳ ai chạy trên log này về sau đều vướng cùng chỗ.
+
+---
+
+### Lỗi 128 — "Check block assertion failed" là một báo cáo không dùng được
+
+Phép kiểm log bắt được, trong lượt chạy `ops-permission-set`:
+
+```
+Warning:  2 dòng
+  │ Warning: Deprecated Parameter
+  │ Warning: Check block assertion failed
+```
+
+Dòng thứ hai là một phát hiện **thật** — một `check` block của Terraform đã thất bại mà stage vẫn xanh, đúng cái khoảng trống lớp này được viết ra để đọc. Nhưng nó không nói *check nào* trong hàng chục check của layer đã thất bại. Nên người đọc vẫn phải mở log bằng tay — đúng cái việc lớp này tồn tại để khỏi phải làm.
+
+Nguyên nhân nằm trong chính hàm lọc của nó. Terraform in cảnh báo thành khung nhiều dòng, và `la_ma_nguon()` bỏ các dòng `│ ...` *tiếp theo* để một cảnh báo không bị đếm thành mười dòng. Quy tắc đó đúng — trừ với check block, nơi **dòng thứ hai là cả nội dung**:
+
+```
+│ Warning: Check block assertion failed
+│ Phạm vi RỖNG nên không sinh assignment nào: analytics . ...
+```
+
+Sửa: khớp ở dòng đầu, rồi *kéo theo* vài dòng tiếp làm chi tiết — có chặn theo `logStreamName`, vì hai stream được nối dưới nhau nên không chặn thì dòng đầu của stream sau thành chi tiết của cảnh báo cuối stream trước.
+
+Check thất bại hoá ra là `declared_scopes_not_empty`: phạm vi `analytics` rỗng, tức ba permission set đang cấp phát vào **0 account**.
+
+> **Điều đáng giữ:** một báo cáo chỉ ra "có cái gì đó sai" có cùng chi phí đọc với không có báo cáo nào. Phép kiểm phải mang theo giá trị làm nó kêu.
+
+---
+
+### Lỗi 127 — hai lớp nhìn cùng một sự thật, lớp dưới im lặng
+
+Cũng lượt chạy đó, script verify của layer in ra:
+
+```
+lz-analytics-operator    1 managed, inline=co, 0 account
+lz-datalake-admin        0 managed, inline=co, 0 account
+lz-analytics-admin       0 managed, inline=co, 0 account
+```
+
+và **không nói gì**. Trong cùng báo cáo, nó cảnh báo 12 lần cho các group 0 người, kèm giải thích rằng "một cái hộp rỗng trông như một nhóm đang hoạt động".
+
+Hai sự việc cùng một hình dạng — một thứ tồn tại, trông như đang hoạt động, và cấp 0 quyền cho ai — mà hai cách xử lý khác nhau. Sự thật về `analytics` chỉ lộ ra nhờ **lớp trên**: phép kiểm log bắt được check block (lỗi 128). Phép kiểm gần nó nhất thì im.
+
+Và phép kiểm im là phép kiểm người ta tin.
+
+Sửa: cảnh báo khi một permission set cấp phát vào 0 account. **CẢNH BÁO chứ không LỖI** — script đọc AWS, không đọc Terraform, nên nó không phân biệt được hai nguyên nhân, và nó nói thẳng ra điều đó:
+
+1. cố ý không gán — `lz-app-breakglass` khai `scope = "none"` (doc 19);
+2. một phạm vi rỗng — thiếu dòng trong `var.core_accounts` hoặc `var.accounts_by_scope`, set sinh ra 0 assignment trong im lặng.
+
+Báo LỖI sẽ làm pipeline đỏ vì một cái breakglass cố ý để trống.
+
+> **Điều đáng giữ:** khi hai lớp nhìn cùng một sự thật và bất đồng, lớp nói ít hơn là lớp cần sửa — không phải lớp đang kêu.
+
+Cùng họ với lỗi 126: ở đó một policy *chứa* statement mà không chặn gì; ở đây một permission set *tồn tại* mà không cấp gì cho ai. Cả hai đều xanh ở mọi lớp đếm được.
+
+---
+
 ### Lỗi 126 — "policy chứa statement" và "guardrail chặn được" là hai câu khác nhau
 
 Thêm `baseline/ProtectEbsEncryptionByDefault` (`Deny ec2:DisableEbsEncryptionByDefault`) qua pipeline `ops`. Apply thật: `0 added, 1 changed, 0 destroyed`, và `-refresh-only` đọc lại policy sống từ Organizations rồi báo `No changes` — nội dung ở AWS khớp cấu hình.
