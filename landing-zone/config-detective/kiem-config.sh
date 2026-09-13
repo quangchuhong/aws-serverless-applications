@@ -296,26 +296,79 @@ for r in sorted(rules, key=lambda x: x["OrganizationConfigRuleName"]):
         )
 
 ####################################
-# MOT CANH BAO CHO MOI TAP LOAI TRU
+# LOAI TRU: CAI DANG BAO KHONG PHAI "CO NGOAI LE", MA LA "CAC RULE LECH NHAU"
 #
-# Lan chay that dau tien cho ra MUOI doan y het nhau. Gom lai con noi duoc
-# mot dieu ma bao rieng tung rule khong noi duoc: cung MOT tap account
-# thoat khoi CA danh sach rule la mot cau ve chinh sach, khong phai mot su
-# co cua tung rule.
+# Lan chay that dau tien bao MUOI canh bao "rule X dang loai tru 7
+# account". Gop lai con MOT thi doc de hon, nhung van SAI ve ban chat, va
+# sai theo hai huong:
+#
+#   1. No kêu MOI LUOT, MAI MAI. Loai tru la chinh sach da quyet -
+#      nonprod/sandbox khong bat Config, chi prod OU va LZ core co. Mot
+#      canh bao kêu moi lan tuong duong KHONG co canh bao; do la dieu ghi
+#      day trong repo nay, va toi vua tu vi pham no.
+#
+#   2. Mot phan cua danh sach la BAT BUOC. aggregator-rules.tf co
+#      check "management_account_excluded": thieu management trong
+#      excluded_accounts thi rule ngoi CREATE_IN_PROGRESS hang chuc phut
+#      roi CREATE_FAILED, keo ca lan apply theo. Nen canh bao ve viec
+#      management bi loai tru la canh bao ve mot thu PHAI nhu vay.
+#
+# Thu THAT dang bao duoc suy ra tu chinh cau truc cua layer:
+# aggregator-rules.tf dat `excluded_accounts = local.excluded_all` - MOT
+# danh sach, ap cho MOI rule. Nen Terraform KHONG THE lam cac rule lech
+# nhau. Mot lan sua bang tay o console thi lam duoc dung dieu do.
+#
+#   mot tap duy nhat dung chung   hinh dang cua mot danh sach khai trong
+#                                 Terraform -> BAO TIN, khong canh bao
+#   cac rule lech nhau            khong con duong nao tu Terraform ra ket
+#                                 qua nay -> CANH BAO
+#
+# Nen phep kiem nay IM khi moi thu binh thuong, va do la dieu kien de no
+# con duoc doc sau hai tuan.
 ####################################
-for tap, ten_rule in sorted(ngoai_le_theo_tap.items(), key=lambda kv: -len(kv[1])):
-    chung = "CA %d rule" % len(ten_rule) if len(ten_rule) == len(rules) else "%d rule" % len(ten_rule)
+if len(ngoai_le_theo_tap) == 1:
+    tap, ten_rule = next(iter(ngoai_le_theo_tap.items()))
+    print()
+    print(f"── Loai tru: cung MOT tap {len(tap)} account cho ca {len(ten_rule)} rule")
+    for a in tap:
+        print(f"    {a}")
+    print("    Mot tap duy nhat dung chung la hinh dang cua mot danh sach khai trong")
+    print("    Terraform: aggregator-rules.tf dat excluded_accounts =")
+    print("    local.excluded_all - MOT danh sach, ap cho MOI rule.")
+    print()
+    print("    DOI CHIEU BANG CAI GI - va KHONG phai bang tfvars:")
+    print("      excluded_all = distinct(concat(var.excluded_accounts,")
+    print("                                    local.vending_excluded))")
+    print("    tuc danh sach go tay CONG cac account vending doc tu state cua")
+    print("    account-baseline. So o tfvars luon NHO HON so o AWS, va so le do la")
+    print("    BINH THUONG - khong phai drift. Phep so dung la:")
+    print("      cd ../config-detective && terraform output recording_scope")
+    print("    Truong excluded_accounts o do la length(local.excluded_all); no phai")
+    print(f"    bang {len(tap)}.")
+
+elif len(ngoai_le_theo_tap) > 1:
+    dong = []
+    for tap, ten_rule in sorted(ngoai_le_theo_tap.items(), key=lambda kv: -len(kv[1])):
+        dong.append(f"          {len(tap)} account [{', '.join(tap)}]")
+        dong.append(f"            -> {', '.join(ten_rule)}")
+    khong_co = [
+        r["OrganizationConfigRuleName"] for r in rules
+        if not (r.get("ExcludedAccounts") or [])
+    ]
+    if khong_co:
+        dong.append(f"          0 account -> {', '.join(khong_co)}")
     canh.append(
-        f"{chung} dang loai tru cung MOT tap {len(tap)} account:\n"
-        f"          {', '.join(tap)}\n"
-        f"        Rule: {', '.join(ten_rule)}\n"
-        "        Moi account o day THOAT khoi phep kiem, va thoat trong im lang -\n"
-        "        rule van 'dang bat' va console van hien xanh. gate.py canh viec nay\n"
-        "        khi no di qua ban plan, nhung mot lan them bang tay o console thi\n"
-        "        khong co ban plan nao de doc.\n"
-        "        DOI CHIEU voi excluded_accounts trong tfvars cua config-detective:\n"
-        "          grep -A 20 excluded_accounts ../config-detective/terraform.tfvars\n"
-        "        Lech nghia la co nguoi sua ngoai Terraform."
+        "Cac rule LECH NHAU ve excluded_accounts:\n"
+        + "\n".join(dong) + "\n"
+        "        aggregator-rules.tf dat excluded_accounts = local.excluded_all, tuc\n"
+        "        MOT danh sach ap cho MOI rule - nen Terraform khong the ra ket qua\n"
+        "        nay. Mot lan sua bang tay o console thi lam duoc dung dieu do, va\n"
+        "        gate.py khong thay vi no doc BAN PLAN chu khong doc AWS.\n"
+        "        Rule co IT ngoai le hon dang kiem NHIEU account hon - doc ky ben nao\n"
+        "        moi la ben bi sua.\n"
+        "        Phep so dung (KHONG phai tfvars - excluded_all = var.excluded_accounts\n"
+        "        CONG local.vending_excluded doc tu state account-baseline):\n"
+        "          cd ../config-detective && terraform output recording_scope"
     )
 
 ####################################
@@ -342,5 +395,12 @@ if loi:
 if canh:
     print(f"  {VANG}{len(canh)} canh bao{HET}, 0 loi.")
     sys.exit(0)
-print(f"  {XANH}Moi rule ton tai, khong ngoai le, trien khai xong.{HET} 0 canh bao.")
+####################################
+# "khong ngoai le" la mot cau SAI o day
+#
+# Ban dau dong nay viet "Moi rule ton tai, khong ngoai le, trien khai
+# xong." Co ngoai le - bay account - va chung DUNG. Mot dong tong ket noi
+# sai ve trang thai that thi te hon khong co dong tong ket.
+####################################
+print(f"  {XANH}Moi rule ton tai, loai tru dong nhat, trien khai xong.{HET} 0 canh bao.")
 PY
