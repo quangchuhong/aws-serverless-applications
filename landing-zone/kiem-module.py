@@ -12,7 +12,7 @@ registry.terraform.io. Trong moi truong bi chan mang (va trong mot CI
 khong co quyen ra ngoai) thi khong chay duoc, va luc do thu duy nhat con
 lai la doc bang mat.
 
-Muoi mot phep kiem, khong can mang:
+Muoi ba phep kiem, khong can mang:
 
   1. dung var.X ma khong khai
   2. module khai var khong ai dung
@@ -28,6 +28,10 @@ Muoi mot phep kiem, khong can mang:
      cua trigger-filter cham toi - xem kiem_phu_layer()
  11. layer duoc mot pipeline APPLY ma push-tfvars.sh khong day tfvars len
      - xem kiem_push_tfvars()
+ 12. tien to trong ban_do ma pipeline do KHONG apply layer nao duoi no -
+     xem kiem_tien_to_co_ich()
+ 13. CodeBuild project pipeline GOI ma iam.tf khong cap StartBuild -
+     xem kiem_project_duoc_phep()
 
 Phep thu 7 la mot bai hoc duoc ma hoa: list(any) buoc MOI phan tu cung
 mot type, va IAM statement thi luon khac hinh - mot cai co Condition, cai
@@ -562,6 +566,81 @@ def kiem_tien_to_co_ich(ap):
     return loi
 
 
+def kiem_project_duoc_phep():
+    """12. Moi CodeBuild project pipeline GOI phai co trong policy cua role.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VOI MOT CANH BAO VIET SAN NGAY CANH CHO SUA
+
+    iam.tf co mot khoi chu thich noi dung dieu se xay ra:
+
+      "Thieu mot cai o day KHONG hong luc apply - no hong luc pipeline
+       chay, va thong bao la AccessDenied tren StartBuild."
+
+    Stage Verify duoc them, project thu ba duoc tao, va dong trong iam.tf
+    thi khong. `terraform apply` xanh - 1 to add, 2 to change - roi lan
+    chay dau do voi
+
+      User: .../qh11-lz-ops-pipeline is not authorized to perform:
+      codebuild:StartBuild on resource: .../qh11-lz-ops-verify
+
+    Mot canh bao viet ra khong chay duoc. Phep kiem nay la ban CHAY DUOC
+    cua no.
+
+    =====================================================================
+    NO DOI CHIEU GI
+
+    pipeline.tf: moi `ProjectName = aws_codebuild_project.X[0].name`
+    iam.tf:      moi `aws_codebuild_project.X[0].arn`
+
+    Ten X phai co ca hai ben. Thieu ben iam.tf = AccessDenied luc chay.
+    Thua ben iam.tf = cap quyen cho mot project khong stage nao goi.
+
+    KHONG doi chieu project `drift`: no khong do pipeline khoi chay ma do
+    EventBridge, va quyen cua no nam o role events (aws_iam_role.events),
+    mot policy khac.
+    """
+    p_pipe = os.path.join(M, "pipeline.tf")
+    p_iam = os.path.join(M, "iam.tf")
+    for f in (p_pipe, p_iam):
+        if not os.path.exists(f):
+            return [f"khong co {f} - phep kiem project duoc phep KHONG chay."]
+
+    goi = set(re.findall(
+        r"ProjectName\s*=\s*aws_codebuild_project\.(\w+)\[0\]\.name",
+        open(p_pipe).read()))
+    cho = set(re.findall(
+        r"aws_codebuild_project\.(\w+)\[0\]\.arn",
+        boc(open(p_iam).read())))
+
+    if not goi:
+        return [
+            "khong doc duoc ProjectName nao trong pipeline.tf. Day KHONG phai "
+            "'moi project deu duoc phep' - la CHUA DOC DUOC."
+        ]
+
+    loi = []
+    thieu = sorted(goi - cho)
+    if thieu:
+        loi.append(
+            f"pipeline goi project {thieu} nhung iam.tf KHONG cap "
+            "codebuild:StartBuild cho chung. terraform apply se XANH, va lan chay "
+            "dau do voi AccessDenied tren StartBuild - mot thong bao doc nhu "
+            "pipeline bi hong quyen chu khong nhu mot dong con thieu."
+        )
+
+    # Chieu nguoc: cap quyen cho mot project khong ai goi. Vo hai luc chay,
+    # nhung no la quyen thua - va quyen thua thi khong ai di tim.
+    thua = sorted(cho - goi - {"drift"})
+    if thua:
+        loi.append(
+            f"iam.tf cap StartBuild cho project {thua} ma khong stage nao goi. "
+            "Quyen thua khong gay loi nen khong ai di tim - xoa neu khong con "
+            "dung, hoac them stage neu quen."
+        )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -664,6 +743,10 @@ def main():
         if ap:
             print(f"  {'x' if l3 else 'v'} moi tien to trong ban_do co ich")
         loi += l3
+
+        l4 = kiem_project_duoc_phep()
+        print(f"  {'x' if l4 else 'v'} moi project pipeline goi deu duoc cap StartBuild")
+        loi += l4
 
     print()
     if loi:

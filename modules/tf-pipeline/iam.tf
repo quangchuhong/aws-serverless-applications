@@ -288,12 +288,26 @@ resource "aws_iam_role_policy" "pipeline" {
         Resource = aws_kms_key.artifacts[0].arn
       },
       ####################################
-      # HAI PROJECT, LIET KE CA HAI
+      # BA PROJECT, LIET KE CA BA
       #
       # Thieu mot cai o day KHONG hong luc apply - no hong luc pipeline
       # chay, va thong bao la AccessDenied tren StartBuild. Mot stage
       # moi them ma quen dong nay se doc nhu la pipeline bi hong quyen,
       # chu khong nhu la mot dong con thieu.
+      #
+      # ---------------------------------------------------------------
+      # VA CHUYEN DO DA XAY RA, VOI CHINH KHOI CHU THICH NAY DANG O DAY
+      #
+      # Stage Verify duoc them, project thu ba duoc tao, va dong duoi day
+      # thi khong. `terraform apply` xanh - 1 to add, 2 to change - roi
+      # lan chay dau do voi
+      #
+      #   User: .../qh11-lz-ops-pipeline is not authorized to perform:
+      #   codebuild:StartBuild on resource: .../qh11-lz-ops-verify
+      #
+      # Mot canh bao viet ra khong chay duoc. Nen ngoai khoi nay con mot
+      # phep kiem TINH doi chieu moi ProjectName trong pipeline.tf voi
+      # danh sach nay - xem kiem-module.py, kiem_project_duoc_phep().
       #
       # Liet ke thay vi dung "*" tren moi project: role nay khong can
       # khoi duoc bat ky build nao khac trong account.
@@ -301,12 +315,14 @@ resource "aws_iam_role_policy" "pipeline" {
       {
         Effect = "Allow"
         Action = ["codebuild:BatchGetBuilds", "codebuild:StartBuild"]
-        # compact() bo phan tu rong: project catalog khong ton tai khi
-        # pipeline nay khong co catalog nao. Liet ke mot ARN rong se lam
-        # IAM tu choi ca policy voi mot loi ve dinh dang ARN.
+        # compact() bo phan tu rong: project catalog va verify khong ton
+        # tai khi pipeline nay khong co catalog / khong co lenh verify.
+        # Liet ke mot ARN rong se lam IAM tu choi ca policy voi mot loi
+        # ve dinh dang ARN.
         Resource = compact([
           aws_codebuild_project.terraform[0].arn,
           try(aws_codebuild_project.catalog[0].arn, ""),
+          try(aws_codebuild_project.verify[0].arn, ""),
         ])
       },
       ],
