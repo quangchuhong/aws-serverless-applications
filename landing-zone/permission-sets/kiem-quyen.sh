@@ -235,6 +235,37 @@ for arn in sorted(sets):
             "        o moi thao tac."
         )
 
+    ####################################
+    # 0 ACCOUNT - CUNG HINH DANG VOI "GROUP KHONG CO AI"
+    #
+    # Lan chay dau cua script nay IN ra "lz-analytics-operator ... 0 account"
+    # va khong noi gi, trong khi mot group 0 nguoi thi co CANH BAO. Cung mot
+    # kieu hong - mot thu ton tai, trong nhu dang hoat dong, va cap 0 quyen
+    # cho ai - ma hai cach xu ly khac nhau.
+    #
+    # Phat hien ra la nho ../ops-gate/kiem-log.sh bat duoc
+    # "Check block assertion failed" trong log CUNG lan chay do: Terraform
+    # co check declared_scopes_not_empty bat dung viec nay. Tuc phep kiem o
+    # lop tren bao, phep kiem o lop nay im - va phep kiem im la phep kiem
+    # nguoi ta tin.
+    #
+    # CANH BAO chu khong LOI: script nay doc AWS, khong doc Terraform, nen
+    # no KHONG phan biet duoc hai nguyen nhan duoi day. Bao LOI se lam
+    # pipeline do vi mot cai breakglass co y de trong.
+    ####################################
+    if not accs:
+        canh.append(
+            f"permission set {ten} duoc cap phat vao 0 ACCOUNT - khong ai vao duoc\n"
+            "        qua no, o dau ca. Hai nguyen nhan, va script nay khong phan biet\n"
+            "        duoc vi no doc AWS chu khong doc Terraform:\n"
+            "          1. CO Y khong gan - lz-app-breakglass khai scope \"none\" (doc 19).\n"
+            "          2. Mot PHAM VI RONG: thieu dong trong var.core_accounts hoac\n"
+            "             var.accounts_by_scope, nen set sinh ra 0 assignment trong im\n"
+            "             lang. Day la cai that.\n"
+            "        Terraform co check declared_scopes_not_empty bat truong hop 2,\n"
+            "        nhung check block chi CANH BAO - no khong bao gio lam apply do."
+        )
+
 ####################################
 # 2. GROUP - CO ASSIGNMENT KHONG, CO AI KHONG
 #

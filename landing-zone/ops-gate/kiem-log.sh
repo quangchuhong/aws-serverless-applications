@@ -133,7 +133,7 @@ fi
 # PHAN TICH
 ########################################
 python3 - "$D" "${CODEBUILD_LOG_PATH:-}" <<'PY'
-import json, os, sys
+import json, os, re, sys
 
 D = sys.argv[1]
 # Stream log cua CHINH build nay. Loc theo execution chi lay stream cua
@@ -262,6 +262,37 @@ def la_ma_nguon(t):
     return False
 
 
+####################################
+# BO MA MAU ANSI TRUOC KHI SO KHOP
+#
+# buildspec chay `terraform init` va `terraform plan` KHONG co -no-color,
+# nen output Terraform trong log mang ma escape. Mot canh bao that ra la
+#
+#   \x1b[33m│\x1b[0m \x1b[1mWarning: \x1b[0m\x1b[1mDeprecated Parameter\x1b[0m
+#
+# Nen "Warning: Deprecated Parameter" KHONG con la chuoi con lien mach -
+# co ma escape chen giua. Con "Warning:" thi van lien, nen no khop.
+#
+# Ket qua: dong do bi bat boi DANG_TIM ma KHONG bi BIET_ROI loc, va no
+# hien ra o moi lan chay.
+#
+# VI SAO KHONG THAY SOM: `aws logs tail` in ra terminal, va terminal DIEN
+# GIAI cac ma do - nen chung vo hinh. Thu nguoi doc thay la mot dong sach
+# se, giong het chuoi trong BIET_ROI. Cung ho voi hai lan truoc trong
+# buoi nay: CodeBuild in ma nguon cua lenh, va externalExecutionSummary
+# dan ca buildspec - MAN HINH lam hai thu khac nhau trong giong nhau.
+#
+# Cach chua khac hai lan do: o day khong phai loc theo hinh dang, ma la
+# CHUAN HOA truoc khi so. `-no-color` trong buildspec cung chua duoc,
+# nhung do la sua o mot cho khac va khong giup cho nhung log da co.
+####################################
+ANSI = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+
+def sach(t):
+    return ANSI.sub("", t)
+
+
 print()
 print("── Log cua lan chay vua roi")
 
@@ -279,16 +310,58 @@ su_kien = [
     if x.get("logStreamName") != STREAM_TOI
 ]
 
+####################################
+# DONG TIEP CUA MOT KHUNG CANH BAO MANG CA NOI DUNG
+#
+# Terraform in mot check block that bai thanh HAI dong:
+#
+#   │ Warning: Check block assertion failed
+#   │ Pham vi RONG nen khong sinh assignment nao: analytics . ...
+#
+# la_ma_nguon() bo dong thu hai - dung, de mot canh bao khong bi dem
+# thanh muoi dong. Nhung voi RIENG check block, dong thu hai la CA noi
+# dung: "Check block assertion failed" khong noi check NAO that bai, va
+# mot layer co the co hang chuc check.
+#
+# Da do that: lan chay ops-permission-set dau tien bao dung mot dong
+#
+#     │ Warning: Check block assertion failed
+#
+# va tu dong do khong the biet duoc rang pham vi "analytics" dang rong,
+# tuc ba permission set dang cap phat vao 0 account. Bao cao chi ra
+# "co mot cai gi do sai" la mot bao cao KHONG dung duoc - nguoi doc phai
+# mo log tay, tuc dung cai viec lop nay duoc viet ra de khoi phai lam.
+#
+# Nen: khop o dong DAU, roi KEO THEO may dong tiep lam chi tiet.
+####################################
+def chi_tiet(i):
+    """May dong '│ ...' ngay sau dong i, trong CUNG mot stream."""
+    ra = []
+    goc = su_kien[i].get("logStreamName")
+    for j in range(i + 1, min(i + 5, len(su_kien))):
+        # Hai stream duoc noi duoi nhau trong su_kien, nen khong chan o
+        # day thi cuoi stream nay se keo dong dau cua stream sau vao.
+        if su_kien[j].get("logStreamName") != goc:
+            break
+        t = sach(su_kien[j].get("message") or "").strip()
+        if not t.startswith("│"):
+            break
+        t = t.lstrip("│").strip()
+        if t:
+            ra.append(t)
+    return ra
+
+
 thay = {}
-for x in su_kien:
-    t = (x.get("message") or "").strip()
+for i, x in enumerate(su_kien):
+    t = sach(x.get("message") or "").strip()
     if any(b in t for b in BIET_ROI):
         continue
     if la_ma_nguon(t):
         continue
     for mau in DANG_TIM:
         if mau in t:
-            thay.setdefault(mau, []).append(t[:160])
+            thay.setdefault(mau, []).append((t[:160], chi_tiet(i)))
             break
 
 print(f"    {len(su_kien)} dong log")
@@ -306,8 +379,10 @@ if not thay:
 
 for mau, ds in sorted(thay.items(), key=lambda kv: -len(kv[1])):
     print(f"    {VANG}{mau}{HET}  {len(ds)} dong")
-    for t in ds[:3]:
+    for t, ct in ds[:3]:
         print(f"      {t}")
+        for c in ct[:2]:
+            print(f"        {c[:200]}")
     if len(ds) > 3:
         print(f"      ... con {len(ds) - 3} dong nua")
 
