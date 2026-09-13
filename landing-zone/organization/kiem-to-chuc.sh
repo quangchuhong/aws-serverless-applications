@@ -635,6 +635,32 @@ BIET_ROI = (
     "Resource targeting is in effect",
     "Applied changes may be incomplete",
     "The -target option is not for routine use",
+
+    ####################################
+    # KHUYEN NGHI dynamodb_table -> use_lockfile
+    #
+    # Xuat hien o MOI lan chay: buildspec truyen
+    # -backend-config=dynamodb_table, va Terraform 1.11 khuyen dung
+    # use_lockfile. Van chay binh thuong o 1.11.3.
+    #
+    # PHAI khop vao TIEU DE, khong khop vao dong noi ten tham so:
+    # Terraform in canh bao thanh khung hai dong,
+    #
+    #   │ Warning: Deprecated Parameter
+    #   │ The parameter "dynamodb_table" is deprecated. ...
+    #
+    # va dong thu hai bi la_ma_nguon() loc di nhu mot dong TIEP. Nen chuoi
+    # duy nhat con de khop la tieu de - va tieu de khong noi tham so nao.
+    #
+    # He qua phai chap nhan: dong nay lam im MOI canh bao "Deprecated
+    # Parameter", khong chi cai dynamodb_table. Hien tai chi co mot cai,
+    # da kiem bang mat trong log.
+    #
+    # XOA DONG NAY khi ghim Terraform len nhanh 1.12+: luc do
+    # dynamodb_table thanh loi that chu khong con la khuyen nghi, va no
+    # phai hien ra lai.
+    ####################################
+    "Warning: Deprecated Parameter",
 )
 DANG_TIM = (
     "Warning:",
@@ -711,10 +737,48 @@ else:
         x for x in (d.get("events") or [])
         if x.get("logStreamName") != STREAM_TOI
     ]
+    ####################################
+    # BO DONG LA MA NGUON CUA LENH, KHONG PHAI KET QUA
+    #
+    # CodeBuild IN RA tung lenh truoc khi chay no. Nen mot dong nhu
+    #
+    #   echo "CANH BAO: ${SO_HONG} catalog co khoi `loosen` HET HAN."
+    #
+    # nam trong log o MOI lan chay - ke ca khi SO_HONG bang 0 va cau do
+    # khong bao gio duoc in. Script khop vao cai `echo` SE in canh bao,
+    # chu khong vao canh bao.
+    #
+    # Da do: hai canh bao gia moi lan chay. Hai la du de nguoi ta thoi
+    # doc ca phan nay.
+    #
+    # Cung ho voi viec externalExecutionSummary dan ca buildspec va doc
+    # nhu mot su co - thu duy nhat phan biet duoc la HINH DANG cua dong,
+    # khong phai noi dung.
+    ####################################
+    def la_ma_nguon(t):
+        # Ma nguon cua lenh, do CodeBuild in ra truoc khi chay.
+        if t.startswith(("echo ", "printf ", "#")):
+            return True
+
+        # Dong TIEP cua mot khung canh bao Terraform: "│ <chi tiet>".
+        # Giu dong DAU ("│ Warning: ..." / "│ Error: ...") vi do la dong
+        # mang noi dung; bo phan con lai de mot canh bao khong bi dem
+        # thanh muoi dong.
+        #
+        # Viet ro bang if long chu khong dua vao thu tu uu tien and/or:
+        # `a or b and c` la `a or (b and c)`, dung y o day nhung mot nguoi
+        # sua sau se phai dung lai de nho quy tac do.
+        if t.startswith("│ "):
+            return "Warning:" not in t and "Error:" not in t
+
+        return False
+
     thay = {}
     for x in su_kien:
         t = (x.get("message") or "").strip()
         if any(b in t for b in BIET_ROI):
+            continue
+        if la_ma_nguon(t):
             continue
         for mau in DANG_TIM:
             if mau in t:
