@@ -240,28 +240,75 @@ module "pipeline" {
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 
   ####################################
-  # LY DO CU DA BI GIAI QUYET O CHO KHAC - GIU khong_co_verify, DOI LY DO
+  # VERIFY - HAI CHIEU, VA CHE DO TU SINH RA TU HAI CO enable_*
   #
-  # Ly do cu la: "verify chay bang danh tinh CodeBuild o management nen
-  # khong nhin thay gi, can co che assume truoc da". Lap luan do KHONG con
-  # dung: ops-pipeline-config-rules gio truyen mot ARN role lam tham so cho
-  # script verify, script assume roi doc qua dung cai cua ma apply da dung.
-  # Cung cach do dung duoc y nguyen cho mang.
+  # =================================================================
+  # VI SAO KHONG CO BIEN "network_dang_rong"
   #
-  # Ly do THAT de chua co verify o day la khac, va nho hon: layer network
-  # dang RONG - ha tang da bi xoa het (state 0 resource) va se duoc dung
-  # lai sau. Mot phep kiem viet truoc khi biet layer se co hinh gi se kiem
-  # nhung thu khong ton tai, va cach re nhat de no xanh la lam no rong.
+  # Ha tang network hien dang RONG (state 0 resource) va se duoc dung lai.
+  # Nen phep kiem phai dung o CA HAI trang thai, va phai biet dang o trang
+  # thai nao.
   #
-  # KHI DUNG LAI MANG, viec can lam la:
-  #   1. them landing-zone/network/kiem-mang.sh theo mau kiem-config.sh
-  #      (nhan ARN role lam tham so, assume, IN RA dang doc bang danh tinh
-  #      nao, va 0 resource thi bao LOI chu khong bao mau xanh)
-  #   2. them bien network_verify_role_arn + check doi chieu no voi danh
-  #      sach ARN duoc assume
-  #   3. doi dong nay thanh `verify = "./landing-zone/network/kiem-mang.sh ..."`
+  # Cach hien nhien la them mot bien khai bao - va do la cach SAI: mot bien
+  # nhu vay lech duoc voi thuc te. Dung lai mang, bat hai stage, roi quen
+  # doi bien thi phep kiem se doi resource VANG MAT trong khi chung dang
+  # duoc apply moi lan.
+  #
+  # Nen che do duoc SUY RA tu chinh hai co quyet dinh stage co chay hay
+  # khong. Khong co gi de quen, va khong co gi de lech.
+  #
+  # =================================================================
+  # HAI CHIEU, VA CA HAI DEU BAO DUOC
+  #
+  #   chua-dung  hai stage tat -> KHONG duoc thay rule group hay alarm.
+  #              Thay thi CANH BAO: co ha tang dang song ma khong pipeline
+  #              nao quan - thay doi o do khong qua gate.py, khong qua cong
+  #              duyet, va drift hang dem khong doc layer nay.
+  #
+  #   da-dung    stage bat -> rule group phai ton tai, PHAI duoc mot
+  #              firewall policy doc toi, va hai alarm phai co nguoi nhan.
+  #
+  # Chieu thu nhat la chieu nguoi ta khong nghi toi, va no la chieu dang
+  # xay ra hom nay.
+  #
+  # =================================================================
+  # PHEP KIEM DANG GIA NHAT O DAY: "TON TAI" KHAC "DUOC DOC TOI"
+  #
+  # network/ops co check "rule_group_is_referenced", nhung no so ARN voi
+  # BIEN ops_rule_group_arns cua layer cha - tuc kiem mot LOI KHAI. Sua
+  # firewall policy o console thi bien van khop va check van xanh, trong khi
+  # rule group khong con duoc doc toi: moi luong truoc day bi chan gio di
+  # qua, va khong co log nao noi mot luat vua ngung co hieu luc.
+  #
+  # Script doc firewall policy TU AWS nen no thay. Cung ho voi loi 126.
+  #
+  # =================================================================
+  # LUU Y: verify.sh CO SAN KHONG DUNG DUOC O DAY
+  #
+  # landing-zone/network/verify.sh doc `terraform output`, tuc doc STATE -
+  # ma buildspec-verify.yml CO Y khong cai Terraform va khong doc state. Va
+  # no kiem layer network GOC, con pipeline nay apply network/ops. Hai tap
+  # khac nhau, khong phai trung lap.
   ####################################
-  khong_co_verify = "layer network dang RONG - ha tang da bi xoa het (state 0 resource), se dung lai sau. Phep kiem viet truoc khi biet layer co hinh gi se kiem nhung thu khong ton tai. Co che assume cho verify thi da co roi: xem kiem-config.sh cua ops-pipeline-config-rules."
+  # =================================================================
+  # NHAY DON QUANH ARN - KHONG PHAI TRANG TRI
+  #
+  # network_deploy_role_arn hom nay RONG. Khong co nhay thi buildspec
+  # `eval` thay
+  #
+  #   ./landing-zone/network/kiem-mang.sh  chua-dung
+  #
+  # va bash GOP khoang trang: $1 thanh "chua-dung", $2 rong, script thoat 2
+  # voi mot loi ve "che do khong hop le" khong nhac gi toi ARN.
+  #
+  # kiem-config.sh khong vuong vi ARN la tham so CUOI o do; o day no dung
+  # giua nen phai giu cho.
+  #
+  # Da tai hien:
+  #   eval "/tmp/t.sh  chua-dung"      -> $1='chua-dung' $2=''
+  #   eval "/tmp/t.sh '' chua-dung"    -> $1=''          $2='chua-dung'
+  # =================================================================
+  verify = "./landing-zone/network/kiem-mang.sh '${var.network_deploy_role_arn}' ${var.enable_network_stage || var.enable_firewall_stage ? "da-dung" : "chua-dung"}"
 
   source_type       = var.source_type
   repository_name   = var.repository_name
