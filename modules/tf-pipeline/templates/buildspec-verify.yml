@@ -68,6 +68,49 @@ phases:
 
         cd "${CODEBUILD_SRC_DIR}"
         echo "== Verify: ${VERIFY_CMD}"
+
+        # ----------------------------------------------------
+        # FILE KHONG CO TRONG ARTIFACT NGUON - NOI RO NGUYEN NHAN
+        #
+        # Khong co khoi nay thi bash chi in
+        #
+        #   ./landing-zone/organization/kiem-to-chuc.sh: No such file or
+        #   directory
+        #   exit status 127
+        #
+        # va dong do doc y het mot ten file GO SAI. Nguyen nhan thuong gap
+        # hon han thi khac: pipeline doc tu CODECOMMIT, con file moi thi
+        # dang o GitHub va chua duoc mirror. Da xay ra dung nhu vay o lan
+        # chay dau cua stage nay.
+        #
+        # Hai nguyen nhan, hai cach chua hoan toan khac nhau - nen thong
+        # bao phai neu ca hai chu khong de nguoi doc tu doan.
+        # ----------------------------------------------------
+        SCRIPT="${VERIFY_CMD%% *}"
+        if [ ! -f "$SCRIPT" ]; then
+          echo
+          echo "LOI: khong thay $SCRIPT trong artifact nguon."
+          echo
+          echo "     Thu muc goc cua artifact: $(pwd)"
+          echo "     Commit dang build: ${CODEBUILD_RESOLVED_SOURCE_VERSION:-khong biet}"
+          echo
+          echo "     HAI nguyen nhan, hai cach chua:"
+          echo
+          echo "     1. File CHUA duoc day len nhanh ma pipeline doc."
+          echo "        Pipeline doc tu CodeCommit; mot commit chi nam o GitHub"
+          echo "        thi voi pipeline la KHONG TON TAI."
+          echo "          git push codecommit HEAD:main"
+          echo
+          echo "     2. Duong dan trong var.verify go sai."
+          echo "        Duong dan tinh tu GOC REPO, khong tu thu muc layer."
+          exit 1
+        fi
+        if [ ! -x "$SCRIPT" ]; then
+          echo
+          echo "LOI: $SCRIPT co trong artifact nhung KHONG co quyen chay."
+          echo "     git giu bit nay: chmod +x roi commit lai."
+          exit 1
+        fi
         echo
 
         # ----------------------------------------------------
