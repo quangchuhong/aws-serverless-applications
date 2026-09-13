@@ -104,6 +104,32 @@ locals {
     # PutConfigurationRecorder, khong co PutDeliveryChannel. Nhung thu do
     # thuoc layer cha va duoc Deny viet ro ben duoi.
     ####################################
+    ####################################
+    # CHO PHEP KIEM LOG DUNG CHUNG - CHI DOC
+    #
+    # buildspec-verify.yml goi ../ops-gate/kiem-log.sh LUON sau lenh verify
+    # cua pipeline nay. No doc log cua CHINH lan chay do de tim CANH BAO -
+    # mot check block Terraform that bai hay mot dong "changed outside of
+    # Terraform" di qua ma stage van xanh, va khong ai mo log cua mot build
+    # mau xanh.
+    #
+    # Loc theo EXECUTION chu khong theo cua so thoi gian, nen no can doc
+    # danh sach action de lay build-uuid (chinh la ten log stream).
+    #
+    # Thieu bon action nay thi buoc Verify do voi AccessDenied o mot dich
+    # vu ma khong dong nao trong file nay nhac ten.
+    ####################################
+    {
+      Sid    = "DocLogChoVerify"
+      Effect = "Allow"
+      Action = [
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "*"
+    },
     {
       Sid    = "GhiRuleToanToChuc"
       Effect = "Allow"
@@ -261,6 +287,37 @@ check "bat_stage_thi_co_role" {
   }
 }
 
+########################################
+# ARN CUA VERIFY PHAI NAM TRONG DANH SACH DUOC ASSUME
+#
+# Hai bien, hai muc dich, va chung DE lech nhau:
+#
+#   config_pipeline_role_arns  nuoi Resource cua statement sts:AssumeRole
+#   config_verify_role_arn     duoc truyen lam tham so cho kiem-config.sh
+#
+# Dien mot ARN vao bien thu hai ma quen bien thu nhat thi plan van XANH,
+# apply van xanh, va buoc Verify do voi AccessDenied o sts:AssumeRole -
+# mot loi khong nhac ten bien nao trong hai bien nay.
+#
+# Cung ho voi check "bat_stage_thi_co_role" o ops-pipeline-trail: mot
+# danh sach ARN rong hay lech chi hien ra luc CHAY, khong hien ra o plan.
+########################################
+check "arn_verify_nam_trong_danh_sach_assume" {
+  assert {
+    condition = (
+      var.config_verify_role_arn == "" ||
+      contains(var.config_pipeline_role_arns, var.config_verify_role_arn)
+    )
+    error_message = join(" ", [
+      "config_verify_role_arn KHONG nam trong config_pipeline_role_arns.",
+      "Statement sts:AssumeRole chi phu cac ARN o danh sach do, nen buoc",
+      "Verify se do voi AccessDenied - va loi do khong nhac ten bien nao.",
+      "Them ARN vao config_pipeline_role_arns, hoac de",
+      "config_verify_role_arn rong de doc bang danh tinh management.",
+    ])
+  }
+}
+
 module "pipeline" {
   source = "../../modules/tf-pipeline"
 
@@ -276,7 +333,33 @@ module "pipeline" {
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 
-  khong_co_verify = "organization config rule song o account delegated admin; hoi tu management tra ve NoSuchOrganizationConfigRuleException - mot cau nghia la \"khong co trong account NAY\". Va trang thai tuan thu can toi mot gio, ket qua dau thuong la INSUFFICIENT_DATA: do la phep do theo lich, khong phai phep do sau apply."
+  ####################################
+  # VERIFY - BA THU DOC DUOC NGAY, VA MOT THU KHONG
+  #
+  # Truoc day cho nay khai khong_co_verify voi ly do hai phan. Phan thu hai
+  # - "trang thai tuan thu can toi mot gio, ket qua dau thuong la
+  # INSUFFICIENT_DATA" - la THAT, va script nay khong kiem tuan thu.
+  #
+  # Nhung no chi dung cho TUAN THU. De mot phep do co do tre phu quyet ca
+  # buoc verify la dung cai loi da mac o ops-trail: o do "phai doi 2 phut
+  # cho lo log dau" da giet luon nam thuoc tinh doc duoc ngay. Ba thu duoi
+  # day KHONG theo lich:
+  #
+  #   rule co ton tai khong                doc duoc ngay
+  #   ExcludedAccounts co ai moi khong     doc duoc ngay
+  #   rule da rai xuong tung account chua  doc duoc ngay (DetailedStatus)
+  #
+  # Cai giua la thu gate.py canh (tap_khong_lon). Va gate.py doc BAN PLAN,
+  # nen mot lan them ngoai le bang tay o console di qua no ma khong de lai
+  # gi - phep kiem nay doc AWS nen no thay.
+  #
+  # Phan thu nhat cua ly do cu - "hoi tu management tra ve
+  # NoSuchOrganizationConfigRuleException" - toi KHONG kiem chung. Nen
+  # script khong dua vao no: no nhan ARN role va doc qua DUNG CAI CUA ma
+  # apply da dung. Rong thi van chay, va 0 rule se thanh LOI chu khong
+  # thanh mau xanh.
+  ####################################
+  verify = "./landing-zone/config-detective/kiem-config.sh ${var.config_verify_role_arn}"
 
   source_type       = var.source_type
   repository_name   = var.repository_name

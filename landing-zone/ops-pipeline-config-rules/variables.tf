@@ -202,3 +202,23 @@ variable "config_pipeline_role_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "config_verify_role_arn" {
+  description = <<-EOT
+    ARN role buoc Verify assume sang de DOC organization config rule.
+
+    RONG thi buoc Verify van chay, nhung doc bang danh tinh CodeBuild o
+    account management. Neu management khong thay rule cua delegated admin
+    thi ket qua la "0 rule", va script bao LOI chu khong bao mau xanh -
+    doc duoc va rong khong duoc coi la "khong co gi sai".
+
+    PHAI la mot trong cac ARN da khai o config_pipeline_role_arns, neu
+    khong thi statement sts:AssumeRole khong phu no va buoc Verify do voi
+    AccessDenied. Co check "arn_verify_nam_trong_danh_sach_assume" canh.
+
+    CHI DOC: script chi goi describe-organization-config-rules va
+    get-organization-config-rule-detailed-status.
+  EOT
+  type        = string
+  default     = ""
+}

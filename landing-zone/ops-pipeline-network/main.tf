@@ -239,7 +239,29 @@ module "pipeline" {
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
 
-  khong_co_verify = "ha tang mang song o ACCOUNT MANG. Buoc verify chay bang danh tinh CodeBuild o management nen no khong nhin thay gi - va \"khong nhin thay\" se thanh \"khong co\". Can co che assume cho buoc verify truoc da."
+  ####################################
+  # LY DO CU DA BI GIAI QUYET O CHO KHAC - GIU khong_co_verify, DOI LY DO
+  #
+  # Ly do cu la: "verify chay bang danh tinh CodeBuild o management nen
+  # khong nhin thay gi, can co che assume truoc da". Lap luan do KHONG con
+  # dung: ops-pipeline-config-rules gio truyen mot ARN role lam tham so cho
+  # script verify, script assume roi doc qua dung cai cua ma apply da dung.
+  # Cung cach do dung duoc y nguyen cho mang.
+  #
+  # Ly do THAT de chua co verify o day la khac, va nho hon: layer network
+  # dang RONG - ha tang da bi xoa het (state 0 resource) va se duoc dung
+  # lai sau. Mot phep kiem viet truoc khi biet layer se co hinh gi se kiem
+  # nhung thu khong ton tai, va cach re nhat de no xanh la lam no rong.
+  #
+  # KHI DUNG LAI MANG, viec can lam la:
+  #   1. them landing-zone/network/kiem-mang.sh theo mau kiem-config.sh
+  #      (nhan ARN role lam tham so, assume, IN RA dang doc bang danh tinh
+  #      nao, va 0 resource thi bao LOI chu khong bao mau xanh)
+  #   2. them bien network_verify_role_arn + check doi chieu no voi danh
+  #      sach ARN duoc assume
+  #   3. doi dong nay thanh `verify = "./landing-zone/network/kiem-mang.sh ..."`
+  ####################################
+  khong_co_verify = "layer network dang RONG - ha tang da bi xoa het (state 0 resource), se dung lai sau. Phep kiem viet truoc khi biet layer co hinh gi se kiem nhung thu khong ton tai. Co che assume cho verify thi da co roi: xem kiem-config.sh cua ops-pipeline-config-rules."
 
   source_type       = var.source_type
   repository_name   = var.repository_name
