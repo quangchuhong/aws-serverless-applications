@@ -4086,6 +4086,35 @@ Cùng họ với `--max-items` sáng cùng ngày (thêm một dòng `None` vào 
 
 ---
 
+### Lỗi 130 — tôi khai một cái tên thật là lỗi gõ, và viết nó vào 4 file
+
+Sửa `terraform.tfvars.example` của 4 pipeline, tôi ghi thành một trong ba lý do đừng gõ ARN bằng tay:
+
+> *ARN GÕ TAY: `"quh11-lz-"` gõ sai từ `"qh11-lz-"`. Một ARN gõ sai không làm apply đỏ; publish thất bại lúc 2 giờ sáng.*
+
+Kiểm một lệnh thì ra ngược lại:
+
+```
+$ terraform output alert_topic
+"arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
+$ grep '^project' terraform.tfvars
+project     = "quh11-lz" # dung ten ban da dung o billing-guard
+```
+
+Topic tên `"${var.project}-security-findings"`, và `config-detective` khai `project = "quh11-lz"` **có chủ ý**. `quh11-lz-security-findings` là tên đúng. ARN trong tfvars luôn luôn đúng.
+
+Tôi suy ra từ một mẫu thật — các pipeline khai `qh11-lz`, và bucket log của `org-trail` từng được xác định là mang tên gõ sai — rồi **viết suy luận đó xuống như một sự thật**, vào 4 file, trong một commit message.
+
+Hại hơn im lặng: một chú thích nói "cái này gõ sai" sẽ khiến người đọc *sửa* nó. Và "sửa" `quh11-lz` thành `qh11-lz` làm đứt một đường đang chạy — đúng cái hậu quả tôi mô tả, chỉ là do bản sửa gây ra chứ không do cái tên.
+
+Bài học thật lại mạnh hơn cái tôi viết sai. Lý do đừng gõ ARN này bằng tay **không phải** sợ gõ sai — mà vì **tên nó suy ra từ biến của một layer khác, và biến đó có giá trị khác ở đây**. Lý do đó vẫn đúng khi bạn gõ hết sức cẩn thận.
+
+> **Điều đáng giữ:** hai quy ước tên cùng tồn tại trong một hạ tầng thật thì cái lạ hơn không phải cái sai. Trước khi gọi một giá trị live là lỗi gõ, đọc thứ sinh ra nó — ở đây là một lệnh `terraform output`.
+
+Và hệ quả thực tế, cho câu hỏi "sửa `quh11-lz` cho thống nhất có được không": **không.** `project` nuôi *tên* resource, đổi tên là destroy + create. Chín resource ở `config-detective` lấy tên từ nó, trong đó bucket `${project}-config-snapshots-…` có `prevent_destroy = true` — nên apply sẽ **thất bại**, không phải xoá. Đổi một biến xong là layer đó không apply được nữa cho tới khi revert, và điều đó chỉ lộ ra ở lần apply sau. Đổi lấy đúng không gì về chức năng.
+
+---
+
 ### Lỗi 129 — mã màu ANSI: màn hình làm hai chuỗi khác nhau *trông* giống nhau
 
 Phép kiểm log có một danh sách `BIET_ROI` — những cảnh báo đã biết, lọc đi để người ta không thôi đọc phần này. Trong đó có `"Warning: Deprecated Parameter"` (khuyến nghị `dynamodb_table` → `use_lockfile`, xuất hiện mỗi lần chạy).

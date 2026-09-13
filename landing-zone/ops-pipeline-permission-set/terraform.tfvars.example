@@ -105,8 +105,19 @@ drift_emails = []
 #      dong canh bao nay da co san o day tu truoc ma van co nguoi khai ca
 #      hai: mot chu thich KHONG THUC THI.
 #
-#   3. ARN GO TAY. Ten trong ARN cu la "quh11-lz-..." - go sai tu "qh11".
-#      Mot ARN go sai khong lam apply do: publish that bai luc 2 gio sang.
+#   3. ARN GO TAY - va KHONG phai vi so go sai. Topic do ten
+#      "${var.project}-security-findings" voi var.project CUA
+#      config-detective, va layer do khai project = "quh11-lz" (theo
+#      billing-guard) trong khi cac pipeline khai "qh11-lz". HAI quy uoc
+#      ten cung ton tai that trong ha tang nay (bucket log cua org-trail
+#      cung la "quh11-lz-..."). Nen "quh11-lz-security-findings" la ten
+#      DUNG, va "sua" no thanh "qh11-lz-..." cho khop voi pipeline se lam
+#      publish that bai luc 2 gio sang.
+#
+#      Do la ly do thuc su de khong go ARN nay bang tay: ten cua no suy ra
+#      tu bien cua MOT LAYER KHAC, va bien do khac gia tri o day. Doc tu
+#      layer so huu no:
+#        cd ../config-detective && terraform output alert_topic
 #
 # Nen: neu dung topic co san thi LAY ARN THAT, DUNG GO TAY:
 #   cd ../config-detective && terraform output alert_topic
