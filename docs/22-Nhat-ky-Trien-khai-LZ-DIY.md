@@ -4172,6 +4172,20 @@ Check thất bại hoá ra là `declared_scopes_not_empty`: phạm vi `analytics
 
 > **Điều đáng giữ:** một báo cáo chỉ ra "có cái gì đó sai" có cùng chi phí đọc với không có báo cáo nào. Phép kiểm phải mang theo giá trị làm nó kêu.
 
+**Xác nhận trên log thật, và cửa sổ đầu tiên vẫn quá hẹp.** Lượt chạy sau khi sửa cho ra đúng `1` cảnh báo trên đúng 1711 dòng — và câu `declared_scopes_not_empty` ở trên, ban đầu là *suy luận* từ bằng chứng gián tiếp "3 set có 0 account", trở thành phép đọc:
+
+```
+│ Warning: Check block assertion failed
+  on assignments.tf line 119, in check "declared_scopes_not_empty":
+  119:     condition = length(local.empty_scopes) == 0
+```
+
+Nhưng cửa sổ 4 dòng dừng ngay trước thứ trả lời câu hỏi vận hành — *phạm vi nào* rỗng. Khung thật của Terraform dài hơn: sau dòng `condition` còn một khối giá trị lồng (`├───`, `│ local.empty_scopes is list of string with 1 element`), một dòng trống, rồi mới tới `error_message`.
+
+Cách chữa dùng lại đúng thủ pháp của `la_ma_nguon()` — phân biệt bằng **hình dạng**, không bằng nội dung: đọc tới khi khung đóng (dòng không mở bằng `│`, kể cả `╵`), bỏ những dòng mà sau khi tách `│` *ngoài* vẫn còn `│` hoặc `├` của riêng chúng (đó chính là khối giá trị lồng), rồi lấy dòng `on …` cộng hai dòng cuối. `error_message` luôn ở cuối khung.
+
+> **Điều đáng giữ thêm:** một cửa sổ cố định đủ cho ca mình vừa gặp là một cửa sổ chưa được đo. Con số 4 đến từ ví dụ hai dòng của `Deprecated Parameter`, không từ cấu trúc khung.
+
 ---
 
 ### Lỗi 127 — hai lớp nhìn cùng một sự thật, lớp dưới im lặng

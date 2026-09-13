@@ -335,10 +335,39 @@ su_kien = [
 # Nen: khop o dong DAU, roi KEO THEO may dong tiep lam chi tiet.
 ####################################
 def chi_tiet(i):
-    """May dong '│ ...' ngay sau dong i, trong CUNG mot stream."""
-    ra = []
+    """May dong '│ ...' ngay sau dong i, trong CUNG mot stream.
+
+    ---------------------------------------------------------------------
+    CUA SO PHAI DU RONG - 4 DONG LA KHONG DU
+
+    Ban dau ham nay lay 4 dong. Lan chay that cho ra:
+
+        on assignments.tf line 119, in check "declared_scopes_not_empty":
+        119:     condition = length(local.empty_scopes) == 0
+
+    Ten check la phan quan trong nhat va no co - nhung error_message, dong
+    noi PHAM VI NAO dang rong, nam ngoai cua so. Khung that cua Terraform
+    dai hon nhieu:
+
+        │ Warning: Check block assertion failed
+        │
+        │   on assignments.tf line 119, in check "...":
+        │   119:     condition = ...
+        │     ├────────────────
+        │     │ local.empty_scopes is list of string with 1 element
+        │
+        │ Pham vi RONG nen khong sinh assignment nao: analytics . ...
+        ╵
+
+    Nen: doc toi khi khung dong (dong khong bat dau bang '│' - ke ca '╵'),
+    bo khung trang tri va khoi gia tri long ben trong, roi lay dong 'on ...'
+    CONG hai dong cuoi. error_message luon o cuoi khung.
+
+    Gioi han 30 dong de mot khung di thuong khong keo ca log vao.
+    """
+    tho = []
     goc = su_kien[i].get("logStreamName")
-    for j in range(i + 1, min(i + 5, len(su_kien))):
+    for j in range(i + 1, min(i + 30, len(su_kien))):
         # Hai stream duoc noi duoi nhau trong su_kien, nen khong chan o
         # day thi cuoi stream nay se keo dong dau cua stream sau vao.
         if su_kien[j].get("logStreamName") != goc:
@@ -348,6 +377,17 @@ def chi_tiet(i):
             break
         t = t.lstrip("│").strip()
         if t:
+            tho.append(t)
+
+    # Sau khi bo '│' NGOAI, khoi gia tri long van con '│' cua no - do la
+    # cach phan biet duoc, khong phai doan theo noi dung.
+    con = [t for t in tho if not t.startswith(("├", "└", "│"))]
+    if not con:
+        return tho[:2]
+
+    ra = [t for t in con if t.startswith("on ")][:1]
+    for t in con[-2:]:
+        if t not in ra:
             ra.append(t)
     return ra
 
@@ -462,7 +502,7 @@ for mau, ds in sorted(thay.items(), key=lambda kv: -len(kv[1])):
     print(f"    {VANG}{mau}{HET}  {len(ds)} dong")
     for t, ct in ds[:3]:
         print(f"      {t}")
-        for c in ct[:2]:
+        for c in ct[:3]:
             print(f"        {c[:200]}")
     if len(ds) > 3:
         print(f"      ... con {len(ds) - 3} dong nua")
