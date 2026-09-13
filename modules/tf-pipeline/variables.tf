@@ -474,15 +474,42 @@ variable "stages" {
                    trong hai - xem check "moi_stage_co_lint".
     mo_ta          hien trong noi dung thu duyet. Viet cho nguoi phai
                    quyet dinh luc 2 gio sang.
+
+    -------------------------------------------------------------------
+    verify           lenh doc lai AWS SAU khi apply, trong thu muc layer.
+    khong_co_verify  ly do vi sao stage nay khong verify duoc. Phai co
+                     mot trong hai - xem check "moi_stage_co_verify".
+
+    HAI LOP NAY BAT HAI KHOANG TRONG KHAC NHAU:
+
+      lint    truoc khi Terraform cham vao AWS  -> "co nen lam khong"
+      verify  sau khi apply xong                -> "da lam duoc chua"
+
+    Cau thu hai khong co ai tra loi neu thieu verify, va cau tra loi mac
+    dinh se la mau xanh cua stage Apply - thu chi noi rang AWS tra ve 200.
+    Loi 121 va 126 deu la cai gia cua viec khong co lop nay.
+
+    PHAM VI: verify chay NGAY sau apply, nen chi dat duoc nhung phep do
+    co du lieu NGAY - policy gan vao dau, enforced_for co gi, OU nao ton
+    tai. Phep do TRE (bao cao tuan thu tag policy toi 48 gio, Config
+    compliance toi 1 gio) thuoc project DRIFT chay theo lich: dat chung o
+    day thi chung vinh vien in "chua co du lieu", va mot dong luon giong
+    nhau la mot dong khong ai doc nua.
+
+    DANH TINH: verify chay bang credential CUA CODEBUILD (account
+    management), KHONG assume nhu Plan/Apply. Stage can doc o account
+    khac phai khai khong_co_verify.
   EOT
   type = list(object({
-    key           = string
-    layer         = string
-    enabled       = bool
-    targets       = optional(list(string), [])
-    lint          = optional(string, "")
-    khong_co_lint = optional(string, "")
-    mo_ta         = string
+    key             = string
+    layer           = string
+    enabled         = bool
+    targets         = optional(list(string), [])
+    lint            = optional(string, "")
+    khong_co_lint   = optional(string, "")
+    verify          = optional(string, "")
+    khong_co_verify = optional(string, "")
+    mo_ta           = string
   }))
 }
 

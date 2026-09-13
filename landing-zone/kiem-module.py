@@ -562,6 +562,99 @@ def kiem_tien_to_co_ich(ap):
     return loi
 
 
+def kiem_verify_ton_tai(ap):
+    """12. Moi `verify = "..."` phai tro vao mot script CO THAT.
+
+    =====================================================================
+    VI SAO check CUA TERRAFORM KHONG DU
+
+    check "moi_stage_co_verify" trong module bat duoc mot stage THIEU
+    verify. No khong bat duoc mot verify tro vao file khong ton tai: voi
+    Terraform thi day chi la mot chuoi, va chuoi nao cung hop le.
+
+    Go sai ten script se apply THANH CONG, pipeline se co day du action
+    Verify, va no do o LAN CHAY DAU voi
+
+      ./kiem-to-chuc.sh: No such file or directory
+
+    Do la lan chay sau khi apply da xong - tuc sau khi thay doi da toi
+    AWS, va sau khi nguoi khai da di lam viec khac.
+
+    =====================================================================
+    DUONG DAN LA TUONG DOI TU THU MUC LAYER
+
+    buildspec-verify.yml `cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"` roi moi
+    chay lenh. Nen "./kiem-to-chuc.sh" o stage co layer
+    landing-zone/organization nghia la
+    landing-zone/organization/kiem-to-chuc.sh.
+
+    Phep kiem nay doi chieu theo TUNG CALLER chu khong gop: mot script co
+    that o layer cua pipeline KHAC khong giup gi cho pipeline nay.
+    """
+    loi = []
+    for C in tim_caller():
+        raw = "".join(
+            boc(open(f).read())
+            for f in sorted(glob.glob(os.path.join(C, "*.tf")))
+        )
+        ####################################
+        # LOOKBEHIND, KHONG PHAI `verify\s*=`
+        #
+        # `khong_co_verify` KET THUC bang "verify", nen mot mau long se
+        # khop ca no - va luc do phep kiem doc mot doan ly do dai dong
+        # thanh mot ten script, roi bao loi cho MOI caller khai
+        # khong_co_verify. Da xay ra that ngay lan chay dau.
+        #
+        # Day la lan thu TU mot mau regex long gay sai trong chinh file
+        # nay (truoc do: TEN thieu chu so, `khoi()` an mat khoi `tru`,
+        # `ten_ngan()` khop mot dong `ten =` khac). Neu con lan thu nam
+        # thi cach chua khong phai mot mau chat hon nua, ma la doc HCL
+        # bang mot bo phan tich that.
+        ####################################
+        lenh = re.findall(r'(?<![\w])verify\s*=\s*"([^"]+)"', raw)
+        if not lenh:
+            continue
+
+        ten = ten_ngan(C, raw)
+        layers = sorted(ap.get(ten, set()))
+        if not layers:
+            loi.append(
+                f"{os.path.basename(C.rstrip('/'))}: co {len(lenh)} lenh verify nhung "
+                "khong doc duoc layer nao cua no. Day KHONG phai 'moi lenh deu dung' - "
+                "la CHUA DOI CHIEU DUOC."
+            )
+            continue
+
+        for cmd in lenh:
+            script = cmd.split()[0]
+            if not script.startswith("./"):
+                # Mot lenh khong bat dau bang ./ co the la `bash x.sh` hay
+                # `python3 y.py` - khong doan, chi noi ro la khong kiem.
+                loi.append(
+                    f"{os.path.basename(C.rstrip('/'))}: verify {cmd!r} khong bat dau "
+                    "bang './' nen phep kiem nay KHONG xac minh duoc file co that. "
+                    "Viet dang './<ten>' de no kiem duoc."
+                )
+                continue
+
+            co = [l for l in layers if os.path.exists(os.path.join(GOC, l, script[2:]))]
+            if not co:
+                loi.append(
+                    f"{os.path.basename(C.rstrip('/'))}: verify {cmd!r} tro vao "
+                    f"{script} ma khong co trong layer nao cua pipeline do {layers}. "
+                    "Terraform coi day la mot chuoi hop le, nen no apply THANH CONG va "
+                    "chi do o lan chay dau voi 'No such file or directory' - sau khi "
+                    "thay doi da toi AWS."
+                )
+            elif not os.access(os.path.join(GOC, co[0], script[2:]), os.X_OK):
+                loi.append(
+                    f"{os.path.basename(C.rstrip('/'))}: {co[0]}/{script[2:]} co that "
+                    "nhung KHONG co quyen chay. `./x.sh` se ra 'Permission denied' - "
+                    "chmod +x va commit lai (git giu bit nay)."
+                )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -664,6 +757,11 @@ def main():
         if ap:
             print(f"  {'x' if l3 else 'v'} moi tien to trong ban_do co ich")
         loi += l3
+
+        l4 = kiem_verify_ton_tai(ap) if ap else []
+        if ap:
+            print(f"  {'x' if l4 else 'v'} moi lenh verify tro vao script co that")
+        loi += l4
 
     print()
     if loi:

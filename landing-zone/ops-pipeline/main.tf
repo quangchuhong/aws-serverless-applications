@@ -79,6 +79,8 @@ locals {
       # root, moi SCP gan vao OU do het ap dung) va doi parent_id la NOI.
       khong_co_lint = "OU khong co catalog - phep kiem y nghia la gate.py, xem bang LUAT muc aws_organizations_organizational_unit"
 
+      verify = "./kiem-to-chuc.sh ou --tuc-thi"
+
       mo_ta = "Cay OU. Xoa mot OU hoac doi parent_id la NOI."
     },
 
@@ -119,6 +121,8 @@ locals {
       # doi trong nhu THAT, tuc lint bao sach ma khong so voi gi.
       lint = "./lint.sh --aws --strict"
 
+      verify = "./kiem-to-chuc.sh scp --tuc-thi"
+
       mo_ta = "SCP tu catalog/scp.yaml. That chay tu do, noi phai co khoi loosen."
     },
 
@@ -148,6 +152,18 @@ locals {
       ]
 
       khong_co_lint = "tag policy sinh tu bien tag_policy_keys chu khong tu catalog - phep kiem y nghia la gate.py, muc aws_organizations_policy_attachment"
+
+      ####################################
+      # VERIFY: --tuc-thi, va do la mot lua chon
+      #
+      # Bo bao cao tuan thu tag policy ra khoi buoc nay: AWS can toi 48
+      # gio de quet lan dau, nen dat no o mot stage chay ngay sau apply
+      # thi no vinh vien in "chua co du lieu" - va mot dong luon giong
+      # nhau la mot dong khong ai doc nua.
+      #
+      # Phep do do chay theo lich: ./kiem-to-chuc.sh tag --tre
+      ####################################
+      verify = "./kiem-to-chuc.sh tag --tuc-thi"
 
       mo_ta = "Tag policy. Go khoi mot target la NOI."
     },
@@ -182,6 +198,37 @@ locals {
       Action = [
         "organizations:Describe*",
         "organizations:List*",
+      ]
+      Resource = "*"
+    },
+
+    ####################################
+    # DOC CHO BUOC VERIFY - CHI DOC, VA KHONG PHAI ORGANIZATIONS
+    #
+    # Buoc Verify goi AWS CLI truc tiep (khong qua Terraform) de hoi xem
+    # apply co TAC DUNG khong: policy gan vao dau, enforced_for co gi.
+    # Phan lon cau hoi do tra loi bang organizations:List* o tren.
+    #
+    # Hai action duoi day thi khong: chung thuoc resourcegroupstaggingapi,
+    # mot dich vu KHAC voi tien to IAM la "tag:".
+    #
+    #   tag:GetComplianceSummary  bao cao tuan thu tag policy toan to chuc
+    #   tag:GetResources          quet gia tri tag trong account nay
+    #
+    # Thieu chung thi buoc Verify do voi AccessDenied o mot dich vu ma
+    # khong dong nao trong file nay nhac ten - va nguoi doc se di tim
+    # trong khoi organizations.
+    #
+    # CHI DOC. Khong co tag:TagResources hay UntagResources: buoc verify
+    # khong duoc sua gi, ke ca sua cho dung.
+    ####################################
+    {
+      Sid    = "DocTagChoVerify"
+      Effect = "Allow"
+      Action = [
+        "tag:GetComplianceSummary",
+        "tag:GetResources",
+        "tag:DescribeReportCreation",
       ]
       Resource = "*"
     },

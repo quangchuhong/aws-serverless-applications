@@ -61,8 +61,8 @@ locals {
   # ----------------------------------
   # THU TU ACTION TRONG MOT STAGE
   #
-  # Co cong duyet:       Plan 1  ->  Duyet 2  ->  Apply 3
-  # Khong co cong duyet: Plan 1  ->  Apply 2
+  # Co cong duyet:       Plan 1  ->  Duyet 2  ->  Apply 3  ->  Verify 4
+  # Khong co cong duyet: Plan 1  ->  Apply 2  ->  Verify 3
   #
   # Tinh o day chu khong trong pipeline.tf: hai cho tinh doc lap la hai
   # cho de lech, va mot run_order lech KHONG gay loi - no chi lam Apply
@@ -75,8 +75,44 @@ locals {
       co_duyet = contains(var.approve_stages, s.key)
       ro_duyet = 2
       ro_apply = contains(var.approve_stages, s.key) ? 3 : 2
+      ro_verify = contains(var.approve_stages, s.key) ? 4 : 3
     })
   ]
+
+  ####################################
+  # VERIFY - DOC LAI AWS SAU KHI APPLY
+  #
+  # Vi sao can, khi apply da bao thanh cong: apply chi noi rang Terraform
+  # goi API va AWS tra ve 200. No khong noi policy da gan vao dau, hay no
+  # co CHAN gi khong.
+  #
+  # Do la dung cai sai biet mat hai lan do moi tim ra: loi 121 (mot apply
+  # xanh chua bao gio chung minh duoc apply DUOC) va loi 126 (mot SCP
+  # dung noi dung van chan 0 thu neu go sai ten action).
+  #
+  # ----------------------------------
+  # PHAM VI: CHI NHUNG GI DOC DUOC NGAY
+  #
+  # Verify chay NGAY sau apply, nen no chi tra loi duoc nhung cau co du
+  # lieu ngay: policy gan vao dau, enforced_for co nhung gi, OU nao ton
+  # tai. Nhung phep do TRE - bao cao tuan thu tag policy (toi 48 gio),
+  # Config compliance (toi 1 gio) - KHONG thuoc day: dat chung vao mot
+  # stage chay ngay sau apply thi chung se vinh vien in ra "chua co du
+  # lieu", va mot dong luon giong nhau la mot dong khong ai doc nua.
+  #
+  # Nhung phep do do thuoc project DRIFT, chay theo lich.
+  #
+  # ----------------------------------
+  # VERIFY CHAY BANG DANH TINH CUA CODEBUILD, KHONG ASSUME
+  #
+  # Khac Plan/Apply - chung truyen ASSUME_ROLE_ARN cho provider Terraform.
+  # Script verify goi AWS CLI truc tiep, nen no o ACCOUNT MANAGEMENT.
+  #
+  # Du cho layer organization (Organizations chi tra loi tu management).
+  # Mot stage can doc o account KHAC phai khai khong_co_verify kem ly do,
+  # cho toi khi co co che assume cho buoc nay.
+  ####################################
+  co_verify = length([for s in local.stages : s.key if try(s.verify, "") != ""]) > 0
 
   stages_tat = [for s in var.stages : s.key if !s.enabled]
 
@@ -212,6 +248,40 @@ check "moi_stage_co_lint" {
       "khong lint va khong giai thich la mot stage chi con FAIL_ON_DESTROY -",
       "va FAIL_ON_DESTROY khong biet gi ve y nghia, no chi dem so resource bi",
       "xoa.",
+    ])
+  }
+}
+
+########################################
+# MOI STAGE PHAI CO VERIFY, HOAC MOT LY DO VI SAO KHONG
+#
+# Cung khuon voi moi_stage_co_lint, nhung bat mot khoang trong KHAC:
+#
+#   lint    kiem TRUOC khi Terraform cham vao AWS  - "co nen lam khong"
+#   verify  doc lai AWS SAU khi apply              - "da lam duoc chua"
+#
+# Lop thu hai la lop duy nhat tra loi duoc cau hoi cua loi 121 va 126:
+# apply bao thanh cong khong co nghia la thu do dang co tac dung. Mot SCP
+# go sai ten action van apply thanh cong, van nam trong policy, va chan
+# dung 0 thu.
+#
+# RONG LA HOP LE. Co stage that su khong verify duoc tu account
+# management - luc do phai VIET RA, vi mot truong bo trong doc giong het
+# mot truong bi quen.
+########################################
+check "moi_stage_co_verify" {
+  assert {
+    condition = length([
+      for s in var.stages : s.key
+      if s.enabled && s.verify == "" && s.khong_co_verify == ""
+    ]) == 0
+    error_message = join(" ", [
+      "Stage dang BAT ma khong co lenh verify va cung khong khai khong_co_verify:",
+      join(", ", [for s in var.stages : s.key if s.enabled && s.verify == "" && s.khong_co_verify == ""]),
+      ". verify la lop DUY NHAT doc lai AWS sau khi apply. Thieu no thi cau",
+      "\"apply da co tac dung chua\" khong co ai tra loi - va cau tra loi",
+      "mac dinh se la mau xanh cua stage Apply, thu chi noi rang AWS da tra",
+      "ve 200.",
     ])
   }
 }

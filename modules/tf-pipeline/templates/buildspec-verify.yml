@@ -1,0 +1,86 @@
+version: 0.2
+
+# Doc lai AWS SAU khi apply.
+#
+# Bien do pipeline.tf de len o tung action:
+#   LAYER_DIR   duong dan tuong doi tu goc repo
+#   VERIFY_CMD  lenh chay trong thu muc do
+#
+# ======================================================================
+# KHONG CAI TERRAFORM, KHONG DOC STATE, KHONG KEO tfvars
+#
+# Ba dieu do la thiet ke, khong phai toi gian hoa.
+#
+# Mot phep verify doc state se tra loi dung cau hoi ma state da tra loi
+# roi - va do la cau hoi SAI. `terraform output tag_policy` in
+# enabled = true nghia la Terraform DA GOI CreatePolicy va AWS tra ve
+# 200; no khong noi policy gan vao dau, hay no co CHAN gi khong.
+#
+# Loi 121: moi apply xanh trong ba thang deu la no-op, nen "pipeline chay
+# on" chua bao gio co nghia la "apply duoc".
+# Loi 126: mot SCP go sai ten action van apply thanh cong, van nam trong
+# policy, va chan dung 0 thu.
+#
+# Ca hai chi do duoc bang mot cau hoi gui THANG toi AWS.
+#
+# ======================================================================
+# DANH TINH: CUA CODEBUILD, O ACCOUNT MANAGEMENT
+#
+# Khac Plan/Apply - chung truyen ASSUME_ROLE_ARN cho provider Terraform.
+# O day khong co provider nao; script goi AWS CLI truc tiep.
+#
+# Du cho layer organization: Organizations CHI tra loi tu account
+# management, va goi tu account khac tra ve rong hoac AccessDenied - thu
+# ma mot script doc hong se bien thanh "khong co gi sai".
+#
+# Stage can doc o account KHAC phai khai khong_co_verify kem ly do.
+
+phases:
+  pre_build:
+    commands:
+      - |
+        set -euo pipefail
+        echo "== Danh tinh CodeBuild"
+        aws sts get-caller-identity --query '[Account,Arn]' --output text
+
+  build:
+    commands:
+      # ------------------------------------------------------
+      # VERIFY_CMD RONG LA MOT LOI, KHONG PHAI "KHONG CO GI DE LAM"
+      #
+      # Action verify chi duoc sinh khi stage khai truong `verify` khac
+      # rong (xem pipeline.tf), nen rong o day nghia la bien khong den
+      # duoc CodeBuild - va luc do mot lan chay "thanh cong" se chung
+      # minh dung mot dieu: khong co gi duoc kiem.
+      #
+      # DAU NHAY DON o cac dong echo duoi day: trong nhay doi, backtick
+      # la command substitution - bash se di TIM mot lenh ten "verify".
+      # ------------------------------------------------------
+      - |
+        set -euo pipefail
+
+        if [ -z "${VERIFY_CMD:-}" ]; then
+          echo 'LOI: VERIFY_CMD rong.'
+          echo '     Action nay chi duoc sinh khi stage khai truong `verify`,'
+          echo '     nen rong nghia la bien khong den duoc CodeBuild. Mot lan'
+          echo '     chay xanh o day se chung minh dung mot dieu: khong co gi'
+          echo '     duoc kiem.'
+          exit 1
+        fi
+
+        cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"
+        echo "== Layer: ${LAYER_DIR}"
+        echo "== Verify: ${VERIFY_CMD}"
+        echo
+
+        # ----------------------------------------------------
+        # eval, va vi sao khong phai mot mang lenh
+        #
+        # VERIFY_CMD den tu Terraform duoi dang MOT chuoi, co the mang
+        # co ("./kiem-to-chuc.sh scp --tuc-thi"). Chay no truc tiep thi
+        # ca chuoi bi coi la mot ten file.
+        #
+        # An toan o day vi nguon cua chuoi la code da qua review, khong
+        # phai dau vao cua nguoi dung.
+        # ----------------------------------------------------
+        eval "${VERIFY_CMD}"

@@ -69,6 +69,30 @@ locals {
 
       khong_co_lint = "org-trail khong co catalog - phep kiem y nghia la gate.py, muc aws_cloudtrail: sau thuoc tinh don dieu, tat bat ky cai nao cung la NOI"
 
+      ####################################
+      # VI SAO CHUA CO VERIFY, VA PHEP DO NAO CAN
+      #
+      # Phep do dung cho trail KHONG phai "trail co ton tai" - Terraform
+      # da biet the. La HAI cau nay:
+      #
+      #   get-trail-status  IsLogging con true, va LatestDeliveryTime co
+      #                     MOI HON luc apply khong
+      #   describe-trails   IsOrganizationTrail va IsMultiRegionTrail
+      #
+      # Cau thu nhat la cau da cuu mot lan: UpdateTrail tra ve 200 xong
+      # ma trail ngung ghi thi khong co trieu chung nao, va khoang trong
+      # no de lai khong lay lai duoc.
+      #
+      # Chua viet duoc vi mot ly do do duoc: no can doi ~2 phut sau apply
+      # (CloudTrail giao theo lo, khong tuc thi), nen mot buoc verify chay
+      # ngay se doc LatestDeliveryTime CU roi ket luan sai theo chieu an
+      # tam. Can mot phep cho, va do la thu phai thiet ke chu khong them
+      # vao mot dong.
+      #
+      # Hien lam bang tay - xem next_steps cua layer org-trail muc 2.
+      ####################################
+      khong_co_verify = "can doi ~2 phut cho CloudTrail giao lo dau tien; mot verify chay ngay se doc LatestDeliveryTime CU va ket luan sai theo chieu an tam. Lam bang tay theo next_steps muc 2 cua org-trail."
+
       mo_ta = "CloudTrail to chuc. Tat log, bo multi-region, hay bo global service events deu la NOI."
     },
   ]
