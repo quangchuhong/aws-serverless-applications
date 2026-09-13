@@ -66,15 +66,49 @@ tfvars_bucket = "qh11-lz-vending-tfvars-609320954321"
 # KHONG ra "khong co thay doi" chinh la bao dong.
 ########################################
 
-drift_cron      = "cron(0 19 * * ? *)"
-drift_topic_arn = "arn:aws:sns:ap-southeast-1:458195083898:quh11-lz-security-findings"
-
-# CHON MOT, KHONG PHAI CA HAI. drift_topic_arn o tren THANG, nen mot
-# dong `drift_emails = [...]` them vao day se khong tao topic nao va
-# nhung dia chi do khong nhan duoc gi - check "khong_khai_ca_hai_nguon_topic"
-# trong module canh bao dung viec do.
+drift_cron = "cron(0 19 * * ? *)"
+# CACH DUOC KHUYEN: khai dia chi, layer nay TU TAO topic o account
+# management. Khong co phu thuoc lien account nao.
 #
-# Bo drift_topic_arn di neu muon dung drift_emails.
+# Moi dia chi nhan mot thu tu SNS va PHAI BAM XAC NHAN. Truoc do
+# subscription o PendingConfirmation va khong nhan gi - Terraform van bao
+# tao thanh cong.
+drift_emails = []
+# drift_emails = ["DIA-CHI-CUA-BAN@example.com"]
+
+########################################
+# CACH KIA: MOT TOPIC CO SAN - VA VI SAO DONG NAY GIO DE RONG
+#
+# File nay TRUOC DAY dat san mot ARN tro sang topic cua config-detective o
+# account security. Do la mot cai bay ba lop, va ca ba deu im lang:
+#
+#   1. LIEN ACCOUNT. notify.tf cua module viet ro: resource policy cua
+#      topic do chi cho Principal = events.amazonaws.com. Publish lien
+#      account can CA HAI phia cho phep, va Terraform o day KHONG sua duoc
+#      policy cua mot topic o account khac. Nen buoc drift chay, phat hien
+#      dung, roi in "CANH BAO: khong bao duoc ve SNS" - moi dem, trong log
+#      cua mot job khong ai mo. Mot canh bao khong den duoc dich TE HON
+#      khong co canh bao, vi no tao cam giac da co nguoi canh.
+#
+#   2. LOAI TRU VOI drift_emails. drift_topic_arn THANG, nen them mot dong
+#      `drift_emails = [...]` se KHONG tao topic nao va nhung dia chi do
+#      khong nhan gi. Check "khong_khai_ca_hai_nguon_topic" bat viec nay -
+#      nhung check block chi CANH BAO, no khong bao gio lam apply do. Va
+#      dong canh bao nay da co san o day tu truoc ma van co nguoi khai ca
+#      hai: mot chu thich KHONG THUC THI.
+#
+#   3. ARN GO TAY. Ten trong ARN cu la "quh11-lz-..." - go sai tu "qh11".
+#      Mot ARN go sai khong lam apply do: publish that bai luc 2 gio sang.
+#
+# Nen: neu dung topic co san thi LAY ARN THAT, DUNG GO TAY:
+#   cd ../config-detective && terraform output alert_topic
+#
+# Va neu topic o account khac, phai TU them statement cho phep role
+# <project>-<ten>-codebuild publish. Kiem policy hien tai:
+#   aws sns get-topic-attributes --topic-arn <arn> \
+#     --query 'Attributes.Policy' --output text
+########################################
+drift_topic_arn = ""
 
 build_timeout_minutes = 30
 log_retention_days    = 90
