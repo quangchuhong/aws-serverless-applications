@@ -352,9 +352,78 @@ def chi_tiet(i):
     return ra
 
 
+####################################
+# BO PHAN OUTPUT CUA TERRAFORM - VAN BAN TAI LIEU, KHONG PHAI KET QUA
+#
+# Lan chay dau cua ops-config-rules bao BON canh bao, va ca bon la gia:
+#
+#   CANH BAO  2 dong
+#     CHUA BAM LINK = KHONG NHAN DUOC CANH BAO NAO.
+#   INSUFFICIENT_DATA  2 dong
+#     Rule o trang thai INSUFFICIENT_DATA nghia la recorder KHONG ghi
+#
+# Ca hai chuoi nam trong landing-zone/config-detective/outputs.tf, tuc la
+# van ban TAI LIEU trong mot `output` cua Terraform. `plan` in no mot lan,
+# `apply` in lan nua - nen dung 2 dong moi cai.
+#
+# Day la CUA THU TU cua cung mot lop loi trong buoi nay:
+#
+#   1. CodeBuild in ma nguon cua tung lenh -> mot `echo "CANH BAO: ..."`
+#      nam trong log ke ca khi cau do khong bao gio duoc in
+#   2. externalExecutionSummary dan ca buildspec vao nhu mot su co
+#   3. ma ANSI cat "Warning: Deprecated Parameter" thanh khong lien mach
+#   4. output cua Terraform chua chinh nhung tu ma phep kiem nay di tim
+#
+# Va cai thu tu co mot chieu tro treu rieng: chuoi MO TA mot van de bi bat
+# nhu chinh van de do. Cang viet tai lieu ky cang nhieu duong tinh gia.
+#
+# VI SAO KHONG THEM HAI CHUOI DO VAO BIET_ROI: do la danh whack-a-mole -
+# va ta se giet luon tin hieu THAT. Mot rule that o trang thai
+# INSUFFICIENT_DATA la dieu can biet; van ban noi VE trang thai do thi
+# khong.
+#
+# Nen phan biet bang HINH DANG, nhu la_ma_nguon(): hai khoi van ban duoi
+# day khong bao gio chua ket qua that.
+#
+#   `Outputs:`     Terraform in dong nay MOT MINH roi liet ke output.
+#                  Canh bao/loi cua Terraform in TRUOC do, khong bao gio
+#                  sau - nen bo het phan con lai cua stream la an toan.
+#   `<<-EOT`       noi dung heredoc trong ban plan (`+ x = <<-EOT ... EOT`).
+#
+# So SANH BANG o `Outputs:` chu khong `startswith`: chuoi do co the xuat
+# hien trong mot dong chu thich cua buildspec ma CodeBuild echo ra, va luc
+# do bo het phan con lai cua stream se lam MAT canh bao that.
+#
+# Trang thai phai reset theo STREAM: su_kien noi cac stream duoi nhau.
+####################################
 thay = {}
+stream_truoc = None
+trong_output = False
+trong_heredoc = False
+
 for i, x in enumerate(su_kien):
+    st = x.get("logStreamName")
+    if st != stream_truoc:
+        stream_truoc = st
+        trong_output = False
+        trong_heredoc = False
+
     t = sach(x.get("message") or "").strip()
+
+    if trong_output:
+        continue
+    if t == "Outputs:":
+        trong_output = True
+        continue
+
+    if trong_heredoc:
+        if t in ("EOT", "EOT,"):
+            trong_heredoc = False
+        continue
+    if t.endswith("<<-EOT") or t.endswith("<<EOT"):
+        trong_heredoc = True
+        continue
+
     if any(b in t for b in BIET_ROI):
         continue
     if la_ma_nguon(t):
