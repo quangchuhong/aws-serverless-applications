@@ -1,10 +1,11 @@
 version: 0.2
 
-# Doc lai AWS SAU khi apply.
+# Doc lai AWS sau khi MOI stage cua pipeline da apply xong.
 #
-# Bien do pipeline.tf de len o tung action:
-#   LAYER_DIR   duong dan tuong doi tu goc repo
-#   VERIFY_CMD  lenh chay trong thu muc do
+# Bien do codebuild.tf dat:
+#   VERIFY_CMD  lenh chay, tu GOC REPO
+#   PIPELINE    ten pipeline - de script doc lai log cua chinh lan chay nay
+#   LOG_GROUP   log group cua cac build trong pipeline do
 #
 # ======================================================================
 # KHONG CAI TERRAFORM, KHONG DOC STATE, KHONG KEO tfvars
@@ -32,8 +33,6 @@ version: 0.2
 # Du cho layer organization: Organizations CHI tra loi tu account
 # management, va goi tu account khac tra ve rong hoac AccessDenied - thu
 # ma mot script doc hong se bien thanh "khong co gi sai".
-#
-# Stage can doc o account KHAC phai khai khong_co_verify kem ly do.
 
 phases:
   pre_build:
@@ -48,37 +47,34 @@ phases:
       # ------------------------------------------------------
       # VERIFY_CMD RONG LA MOT LOI, KHONG PHAI "KHONG CO GI DE LAM"
       #
-      # Action verify chi duoc sinh khi stage khai truong `verify` khac
-      # rong (xem pipeline.tf), nen rong o day nghia la bien khong den
-      # duoc CodeBuild - va luc do mot lan chay "thanh cong" se chung
-      # minh dung mot dieu: khong co gi duoc kiem.
+      # Stage nay chi duoc sinh khi var.verify khac rong (xem
+      # pipeline.tf), nen rong o day nghia la bien khong den duoc
+      # CodeBuild - va luc do mot lan chay "thanh cong" se chung minh
+      # dung mot dieu: khong co gi duoc kiem.
       #
-      # DAU NHAY DON o cac dong echo duoi day: trong nhay doi, backtick
-      # la command substitution - bash se di TIM mot lenh ten "verify".
+      # DAU NHAY DON o cac dong echo: trong nhay doi, backtick la command
+      # substitution - bash se di TIM mot lenh ten "verify".
       # ------------------------------------------------------
       - |
         set -euo pipefail
 
         if [ -z "${VERIFY_CMD:-}" ]; then
           echo 'LOI: VERIFY_CMD rong.'
-          echo '     Action nay chi duoc sinh khi stage khai truong `verify`,'
-          echo '     nen rong nghia la bien khong den duoc CodeBuild. Mot lan'
-          echo '     chay xanh o day se chung minh dung mot dieu: khong co gi'
-          echo '     duoc kiem.'
+          echo '     Stage nay chi duoc sinh khi var.verify khac rong, nen rong'
+          echo '     nghia la bien khong den duoc CodeBuild. Mot lan chay xanh o'
+          echo '     day se chung minh dung mot dieu: khong co gi duoc kiem.'
           exit 1
         fi
 
-        cd "${CODEBUILD_SRC_DIR}/${LAYER_DIR}"
-        echo "== Layer: ${LAYER_DIR}"
+        cd "${CODEBUILD_SRC_DIR}"
         echo "== Verify: ${VERIFY_CMD}"
         echo
 
         # ----------------------------------------------------
         # eval, va vi sao khong phai mot mang lenh
         #
-        # VERIFY_CMD den tu Terraform duoi dang MOT chuoi, co the mang
-        # co ("./kiem-to-chuc.sh scp --tuc-thi"). Chay no truc tiep thi
-        # ca chuoi bi coi la mot ten file.
+        # VERIFY_CMD den tu Terraform duoi dang MOT chuoi, co the mang co.
+        # Chay no truc tiep thi ca chuoi bi coi la mot ten file.
         #
         # An toan o day vi nguon cua chuoi la code da qua review, khong
         # phai dau vao cua nguoi dung.

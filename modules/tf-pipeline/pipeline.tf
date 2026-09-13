@@ -3,19 +3,16 @@
 #
 # Nguon -> mot stage cho moi layer trong local.stages.
 #
-# Moi stage co HAI den BON action:
+# Moi stage co HAI hoac BA action:
 #
-#   Plan 1  ->  Apply 2                            khong duyet, khong verify
-#   Plan 1  ->  Duyet 2  ->  Apply 3               co duyet
-#   Plan 1  ->  Apply 2  ->  Verify 3              co verify
-#   Plan 1  ->  Duyet 2  ->  Apply 3  ->  Verify 4 ca hai
+#   Plan 1  ->  Apply 2                 stage khong trong approve_stages
+#   Plan 1  ->  Duyet 2  ->  Apply 3    stage trong approve_stages
 #
-# Verify chi xuat hien khi stage khai truong `verify`. Thieu ca verify lan
-# khong_co_verify thi check "moi_stage_co_verify" keu - mot stage khong ai
-# doc lai AWS sau apply thi cau "da lam duoc chua" khong co ai tra loi,
-# va cau tra loi mac dinh se la mau xanh cua Apply.
+# Roi MOT stage Verify o cuoi, neu var.verify khac rong: no doc lai AWS
+# sau khi moi stage da apply xong. Mot stage cho ca pipeline, khong phai
+# mot action moi stage - xem khoi chu thich cua no o duoi.
 #
-# run_order do local.stages tinh (ro_duyet / ro_apply / ro_verify), khong tinh o day:
+# run_order do local.stages tinh (ro_duyet / ro_apply), khong tinh o day:
 # hai cho tinh doc lap la hai cho de lech, va mot run_order lech KHONG
 # gay loi - no chi lam Apply chay SONG SONG voi cong duyet, tuc apply
 # xong truoc khi co nguoi bam.
@@ -297,43 +294,46 @@ resource "aws_codepipeline" "ops" {
           ])
         }
       }
+    }
+  }
 
-      ####################################
-      # VERIFY - HOI THANG AWS SAU KHI APPLY
-      #
-      # input_artifacts la "nguon", KHONG phai ban plan: verify khong doc
-      # ke hoach, no doc THUC TE. Lay ban plan vao day se moi no so sanh
-      # hai thu vua duoc sinh ra tu cung mot cho.
-      #
-      # Va no dung project rieng (khong cai Terraform, khong doc state) -
-      # xem codebuild.tf. Mot phep verify doc state se tra loi dung cau
-      # hoi ma state da tra loi roi, va do la cau hoi sai: loi 121 va 126
-      # ca hai deu la truong hop state noi "xong" trong khi AWS chua co
-      # tac dung gi.
-      #
-      # KHONG truyen ASSUME_ROLE_ARN: script goi AWS CLI bang danh tinh
-      # cua CodeBuild, o account management. Stage can doc o account khac
-      # phai khai khong_co_verify - xem check "moi_stage_co_verify".
-      ####################################
-      dynamic "action" {
-        for_each = try(stage.value.verify, "") != "" ? [1] : []
+  ####################################
+  # VERIFY - MOT STAGE CUOI, SAU KHI MOI STAGE DA APPLY
+  #
+  # MOT stage cho ca pipeline, khong phai mot action moi stage. Cac stage
+  # cua mot pipeline deu cham vao cung mot mien (organization, hay mang,
+  # hay Identity Center), nen mot script doc lai mien do la du - mot lenh
+  # moi stage chi lam ba lan goi cung mot script.
+  #
+  # Va dat o CUOI co mot ly do nua: cac stage chay tuan tu tren cung mot
+  # state, nen doc lai giua duong se doc mot trang thai chua xong. Voi
+  # layer organization thi stage sec-ou doi cay OU va sec-scp gan lai
+  # attachment - hoi "SCP gan vao dau" ngay sau sec-ou la hoi giua luc.
+  #
+  # input_artifacts la "nguon", KHONG phai ban plan: verify khong doc ke
+  # hoach, no doc THUC TE. Lay ban plan vao day se moi no so sanh hai thu
+  # vua duoc sinh ra tu cung mot cho.
+  #
+  # KHONG truyen ASSUME_ROLE_ARN: script goi AWS CLI bang danh tinh cua
+  # CodeBuild, o account management.
+  ####################################
+  dynamic "stage" {
+    for_each = var.verify != "" ? [1] : []
 
-        content {
-          name            = "Verify"
-          category        = "Build"
-          owner           = "AWS"
-          provider        = "CodeBuild"
-          version         = "1"
-          run_order       = stage.value.ro_verify
-          input_artifacts = ["nguon"]
+    content {
+      name = "Verify"
 
-          configuration = {
-            ProjectName = aws_codebuild_project.verify[0].name
-            EnvironmentVariables = jsonencode([
-              { name = "LAYER_DIR", value = stage.value.layer, type = "PLAINTEXT" },
-              { name = "VERIFY_CMD", value = stage.value.verify, type = "PLAINTEXT" },
-            ])
-          }
+      action {
+        name            = "Verify"
+        category        = "Build"
+        owner           = "AWS"
+        provider        = "CodeBuild"
+        version         = "1"
+        run_order       = 1
+        input_artifacts = ["nguon"]
+
+        configuration = {
+          ProjectName = aws_codebuild_project.verify[0].name
         }
       }
     }

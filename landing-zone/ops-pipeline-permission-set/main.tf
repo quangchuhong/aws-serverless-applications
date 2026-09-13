@@ -73,26 +73,6 @@ locals {
 
       khong_co_lint = "permission-sets chua co catalog - phep kiem y nghia la gate.py, muc aws_ssoadmin_account_assignment va aws_identitystore_group_membership"
 
-      ####################################
-      # VI SAO CHUA CO VERIFY
-      #
-      # Doc lai assignment tu Identity Center thi lam duoc ngay
-      # (sso-admin:ListAccountAssignments), va no da duoc do mot lan: buoc
-      # -refresh-only cua apply in ra id that cua assignment moi.
-      #
-      # Nhung phep do CO Y NGHIA thi khac: mot assignment ton tai khong
-      # noi rang nguoi trong group do VAO DUOC account. Identity Center
-      # con phai sinh role AWSReservedSSO_<set>_<hash> o account dich, va
-      # viec do KHONG tuc thi.
-      #
-      # Doc thu ba do doi mot phien o ACCOUNT KHAC - thu buoc verify
-      # khong co, vi no chay bang danh tinh cua CodeBuild o management.
-      #
-      # Nen mot verify chi doc assignment se luon xanh va khong tra loi
-      # duoc cau hoi that. Khai ra thay vi them mot lop kiem de chiu.
-      ####################################
-      khong_co_verify = "doc lai assignment thi luon xanh nhung khong tra loi duoc cau hoi that: nguoi trong group co vao duoc account khong. Cau do doi mot phien o ACCOUNT DICH, ma buoc verify chay bang danh tinh CodeBuild o management."
-
       mo_ta = "Ai vao account nao. TAO mot assignment la NOI - chieu nguoc voi SCP."
     },
   ]
@@ -229,6 +209,8 @@ module "pipeline" {
   state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
+
+  khong_co_verify = "doc lai assignment thi luon xanh nhung khong tra loi duoc cau hoi that: nguoi trong group co vao duoc account khong. Cau do doi mot phien o ACCOUNT DICH, ma buoc verify chay bang danh tinh CodeBuild o management."
 
   source_type       = var.source_type
   repository_name   = var.repository_name

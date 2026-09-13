@@ -38,24 +38,6 @@ locals {
 
       khong_co_lint = "config-detective khai rule trong bien organization_rules, chua co catalog - phep kiem y nghia la gate.py, muc aws_config_organization_managed_rule"
 
-      ####################################
-      # VI SAO CHUA CO VERIFY
-      #
-      # Organization config rule song o ACCOUNT DELEGATED ADMIN, khong o
-      # management - hoi tu management tra ve
-      # NoSuchOrganizationConfigRuleException, mot cau co nghia "khong co
-      # trong account NAY" chu khong phai "khong ton tai".
-      #
-      # Buoc verify chay bang danh tinh cua CodeBuild o management, nen no
-      # se nhan dung cai loi do va bao mot su co khong co that.
-      #
-      # Va phep do that su co y nghia con tre hon: trang thai tuan thu can
-      # toi mot gio, va ket qua dau tien thuong la INSUFFICIENT_DATA chu
-      # khong phai NON_COMPLIANT. Do la phep do theo lich, khong phai phep
-      # do sau apply.
-      ####################################
-      khong_co_verify = "organization config rule song o account delegated admin; hoi tu management tra ve NoSuchOrganizationConfigRuleException. Va trang thai tuan thu can toi mot gio, ket qua dau thuong la INSUFFICIENT_DATA - do la phep do theo lich."
-
       mo_ta = "Config rule toan to chuc. Xoa mot rule, hoac THEM account vao excluded_accounts, deu la NOI."
     },
   ]
@@ -293,6 +275,8 @@ module "pipeline" {
   state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
+
+  khong_co_verify = "organization config rule song o account delegated admin; hoi tu management tra ve NoSuchOrganizationConfigRuleException - mot cau nghia la \"khong co trong account NAY\". Va trang thai tuan thu can toi mot gio, ket qua dau thuong la INSUFFICIENT_DATA: do la phep do theo lich, khong phai phep do sau apply."
 
   source_type       = var.source_type
   repository_name   = var.repository_name

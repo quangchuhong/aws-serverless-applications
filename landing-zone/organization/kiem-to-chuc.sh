@@ -1,43 +1,34 @@
 #!/usr/bin/env bash
 #
 # Kiem cay OU, SCP va tag policy DANG THAT o AWS - khong doc Terraform state.
+# Va doc lai LOG cua lan chay pipeline vua roi de tim canh bao.
 #
-#   ./kiem-to-chuc.sh            ca ba
-#   ./kiem-to-chuc.sh ou         chi cay OU
-#   ./kiem-to-chuc.sh scp        chi SCP
-#   ./kiem-to-chuc.sh tag        chi tag policy
+#   ./kiem-to-chuc.sh
 #
-#   --tuc-thi   BO nhung phep do TRE (bao cao tuan thu tag policy). Day la
-#               che do pipeline dung o stage Verify.
-#   --tre       CHI nhung phep do tre. Danh cho job chay theo lich.
+# Khong tham so. Bien moi truong:
 #
-# Khong co co nao = ca hai nhom, danh cho nguoi chay tay.
+#   PIPELINE    ten pipeline de doc log (rong = bo qua phan log, va NOI RO)
+#   LOG_GROUP   mac dinh /aws/codebuild/$PIPELINE
+#   TU_THU_MUC  doc JSON co san, khong goi AWS - de test offline
 #
 # ======================================================================
-# VI SAO CAN, KHI `terraform output` DA IN RA DAY DU
+# HAI CAU HOI, VA KHONG LOP NAO KHAC TRA LOI CHUNG
 #
-# output doc STATE. State noi rang Terraform DA GOI API va AWS tra ve 200
-# - no khong noi policy dang gan vao dau, noi dung con dung khong, hay no
-# co CHAN gi khong.
+# 1. APPLY DA CO TAC DUNG CHUA
 #
-# Hai lan da mat de biet dieu do:
+# `terraform output` doc STATE. State noi rang Terraform DA GOI API va AWS
+# tra ve 200 - no khong noi policy gan vao dau, hay no co CHAN gi khong.
 #
 #   loi 121  moi apply xanh trong ba thang deu la no-op, nen "pipeline
 #            chay on" chua bao gio co nghia la "apply duoc"
 #   loi 126  mot SCP go sai ten action van apply thanh cong, van nam
 #            trong policy, va chan dung 0 thu
 #
-# ======================================================================
-# TACH --tuc-thi VOI --tre THEO DO TRE CUA DU LIEU, KHONG THEO MUC QUAN TRONG
+# 2. LAN CHAY DO CO CANH BAO GI KHONG
 #
-# Stage Verify chay NGAY sau apply. Nhung phep do co du lieu ngay - OU ton
-# tai, SCP gan vao target nao, tag policy co enforced_for gi - tra loi
-# duoc o day.
-#
-# Bao cao tuan thu tag policy thi KHONG: AWS can toi 48 gio de quet lan
-# dau. Dat no vao stage Verify thi no vinh vien in "chua co du lieu", va
-# mot dong luon giong nhau la mot dong khong ai doc nua. Nen no thuoc
-# --tre, chay theo lich cung job drift.
+# Mot check block cua Terraform that bai, mot dong "Objects have changed
+# outside of Terraform", mot canh bao cua -target - tat ca di qua ma stage
+# van XANH. Va khong ai mo log cua mot build mau xanh.
 #
 # ======================================================================
 # BA TANG, VA SCRIPT NAY CHI DO TANG THU NHAT CUA TAG
@@ -60,41 +51,33 @@
 # bash, va no chua bao gio chay duoc lan nao - backslash trong bieu thuc
 # f-string la SyntaxError o Python < 3.12.
 #
-#   TU_THU_MUC=/duong/dan ./kiem-to-chuc.sh   doc file co san, khong goi AWS
-#
 set -uo pipefail
 
 XANH=$'\033[32m'; DO=$'\033[31m'; VANG=$'\033[33m'; HET=$'\033[0m'
 
 ########################################
-# THAM SO
+# KHONG CO CHE DO, KHONG CO THAM SO LOC
 #
-# MAC DINH LA "TAT CA", khong phai "khong gi". Goi script khong tham so
-# roi nhan mot dong "xong" ma no chua kiem gi la dang hong te nhat cua ca
-# file nay - nen khong co che do rong.
+# Truoc day script nay co `ou|scp|tag` va `--tuc-thi|--tre`. Chung sinh ra
+# de phuc vu mot thiet ke da bo: mot action verify cho TUNG stage. Voi mot
+# buoc verify duy nhat o cuoi pipeline thi khong con gi de loc - va mot co
+# khong ai dat la mot co khong ai thu.
+#
+# Bien moi truong thi con, va chung la DAU VAO chu khong phai che do:
+#
+#   PIPELINE   ten pipeline de doc lai log cua lan chay nay. Rong = bo qua
+#              phan log, VA NOI RO la bo qua.
+#   LOG_GROUP  log group cua cac build. Mac dinh /aws/codebuild/$PIPELINE.
+#   TU_THU_MUC doc JSON co san, khong goi AWS. Danh cho test offline.
 ########################################
-PHAN="ou scp tag"
-NHOM="tuc-thi tre"
+if [[ $# -gt 0 ]]; then
+  echo "Script nay khong nhan tham so (nhan duoc: $*)."
+  echo "Bien moi truong: PIPELINE, LOG_GROUP, TU_THU_MUC."
+  exit 2
+fi
 
-for A in "$@"; do
-  case "$A" in
-    ou|scp|tag) PHAN="$A" ;;
-    --tuc-thi)  NHOM="tuc-thi" ;;
-    --tre)      NHOM="tre" ;;
-    -h|--help)
-      sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
-      exit 0
-      ;;
-    *)
-      echo "Tham so khong hieu: $A"
-      echo "Dung: $0 [ou|scp|tag] [--tuc-thi|--tre]"
-      exit 2
-      ;;
-  esac
-done
-
-co() { [[ " $PHAN " == *" $1 "* ]]; }
-nhom() { [[ " $NHOM " == *" $1 "* ]]; }
+PIPELINE="${PIPELINE:-}"
+LOG_GROUP="${LOG_GROUP:-${PIPELINE:+/aws/codebuild/$PIPELINE}}"
 
 D="${TU_THU_MUC:-}"
 if [[ -z "$D" ]]; then
@@ -176,7 +159,7 @@ PY
   # thi "Workloads/Production khong ton tai" se la mot ket luan sai rut
   # ra tu mot phep hoi khong day du.
   ####################################
-  if co ou && [[ -n "$ROOT" ]]; then
+  if [[ -n "$ROOT" ]]; then
     aws organizations list-organizational-units-for-parent --parent-id "$ROOT" \
       --output json > "$D/ou-$ROOT.json" 2>"$D/ou-$ROOT.err"
 
@@ -202,11 +185,6 @@ PY
   # Nen chung dung cung mot vong lap va cung mot ten file.
   ####################################
   for LOAI in SERVICE_CONTROL_POLICY TAG_POLICY; do
-    case "$LOAI" in
-      SERVICE_CONTROL_POLICY) co scp || continue ;;
-      TAG_POLICY)             co tag || continue ;;
-    esac
-
     aws organizations list-policies --filter "$LOAI" --output json \
       > "$D/policies-$LOAI.json" 2>"$D/policies-$LOAI.err"
 
@@ -244,22 +222,47 @@ PY
   #
   # TAG_REGION de ghi de neu mot ngay AWS mo rong sang region khac.
   ####################################
-  if co tag && nhom tre; then
-    aws resourcegroupstaggingapi get-compliance-summary --group-by TARGET_ID \
-      --region "${TAG_REGION:-us-east-1}" --output json > "$D/tuanthu.json" 2>"$D/tuanthu.err"
+  aws resourcegroupstaggingapi get-compliance-summary --group-by TARGET_ID \
+    --region "${TAG_REGION:-us-east-1}" --output json > "$D/tuanthu.json" 2>"$D/tuanthu.err"
 
-    aws resourcegroupstaggingapi get-resources --tag-filters Key=Environment \
-      --region "$REGION" --output json > "$D/quet.json" 2>"$D/quet.err"
+  aws resourcegroupstaggingapi get-resources --tag-filters Key=Environment \
+    --region "$REGION" --output json > "$D/quet.json" 2>"$D/quet.err"
+
+  ####################################
+  # LOG CUA CHINH LAN CHAY NAY
+  #
+  # Khoang trong ma khong lop nao doc: CANH BAO. Mot check block cua
+  # Terraform that bai, mot dong "Objects have changed outside of
+  # Terraform", mot canh bao cua -target - tat ca di qua ma stage van
+  # XANH. Khong ai mo log cua mot build mau xanh.
+  #
+  # Quet theo THOI GIAN chu khong theo execution id: mot lenh
+  # FilterLogEvents tren log group, tu 40 phut truoc. Khong can goi
+  # codepipeline, khong can ghep action voi build.
+  #
+  # 40 phut: dai hon mot luot pipeline (do duoc ~15 phut cho ba stage) va
+  # ngan hon khoang giua hai luot. Qua ngan thi bo sot stage dau; qua dai
+  # thi keo canh bao cua luot TRUOC vao luot nay.
+  ####################################
+  if [[ -n "$LOG_GROUP" ]]; then
+    TU=$(( ($(date +%s) - 40 * 60) * 1000 ))
+    aws logs filter-log-events \
+      --log-group-name "$LOG_GROUP" \
+      --start-time "$TU" \
+      --region "$REGION" --output json > "$D/log.json" 2>"$D/log.err"
   fi
 fi
 
 ########################################
 # PHAN TICH
 ########################################
-python3 - "$D" "$PHAN" "$NHOM" <<'PY'
+python3 - "$D" "${CODEBUILD_LOG_PATH:-}" <<'PY'
 import glob, json, os, sys
 
-D, PHAN, NHOM = sys.argv[1], sys.argv[2].split(), sys.argv[3].split()
+D = sys.argv[1]
+# Stream log cua CHINH build nay. Bo ra khoi phep quet - neu khong thi
+# script se thay "CANH BAO" do CHINH NO in ra va bao co van de, moi lan.
+STREAM_TOI = sys.argv[2] if len(sys.argv) > 2 else ""
 XANH, DO, VANG, HET = "\033[32m", "\033[31m", "\033[33m", "\033[0m"
 loi, canh = [], []
 
@@ -324,7 +327,7 @@ else:
 # Cau thu hai la cau khong ai hoi: mot account nam o root van "trong to
 # chuc", van hien trong console, va van thieu moi guardrail cua OU.
 ####################################
-if "ou" in PHAN and "tuc-thi" in NHOM:
+if True:
     tieu_de("Cay OU")
     if not root_id:
         loi.append("khong biet root id nen KHONG kiem duoc cay OU.")
@@ -382,9 +385,6 @@ for loai, ten_phan, nhan in (
     ("SERVICE_CONTROL_POLICY", "scp", "SCP"),
     ("TAG_POLICY", "tag", "Tag policy"),
 ):
-    if ten_phan not in PHAN or "tuc-thi" not in NHOM:
-        continue
-
     tieu_de(nhan)
 
     # Loai policy phai duoc BAT tren root, neu khong thi CreatePolicy tra
@@ -493,7 +493,7 @@ for loai, ten_phan, nhan in (
 # Cung ho voi INSUFFICIENT_DATA cua Config: mot cho trong bi doc thanh
 # mot cau tra loi. Day la dang loi lap lai nhieu nhat trong du an nay.
 ####################################
-if "tag" in PHAN and "tre" in NHOM:
+if True:
     tieu_de("Bao cao tuan thu tag (phep do TRE)")
     d, e = doc("tuanthu.json")
     if d is None:
@@ -547,21 +547,105 @@ if "tag" in PHAN and "tre" in NHOM:
             loi.append(f"{len(sai)} resource mang Environment ngoai bon gia tri cua doc 11 muc 2.")
 
 ####################################
-# KHONG PHAN NAO CHAY LA MOT LOI
+# 6. LOG CUA LAN CHAY PIPELINE VUA ROI
 #
-# Tham so loc co the loai het moi phan - vi du `tag --tuc-thi` khi chi co
-# phep do tre. Mot lan chay khong kiem gi ma bao "xong" la dang hong te
-# nhat cua ca file nay.
+# Khoang trong ma khong lop nao doc: CANH BAO. Mot check block cua
+# Terraform that bai, mot dong "Objects have changed outside of Terraform",
+# mot canh bao cua -target - tat ca di qua ma stage van XANH, va khong ai
+# mo log cua mot build mau xanh.
+#
+# BA DIEU DE SAI KHI DOC LOG, va ca ba da duoc xu ly:
+#
+#   1. Stream cua CHINH build nay cung nam trong log group. Khong tru no
+#      ra thi script thay "CANH BAO" do chinh no in va bao co van de, moi
+#      lan chay.
+#   2. Log RONG khong phai "khong co canh bao" - co the la sai log group,
+#      sai region, hay thieu quyen. Ba truong hop khac nhau.
+#   3. Mot dong khop KHONG phai mot su co. `Warning: Resource targeting is
+#      in effect` xuat hien o MOI lan chay vi -target la thiet ke cua
+#      pipeline nay. Nen no nam trong danh sach BIET ROI.
 ####################################
-chay = [
-    p for p in PHAN
-    if ("tuc-thi" in NHOM) or (p == "tag" and "tre" in NHOM)
-]
-if not chay:
-    print()
-    print(f"  {DO}KHONG phan nao duoc chay{HET} voi phan={PHAN} nhom={NHOM}.")
-    print("  Mot lan chay khong kiem gi thi khong duoc bao la thanh cong.")
-    sys.exit(1)
+tieu_de("Log cua lan chay vua roi")
+
+# Mau khop -> co phai canh bao MOI hay khong.
+#
+# "Resource targeting is in effect" va "Applied changes may be incomplete"
+# la he qua truc tiep cua -target, tuc thiet ke cua pipeline. Bao chung
+# moi lan la cach nhanh nhat lam nguoi ta thoi doc phan nay.
+BIET_ROI = (
+    "Resource targeting is in effect",
+    "Applied changes may be incomplete",
+    "The -target option is not for routine use",
+)
+DANG_TIM = (
+    "Warning:",
+    "changed outside of Terraform",
+    "CANH BAO",
+    "Error:",
+    "error occurred",
+    "AccessDenied",
+    "INSUFFICIENT_DATA",
+)
+
+d, e = doc("log.json")
+if d is None:
+    if not e or "khong co file" in e:
+        # Khong goi = khong co PIPELINE/LOG_GROUP. Noi ro la BO QUA, khong
+        # de no im lang thanh mot phan "dat".
+        canh.append(
+            "KHONG doc log: thieu PIPELINE hoac LOG_GROUP.\n"
+            "       Phan nay bi BO QUA - khong phai 'lan chay khong co canh bao'."
+        )
+    else:
+        canh.append(
+            "KHONG doc duoc log cua lan chay.\n"
+            f"       {e}\n"
+            "       Day KHONG phai 'khong co canh bao nao'. Thieu quyen thi them\n"
+            "       logs:FilterLogEvents cho role CodeBuild."
+        )
+else:
+    su_kien = [
+        x for x in (d.get("events") or [])
+        if x.get("logStreamName") != STREAM_TOI
+    ]
+    thay = {}
+    for x in su_kien:
+        t = (x.get("message") or "").strip()
+        if any(b in t for b in BIET_ROI):
+            continue
+        for mau in DANG_TIM:
+            if mau in t:
+                thay.setdefault(mau, []).append(t[:160])
+                break
+
+    print(f"    {len(su_kien)} dong log (da tru stream cua chinh buoc nay)")
+    if not su_kien:
+        canh.append(
+            "log group doc duoc nhung RONG trong 40 phut qua.\n"
+            "       Doc duoc va rong la mot cau tra loi hop le - nhung o day no\n"
+            "       kho tin: buoc verify nay chay SAU cac stage apply, nen log cua\n"
+            "       chung phai con. Kiem lai ten log group va region."
+        )
+    elif not thay:
+        print("    Khong co canh bao nao ngoai nhung dong biet roi cua -target.")
+    else:
+        for mau, ds in sorted(thay.items(), key=lambda kv: -len(kv[1])):
+            print(f"    {VANG}{mau}{HET}  {len(ds)} dong")
+            for t in ds[:3]:
+                print(f"      {t}")
+            if len(ds) > 3:
+                print(f"      ... con {len(ds) - 3} dong nua")
+        nang = [m for m in thay if m in ("Error:", "error occurred", "AccessDenied")]
+        if nang:
+            loi.append(
+                f"log cua lan chay co dong bao LOI ({', '.join(nang)}) du stage van xanh. "
+                "Doc log truoc khi tin ket qua."
+            )
+        else:
+            canh.append(
+                f"log cua lan chay co {sum(len(v) for v in thay.values())} dong canh bao "
+                f"({', '.join(sorted(thay))}). Stage xanh khong co nghia la khong co gi."
+            )
 
 ####################################
 print()
@@ -571,7 +655,7 @@ for l in loi:
     print(f"  {DO}LOI{HET}  {l}")
 
 print()
-print(f"  Da kiem: {', '.join(chay)}   nhom: {', '.join(NHOM)}")
+print("  Da kiem: cay OU, SCP, tag policy, log lan chay.")
 if loi:
     print(f"  {DO}{len(loi)} loi{HET}, {len(canh)} canh bao.")
     sys.exit(1)

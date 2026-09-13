@@ -474,43 +474,67 @@ variable "stages" {
                    trong hai - xem check "moi_stage_co_lint".
     mo_ta          hien trong noi dung thu duyet. Viet cho nguoi phai
                    quyet dinh luc 2 gio sang.
-
-    -------------------------------------------------------------------
-    verify           lenh doc lai AWS SAU khi apply, trong thu muc layer.
-    khong_co_verify  ly do vi sao stage nay khong verify duoc. Phai co
-                     mot trong hai - xem check "moi_stage_co_verify".
-
-    HAI LOP NAY BAT HAI KHOANG TRONG KHAC NHAU:
-
-      lint    truoc khi Terraform cham vao AWS  -> "co nen lam khong"
-      verify  sau khi apply xong                -> "da lam duoc chua"
-
-    Cau thu hai khong co ai tra loi neu thieu verify, va cau tra loi mac
-    dinh se la mau xanh cua stage Apply - thu chi noi rang AWS tra ve 200.
-    Loi 121 va 126 deu la cai gia cua viec khong co lop nay.
-
-    PHAM VI: verify chay NGAY sau apply, nen chi dat duoc nhung phep do
-    co du lieu NGAY - policy gan vao dau, enforced_for co gi, OU nao ton
-    tai. Phep do TRE (bao cao tuan thu tag policy toi 48 gio, Config
-    compliance toi 1 gio) thuoc project DRIFT chay theo lich: dat chung o
-    day thi chung vinh vien in "chua co du lieu", va mot dong luon giong
-    nhau la mot dong khong ai doc nua.
-
-    DANH TINH: verify chay bang credential CUA CODEBUILD (account
-    management), KHONG assume nhu Plan/Apply. Stage can doc o account
-    khac phai khai khong_co_verify.
   EOT
   type = list(object({
-    key             = string
-    layer           = string
-    enabled         = bool
-    targets         = optional(list(string), [])
-    lint            = optional(string, "")
-    khong_co_lint   = optional(string, "")
-    verify          = optional(string, "")
-    khong_co_verify = optional(string, "")
-    mo_ta           = string
+    key           = string
+    layer         = string
+    enabled       = bool
+    targets       = optional(list(string), [])
+    lint          = optional(string, "")
+    khong_co_lint = optional(string, "")
+    mo_ta         = string
   }))
+}
+
+variable "verify" {
+  description = <<-EOT
+    Lenh doc lai AWS sau khi MOI stage da apply xong. Chay tu goc repo.
+
+    MOT lenh cho CA pipeline, khong phai mot lenh moi stage: cac stage cua
+    mot pipeline deu cham vao cung mot mien (organization, hay mang, hay
+    Identity Center), nen mot script doc lai mien do la du. Mot lenh moi
+    stage chi lam ba lan goi cung mot script.
+
+    -------------------------------------------------------------------
+    VI SAO CAN, KHI STAGE APPLY DA XANH
+
+    Apply xanh chi nghia la AWS tra ve 200. No khong noi policy gan vao
+    dau, hay no co CHAN gi khong.
+
+      loi 121  moi apply xanh trong ba thang deu la no-op, nen "pipeline
+               chay on" chua bao gio co nghia la "apply duoc"
+      loi 126  mot SCP go sai ten action van apply thanh cong, van nam
+               trong policy, va chan dung 0 thu
+
+    Va mot khoang trong nua ma khong lop nao doc: CANH BAO. Mot check
+    block cua Terraform that bai, mot dong "Objects have changed outside
+    of Terraform", mot canh bao cua -target - tat ca deu di qua ma stage
+    van xanh. Script verify nen doc lai log cua chinh lan chay do.
+
+    -------------------------------------------------------------------
+    DANH TINH: CUA CODEBUILD, O ACCOUNT MANAGEMENT
+
+    Khac Plan/Apply - chung truyen ASSUME_ROLE_ARN cho provider Terraform.
+    O buoc nay khong co provider nao; script goi AWS CLI truc tiep.
+
+    Pipeline can doc o account KHAC phai de trong va khai khong_co_verify.
+
+    RONG LA HOP LE, nhung phai NOI RO bang var.khong_co_verify.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "khong_co_verify" {
+  description = <<-EOT
+    Ly do vi sao pipeline nay khong co buoc verify.
+
+    Cung khuon voi khong_co_catalog: mot truong bo trong doc giong het mot
+    truong bi quen, va cai thu hai la mot pipeline apply xong ma khong ai
+    hoi lai AWS xem no co tac dung khong.
+  EOT
+  type        = string
+  default     = ""
 }
 
 variable "catalogs" {

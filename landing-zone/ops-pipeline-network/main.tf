@@ -46,8 +46,6 @@ locals {
 
       khong_co_lint = "network/ops khong co catalog - phep kiem y nghia la gate.py; xoa mot alarm hay mot rule group la NOI"
 
-      khong_co_verify = "ha tang mang song o ACCOUNT MANG, khong o management. Buoc verify chay bang danh tinh CodeBuild o management nen no khong nhin thay gi - va \"khong nhin thay\" se thanh \"khong co\". Can co che assume cho buoc verify truoc da."
-
       # Provider cua layer tu assume role nay. Buildspec export
       # TF_VAR_assume_role_arn; tfvars KHONG mang gia tri nay, vi tfvars
       # dung chung voi nguoi chay tay (ho dung var.aws_profile).
@@ -74,8 +72,6 @@ locals {
       ]
 
       khong_co_lint = "luat tuong lua khai trong HCL, chua co catalog - phep kiem y nghia la gate.py, muc aws_networkfirewall_rule_group va aws_vpc_security_group_ingress_rule"
-
-      khong_co_verify = "cung ly do stage tren: tuong lua o account mang, buoc verify o management. Va phep do dung cho mot rule tuong lua la mot goi tin bi CHAN - thu khong lam duoc bang mot lenh doc."
 
       assume_role_arn = var.network_deploy_role_arn
 
@@ -242,6 +238,8 @@ module "pipeline" {
   state_chi_doc    = local.state_chi_doc
   quyen_dich_vu    = local.quyen_dich_vu
   tu_choi_dich_vu  = local.tu_choi_dich_vu
+
+  khong_co_verify = "ha tang mang song o ACCOUNT MANG. Buoc verify chay bang danh tinh CodeBuild o management nen no khong nhin thay gi - va \"khong nhin thay\" se thanh \"khong co\". Can co che assume cho buoc verify truoc da."
 
   source_type       = var.source_type
   repository_name   = var.repository_name

@@ -203,12 +203,12 @@ resource "aws_codebuild_project" "catalog" {
 }
 
 ########################################
-# VERIFY - DOC LAI AWS SAU KHI APPLY
+# VERIFY - DOC LAI AWS SAU KHI MOI STAGE DA APPLY
 #
 # Tach khoi project terraform vi no khac o ba dieu, va ca ba deu quan
 # trong:
 #
-#   KHONG cai Terraform    nhanh hon ~15 giay moi lan chay
+#   KHONG cai Terraform    nhanh hon ~15 giay
 #   KHONG doc state        no hoi AWS, khong hoi Terraform
 #   KHONG keo tfvars       khong can biet cau hinh mong doi la gi
 #
@@ -217,15 +217,14 @@ resource "aws_codebuild_project" "catalog" {
 # ca hai deu la truong hop state noi "xong" trong khi AWS chua co tac
 # dung gi.
 #
-# Nen no cung KHONG duoc nhan ASSUME_ROLE_ARN: script goi AWS CLI bang
-# danh tinh cua CodeBuild, o account management. Mot stage can doc o
-# account khac phai khai khong_co_verify - xem check "moi_stage_co_verify".
+# Va no KHONG nhan ASSUME_ROLE_ARN: script goi AWS CLI bang danh tinh cua
+# CodeBuild, o account management.
 ########################################
 
 resource "aws_codebuild_project" "verify" {
-  # KHONG tao khi khong stage nao co verify. Mot project ton tai ma
-  # khong action nao goi la mot thu nguoi doc se tuong dang chay.
-  count = local.enabled && local.co_verify ? 1 : 0
+  # KHONG tao khi khong co lenh verify. Mot project ton tai ma khong
+  # action nao goi la mot thu nguoi doc se tuong dang chay.
+  count = local.enabled && var.verify != "" ? 1 : 0
 
   name          = "${local.name}-verify"
   description   = "Doc lai AWS sau khi apply. Khong cai Terraform, khong doc state."
@@ -239,15 +238,21 @@ resource "aws_codebuild_project" "verify" {
     image        = "aws/codebuild/amazonlinux2-x86_64-standard:5.0"
     type         = "LINUX_CONTAINER"
 
-    # Gia tri MAC DINH. Moi action verify de len nhung cai no can -
-    # xem pipeline.tf.
-    environment_variable {
-      name  = "LAYER_DIR"
-      value = "chua-dat"
-    }
     environment_variable {
       name  = "VERIFY_CMD"
-      value = ""
+      value = var.verify
+    }
+
+    # Ten pipeline de script doc lai log cua CHINH lan chay nay. Truyen
+    # vao chu khong doan tu CODEBUILD_INITIATOR: chuoi do co dang
+    # "codepipeline/<ten>" va viec cat no ra la mot cho de sai im lang.
+    environment_variable {
+      name  = "PIPELINE"
+      value = local.name
+    }
+    environment_variable {
+      name  = "LOG_GROUP"
+      value = "/aws/codebuild/${local.name}"
     }
   }
 
