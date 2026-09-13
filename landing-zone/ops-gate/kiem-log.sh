@@ -382,39 +382,51 @@ def chi_tiet(i):
 # INSUFFICIENT_DATA la dieu can biet; van ban noi VE trang thai do thi
 # khong.
 #
-# Nen phan biet bang HINH DANG, nhu la_ma_nguon(): hai khoi van ban duoi
-# day khong bao gio chua ket qua that.
+# Nen phan biet bang HINH DANG, nhu la_ma_nguon(): noi dung HEREDOC
+# (`x = <<EOT ... EOT`, hoac `+ x = <<-EOT ... EOT` trong ban plan) khong
+# bao gio chua ket qua that. Ca bon dong gia deu nam trong dung mot khoi
+# nhu vay.
 #
-#   `Outputs:`     Terraform in dong nay MOT MINH roi liet ke output.
-#                  Canh bao/loi cua Terraform in TRUOC do, khong bao gio
-#                  sau - nen bo het phan con lai cua stream la an toan.
-#   `<<-EOT`       noi dung heredoc trong ban plan (`+ x = <<-EOT ... EOT`).
+# =======================================================================
+# VA MOT CACH LOC DA THU ROI BO: "bo het phan sau `Outputs:`"
 #
-# So SANH BANG o `Outputs:` chu khong `startswith`: chuoi do co the xuat
-# hien trong mot dong chu thich cua buildspec ma CodeBuild echo ra, va luc
-# do bo het phan con lai cua stream se lam MAT canh bao that.
+# Ban dau cho nay con bo moi dong sau khi gap `Outputs:`, voi ly do
+# "canh bao cua Terraform in TRUOC output, khong bao gio sau". Ly do do
+# SAI, va no lam MAT mot canh bao that ngay lan chay sau:
+#
+#   2385: Outputs:                               <- bat o day
+#   2449: next_steps = <<EOT
+#   2490: EOT
+#   2839: │ Warning: Check block assertion failed <- va nuot mat dong nay
+#   2853: Outputs:
+#
+# buildspec chay HAI lenh apply trong cung mot build (`apply tfplan` roi
+# `apply -refresh-only`), nen `Outputs:` xuat hien GIUA stream chu khong
+# o cuoi. Mot canh bao sinh ra giua hai lan apply nam sau khoi output
+# thu nhat.
+#
+# Hai dieu dang giu lai tu lan do:
+#
+#   1. Loc theo heredoc MOT MINH la du - ca bon dong gia deu nam trong
+#      heredoc. Khoi `Outputs:` khong bat them gi, chi bo bot.
+#   2. Cach phat hien ra: SO SANH CON SO. Bao cao sau khi sua ra "0 canh
+#      bao" tren dung 1711 dong log nhu luot truoc, trong khi luot truoc
+#      ra 2 - va mot trong hai la phat hien that. Neu chi doc mau xanh
+#      thi mot lop kiem vua bi lam im se di qua nhu mot thanh cong.
 #
 # Trang thai phai reset theo STREAM: su_kien noi cac stream duoi nhau.
 ####################################
 thay = {}
 stream_truoc = None
-trong_output = False
 trong_heredoc = False
 
 for i, x in enumerate(su_kien):
     st = x.get("logStreamName")
     if st != stream_truoc:
         stream_truoc = st
-        trong_output = False
         trong_heredoc = False
 
     t = sach(x.get("message") or "").strip()
-
-    if trong_output:
-        continue
-    if t == "Outputs:":
-        trong_output = True
-        continue
 
     if trong_heredoc:
         if t in ("EOT", "EOT,"):

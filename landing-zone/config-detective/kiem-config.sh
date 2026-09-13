@@ -200,6 +200,8 @@ else:
             "          - rule da bi xoa het"
         )
 
+ngoai_le_theo_tap = {}
+
 for r in sorted(rules, key=lambda x: x["OrganizationConfigRuleName"]):
     ten = r["OrganizationConfigRuleName"]
     md = r.get("OrganizationManagedRuleMetadata") or {}
@@ -216,10 +218,27 @@ for r in sorted(rules, key=lambda x: x["OrganizationConfigRuleName"]):
                 trang_thai.get(s.get("MemberAccountRuleStatus", "?"), 0) + 1
             )
 
+    ####################################
+    # RuleIdentifier, KHONG PHAI SourceIdentifier
+    #
+    # Lan chay that dau tien in "?" o ca 10 rule. Nguyen nhan: khoa cua API
+    # la RuleIdentifier, con SourceIdentifier la ten truong o phia
+    # Terraform (va o describe-config-rules, tuc rule TUNG ACCOUNT).
+    #
+    # Va cai "?" do khong lam gi do het - no chi la mot dau hoi in ra muoi
+    # lan. Dung lop loi ghi day trong repo nay: mot phep doc that bai tra
+    # ve rong, va rong duoc doc thanh cau tra loi. Nen giu ca hai khoa va
+    # noi RO khi khong doc duoc, thay vi in mot ky tu.
+    ####################################
+    ma_rule = md.get("RuleIdentifier") or md.get("SourceIdentifier") or ""
+    if not ma_rule:
+        ma_rule = "KHONG DOC DUOC RuleIdentifier - xem OrganizationManagedRuleMetadata"
+
+    so_gan = sum(trang_thai.values())
     tom = ", ".join(f"{k}={v}" for k, v in sorted(trang_thai.items())) or "khong co so lieu"
     print(f"    {ten}")
-    print(f"        {md.get('SourceIdentifier', '?')}")
-    print(f"        {len(ngoai_le)} excluded, {tom}")
+    print(f"        {ma_rule}")
+    print(f"        {so_gan} duoc kiem, {len(ngoai_le)} loai tru  |  {tom}")
 
     ####################################
     # 2. ExcludedAccounts - TAP LON LEN LA NOI LONG
@@ -233,15 +252,20 @@ for r in sorted(rules, key=lambda x: x["OrganizationConfigRuleName"]):
     # CANH BAO chu khong LOI: mot ngoai le co the la co y va da duyet.
     # Cai sai la ngoai le KHONG AI BIET.
     ####################################
+    ####################################
+    # GOM THEO TAP LOAI TRU, KHONG BAO MOI RULE MOT LAN
+    #
+    # Lan chay that dau tien in MUOI doan y het nhau - ca 10 rule cung loai
+    # tru dung 7 account do. Muoi doan trung khit la cach nhanh nhat lam
+    # nguoi ta thoi doc ca phan nay, tuc lop kiem tu vo hieu hoa. Cung ly
+    # do BIET_ROI ton tai trong kiem-log.sh.
+    #
+    # Va gom lai con noi duoc mot dieu ma bao rieng tung rule khong noi
+    # duoc: "CUNG MOT tap 7 account thoat khoi CA 10 rule" la mot cau ve
+    # chinh sach, con "rule X loai tru 7 account" mười lần thì không.
+    ####################################
     if ngoai_le:
-        canh.append(
-            f"rule {ten} dang loai tru {len(ngoai_le)} account: {', '.join(ngoai_le)}.\n"
-            "        Moi account o day THOAT khoi phep kiem, va thoat trong im lang -\n"
-            "        rule van 'dang bat' va console van hien xanh. gate.py canh viec\n"
-            "        nay khi no di qua ban plan, nhung mot lan them bang tay o console\n"
-            "        thi khong co ban plan nao de doc. Doi chieu voi excluded_accounts\n"
-            "        trong tfvars: lech nghia la co nguoi sua ngoai Terraform."
-        )
+        ngoai_le_theo_tap.setdefault(tuple(sorted(ngoai_le)), []).append(ten)
 
     ####################################
     # 3. TRIEN KHAI - KHAC TUAN THU, VA KHONG THEO LICH
@@ -270,6 +294,29 @@ for r in sorted(rules, key=lambda x: x["OrganizationConfigRuleName"]):
             "        Chua that bai, nhung cung chua xong - chay lai phep kiem nay sau\n"
             "        vai phut de biet ket qua."
         )
+
+####################################
+# MOT CANH BAO CHO MOI TAP LOAI TRU
+#
+# Lan chay that dau tien cho ra MUOI doan y het nhau. Gom lai con noi duoc
+# mot dieu ma bao rieng tung rule khong noi duoc: cung MOT tap account
+# thoat khoi CA danh sach rule la mot cau ve chinh sach, khong phai mot su
+# co cua tung rule.
+####################################
+for tap, ten_rule in sorted(ngoai_le_theo_tap.items(), key=lambda kv: -len(kv[1])):
+    chung = "CA %d rule" % len(ten_rule) if len(ten_rule) == len(rules) else "%d rule" % len(ten_rule)
+    canh.append(
+        f"{chung} dang loai tru cung MOT tap {len(tap)} account:\n"
+        f"          {', '.join(tap)}\n"
+        f"        Rule: {', '.join(ten_rule)}\n"
+        "        Moi account o day THOAT khoi phep kiem, va thoat trong im lang -\n"
+        "        rule van 'dang bat' va console van hien xanh. gate.py canh viec nay\n"
+        "        khi no di qua ban plan, nhung mot lan them bang tay o console thi\n"
+        "        khong co ban plan nao de doc.\n"
+        "        DOI CHIEU voi excluded_accounts trong tfvars cua config-detective:\n"
+        "          grep -A 20 excluded_accounts ../config-detective/terraform.tfvars\n"
+        "        Lech nghia la co nguoi sua ngoai Terraform."
+    )
 
 ####################################
 # CAI KHONG KIEM - NOI RO
