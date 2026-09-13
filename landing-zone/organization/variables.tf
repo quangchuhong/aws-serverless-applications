@@ -94,6 +94,34 @@ variable "aws_service_access_principals" {
     "ram.amazonaws.com",                                 # share TGW cross-account
     "member.org.stacksets.cloudformation.amazonaws.com", # StackSet auto-deploy
     "backup.amazonaws.com",
+
+    ####################################
+    # BAO CAO TUAN THU TAG POLICY - KHONG PHAI BAN THAN TAG POLICY
+    #
+    # Tag policy TAO va GAN duoc ma khong can dong nay: CreatePolicy va
+    # AttachPolicy chi doi TAG_POLICY duoc bat tren root. Nen `terraform
+    # output tag_policy` in enabled = true, policy_id co that, gan vao
+    # ROOT - moi thu doc nhu da xong.
+    #
+    # Thieu dong nay thi thu KHONG hoat dong la BAO CAO TUAN THU:
+    #
+    #   ConstraintViolationException: Access to tag policies is not
+    #   enabled. To enable it, run the AWS Organizations
+    #   EnableAWSServiceAccess action and specify
+    #   tagpolicies.tag.amazonaws.com
+    #
+    # Va bao cao tuan thu la ly do CHINH de bat tag policy o nhip mot:
+    # no la thu cho biet AI dang gan tag sai, truoc khi viec gan sai bat
+    # dau bi tu choi giua mot lan apply cua nguoi khac.
+    #
+    # Nen thieu dong nay = tag policy ton tai, khong chan gi (nhip 1), va
+    # cung khong bao cao gi. Tuc no khong lam gi ca, trong khi moi phep
+    # kiem deu xanh.
+    #
+    # Do la buoc Verify cua pipeline tim ra, khong phai plan hay apply -
+    # ca hai deu khong bao gio goi GetComplianceSummary.
+    ####################################
+    "tagpolicies.tag.amazonaws.com",
   ]
 }
 

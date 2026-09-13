@@ -229,27 +229,86 @@ PY
     --region "$REGION" --output json > "$D/quet.json" 2>"$D/quet.err"
 
   ####################################
-  # LOG CUA CHINH LAN CHAY NAY
+  # LOG CUA CHINH LAN CHAY NAY - LOC THEO EXECUTION, KHONG THEO THOI GIAN
   #
   # Khoang trong ma khong lop nao doc: CANH BAO. Mot check block cua
   # Terraform that bai, mot dong "Objects have changed outside of
-  # Terraform", mot canh bao cua -target - tat ca di qua ma stage van
-  # XANH. Khong ai mo log cua mot build mau xanh.
+  # Terraform" - tat ca di qua ma stage van XANH, va khong ai mo log cua
+  # mot build mau xanh.
   #
-  # Quet theo THOI GIAN chu khong theo execution id: mot lenh
-  # FilterLogEvents tren log group, tu 40 phut truoc. Khong can goi
-  # codepipeline, khong can ghep action voi build.
+  # ------------------------------------------------------------------
+  # VI SAO KHONG QUET THEO THOI GIAN
   #
-  # 40 phut: dai hon mot luot pipeline (do duoc ~15 phut cho ba stage) va
-  # ngan hon khoang giua hai luot. Qua ngan thi bo sot stage dau; qua dai
-  # thi keo canh bao cua luot TRUOC vao luot nay.
+  # Ban dau khoi nay quet ca log group trong 40 phut. No do duoc mot lan
+  # va SAI ngay lan do: no bat `Error: Saved plan is stale` cua mot lan
+  # chay TRUOC (lan bi superseded) roi bao LOI cho mot luot ma ca tam
+  # stage deu xanh.
+  #
+  # Chinh chu thich cu da noi truoc dieu do - "qua dai thi keo canh bao
+  # cua luot TRUOC vao luot nay" - va toi van chon 40 phut. Mot canh bao
+  # viet ra khong chay duoc.
+  #
+  # Cach chua khong phai rut ngan cua so: mot luot pipeline dai ~15 phut,
+  # nen khong co con so nao vua ca. La loc theo EXECUTION.
+  #
+  # ------------------------------------------------------------------
+  # LAY DUNG EXECUTION DANG CHAY
+  #
+  # Buoc Verify nam TRONG execution do, nen execution MOI NHAT chinh la
+  # no. Tu day lay danh sach action, moi action co externalExecutionId
+  # dang "<project>:<build-uuid>", va build-uuid CHINH LA ten log stream.
+  #
+  # Nen phep quet chi doc dung nhung stream cua luot nay - khong the keo
+  # canh bao cua luot truoc vao, bat ke chung cach nhau bao lau.
   ####################################
-  if [[ -n "$LOG_GROUP" ]]; then
-    TU=$(( ($(date +%s) - 40 * 60) * 1000 ))
-    aws logs filter-log-events \
-      --log-group-name "$LOG_GROUP" \
-      --start-time "$TU" \
-      --region "$REGION" --output json > "$D/log.json" 2>"$D/log.err"
+  if [[ -n "$PIPELINE" && -n "$LOG_GROUP" ]]; then
+    aws codepipeline list-pipeline-executions --pipeline-name "$PIPELINE" \
+      --max-items 1 --region "$REGION" --output json > "$D/exec.json" 2>"$D/exec.err"
+
+    EX=$(python3 - "$D/exec.json" <<'PY2'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+s = d.get("pipelineExecutionSummaries") or []
+print(s[0]["pipelineExecutionId"] if s else "")
+PY2
+    )
+
+    if [[ -n "$EX" ]]; then
+      echo "Execution           : $EX"
+      aws codepipeline list-action-executions --pipeline-name "$PIPELINE" \
+        --filter "pipelineExecutionId=$EX" --region "$REGION" --output json \
+        > "$D/action.json" 2>"$D/action.err"
+
+      ####################################
+      # MOT STREAM MOT LENH, KHONG DUNG filter-log-events
+      #
+      # filter-log-events co --log-stream-names, nhung khi mot stream
+      # khong ton tai thi no tra ve loi cho CA lenh - va mot build bi
+      # superseded truoc khi chay se khong co stream nao. Nen doc tung
+      # stream: mot cai thieu chi lam mat cai do, khong lam mat ca phep
+      # quet.
+      ####################################
+      : > "$D/log.jsonl"
+      for ST in $(python3 - "$D/action.json" <<'PY2'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+for a in d.get("actionExecutionDetails", []):
+    eid = (a.get("output") or {}).get("executionResult", {}).get("externalExecutionId", "")
+    if ":" in eid:
+        print(eid.split(":", 1)[1])
+PY2
+      ); do
+        aws logs get-log-events --log-group-name "$LOG_GROUP" \
+          --log-stream-name "$ST" --region "$REGION" --output json \
+          >> "$D/log.jsonl" 2>>"$D/log.err" || true
+      done
+    fi
   fi
 fi
 
@@ -587,7 +646,41 @@ DANG_TIM = (
     "INSUFFICIENT_DATA",
 )
 
-d, e = doc("log.json")
+####################################
+# DOC log.jsonl - MOT DOI TUONG JSON MOI DONG
+#
+# Moi stream mot lan goi get-log-events, moi lan noi them mot doi tuong
+# vao file. Nen day KHONG phai mot file JSON hop le - phai doc tung khoi.
+#
+# Va `aws` in JSON nhieu dong, nen khong tach duoc bang splitlines():
+# dung raw_decode va nhay theo vi tri ket thuc.
+####################################
+def doc_log():
+    p = os.path.join(D, "log.jsonl")
+    err = ""
+    pe = os.path.join(D, "log.err")
+    if os.path.exists(pe):
+        err = open(pe).read().strip()
+    if not os.path.exists(p) or os.path.getsize(p) == 0:
+        return None, err or "khong co file log.jsonl"
+    t = open(p).read()
+    de = json.JSONDecoder()
+    ra, i = [], 0
+    while i < len(t):
+        while i < len(t) and t[i].isspace():
+            i += 1
+        if i >= len(t):
+            break
+        try:
+            o, j = de.raw_decode(t, i)
+        except Exception as ex:
+            return None, err or f"log.jsonl hong o byte {i}: {ex}"
+        ra += o.get("events") or []
+        i = j
+    return {"events": ra}, err
+
+
+d, e = doc_log()
 if d is None:
     if not e or "khong co file" in e:
         # Khong goi = khong co PIPELINE/LOG_GROUP. Noi ro la BO QUA, khong
@@ -604,6 +697,16 @@ if d is None:
             "       logs:FilterLogEvents cho role CodeBuild."
         )
 else:
+    ####################################
+    # KHONG CAN TRU STREAM CUA CHINH MINH NUA
+    #
+    # Loc theo execution chi lay stream cua nhung action DA CO ket qua.
+    # Buoc Verify dang chay thi chua co externalExecutionId, nen stream
+    # cua no khong nam trong danh sach.
+    #
+    # GIU phep tru: neu mot ngay CodePipeline bao cao action dang chay kem
+    # id, thi khong tru se lam script bat "CANH BAO" do chinh no in.
+    ####################################
     su_kien = [
         x for x in (d.get("events") or [])
         if x.get("logStreamName") != STREAM_TOI
@@ -621,9 +724,9 @@ else:
     print(f"    {len(su_kien)} dong log (da tru stream cua chinh buoc nay)")
     if not su_kien:
         canh.append(
-            "log group doc duoc nhung RONG trong 40 phut qua.\n"
+            "doc duoc stream cua execution nhung KHONG co dong log nao.\n"
             "       Doc duoc va rong la mot cau tra loi hop le - nhung o day no\n"
-            "       kho tin: buoc verify nay chay SAU cac stage apply, nen log cua\n"
+            "       kho tin: buoc verify chay SAU cac stage apply, nen log cua\n"
             "       chung phai con. Kiem lai ten log group va region."
         )
     elif not thay:

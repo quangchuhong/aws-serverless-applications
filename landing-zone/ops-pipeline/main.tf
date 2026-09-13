@@ -213,7 +213,17 @@ locals {
       Action = [
         "tag:GetComplianceSummary",
         "tag:GetResources",
-        "logs:FilterLogEvents",
+
+        # Doc log cua CHINH lan chay nay, khong phai theo cua so thoi
+        # gian: lay execution moi nhat (buoc Verify nam trong no), roi
+        # tu danh sach action lay build-uuid - chinh la ten log stream.
+        #
+        # Quet theo thoi gian da SAI mot lan: no bat
+        # "Error: Saved plan is stale" cua mot luot truoc roi bao LOI cho
+        # mot luot ma ca tam stage deu xanh.
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
         "logs:DescribeLogStreams",
       ]
       Resource = "*"
