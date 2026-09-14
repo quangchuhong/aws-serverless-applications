@@ -19,7 +19,8 @@ Code: [`modules/tf-pipeline/`](../modules/tf-pipeline/) (module dùng chung), [`
 | **Cổng chặn** | `gate.py` — 37 loại resource có luật chiều NỚI/THẮT, 8 stage trong bảng phạm vi |
 | **Verify** | 5 script đọc **AWS**, không đọc state; dùng chung `kiem-log.sh` |
 | **Bộ kiểm offline** | `kiem-module.py` 18 phép kiểm · `test-gate.py` 43 test · `test-loc.py` 39 test |
-| **Chưa** | Đường báo drift chưa ai đi thử thật · firewall còn `alert` · `tu_kich_hoat = true` ở ops-network |
+| **Đã chứng minh** | Đường drift → SNS → email **chạy thật** — thư tới hộp `alert_emails` của `config-detective` |
+| **Chưa** | Job drift **không kiểm được `network/ops`** (thiếu assume role — mục 7.11) · firewall còn `alert` · `tu_kich_hoat = true` ở ops-network |
 
 Các lỗi gặp khi dựng lớp này ghi ở [doc 22](./22-Nhat-ky-Trien-khai-LZ-DIY.md). Mục 8.4 dưới đây tóm bảy cái đắt nhất, vì chúng nói về **cách đọc** chứ không chỉ về một dòng code.
 
@@ -744,9 +745,33 @@ if aws sns publish ...; then echo "Da bao ve ..."
 else echo "CANH BAO: khong bao duoc ve SNS - xem quyen sns:Publish"; fi
 ```
 
-`else` không làm build đỏ. Ghép với 7.5 — nhánh publish chỉ chạy khi *có* phát hiện — kết quả là: **đường báo động của cả năm pipeline chưa từng được đi thử**, vì hệ thống đang sạch. Khai báo đã thông (5 role trong `AllowCrossAccountPublish`); chạy thật thì chưa.
+`else` không làm build đỏ. Ghép với 7.5 — nhánh publish chỉ chạy khi *có* phát hiện — nên trên một hệ thống sạch, nhánh này **không thể** được đi thử.
 
-Muốn kiểm chứng thì phải tạo một drift thật, nhỏ, đảo ngược được, rồi chạy tay job drift và đọc xem log in `Da bao ve` hay `CANH BAO`.
+**Đã chứng minh là thông.** Một lần chạy tay `qh11-lz-ops-network-drift` gặp `plan hong` (mục 7.11) → `SO_HONG = 1` → publish → thư tới. Cách nhận biết thư đến thật chứ không phải đọc log: dòng đầu
+
+```
+Buoc phat hien drift cua ops-pipeline vua chay.
+```
+
+chỉ tồn tại trong `$THU` — thân email — **không** có trong log CodeBuild. Kết quả này đúng cho **cả năm pipeline**, vì cùng một topic và cùng một resource policy.
+
+Thư vào hộp `alert_emails` của `config-detective`, **không** phải địa chỉ trong `drift_emails` — cùng hộp với finding của Security Hub, phân biệt bằng tiêu đề `[LZ] drift: N layer doi, M khong kiem duoc`.
+
+### 7.11 Job drift KHÔNG kiểm được `network/ops` — và nó đã báo đúng như vậy
+
+Project drift có 7 biến môi trường: `TF_VERSION`, `STATE_BUCKET`, `STATE_REGION`, `STATE_LOCK_TABLE`, `TFVARS_BUCKET`, `DRIFT_TOPIC_ARN`, `LAYERS`.
+
+**Không có `ASSUME_ROLE_ARN`**, và `buildspec-drift.yml` không nhắc chữ `assume` một lần nào. Stage Plan có `export TF_VAR_assume_role_arn` (mục 2.3 bước 3); job drift thì không.
+
+`ops-pipeline-network` là caller **duy nhất** khai `assume_role_arn`. Resource của `network/ops` nằm ở account network, còn drift chạy bằng credential CodeBuild ở management với `var.assume_role_arn = ""` và `aws_profile = ""`. Provider đứng nguyên ở management và không thấy resource nào → `plan hong` → `SO_HONG = 1`.
+
+Nên **layer đổi hằng ngày là layer drift chưa bao giờ kiểm được**, mỗi đêm. Và nó đã báo đúng điều đó — `1 layer KHONG kiem duoc` — chỉ là không ai đọc dòng ấy theo nghĩa "drift chưa từng chạy được ở đây". Đây là lý do `SO_HONG` phải đếm riêng (mục 7.6), và là lần nó chứng minh giá trị của mình.
+
+**`catalog_guard` đã cứu một chuyện tệ hơn.** Không có precondition đối chiếu `data.aws_caller_identity.current.account_id` với `local.hub.account_id`, plan có thể *thành công* ở management, không tìm thấy resource nào, rồi báo ~16 resource `to be created` → `SO_DRIFT = 1` → một email nói **có drift thật** cho một layer hoàn toàn bình thường. Buildspec đã phòng đúng kiểu hỏng này cho **tfvars** (*"plan thiếu tfvars sẽ thành công và mô tả một tổ chức không có SCP"*) nhưng chưa phòng cho **danh tính**.
+
+**Cách sửa** (chưa làm): `LAYERS` mang ba trường `layer=key=role` — ARN không chứa `=` nên an toàn — buildspec `cut -d=` ba lần, `export TF_VAR_assume_role_arn` khi có và **`unset` khi không**. Thiếu `unset` thì role của layer này rò sang layer sau trong cùng vòng lặp. Quyền đã đủ: project drift dùng chung `aws_iam_role.codebuild` với stage, vốn có `sts:AssumeRole` sang role mạng.
+
+> **Sau khi destroy network, lỗi này biến mất khỏi tầm nhìn chứ không được sửa.** Chốt `state list = 0` chạy **trước** plan, nên báo cáo đổi thành `state rong`. Nó quay lại đúng lúc mạng được dựng lại.
 
 ---
 

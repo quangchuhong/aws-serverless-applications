@@ -165,12 +165,42 @@ Hai layer, không phải một. Bản trước của tài liệu này ghi cả b
 
 Và nó cũng đổ giữa đường theo chiều AWS: `aws_vpc_endpoint.ops` giữ một ENI trong subnet của spoke, `aws_route53profiles_resource_association.ops_endpoint` gắn vào Route53 Profile của cha. Cả hai chặn destroy của cha.
 
+**Nhưng có một cái móc ngược chiều phải tháo TRƯỚC, ở layer cha.** Policy của cha đang tham chiếu rule group của ops:
+
+```hcl
+# landing-zone/network/firewall.tf:142 — trong aws_networkfirewall_firewall_policy.main
+dynamic "stateful_rule_group_reference" {
+  for_each = var.ops_rule_group_arns
+  ...
+}
+```
+
+Network Firewall không cho xoá một rule group còn được policy nào đọc. Bỏ bước này thì destroy của ops treo ~10 phút rồi chết:
+
+```
+Error: deleting NetworkFirewall Rule Group (...): InvalidOperationException:
+Unable to delete the object because it is still in use
+```
+
+Thông báo đó **không nói ai** đang dùng, và cái đang dùng nằm ở một layer khác.
+
+Nên ba bước, không phải hai:
+
 ```bash
-cd landing-zone/network/ops
+# 1. thao reference o layer CHA - CHA CON SONG. -var thang tfvars, khong can sua file
+cd landing-zone/network
+terraform apply -var 'ops_rule_group_arns=[]'
+#    ky vong: dung 1 to change - aws_networkfirewall_firewall_policy.main
+#    nhieu hon the thi dung lai va doc
+
+# 2. gio ops moi xoa duoc
+cd ops
 terraform destroy
 ```
 
-Không cần gỡ cổng nào ở đây — `prevent_destroy` và `allow_destroy` thuộc layer cha. Chốt `precondition` của `terraform_data.catalog_guard` cũng không chặn: Terraform không kiểm precondition cho resource đang bị destroy.
+Lần destroy thất bại không làm mất state: rule group vẫn còn trong state của ops, nên chạy lại `terraform destroy` là đủ — không cần `import` gì.
+
+Không cần gỡ cổng nào ở ops — `prevent_destroy` và `allow_destroy` thuộc layer cha. Chốt `precondition` của `terraform_data.catalog_guard` cũng không chặn: Terraform không kiểm precondition cho resource đang bị destroy.
 
 Những gì còn tính tiền nếu bỏ sót bước này:
 
