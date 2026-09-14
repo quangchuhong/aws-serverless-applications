@@ -981,6 +981,103 @@ def kiem_danh_sach_email():
     return loi
 
 
+def bo_chu_thich(s):
+    return "\n".join(x for x in s.splitlines() if not x.lstrip().startswith("#"))
+
+
+def kiem_guard_trong_targets():
+    """18. Layer co terraform_data mang `precondition` thi MOI stage co
+    `targets` phai target no.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VA NO TAT TOAN BO CHOT AN TOAN CUA MOT LAYER
+
+    landing-zone/network/ops dat 31 `precondition` vao
+    terraform_data.catalog_guard: dung account khong, rule co tro toi app
+    that khong, cidr co nam trong spoke khong. Manh hon check block, vi
+    precondition lam plan CHET thay vi canh bao.
+
+    Nhung precondition chi duoc tinh khi resource NAM TRONG PLAN. Ca hai
+    stage cua ops-pipeline-network deu `-target`, va guard khong phai phu
+    thuoc cua resource nao - `-target` keo theo PHU THUOC, khong keo theo
+    cai phu thuoc vao no. Nen 31 chot do chi chay khi mot nguoi go
+    `terraform plan` day du bang tay, va KHONG chay tren duong tu dong -
+    dung con duong duy nhat apply ma khong co ai doc.
+
+    Phat hien bang bang chung: `input` cua guard van ghi rules = 5 trong
+    khi pipeline da day 7 dong luat vao AWS. Neu guard tung nam trong plan
+    cua lan apply do thi con so da doi.
+
+    Trieu chung thu hai: job drift chay `plan` KHONG `-target`, nen no bao
+    layer lech VINH VIEN cho mot thu khong ai sua duoc qua pipeline.
+
+    =====================================================================
+    NO DOI CHIEU GI
+
+    <layer>/*.tf:     resource "terraform_data" "X" co `precondition`
+    caller main.tf:   moi stage tro vao layer do, neu co `targets` khong
+                      rong, phai co "terraform_data.X" trong do
+
+    Stage KHONG co targets thi apply ca layer - guard vao plan san, khong
+    can khai.
+    """
+    loi = []
+    for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/ops-pipeline*"))):
+        f = os.path.join(d, "main.tf")
+        if not os.path.isfile(f):
+            continue
+        # Bo chu thich TRUOC khi tim: chinh chu thich giai thich dong
+        # "terraform_data.catalog_guard" CO CHUA chuoi do, nen khong bo thi
+        # phep kiem nay tu di qua chinh no - dung cai bay phep kiem 14 da
+        # sa vao.
+        noi_dung = bo_chu_thich(open(f).read())
+
+        # Tach tung stage: tu mot `key = "..."` den `key` ke tiep.
+        vt = [m.start() for m in re.finditer(r'\bkey\s*=\s*"', noi_dung)]
+        for i, bd in enumerate(vt):
+            kt = vt[i + 1] if i + 1 < len(vt) else len(noi_dung)
+            khoi = noi_dung[bd:kt]
+            mk = re.search(r'key\s*=\s*"([^"]+)"', khoi)
+            ml = re.search(r'layer\s*=\s*"([^"]+)"', khoi)
+            if not mk or not ml:
+                continue
+            stage, layer = mk.group(1), ml.group(1)
+
+            mt = re.search(r"targets\s*=\s*\[(.*?)\]", khoi, re.S)
+            if not mt or not mt.group(1).strip():
+                continue  # khong gioi han pham vi - guard vao plan san
+            da_target = set(re.findall(r'"([^"]+)"', mt.group(1)))
+
+            for g in glob.glob(os.path.join(GOC, layer, "*.tf")):
+                than_file = bo_chu_thich(open(g).read())
+                for mg in re.finditer(
+                    r'resource\s+"terraform_data"\s+"([a-z_0-9]+)"\s*\{', than_file
+                ):
+                    ten = mg.group(1)
+                    j = mg.end()
+                    sau = 1
+                    while sau and j < len(than_file):
+                        if than_file[j] == "{":
+                            sau += 1
+                        elif than_file[j] == "}":
+                            sau -= 1
+                        j += 1
+                    if "precondition" not in than_file[mg.end():j]:
+                        continue
+                    dc = f"terraform_data.{ten}"
+                    if dc not in da_target:
+                        loi.append(
+                            f"{os.path.relpath(f, GOC)}: stage {stage!r} gioi han "
+                            f"`targets` nhung KHONG co {dc} - trong khi "
+                            f"{os.path.relpath(g, GOC)} dat precondition o do. "
+                            "precondition chi duoc tinh khi resource nam trong "
+                            "plan, nen stage nay chay MA KHONG co chot an toan "
+                            "nao. Kem mot trieu chung thu hai: job drift chay "
+                            "plan khong -target se bao layer lech vinh vien."
+                        )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -1103,6 +1200,10 @@ def main():
         l8 = kiem_danh_sach_email()
         print(f"  {'x' if l8 else 'v'} moi bien *_emails co validation")
         loi += l8
+
+        l9 = kiem_guard_trong_targets()
+        print(f"  {'x' if l9 else 'v'} stage co targets deu target chot an toan")
+        loi += l9
 
     print()
     if loi:

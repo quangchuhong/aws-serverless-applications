@@ -70,6 +70,28 @@ locals {
       enabled = var.enable_ou_stage
 
       targets = [
+        ####################################
+        # CHOT AN TOAN - PHAI CO TRONG MOI STAGE
+        #
+        # terraform_data.scp_guard (organization/scp.tf) mang hai
+        # `precondition`: mot SCP dang BAT ma khong gan duoc vao OU nao, va
+        # mot target khong giai duoc thanh OU ID. Chinh chu thich o do viet:
+        # "mot guardrail mo tren giay va khong ton tai trong thuc te, va moi
+        # thu khac deu bao rang no co".
+        #
+        # precondition chi duoc tinh khi resource NAM TRONG PLAN. Ba stage
+        # nay deu `-target`, va guard khong phai phu thuoc cua resource nao
+        # (`-target` keo theo PHU THUOC, khong keo theo cai phu thuoc vao
+        # no), nen truoc dong nay hai chot do KHONG chay tren duong tu dong
+        # - dung con duong apply ma khong ai doc ban plan.
+        #
+        # KHONG MO RONG BAN KINH: terraform_data la resource cuc bo cua
+        # Terraform, khong goi API AWS nao, khong can them quyen IAM nao.
+        #
+        # kiem-module.py phep kiem 18 giu dong nay o ca ba stage.
+        ####################################
+        "terraform_data.scp_guard",
+
         "aws_organizations_organizational_unit.level1",
         "aws_organizations_organizational_unit.level2",
       ]
@@ -103,6 +125,10 @@ locals {
       # DOC RONG va GHI HEP. Xem iam.tf.
       ####################################
       targets = [
+        # Xem chu thich o stage sec-ou. Moi stage la mot ban plan rieng,
+        # nen mot stage thieu dong nay la mot stage khong co chot nao.
+        "terraform_data.scp_guard",
+
         "aws_organizations_policy.scp",
         "aws_organizations_policy_attachment.scp",
       ]
@@ -143,6 +169,9 @@ locals {
       enabled = var.enable_tagging_stage
 
       targets = [
+        # Xem chu thich o stage sec-ou.
+        "terraform_data.scp_guard",
+
         "aws_organizations_policy.tag",
         "aws_organizations_policy_attachment.tag",
       ]

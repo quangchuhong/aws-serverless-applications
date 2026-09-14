@@ -29,6 +29,36 @@ locals {
       enabled = var.enable_network_stage
 
       targets = [
+        ####################################
+        # CHOT AN TOAN - PHAI CO TRONG MOI STAGE
+        #
+        # terraform_data.catalog_guard mang 31 `precondition` cua layer:
+        # dung account khong, rule co tro toi app that khong, cidr co nam
+        # trong spoke khong. Do la co che "apply KHONG duoc di tiep" - manh
+        # hon check block, vi precondition lam plan CHET.
+        #
+        # Nhung precondition chi duoc tinh khi resource NAM TRONG PLAN.
+        # `-target` cat bo phan con lai cua do thi, va guard khong phai
+        # phu thuoc cua resource nao (khong co depends_on nao tro tới no),
+        # nen truoc dong nay no KHONG bao gio vao plan cua pipeline: 31
+        # chot chi chay khi mot nguoi go `terraform plan` day du bang tay.
+        #
+        # Phat hien bang bang chung chu khong bang suy luan: `input` cua
+        # guard van ghi rules = 5 trong khi pipeline da day 7 dong luat vao
+        # AWS that. Neu guard tung nam trong plan cua lan apply do thi con
+        # so da doi.
+        #
+        # Va no con mot trieu chung thu hai: job drift chay `plan` KHONG
+        # `-target`, nen moi dem no bao layer nay lech - vinh vien, cho mot
+        # thu khong ai sua duoc qua pipeline. Mot canh bao luon keu thi
+        # chang may se khong ai doc.
+        #
+        # KHONG MO RONG BAN KINH: terraform_data la resource cuc bo cua
+        # Terraform, khong goi mot API AWS nao, khong can them mot quyen
+        # IAM nao. Dong nay chi keo 31 precondition vao plan.
+        ####################################
+        "terraform_data.catalog_guard",
+
         "aws_route53_record.ops",
         "aws_route53_record.ops_endpoint_apex",
         "aws_route53_record.ops_endpoint_wildcard",
@@ -67,6 +97,11 @@ locals {
       enabled = var.enable_firewall_stage
 
       targets = [
+        # Xem chu thich o stage cloudops-network. Guard phai co o CA HAI
+        # stage: moi stage la mot ban plan rieng, nen mot stage thieu no
+        # la mot stage khong co chot an toan nao.
+        "terraform_data.catalog_guard",
+
         "aws_networkfirewall_rule_group.ops_east_west",
         "aws_vpc_security_group_ingress_rule.partner_service",
       ]
