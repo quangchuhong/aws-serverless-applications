@@ -393,6 +393,7 @@ else:
 # Tap ARN ma cac firewall policy DANG doc toi.
 duoc_doc = set()
 ten_policy = {}
+mac_dinh_policy = {}
 for o in doc_nhieu("fp.jsonl"):
     fp = o.get("FirewallPolicy") or {}
     ten = (o.get("FirewallPolicyResponse") or {}).get("FirewallPolicyName", "?")
@@ -401,6 +402,8 @@ for o in doc_nhieu("fp.jsonl"):
         if a:
             duoc_doc.add(a)
             ten_policy.setdefault(a, []).append(ten)
+            # Hanh dong MAC DINH cua policy - xem khoi "CHE DO" ben duoi.
+            mac_dinh_policy[ten] = fp.get("StatefulDefaultActions") or []
 
 ####################################
 # 2. HAI ALARM - CO TON TAI, CO NGUOI NHAN, CO DUOC BAT
@@ -590,6 +593,46 @@ else:
         )
     else:
         print(f"    Duoc doc toi boi: {', '.join(ten_policy.get(arn_rg, []))}")
+
+        ####################################
+        # CHE DO: "DUOC DOC TOI" VAN CHUA LA "CHAN DUOC"
+        #
+        # Mot rule group duoc policy tham chieu day du, luat nap dung, ma
+        # hanh dong MAC DINH cua policy la alert thi khong luong nao bi
+        # chan: luat `pass` chi cho qua nhung thu da duoc cho qua, con thu
+        # khong khop rule cung di qua binh thuong. Firewall chi GHI LOG.
+        #
+        # Layer co san check "firewall_mode_makes_rules_meaningful" noi
+        # dung dieu nay. Nhung no doc local.hub.firewall.mode - mot gia tri
+        # tu STATE cua layer cha, tuc mot LOI KHAI. Doi
+        # StatefulDefaultActions o console thi check do van xanh trong khi
+        # tuong lua that hanh xu khac.
+        #
+        # Cung ly do phep kiem "duoc doc toi" ton tai du da co
+        # check "rule_group_is_referenced": check doc lo khai, verify doc
+        # AWS. Va cung ho voi loi 126 - "policy chua statement" khac
+        # "guardrail chan duoc".
+        #
+        # CANH BAO chu khong LOI: alert truoc drop la lo trinh co chu dich,
+        # va next_steps cua layer cha ghi ro "chuyen sang drop khi da doc
+        # du log UNMATCHED east-west".
+        ####################################
+        for p in ten_policy.get(arn_rg, []):
+            hd = mac_dinh_policy.get(p, [])
+            co_chan = any("drop" in x or "reject" in x for x in hd)
+            print(f"        {p}: mac dinh = {', '.join(hd) or 'khong khai'}")
+            if not co_chan:
+                canh.append(
+                    f"policy {p} tham chieu rule group nhung hanh dong MAC DINH khong co\n"
+                    f"        drop/reject ({', '.join(hd) or 'khong khai'}).\n"
+                    f"        Nen {so_luat if so_luat is not None else '?'} dong luat duoc nap ma KHONG chan gi:"
+                    " luat `pass` chi cho\n"
+                    "        qua thu da duoc cho qua, con thu khong khop rule cung di qua\n"
+                    "        binh thuong. Tuong lua dang GHI LOG, khong dang loc.\n"
+                    "        Day la trang thai dung khi con do duong - va no cung nghia la\n"
+                    "        chua kiem chung duoc rule nao that su can thiet. Chuyen sang\n"
+                    "        drop o LAYER CHA (var.firewall_mode) khi da doc du log UNMATCHED."
+                )
 
     for h in HAU_TO_ALARM:
         if h not in thay_alarm:
