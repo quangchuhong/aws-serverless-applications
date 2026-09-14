@@ -97,7 +97,7 @@ locals {
     l => var.layer_keys[l]
   }
 
-  next_steps = <<-EOT
+  next_steps_day_du = <<-EOT
 
     ═══════════ ${local.name} - SAU KHI APPLY ═══════════
 
@@ -144,6 +144,40 @@ locals {
     ═══════════════════════════════════════════════════
 
   EOT
+
+  ####################################
+  # KHI enable = false, BANG HUONG DAN TREN LA MOT LOI NOI
+  #
+  # `terraform apply` voi enable = false ra "0 added, 0 changed, 0
+  # destroyed" - khong resource nao duoc tao. Nhung next_steps van in
+  # nguyen bang "SAU KHI APPLY", bao nguoi doc di day tfvars, mirror code,
+  # va theo doi luot chay dau cua mot pipeline KHONG TON TAI.
+  #
+  # Da xay ra that o ops-pipeline-network: hai co enable_*_stage duoc bat
+  # nhung cong tac tong thi khong, va bang huong dan doc y het mot lan
+  # apply thanh cong. Cac output khac (pipeline_name, drift_project) deu
+  # null nen Terraform KHONG in chung ra - tuc dau hieu duy nhat cua viec
+  # "chua co gi" la mot su VANG MAT, thu ma khong ai doc.
+  ####################################
+  next_steps_chua_bat = <<-EOT
+
+    ═══════════ ${local.name} - CHUA DUOC TAO ═══════════
+
+    enable = false, nen KHONG resource nao duoc tao. Lan apply vua roi ra
+    "0 added, 0 changed, 0 destroyed" va do la ket qua dung.
+
+    Cac output pipeline_name, pipeline_console_url, drift_project deu null
+    nen Terraform khong in chung ra - dung dau hieu de nham mot lan apply
+    rong voi mot lan apply thanh cong.
+
+    DE BAT: dat `enable = true` trong terraform.tfvars roi apply lai.
+
+    Cac co enable_*_stage KHONG thay duoc cho cong tac nay: chung chon
+    stage nao chay TRONG pipeline, con `enable` quyet dinh pipeline co ton
+    tai hay khong.
+  EOT
+
+  next_steps = local.enabled ? local.next_steps_day_du : local.next_steps_chua_bat
 }
 
 ########################################
