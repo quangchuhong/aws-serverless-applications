@@ -22,7 +22,14 @@ Nửa 2 không phải "làm nốt cho đủ bộ". Sau giai đoạn 11 hạ tầ
 **Mỗi giai đoạn viết theo một khuôn:** *Mục tiêu → Điều kiện trước → Chạy → `☑ Xong khi`*. Dòng `☑ Xong khi` luôn là một **phép đo**, không phải một cảm giác — nếu nó không chạy được thành một lệnh thì nó chưa đủ tốt.
 
 **Thời gian**: ~2–3 giờ cho nửa 1, thêm ~1–2 giờ cho nửa 2. Phần lớn là chờ AWS.
-**Chi phí**: nửa 1 ~$0 tới giai đoạn 9 (`config-detective` đo được $0.29 một lần rồi ~$0/ngày). Giai đoạn 10 là **~$770/tháng** — xem cảnh báo dưới bản đồ. Nửa 2 gần như $0: CodeBuild tính theo phút chạy.
+**Chi phí** — tách **đo được** khỏi **tính ra**, vì hai thứ đó khác nhau một bậc:
+
+| | |
+|---|---|
+| **Đo từ hoá đơn** | Năm account của LZ cộng lại **$1.57** cho cả kỳ. Config $1.04 · pipeline + drift $0.69 · GuardDuty $0.27 · S3 $0.17 · Network Firewall **$0.0988** · CloudTrail tổ chức và Security Hub **$0.00** |
+| **Tính ra nếu chạy thường trú** | Giai đoạn 10 ở 2 AZ / 5 spoke ≈ **$1.020/tháng**, trong đó ~$577 là Network Firewall endpoint |
+
+`$0.0988` của tường lửa **không** nghĩa là nó rẻ — nghĩa là lớp mạng chưa bao giờ được để chạy: dựng, kiểm chứng 1–2 giờ, rồi xoá. Con số $1.020 là dự phóng từ đơn giá theo giờ, **không phải số trên hoá đơn**.
 
 ---
 
@@ -77,7 +84,11 @@ Giai đoạn **3, 4 và 12 là thủ công** — không có Terraform. Đừng t
 | 15 trước 14 | `ban_do` gọi tên pipeline chưa tồn tại → Lambda ném lỗi mỗi lần chạy |
 | 16 trước 15 | giữa hai lần apply **không có gì** kích hoạt pipeline nào |
 
-> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Chín giai đoạn đầu tốn ~$0/ngày; giai đoạn 10 tốn **~$770/tháng** ở 2 AZ, trong đó $570 là Network Firewall endpoint chạy 24/7 dù có gói tin hay không. Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dùng [`landing-zone/network`](../landing-zone/network/) — dựng, xem, xoá.
+> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Mười một giai đoạn kia đo được **$1.57 cả kỳ**; giai đoạn 10 nếu **để chạy thường trú** thì dự phóng ~**$1.020/tháng** ở 2 AZ và 5 spoke, trong đó ~$577 là Network Firewall endpoint — tính theo **giờ × số AZ**, không theo lưu lượng, nên 10 spoke hay 1 spoke gần như bằng nhau.
+>
+> Công thức để tính cho cấu hình của bạn: `(số AZ × $0.44/giờ) + (số spoke × $0.05/giờ) + $0.15/giờ`. **Thêm một AZ đắt hơn thêm mười lăm spoke.**
+>
+> Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dựng, kiểm chứng, rồi xoá — hoá đơn thật cho thấy cách đó tốn vài xu.
 
 ---
 
@@ -930,7 +941,7 @@ Chi tiết ở [README của layer](./account-baseline/README.md).
 
 ## Giai đoạn 10 — `network`
 
-> **Chỉ làm khi có workload thật cần kết nối.** ~$770/tháng ở 2 AZ. Chín giai đoạn trước cộng lại là ~$0/ngày.
+> **Chỉ làm khi có workload thật cần kết nối.** Dự phóng ~$1.020/tháng ở 2 AZ / 5 spoke nếu để chạy thường trú — xem công thức dưới bản đồ đường đi. Mười một giai đoạn trước cộng lại đo được **$1.57 cả kỳ**.
 >
 > **Layer này chưa ai apply.** `plan` sạch, code đã soát, nhưng chưa chạm AWS lần nào — khác hẳn chín giai đoạn trên. Đi chậm, và kiểm từng bước.
 

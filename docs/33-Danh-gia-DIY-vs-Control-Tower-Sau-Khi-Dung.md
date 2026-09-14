@@ -14,6 +14,7 @@
 | **Vận hành** — pipeline, cổng chặn, drift, verify | **hơn rõ rệt** — CT không có gì tương đương |
 | **Độ phủ tính năng bảo mật** | **kém**, và kém theo hai cách khác nhau (mục 5 và 6) |
 | **Khả năng duy trì bởi người khác** | **kém rõ rệt** — đây là nhược điểm thật, không sửa được bằng code |
+| **Chi phí phần quản trị** | **$1.57 cả kỳ**, đo từ hoá đơn — xem mục 5.2 |
 
 **Chưa đầy đủ.** Thiếu bốn nhóm tính năng mà audit thường hỏi, và — đáng chú ý hơn — có bốn cơ chế **đã đi dây xong nhưng công tắc đang ở số không**, làm khoảng cách với CT trông rộng hơn thực tế.
 
@@ -37,6 +38,8 @@ Còn các con số về trạng thái đang chạy lấy từ `terraform output`
 cd landing-zone/config-detective && terraform output security_hub guardduty recording_scope
 cd ../network/ops               && terraform output summary
 ```
+
+Và số liệu chi phí ở mục 5.2 lấy từ **export Cost Explorer**, hai chiều — theo account và theo dịch vụ. Không phải từ bảng giá AWS, không phải từ ước lượng.
 
 ---
 
@@ -126,6 +129,8 @@ Ba dòng giữa là thứ tìm ra **trong lúc viết tài liệu**, không ph�
 
 ## 5. Cơ chế đã đi dây, công tắc đang ở số không
 
+### 5.1 Bốn công tắc
+
 Đây là phần đáng chú ý nhất của cả đánh giá, vì nó nói khoảng cách với CT **hẹp hơn** vẻ ngoài — nhưng chỉ khi có người bật.
 
 | Cơ chế | Trạng thái thật | Bật bằng gì |
@@ -140,6 +145,34 @@ Dòng đầu là **khoảng cách lớn nhất với CT, và nó là một dòng
 > Port tay từng detective control của CT là việc vô nghĩa. Đường ngắn hơn: bật **Security Hub standard** ở cấp tổ chức. `AWS Foundational Security Best Practices` gói sẵn phần lớn detective control của CT, bật một lần phủ mọi account.
 
 Cả bốn công tắc đều tắt **có lý do** — chi phí, và giai đoạn rollout. `check.security_hub_costs_money` và `check.guardduty_features_cost_money` tồn tại đúng để nhắc điều đó. Nhưng "tắt có lý do" và "tắt vì quên" trông giống nhau sau sáu tháng, nên chúng đáng có một ngày hẹn.
+
+### 5.2 Hoá đơn xác nhận điều đó, và nó rẻ hơn dự đoán
+
+Export Cost Explorer cho **năm account của LZ** (loại account quản trị ra, vì ở đó có một hệ thống ứng dụng chạy từ trước nền tảng này):
+
+| Dịch vụ | Cả kỳ | Đọc ra điều gì |
+|---|---|---|
+| Config | **$1.04** | dòng lớn nhất của cả phần quản trị |
+| CodeBuild + CodePipeline | **$0.69** | sáu pipeline cộng job drift, hàng chục lần chạy |
+| GuardDuty | **$0.27** | bật ở 14 account thành viên |
+| S3 | **$0.17** | nhật ký, state, snapshot |
+| Network Firewall | **$0.0988** | xem cảnh báo dưới |
+| CloudTrail | **$0.00** | trail cấp tổ chức không tính phí |
+| **Security Hub** | **$0.00** | ← **hoá đơn xác nhận `standards = []`** |
+| SNS · SQS · CodeCommit | **$0.00** | trong hạn miễn phí ở quy mô này |
+| **Cộng, năm account** | **$1.57** | |
+
+Dòng `Security Hub $0.00` là một **bằng chứng độc lập** cho mục 5.1: nếu có standard nào đang bật thì nó không thể bằng không. Trạng thái đọc từ `terraform output` và trạng thái đọc từ hoá đơn khớp nhau — hai nguồn không liên quan cùng nói một điều.
+
+> **`$0.0988` KHÔNG có nghĩa là Network Firewall rẻ.** Nó có nghĩa là lớp mạng **chưa bao giờ được để chạy**: dựng lên, kiểm chứng một đến hai giờ, rồi xoá. Điểm kiểm tra tính tiền theo **giờ**, nên vài giờ ra vài xu.
+>
+> Đó là một điểm mạnh thật — *xoá và dựng lại được* nên kiểm chứng gần như không tốn gì. Nhưng nó không trả lời câu "chạy thường trú tốn bao nhiêu". Câu đó là **phép tính**, không phải phép đo:
+>
+> `(số AZ × $0.44/giờ) + (số spoke × $0.05/giờ) + $0.15/giờ`
+>
+> 2 AZ / 5 spoke ≈ **$1.020/tháng**, trong đó ~$577 là firewall endpoint. **Thêm một AZ đắt hơn thêm mười lăm spoke** — tường lửa nhân theo AZ, không theo lưu lượng hay số spoke.
+
+**Một lưu ý về phạm vi số liệu:** export kết thúc ở hết tháng 8, mà LZ dựng từ **cuối tháng 8 tới giữa tháng 9**. Nên `$1.57` là **cận dưới** — nó chỉ bắt được mấy ngày đầu. Xuất thêm tháng 9 thì con số tăng, nhưng vẫn ở thang vài đô: không dịch vụ nào trong bảng có đơn giá đủ lớn để đổi bậc.
 
 ---
 
