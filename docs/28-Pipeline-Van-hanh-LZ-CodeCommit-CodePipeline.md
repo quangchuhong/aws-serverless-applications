@@ -1,8 +1,10 @@
-# Pipeline vận hành LZ — CodeCommit, CodePipeline, và năm lớp kiểm
+# Pipeline vận hành LZ — CodeCommit, CodePipeline, và sáu lớp kiểm
 
 [Doc 10](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) là thiết kế CI/CD bằng GitHub Actions + OIDC. Tài liệu này là thứ **đã dựng thật**, và nó không phải doc 10: chính sách công ty không cho GitHub làm bề mặt điều khiển, nên toàn bộ đường tự động nằm trong AWS — CodeCommit, CodePipeline, CodeBuild. Repo GitHub vẫn tồn tại như một bản sao để đọc và review, nhưng **nó không kích hoạt gì cả**.
 
 Code: [`modules/tf-pipeline/`](../modules/tf-pipeline/) (module dùng chung), [`landing-zone/ops-pipeline*/`](../landing-zone/) (năm caller), [`landing-zone/ops-gate/`](../landing-zone/ops-gate/) (cổng chặn).
+
+> **Sơ đồ tổng quan:** [Luồng pipeline Landing Zone](https://claude.ai/code/artifact/efa04c8c-f8a3-4cae-9a97-250e75fdd1f9) — năm hình vẽ: đường kích hoạt, khung một pipeline với sáu lớp kiểm đặt đúng chỗ chúng chạy, phân bổ năm pipeline sang bốn account, vòng bốn nhịp nới lỏng, và đường drift. Đọc hình trước nếu bạn mới vào; các mục dưới đây là phần chi tiết của chính năm hình đó.
 
 ---
 
@@ -158,9 +160,11 @@ Bước 9 không phải cho đẹp. `terraform apply <file plan>` với `-target
 
 ---
 
-## 3. Năm lớp kiểm, và chúng không thấy nhau
+## 3. Sáu lớp kiểm, và chúng không thấy nhau
 
 Đây là phần quan trọng nhất của tài liệu. Mỗi lớp đọc một thứ khác nhau, và **không lớp nào thay được lớp khác**.
+
+> `next_steps` của module vẫn in **"BỐN LỚP KIỂM"**. Câu đó đúng khi viết: `precondition` và `verify` chưa tồn tại. Nó là một con số sẽ lệch tiếp mỗi lần thêm lớp, nên đừng tin nó — bảng dưới đây là bảng đúng.
 
 | Lớp | Đọc gì | Trả lời câu gì | Chạy ở đâu |
 |---|---|---|---|
@@ -659,6 +663,7 @@ if not callers:
 
 ## Liên quan
 
+- [Sơ đồ tổng quan — Luồng pipeline Landing Zone](https://claude.ai/code/artifact/efa04c8c-f8a3-4cae-9a97-250e75fdd1f9) — năm hình vẽ tương ứng với mục 2, 3, 2.2, 5 và 7
 - [Doc 10 — CI/CD bằng GitHub Actions + OIDC](./10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) — thiết kế bị chính sách loại, còn giữ để so sánh
 - [Doc 20 — Remote state và quy trình thay đổi](./20-Van-hanh-LZ-Remote-State-va-Quy-trinh-Thay-doi.md) — kiến trúc state mà pipeline dùng
 - [Doc 22 — Nhật ký triển khai LZ DIY](./22-Nhat-ky-Trien-khai-LZ-DIY.md) — từng lỗi, theo thứ tự gặp
