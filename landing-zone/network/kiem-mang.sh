@@ -118,33 +118,24 @@ fi
 REGION="${AWS_REGION:-ap-southeast-1}"
 
 ########################################
-# CHUA DUNG + KHONG CO ARN = KHONG DOC DUOC GI, VA PHAI NOI RA
+# KHONG CO ARN KHONG CO NGHIA LA KHONG DOC DUOC
 #
-# Day la trang thai hom nay: hai stage deu tat, ha tang network da xoa,
-# network_deploy_role_arn con rong. Khong co credential vao account mang
-# thi khong chung minh duoc ca su TON TAI lan su VANG MAT.
+# Ban dau cho nay co mot loi tat: "che do chua-dung + ARN rong" thi in mot
+# khoi "KHONG DOC GI" roi thoat 0, khong goi AWS lan nao.
 #
-# Thoat 0 - vi khong co gi SAI - nhung in ro rang mot luot xanh o day
-# khong chung minh dieu gi. Neu de im, no thanh "network da duoc kiem".
+# Loi tat do SAI, va no lo ra ngay lan chay tay dau tien. Nguoi chay dang
+# dang nhap SSO THANG VAO account mang:
+#
+#   arn:aws:sts::436908791055:assumed-role/AWSReservedSSO_lz-account-admin/quang
+#
+# Ho khong can assume - va OrganizationAccountAccessRole cua chinh account
+# do khong tin ho, no tin account management. Nen ep truyen ARN la ep mot
+# thu vua thua vua khong lam duoc.
+#
+# Dau hieu DUNG de biet co chung minh duoc gi hay khong la PHEP DOC CO
+# THANH CONG HAY KHONG, chu khong phai co truyen ARN hay khong. Nen o day
+# luon doc; phan phan tich moi quyet dinh.
 ########################################
-if [[ "$GOI_AWS" == "yes" && "$CHE_DO" == "chua-dung" && -z "$ARN_ROLE" ]]; then
-  echo
-  echo "${VANG}KHONG DOC GI - va day la ket qua dung, khong phai mot lan kiem xanh.${HET}"
-  echo
-  echo "  Hai stage network deu TAT (enable_network_stage, enable_firewall_stage)"
-  echo "  va network_deploy_role_arn con RONG, nen khong co duong nao vao account"
-  echo "  mang. Khong doc duoc thi khong chung minh duoc CA su ton tai LAN su"
-  echo "  vang mat."
-  echo
-  echo "  Khi dung lai network:"
-  echo "    1. dien network_deploy_role_arn trong tfvars cua ops-pipeline-network"
-  echo "    2. bat enable_network_stage / enable_firewall_stage"
-  echo "    3. apply caller do - chuoi verify tu doi sang 'da-dung'"
-  echo
-  echo "  Tu luc do phep kiem nay moi bat dau tra loi that."
-  exit 0
-fi
-
 if [[ "$GOI_AWS" == "yes" ]]; then
   if [[ -n "$ARN_ROLE" ]]; then
     aws sts assume-role --role-arn "$ARN_ROLE" \
@@ -303,10 +294,38 @@ print(f"    che do   {CHE_DO}")
 print()
 print("── Nhom luat tuong lua (hau to -ops-east-west)")
 
+####################################
+# KHONG DOC DUOC != KHONG CO
+#
+# list-rule-groups that bai (AccessDenied, sai region, chua bat Network
+# Firewall) thi KHONG ket luan duoc gi - ke ca chieu "vang mat". Day la
+# lop loi ghi day trong repo nay, va no nguy hiem nhat o dung che do
+# chua-dung: mot phep doc hong se doc thanh "khong thay gi - khop ky vong".
+#
+#   chua-dung  -> in ro la khong kiem duoc, thoat 0 (khong co gi SAI,
+#                 nhung cung khong chung minh duoc gi)
+#   da-dung    -> LOI: stage dang bat ma khong doc duoc la khong chap nhan
+####################################
 d, e = doc("rg-list.json")
 ten_rg, arn_rg = "", ""
+doc_duoc = d is not None
 if d is None:
-    loi.append(f"khong doc duoc list-rule-groups.\n        {e}")
+    print()
+    print(f"  {VANG}KHONG DOC DUOC list-rule-groups.{HET}")
+    print(f"        {e}")
+    print()
+    if CHE_DO == "chua-dung":
+        print("  Nen khong ket luan duoc gi - KE CA chieu 'khong co gi'. Mot phep doc")
+        print("  hong va mot he thong rong deu cho ra danh sach trong.")
+        print()
+        print("  Thoat 0 vi khong co gi SAI, nhung lan chay nay KHONG chung minh dieu gi.")
+        sys.exit(0)
+    loi.append(
+        "che do 'da-dung' ma khong doc duoc list-rule-groups.\n"
+        f"        {e}\n"
+        "        Stage dang bat nen khong doc duoc la khong chap nhan duoc: no che"
+        " mat\n        dung cai ma buoc verify sinh ra de nhin."
+    )
 else:
     for g in d.get("RuleGroups") or []:
         if (g.get("Name") or "").endswith("-ops-east-west"):
@@ -410,23 +429,41 @@ if CHE_DO == "chua-dung":
         )
     else:
         print("    Khong thay rule group lan alarm nao - KHOP voi ky vong.")
-        print("    Va day la mot phep do THAT: doc duoc bang danh tinh o tren, khong")
-        print("    phai mot phep loc tra ve rong.")
+        print("    Va day la mot phep do THAT: list-rule-groups DOC DUOC roi tra ve")
+        print("    danh sach rong, khong phai mot lenh hong.")
+        if not ARN_ROLE:
+            ####################################
+            # KHONG ASSUME -> KHONG BIET DANG DOC ACCOUNT NAO CO DUNG KHONG
+            #
+            # Khi co ARN, account dich nam ngay trong ARN nen "rong" la rong
+            # o DUNG account. Khong co ARN thi script doc bang danh tinh dang
+            # co trong shell - co the la account mang (nguoi chay tay dang
+            # nhap SSO vao do), va cung co the la account management (buoc
+            # verify cua pipeline). Hai truong hop cho ra cung mot danh sach
+            # rong voi hai y nghia nguoc nhau.
+            #
+            # Script KHONG doan duoc, nen no noi ra thay vi im.
+            ####################################
+            print()
+            print(f"    {VANG}Nhung: khong co ARN nen script khong biet account o tren")
+            print(f"    CO PHAI account mang hay khong.{HET} Neu no la account khac thi")
+            print("    'rong' chi co nghia la layer nay khong o day - khong phai no")
+            print("    khong ton tai. Doi chieu so account o dau bao cao.")
 else:
     print("── Ky vong: network DA duoc dung")
-    if not ARN_ROLE:
-        loi.append(
-            "che do 'da-dung' nhung KHONG co ARN role de assume, nen dang doc bang\n"
-            "        danh tinh CodeBuild o account management - noi khong co resource nao\n"
-            "        cua layer nay. Moi phep loc se tra ve rong, va rong se doc thanh\n"
-            "        'thieu het'. Dien network_deploy_role_arn."
+    if not arn_rg and doc_duoc:
+        # Khong co ARN thi "khong thay" co them mot nguyen nhan nua - dang
+        # doc account khac - va script khong phan biet duoc. Neu ep no thanh
+        # mot LOI rieng ve ARN thi lai doan sai cho nguoi chay tay dang dung
+        # san trong account mang (da mac dung loi do mot lan).
+        them = "" if ARN_ROLE else (
+            "\n        VA: khong co ARN nen co the dang doc NHAM ACCOUNT - so account o"
+            "\n        dau bao cao phai la account mang. Truyen ARN de bo kha nang nay."
         )
-    if not arn_rg:
         loi.append(
             "KHONG co rule group nao co hau to -ops-east-west.\n"
             "        Stage tuong lua dang bat, nen day la thieu that - hoac rule group\n"
-            "        chua duoc tao, hoac dang o region khac, hoac dang o ACCOUNT khac\n"
-            "        (kiem dong 'account' o dau bao cao)."
+            "        chua duoc tao, hoac dang o region khac." + them
         )
     elif arn_rg not in duoc_doc:
         loi.append(
