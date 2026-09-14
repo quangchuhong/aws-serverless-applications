@@ -483,6 +483,29 @@ variable "stages" {
     lint          = optional(string, "")
     khong_co_lint = optional(string, "")
     mo_ta         = string
+
+    ####################################
+    # assume_role_arn - THIEU O DAY LA MOT LAN MAT GIA TRI TRONG IM LANG
+    #
+    # Dong nay TUNG khong co, va hau qua khong giong mot loi kieu du lieu
+    # chut nao: Terraform ep object ve kieu da khai va AM THAM BO thuoc
+    # tinh thua. Khong loi, khong canh bao.
+    #
+    # ops-pipeline-network truyen `assume_role_arn = var.network_deploy_role_arn`
+    # trong tung stage. Caller apply XANH voi 25 resource. Nhung
+    # ASSUME_ROLE_ARN den CodeBuild la chuoi rong, buildspec bo qua dong
+    # export, provider cua network/ops roi ve `profile` - va lan chay dau
+    # chet o
+    #
+    #   Error: failed to get shared config profile, default
+    #
+    # tuc mot thong bao ve ~/.aws/config, cach nguyen nhan that ba lop.
+    #
+    # Dau hieu doc duoc trong log la mot dong VANG MAT: buildspec in
+    # "== provider se assume: ..." khi bien co gia tri, va dong do khong
+    # xuat hien.
+    ####################################
+    assume_role_arn = optional(string, "")
   }))
 }
 

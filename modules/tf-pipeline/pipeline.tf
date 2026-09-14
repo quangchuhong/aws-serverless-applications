@@ -221,7 +221,12 @@ resource "aws_codepipeline" "ops" {
             # SAI roi bao "tao moi toan bo"; thieu o Apply thi apply
             # TAO THAT o account sai.
             ####################################
-            { name = "ASSUME_ROLE_ARN", value = try(stage.value.assume_role_arn, ""), type = "PLAINTEXT" },
+            # KHONG boc try(): kieu cua var.stages da khai
+            # `assume_role_arn = optional(string, "")` nen thuoc tinh LUON
+            # ton tai. try() o day tung bien "thuoc tinh bi kieu bo mat"
+            # thanh chuoi rong - mot loi to thanh mot su im lang. De tran
+            # thi lan hoi quy sau se do ngay o plan, kem ten thuoc tinh.
+            { name = "ASSUME_ROLE_ARN", value = stage.value.assume_role_arn, type = "PLAINTEXT" },
           ])
         }
       }
@@ -290,7 +295,12 @@ resource "aws_codepipeline" "ops" {
             # cung commit. Chay lai chi lam apply co the that bai vi mot
             # ly do khong lien quan gi toi ban plan da duoc duyet.
             { name = "LINT_CMD", value = "", type = "PLAINTEXT" },
-            { name = "ASSUME_ROLE_ARN", value = try(stage.value.assume_role_arn, ""), type = "PLAINTEXT" },
+            # KHONG boc try(): kieu cua var.stages da khai
+            # `assume_role_arn = optional(string, "")` nen thuoc tinh LUON
+            # ton tai. try() o day tung bien "thuoc tinh bi kieu bo mat"
+            # thanh chuoi rong - mot loi to thanh mot su im lang. De tran
+            # thi lan hoi quy sau se do ngay o plan, kem ten thuoc tinh.
+            { name = "ASSUME_ROLE_ARN", value = stage.value.assume_role_arn, type = "PLAINTEXT" },
           ])
         }
       }

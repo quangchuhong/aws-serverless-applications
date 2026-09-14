@@ -641,6 +641,90 @@ def kiem_project_duoc_phep():
     return loi
 
 
+def kiem_thuoc_tinh_stage():
+    """13. Moi `stage.value.X` trong pipeline.tf phai co trong kieu cua var.stages.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VA NO IM HOAN TOAN
+
+    ops-pipeline-network truyen `assume_role_arn` trong tung stage. Kieu
+    cua var.stages khong khai thuoc tinh do, va Terraform AM THAM BO
+    thuoc tinh thua khi ep object ve kieu da khai - khong loi, khong
+    canh bao.
+
+    Caller apply XANH voi 25 resource. Nhung ASSUME_ROLE_ARN den
+    CodeBuild la chuoi rong, buildspec bo qua dong export, provider cua
+    network/ops roi ve `profile`, va lan chay dau chet o
+
+      Error: failed to get shared config profile, default
+
+    mot thong bao ve ~/.aws/config, cach nguyen nhan that ba lop. Dau
+    hieu duy nhat trong log la mot dong VANG MAT.
+
+    `try(stage.value.assume_role_arn, "")` lam lop im lang thu hai: no
+    bien "thuoc tinh khong ton tai" - mot loi to - thanh chuoi rong.
+
+    =====================================================================
+    NO DOI CHIEU GI
+
+    pipeline.tf:   moi `stage.value.<ten>`
+    variables.tf:  cac ten trong `variable "stages" { type = list(object({...}))}`
+
+    Thieu ben variables.tf = gia tri bi bo trong im lang.
+    """
+    loi = []
+    pl = os.path.join(M, "pipeline.tf")
+    va = os.path.join(M, "variables.tf")
+    if not os.path.exists(pl) or not os.path.exists(va):
+        return ["khong doc duoc pipeline.tf hoac variables.tf cua module"]
+
+    dung = set(re.findall(r"stage\.value\.([A-Za-z_][A-Za-z0-9_]*)", open(pl).read()))
+
+    tv = open(va).read()
+    m = re.search(r'variable\s+"stages"\s*\{.*?type\s*=\s*list\(object\(\{(.*?)\}\)\)',
+                  tv, re.S)
+    if not m:
+        return ["khong tim thay kieu list(object({...})) cua variable \"stages\""]
+
+    khai = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", m.group(1), re.M))
+
+    # ------------------------------------------------------------------
+    # MODULE TU THEM VAI THUOC TINH - CHUNG KHONG DEN TU CALLER
+    #
+    # main.tf co `stages = [for ... : merge(s, { thu_tu = ..., co_duyet =
+    # ..., ... })]`, va pipeline.tf lap tren local do chu khong tren
+    # var.stages. Nen stage.value.co_duyet la HOP LE du kieu cua
+    # var.stages khong khai no.
+    #
+    # Ban dau phep kiem nay khong tru chung ra va keu ngay ba cai
+    # (co_duyet, ro_apply, ro_duyet) - ca ba deu sai. Mot phep kiem keu
+    # sai con te hon khong co, vi no day nguoi ta toi cho sua mot thu
+    # dang dung.
+    #
+    # DOC tu main.tf chu khong viet cung: them mot thuoc tinh tinh o do
+    # ma phai nho sua danh sach o day thi mot ngay nao do se khong ai nho.
+    # ------------------------------------------------------------------
+    mm = os.path.join(M, "main.tf")
+    tu_them = set()
+    if os.path.exists(mm):
+        m2 = re.search(r"stages\s*=\s*\[\s*\n\s*for .*?merge\(s,\s*\{(.*?)\}\)",
+                       open(mm).read(), re.S)
+        if m2:
+            tu_them = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=",
+                                     m2.group(1), re.M))
+
+    thieu = sorted(dung - khai - tu_them)
+    if thieu:
+        loi.append(
+            "pipeline.tf doc stage.value." + ", stage.value.".join(thieu)
+            + " nhung kieu cua var.stages khong khai chung. Terraform BO"
+            " thuoc tinh thua trong im lang, nen gia tri caller truyen se"
+            " mat ma khong co loi nao. Them `" + thieu[0]
+            + " = optional(...)` vao kieu do."
+        )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -747,6 +831,10 @@ def main():
         l4 = kiem_project_duoc_phep()
         print(f"  {'x' if l4 else 'v'} moi project pipeline goi deu duoc cap StartBuild")
         loi += l4
+
+        l5 = kiem_thuoc_tinh_stage()
+        print(f"  {'x' if l5 else 'v'} moi stage.value.X co trong kieu cua var.stages")
+        loi += l5
 
     print()
     if loi:
