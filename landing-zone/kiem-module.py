@@ -1022,6 +1022,27 @@ def kiem_guard_trong_targets():
     can khai.
     """
     loi = []
+
+    ####################################
+    # PHAM VI KHAI O HAI NOI, VA PHAI KIEM CA HAI
+    #
+    # Sua `targets` trong pipeline la du de guard VAO plan. Nhung gate.py
+    # co bang PHAM_VI rieng - stage nay duoc doi nhung gi - va mot resource
+    # vao plan ma khong co trong bang do bi tu choi "NGOAI PHAM VI".
+    #
+    # Ban dau phep kiem nay chi doc `targets`, nen no bao xanh cho mot cau
+    # hinh lam pipeline DO ngay o lan chay sau: guard vao plan, gate.py chan.
+    # Nua phep kiem la mot phep kiem noi rang moi thu on.
+    ####################################
+    fg = os.path.join(GOC, "landing-zone/ops-gate/gate.py")
+    pham_vi = {}
+    if os.path.isfile(fg):
+        goc_gate = bo_chu_thich(open(fg).read())
+        mb = re.search(r"PHAM_VI\s*=\s*\{(.*?)\n\}", goc_gate, re.S)
+        if mb:
+            for ms in re.finditer(r'"([^"]+)"\s*:\s*\[(.*?)\]', mb.group(1), re.S):
+                pham_vi[ms.group(1)] = set(re.findall(r'"([^"]+)"', ms.group(2)))
+
     for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/ops-pipeline*"))):
         f = os.path.join(d, "main.tf")
         if not os.path.isfile(f):
@@ -1074,6 +1095,22 @@ def kiem_guard_trong_targets():
                             "plan, nen stage nay chay MA KHONG co chot an toan "
                             "nao. Kem mot trieu chung thu hai: job drift chay "
                             "plan khong -target se bao layer lech vinh vien."
+                        )
+
+                    # VE THU HAI. Vao duoc plan nhung khong co trong bang
+                    # PHAM_VI cua gate.py thi cong chan tu choi "NGOAI PHAM
+                    # VI" - pipeline DO o buoc plan. Hai ve nay hong theo hai
+                    # kieu khac nhau, nen phai bao rieng.
+                    if stage in pham_vi and dc not in pham_vi[stage]:
+                        loi.append(
+                            f"landing-zone/ops-gate/gate.py: PHAM_VI[{stage!r}] "
+                            f"khong co {dc}, trong khi {os.path.relpath(f, GOC)} "
+                            "da target no. Guard se VAO plan roi bi cong chan tu "
+                            "choi 'NGOAI PHAM VI', tuc stage do do ngay o buoc "
+                            "plan. Khai dang DIA CHI (co dau .), dung type tran "
+                            "'terraform_data' - cho ca type nghia la moi "
+                            "terraform_data tuong lai cung qua, ke ca mot cai "
+                            "mang `provisioner`."
                         )
     return loi
 

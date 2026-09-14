@@ -437,17 +437,39 @@ PHAM_VI = {
     # attachment cho toi luot sau - state va cau hinh lech nhau trong im
     # lang suot khoang giua.
     ####################################
+    ####################################
+    # CHOT AN TOAN NAM TRONG PHAM VI CUA MOI STAGE
+    #
+    # terraform_data.scp_guard (organization/scp.tf) mang hai precondition:
+    # mot SCP dang BAT ma khong gan vao OU nao, va mot target khong giai
+    # duoc thanh OU ID. precondition chi duoc tinh khi resource NAM TRONG
+    # PLAN, nen guard phai co trong CA `targets` cua pipeline VA bang nay -
+    # thieu ve nao thi hong theo mot kieu khac:
+    #
+    #   thieu o targets   guard khong vao plan -> 33 chot im lang
+    #   thieu o day       guard vao plan -> gate.py tu choi "NGOAI PHAM VI"
+    #
+    # Ve thu hai da xay ra that, ngay sau khi sua ve thu nhat.
+    #
+    # DANG DIA CHI, khong phai type tran "terraform_data": cho ca type
+    # nghia la MOI terraform_data tuong lai cung qua duoc, ke ca mot cai
+    # mang `provisioner` chay lenh cuc bo. Chot an toan duoc phep di qua;
+    # mot cai cong khong duoc.
+    ####################################
     "sec-ou": [
+        "terraform_data.scp_guard",
         "aws_organizations_organizational_unit.level1",
         "aws_organizations_organizational_unit.level2",
     ],
 
     "sec-scp": [
+        "terraform_data.scp_guard",
         "aws_organizations_policy.scp",
         "aws_organizations_policy_attachment.scp",
     ],
 
     "sec-tagging": [
+        "terraform_data.scp_guard",
         "aws_organizations_policy.tag",
         "aws_organizations_policy_attachment.tag",
     ],
@@ -488,6 +510,8 @@ PHAM_VI = {
     # moi thi khong co gi. Chi cloudops-firewall nam trong approve_stages.
     ####################################
     "cloudops-firewall": [
+        # Xem chu thich o sec-ou. 31 precondition cua network/ops.
+        "terraform_data.catalog_guard",
         "aws_networkfirewall_rule_group",
         "aws_vpc_security_group_ingress_rule",
     ],
@@ -497,6 +521,8 @@ PHAM_VI = {
     ],
 
     "cloudops-network": [
+        # Xem chu thich o sec-ou.
+        "terraform_data.catalog_guard",
         "aws_route53_record",
         "aws_vpc_endpoint",
         "aws_route53_zone",

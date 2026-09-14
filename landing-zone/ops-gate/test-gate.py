@@ -363,6 +363,43 @@ chay("khai bao DUNG stage, co NOI khop    -> sach", 0, plan(NO_OP,
 chay("khai bao khong dung + strict -> thoat 1", 1, plan(NO_OP),
      loosen=KHAI_DU, strict=True)
 
+
+print()
+print("── Chot an toan phai di qua duoc cong ──")
+
+# terraform_data.catalog_guard / scp_guard mang precondition cua layer -
+# co che "apply KHONG duoc di tiep". precondition chi duoc tinh khi
+# resource NAM TRONG PLAN, nen guard phai co trong `targets` cua pipeline.
+#
+# Va ngay sau khi them vao targets, pipeline DO o buoc plan: guard vao
+# plan nhung khong co trong PHAM_VI, nen cong chan tu choi "NGOAI PHAM
+# VI". Hai ve, hai kieu hong, va sua ve nay lam lo ve kia.
+#
+# `input` cua guard doi moi lan catalog doi, nen no xuat hien trong plan
+# nhu mot `update` binh thuong - o CA HAI stage cua network/ops.
+GUARD_DOI = rc("terraform_data.catalog_guard", "terraform_data", ["update"],
+               before={"input": {"rules": 5}}, after={"input": {"rules": 7}})
+
+chay("chot an toan doi -> sach o stage cloudops-network", 0,
+     plan(GUARD_DOI), stage="cloudops-network", strict=True)
+
+chay("chot an toan doi -> sach o stage cloudops-firewall", 0,
+     plan(GUARD_DOI), stage="cloudops-firewall", strict=True)
+
+chay("chot an toan doi -> sach o stage sec-scp", 0,
+     plan(rc("terraform_data.scp_guard", "terraform_data", ["update"],
+             before={"input": {"orphan": []}},
+             after={"input": {"orphan": ["x"]}})),
+     stage="sec-scp", strict=True)
+
+# CHIEU NGUOC: mot terraform_data KHAC khong duoc di qua. PHAM_VI khai
+# dang DIA CHI chu khong dang type tran, dung de chan dung truong hop nay -
+# mot terraform_data mang `provisioner` chay lenh cuc bo se bi tu choi.
+chay("terraform_data KHAC -> ngoai pham vi", 1,
+     plan(rc("terraform_data.chay_lenh", "terraform_data", ["create"],
+             before=None, after={"input": "x"})),
+     stage="cloudops-network", strict=True)
+
 ########################################
 # NHAN PHAI KHOP KHOA STAGE THAT
 #
