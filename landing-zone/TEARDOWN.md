@@ -33,7 +33,7 @@ cd landing-zone
 Ngược chiều dựng. Mỗi bước **phải xong** trước khi sang bước sau.
 
 ```
-11. landing-zone/network      ← neu dang chay
+11. landing-zone/network/ops  ← PHAI truoc cha: no doc state cua cha
 10. landing-zone/network      ← neu da enable
  9. account-baseline
  8. org-trail
@@ -157,17 +157,44 @@ Bucket rỗng thật thì `list-object-versions` không in gì.
 
 ## 3. Từng bước
 
-### 11 + 10 — Network
+### 11 — `network/ops`, và nó PHẢI đi trước layer cha
 
-Cùng một cơ chế, hai tên biến ngược chiều nhau:
+Hai layer, không phải một. Bản trước của tài liệu này ghi cả bước 11 và 10 là `landing-zone/network` và **không nhắc `network/ops` một lần nào** — làm đúng theo đó thì lớp vận hành không bao giờ bị xoá.
+
+**Vì sao thứ tự này không đảo được:** `network/ops` đọc state của layer cha qua `terraform_remote_state.hub`. Xoá cha trước thì mọi `local.hub.*` trong ops mất nền, và bạn **không `plan` nổi lệnh destroy của ops nữa** — tức không destroy được nó bằng Terraform. Lúc đó chỉ còn xoá tay từng resource, hoặc dựng lại cha chỉ để xoá ops.
+
+Và nó cũng đổ giữa đường theo chiều AWS: `aws_vpc_endpoint.ops` giữ một ENI trong subnet của spoke, `aws_route53profiles_resource_association.ops_endpoint` gắn vào Route53 Profile của cha. Cả hai chặn destroy của cha.
 
 ```bash
-# landing-zone/network
+cd landing-zone/network/ops
+terraform destroy
+```
+
+Không cần gỡ cổng nào ở đây — `prevent_destroy` và `allow_destroy` thuộc layer cha. Chốt `precondition` của `terraform_data.catalog_guard` cũng không chặn: Terraform không kiểm precondition cho resource đang bị destroy.
+
+Những gì còn tính tiền nếu bỏ sót bước này:
+
+| | Chi phí |
+|---|---|
+| `aws_vpc_endpoint.ops["kms"]` — interface endpoint | ~$14.6/tháng |
+| `aws_route53_zone.ops_endpoint["kms"]` — private hosted zone | $0.50/tháng |
+| `aws_cloudwatch_metric_alarm` ×2 | ~$0.20/tháng |
+
+Phần còn lại của layer (record, TGW route, rule group, ingress rule, target group) không tính tiền riêng.
+
+### 10 — `landing-zone/network`
+
+Hai cơ chế gỡ bảo vệ, tuỳ bản layer đang dùng biến nào:
+
+```bash
+cd landing-zone/network
+
+# Cach 1
 ephemeral = true     # trong terraform.tfvars
 terraform apply      # go bao ve - RIENG mot lan
 ./teardown.sh        # script tu choi chay khi ephemeral = false
 
-# landing-zone/network
+# Cach 2
 terraform apply   -var allow_destroy=true    # RIENG mot lan
 terraform destroy -var allow_destroy=true
 ```
@@ -175,6 +202,26 @@ terraform destroy -var allow_destroy=true
 Cả hai gỡ đúng ba thứ: `delete_protection`, `subnet_change_protection`, và `force_destroy` bucket log firewall.
 
 > Firewall endpoint phải biến mất **hẳn** thì VPC mới xoá được. Gặp `DependencyViolation` giữa chừng là bình thường — chạy `terraform destroy` lần nữa. Tổng ~15–20 phút.
+
+### Sau khi xoá xong: job drift sẽ đỏ mỗi sáng
+
+`qh11-lz-ops-network-drift` vẫn chạy theo lịch (19:00 UTC = **2 giờ sáng giờ VN**) vì pipeline không bị xoá. Nó sẽ thấy `terraform state list` ra 0 và báo:
+
+```
+LOI: state RONG - sai khoa, khong phai drift.
+[LZ] drift: 0 layer doi, 1 khong kiem duoc
+```
+
+Câu "sai khoá" **nói sai nguyên nhân** trong trường hợp này — bạn xoá có chủ đích. Đây là hành vi đúng (state rỗng không phải "sạch"), chỉ là thông báo chưa phân biệt được hai lý do.
+
+Lần đầu thì nó có ích: đó là phép thử duy nhất cho đường `sns publish`, vốn chỉ chạy khi *có* phát hiện. Nhưng nếu để network xoá lâu:
+
+| Cách tắt | Hệ quả |
+|---|---|
+| `enable = false` ở `ops-pipeline-network` | project drift và EventBridge rule **bị xoá** — tắt thật, và thấy được là đã tắt |
+| `enable_*_stage = false` | job **vẫn chạy** với `LAYERS` rỗng → lặp 0 vòng → in `Moi layer khop state.` → **xanh**. Kiểm 0 layer mà báo mọi thứ khớp |
+
+Dùng cách trên. Cách dưới là một báo cáo sạch cho một hệ thống chưa được nhìn.
 
 ### 9 — `account-baseline`
 
