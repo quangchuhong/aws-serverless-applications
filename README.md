@@ -29,6 +29,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | [10](./docs/10-CICD-cho-Landing-Zone-GitHub-Actions-OIDC.md) | CI/CD cho LZ – GitHub Actions + OIDC, không dùng access key |
 | **[28](./docs/28-Pipeline-Van-hanh-LZ-CodeCommit-CodePipeline.md)** | **Pipeline vận hành LZ** – thứ đã dựng thật thay cho doc 10: 5 pipeline, sáu lớp kiểm không thấy nhau, và vì sao phạm vi một stage phải khai ở hai nơi |
 | **[29](./docs/29-Bo-loc-Kich-hoat-va-Cong-Chan.md)** | **Bộ lọc kích hoạt và cổng chặn** – hai bộ phận dùng chung: `loc.py` quyết định thay đổi có được chạy, `gate.py` quyết định nó có được qua. Sáu phép so sánh chiều nới/thắt, và bốn cái bẫy của bộ đọc log |
+| **[30](./docs/30-Khuon-mau-Code-Layer-va-Caller-Pipeline.md)** | **Khuôn mẫu code** – mười hai việc hay gặp khi sửa một layer hoặc caller pipeline: catalog YAML, `terraform_remote_state`, assume role, `check` vs `precondition`, và bốn chỗ phải sửa cùng lúc khi thêm một resource |
 | [11](./docs/11-Tag-Policy-va-Cost-Allocation.md) | Tag policy và cost allocation – chia bill theo team |
 
 ## Landing Zone – identity
