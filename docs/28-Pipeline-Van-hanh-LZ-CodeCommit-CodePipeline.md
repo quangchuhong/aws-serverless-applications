@@ -6,6 +6,8 @@ Code: [`modules/tf-pipeline/`](../modules/tf-pipeline/) (module dùng chung), [`
 
 > **Sơ đồ tổng quan:** [Luồng pipeline Landing Zone](https://claude.ai/code/artifact/efa04c8c-f8a3-4cae-9a97-250e75fdd1f9) — năm hình vẽ: đường kích hoạt, khung một pipeline với sáu lớp kiểm đặt đúng chỗ chúng chạy, phân bổ năm pipeline sang bốn account, vòng bốn nhịp nới lỏng, và đường drift. Đọc hình trước nếu bạn mới vào; các mục dưới đây là phần chi tiết của chính năm hình đó.
 
+**Đọc mục 1 trước mọi mục khác.** Nó trả lời *vì sao* luồng có hình dạng này — chín quyết định, ba ràng buộc sinh ra chúng, và cái giá của từng cái. Không hiểu phần đó thì mọi bước còn lại đọc như thủ tục hành chính, và thủ tục nào không hiểu lý do thì sớm muộn cũng bị đi đường tắt.
+
 ---
 
 ## 0. Trạng thái
@@ -23,9 +25,27 @@ Các lỗi gặp khi dựng lớp này ghi ở [doc 22](./22-Nhat-ky-Trien-khai-
 
 ---
 
-## 1. Vì sao không phải GitHub Actions
+## 1. Vì sao luồng có hình dạng này
 
-Doc 10 vẫn là một thiết kế đúng, và nếu chính sách khác thì nó là lựa chọn tốt hơn: ít hạ tầng hơn, review và pipeline cùng một chỗ. Nó bị loại vì một lý do không kỹ thuật — **GitHub không được tính là bề mặt điều khiển nội bộ**. Hệ quả kỹ thuật thì có thật và phải ghi ra, vì chúng đổi cách vận hành:
+Phần này trả lời câu hỏi mà một người mới vào sẽ hỏi trước mọi câu khác: *tại sao lại phải qua nhiều bước như vậy để sửa một dòng YAML?*
+
+Mỗi lựa chọn dưới đây đều kèm **cái giá** của nó. Một mục "vì sao" chỉ kể lợi ích là quảng cáo, không phải tài liệu — và cái giá là thứ người vận hành gặp hằng ngày, còn lợi ích thì chỉ thấy vào ngày có sự cố.
+
+### 1.1 Ba ràng buộc sinh ra mọi thứ còn lại
+
+Không có quyết định nào dưới đây là sở thích. Cả chín cái đều suy ra từ ba ràng buộc:
+
+| | Ràng buộc | Nó buộc ra cái gì |
+|---|---|---|
+| **A** | GitHub không được tính là bề mặt điều khiển nội bộ | Không có PR → chỗ review phải dịch vào **trong** pipeline (1.2, 1.7) |
+| **B** | Một layer = một state, nhưng chứa những thứ đổi với **nhịp rất khác nhau** | `-target` + nhiều stage trong một pipeline (1.5, 1.6) |
+| **C** | Không ai mở log của một job chạy lúc 2 giờ sáng | Mọi phát hiện phải **làm cái gì đó đỏ**, chứ không chỉ ghi ra (1.8, 1.9) |
+
+Ràng buộc C là cái ít hiển nhiên nhất và lại quyết định nhiều nhất. Nó là lý do job drift `exit 1` khi phát hiện drift, lý do `--strict` biến cảnh báo thành lỗi, và lý do một khai báo nới lỏng bị quên xoá sẽ làm pipeline đỏ. Một hệ thống chỉ *ghi lại* vấn đề là một hệ thống không có vấn đề nào được sửa.
+
+### 1.2 Vì sao không phải GitHub Actions
+
+Doc 10 vẫn là một thiết kế đúng, và nếu chính sách khác thì nó là lựa chọn tốt hơn: ít hạ tầng hơn, review và pipeline cùng một chỗ. Nó bị loại vì ràng buộc A. Hệ quả kỹ thuật thì có thật và phải ghi ra, vì chúng đổi cách vận hành:
 
 | | GitHub Actions (doc 10) | CodePipeline (thực tế) |
 |---|---|---|
@@ -45,6 +65,118 @@ git push codecommit HEAD:main  # AWS — cái này mới chạy pipeline
 ```
 
 Đẩy một bên rồi tưởng đã xong là lỗi hay gặp nhất của người mới vào repo này.
+
+### 1.3 Vì sao `plan` và `apply` là HAI stage, không phải một lệnh
+
+Đây là quyết định có hệ quả lớn nhất, và nó không phải để "cẩn thận hơn".
+
+Stage `apply` **không plan lại**. Nó chạy đúng file `tfplan` mà stage plan đã lưu và truyền qua như artifact — thiếu file đó là lỗi cứng:
+
+```sh
+if [ ! -f tfplan ]; then
+  echo "LOI: khong thay file tfplan."
+  echo "     Stage apply phai nhan artifact tu stage plan cua CHINH no."
+  exit 1
+fi
+```
+
+Nếu apply tự plan lại thì mọi lớp kiểm ở giữa trở thành vô nghĩa: `gate.py` đã đọc một bản plan, con người đã duyệt một bản plan, rồi AWS thi hành **một bản plan khác** — bản mới, sinh ra sau đó, có thể khác vì hạ tầng vừa đổi hoặc vì ai đó vừa đẩy commit. Người duyệt sẽ đã duyệt một thứ không xảy ra.
+
+**Giá phải trả:** một bản plan cũ có thể không apply được nữa (state đã đổi), và khi đó pipeline đỏ ở apply thay vì tự chữa. Đó là đánh đổi có chủ đích — thà chạy lại từ plan còn hơn thi hành một thứ chưa ai đọc.
+
+### 1.4 Vì sao một pipeline cho mỗi CHỦ SỞ HỮU, không phải một pipeline cho cả LZ
+
+Một pipeline duy nhất apply mọi layer sẽ có ba vấn đề, và cái thứ ba là cái thật sự giết:
+
+1. Một layer hỏng chặn mọi layer khác.
+2. Bán kính một lần chạy sai bằng cả Landing Zone.
+3. **Một nút re-run, một luồng thông báo, một người nhận.** Sec và cloudops sẽ nhận cảnh báo của nhau, và chuyện đó kết thúc bằng việc cả hai bên thôi đọc.
+
+Nên tách theo chủ sở hữu: sec giữ guardrail ở `organization`, cloudops vận hành phần còn lại. Hai role, hai luồng thông báo, hai nút re-run.
+
+**Giá phải trả:** năm caller gần giống nhau, tức năm chỗ có thể lệch nhau. Đó chính là lý do `modules/tf-pipeline` tồn tại, và lý do `kiem-module.py` đối chiếu **mọi** caller với module thay vì kiểm từng cái.
+
+### 1.5 Vì sao nhiều stage trong MỘT pipeline, không phải nhiều pipeline
+
+`organization` có ba stage (`sec-ou`, `sec-scp`, `sec-tagging`) dùng **cùng một layer và cùng một state**. Không tách thành ba layer, vì tách state là thêm hai lần init, hai khoá, và hai chỗ để lệch.
+
+Nhưng chúng cũng không thể là ba pipeline, vì **thứ tự có ý nghĩa**: đổi tên một OU làm khoá của `aws_organizations_policy_attachment.scp` đổi theo (khoá là `<policy>|<tên OU>`), nên Terraform thấy destroy + create trên cùng một OU id. Nếu SCP chạy trước OU ở một pipeline khác, OU đổi xong rồi không có gì đối chiếu lại attachment cho tới lượt sau — và state với cấu hình lệch nhau trong im lặng suốt khoảng giữa.
+
+Một pipeline, nhiều stage, chạy theo thứ tự khai trong `local.stages`. Chặn vẫn xảy ra, nhưng chặn **trong cùng một lượt chạy**.
+
+**Giá phải trả:** một stage đỏ chặn các stage sau nó trong cùng layer.
+
+### 1.6 Vì sao `-target`, khi tài liệu Terraform nói đừng dùng
+
+Terraform nói `-target` chỉ dành cho tình huống ngoại lệ. Ở đây nó là thiết kế, vì ràng buộc B: một layer chứa những thứ đổi **hằng ngày** cạnh những thứ đổi **vài lần một năm**.
+
+`config-detective` là ví dụ rõ nhất. Cùng một layer, cùng một state, quản: Config rule (đổi hằng tuần), và recorder, aggregator, Security Hub, GuardDuty, bucket log, đường báo động (đổi vài lần một năm). Stage `cloudops-config-rules` `-target` vào **đúng một** resource:
+
+> *Một pipeline tự apply được chúng là một pipeline có thể **tắt cả hệ thống phát hiện** của tổ chức trong một lần chạy.*
+
+`-target` là cách cho hai nhịp khác nhau đi qua cùng một state mà không phải tách state.
+
+**Giá phải trả, và nó đắt:**
+
+- `-target` giới hạn **apply**, nhưng `plan` vẫn refresh **toàn bộ** state → role cần **đọc rộng, ghi hẹp**, và một quyền đọc bị thiếu làm cả plan chết với thông báo không nhắc gì tới `-target`.
+- Output bị loại khỏi plan → phải `apply -refresh-only` sau đó, nếu không state có resource mới mà output cũ.
+- Resource **không** nằm trong target thì `precondition` của nó **không được tính** → 33 chốt cứng từng vắng mặt suốt nhiều lần chạy (mục 3.3).
+- Những gì không ai target thì không ai apply, và job drift sẽ báo lệch vĩnh viễn.
+
+Ba trong bốn cái giá đó đã sập thật. Đó là lý do mục 4 và phép kiểm 18 tồn tại.
+
+### 1.7 Vì sao cổng duyệt nằm GIỮA plan và apply
+
+Nếu có PR thì review sẽ ở PR. Không có PR (ràng buộc A), nên duyệt phải dịch vào trong pipeline. Nhưng chỗ đặt nó không chỉ là "chỗ còn lại" — nó là **chỗ tốt hơn**:
+
+Một review code trả lời *"đoạn code này có đúng không"*. Một review **bản plan** trả lời *"AWS sắp làm gì"*. Hai câu đó khác nhau, và câu thứ hai là câu người duyệt cần. Một thay đổi catalog một dòng có thể sinh ra một plan mở một cửa vào production — chỉ bản plan nói ra điều đó.
+
+Và nó chỉ bật ở stage nào cần: `approve_stages` hiện chỉ có `cloudops-firewall`. Stage `cloudops-network` không có cổng duyệt, vì một thay đổi DNS sai **có triệu chứng ngay**; một ingress rule mới thì không có gì cả.
+
+**Giá phải trả:** một lần chạy đợi người sẽ treo tới khi hết giờ — **7 ngày** — và một pipeline treo đọc giống một pipeline hỏng. Nặng hơn: `tu_kich_hoat = true` nghĩa là mọi commit vào `main` park một phiếu duyệt, kể cả commit không liên quan.
+
+### 1.8 Vì sao verify là stage RIÊNG, sau apply
+
+Ba lý do, và lý do thứ ba là cái quyết định:
+
+1. Nó chạy **dù apply không đổi gì**. Một lần chạy "0 added, 0 changed" vẫn phải chứng minh thực tế đúng như ta tưởng.
+2. Nó đọc **AWS**, không đọc state. `terraform plan` ra `No changes` ở cả hai trạng thái "email đã bấm xác nhận" và "chưa bấm" — state không trả lời được câu hỏi đó.
+3. Nó **không được đưa** Terraform, state, hay tfvars. `buildspec-verify.yml` không cài Terraform và không kéo tfvars. Một script verify đọc tfvars sẽ so khai báo với khai báo — tức trả lời một câu hỏi khác câu nó tưởng đang trả lời.
+
+> **Nói cho chính xác:** đây **không** phải ranh giới quyền. Project verify dùng **cùng** IAM role với project terraform (`aws_iam_role.codebuild[0]`). Ranh giới là *thứ nó được đưa*, không phải *thứ nó được phép* — một script verify hoàn toàn có thể gọi API ghi nếu ai đó viết vậy. Muốn thành ranh giới thật thì cần một role riêng chỉ-đọc; chưa làm.
+
+**Giá phải trả:** verify có thể đỏ vì một cảnh báo không phải do lần chạy này gây ra, và nó không phân biệt được "tôi vừa làm hỏng" với "chuyện này hỏng từ tuần trước".
+
+### 1.9 Vì sao drift là job theo lịch, không phải một stage
+
+Một stage chỉ chạy khi có người push. Mục đích của drift là bắt đúng những gì xảy ra **khi không ai push** — ai đó sửa tay trong console, một lần apply trước chưa hoàn tất. Đặt nó thành một stage là đặt nó ở chỗ nó không bao giờ thấy được thứ nó đi tìm.
+
+Và nó **chỉ** `plan`. Không có nhánh apply — không phải vì một biến được đặt đúng, mà vì **đoạn code apply không tồn tại**. Một biến có thể bị đè sai; một đoạn code không có thì không.
+
+**Giá phải trả:** drift phát hiện nhưng không sửa, nên nó tạo ra việc cho người. Và nó `plan` không `-target`, nên mọi thứ pipeline không chạm tới được sẽ hiện ra như drift vĩnh viễn — một cảnh báo luôn kêu, tức ràng buộc C bị phá từ bên trong. Đó là vì sao mục 4 phải được sửa cho đúng.
+
+### 1.10 Vì sao catalog YAML và một lớp lint offline
+
+Việc vận hành hằng ngày — mở một port, thêm một endpoint, cho một tên vào DNS — là **sửa dữ liệu**, không phải sửa code. Catalog YAML làm được hai thứ:
+
+- Một lỗi schema chết ở stage `Lint`, **trước khi** có gì gọi tới AWS. Nhanh, offline, không tốn một lần assume role nào.
+- Diff của một thay đổi đọc được bởi người không viết Terraform.
+
+**Giá phải trả:** hai lớp biểu diễn (YAML → HCL) nghĩa là số mục trong catalog **không** bằng số dòng luật ở AWS — một mục `firewall-rules.yaml` có thể thành một dòng Suricata phủ nhiều port. Verify cố ý **không** so hai số đó, và nói ra là nó không so (mục 6).
+
+### 1.11 Tóm lại: chín quyết định, chín cái giá
+
+| Quyết định | Nó mua được gì | Giá |
+|---|---|---|
+| CodeCommit thay GitHub Actions | tuân chính sách | mất PR, mất chỗ review tự nhiên |
+| plan và apply là hai stage | duyệt cái gì thì thi hành đúng cái đó | plan cũ có thể không apply được |
+| một pipeline / chủ sở hữu | bán kính nhỏ, thông báo đúng người | năm caller có thể lệch nhau |
+| nhiều stage / một pipeline | thứ tự đúng, một state | một stage đỏ chặn stage sau |
+| `-target` | hai nhịp thay đổi, một state | đọc rộng-ghi hẹp, mất output, mất precondition |
+| duyệt giữa plan và apply | người đọc **bản plan**, không đọc code | treo 7 ngày; mọi commit park một phiếu |
+| verify là stage riêng | đọc AWS, chạy cả khi 0 thay đổi | không phải ranh giới quyền; không phân biệt lỗi mới/cũ |
+| drift theo lịch | thấy được cái xảy ra khi không ai push | tạo việc cho người; dễ thành cảnh báo luôn kêu |
+| catalog YAML + lint | chết sớm, offline, diff đọc được | hai lớp biểu diễn, hai con số không bằng nhau |
 
 ---
 
