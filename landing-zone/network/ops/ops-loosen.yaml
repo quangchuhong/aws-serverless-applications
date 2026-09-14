@@ -60,7 +60,14 @@ loosen:
   # dai THAT cua doi tac (172.16.0.0/16) chu khong phai dai NLB - do la
   # khoa cua partner_service_sources, khac voi cidr_ipv4 cua rule.
   # ------------------------------------------------------------
-  - address: aws_vpc_security_group_ingress_rule.partner_service["sim-api-v2|172.16.0.0/16"]
+  # `stage` BAT BUOC o layer nay vi no co HAI stage dung chung file nay.
+  #
+  # Thieu dong nay thi khai bao duoc xet o CA HAI stage, va stage
+  # cloudops-network - noi ban plan khong he noi long gi - se bao
+  # "khai bao ... KHONG dung toi", roi --strict lam no DO. Da xay ra dung
+  # nhu vay o lan chay dau: plan sach, 0 loi, va stage van do.
+  - stage: cloudops-firewall
+    address: aws_vpc_security_group_ingress_rule.partner_service["sim-api-v2|172.16.0.0/16"]
     ticket: TEST-9002
     reason: Cong bo dich vu api-v2 cho doi tac sim de thu duong pipeline ops-network
     approved_by: quang

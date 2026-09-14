@@ -701,9 +701,29 @@ def main():
             return 1
         with open(a.loosen) as f:
             doc = yaml.safe_load(f) or {}
+        ####################################
+        # TRUONG `stage` - KHAI BAO THUOC VE MOT STAGE, KHONG PHAI CA LAYER
+        #
+        # ops-loosen.yaml la MOT file cho ca layer, nhung gate.py chay theo
+        # TUNG STAGE voi mot ban plan da -target. Nen mot khai bao cho stage
+        # A la "khong dung toi" duoi mat stage B - va --strict bien canh bao
+        # do thanh mot lan do.
+        #
+        # Da xay ra that: khai bao cho ingress rule cua cloudops-firewall lam
+        # stage cloudops-network CHET, du ban plan cua no sach (0 loi). Layer
+        # landing-zone/organization co BA stage nen no dinh cung mot bay.
+        #
+        # Khai bao co `stage` chi duoc xet khi dung stage do. Khong co `stage`
+        # thi xet o MOI stage - giu nguyen hanh vi cu cho layer mot stage,
+        # nhung voi layer nhieu stage thi do la mot cai bay. kiem-module.py
+        # muc 16 bat buoc phai co `stage` khi layer co tu hai stage tro len.
+        ####################################
         for m in doc.get("loosen") or []:
-            if "address" in m:
-                khai[m["address"]] = m
+            if "address" not in m:
+                continue
+            if m.get("stage") and m["stage"] != a.stage:
+                continue
+            khai[m["address"]] = m
 
     ####################################
     # PHAM VI

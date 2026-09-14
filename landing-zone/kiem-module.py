@@ -831,6 +831,77 @@ def kiem_quyen_doc_log():
     return loi
 
 
+def kiem_loosen_co_stage():
+    """16. Layer co tu HAI stage thi moi muc loosen phai co truong `stage`.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VA NO GIET MOT STAGE CO BAN PLAN SACH
+
+    ops-loosen.yaml la MOT file cho ca layer, nhung gate.py chay theo TUNG
+    STAGE voi mot ban plan da -target. Nen mot khai bao cho stage A la
+    "khong dung toi" duoi mat stage B, va --strict bien canh bao do thanh
+    mot lan do.
+
+    O ops-network: khai bao ingress rule cua cloudops-firewall lam stage
+    cloudops-network CHET, du plan cua no bao "0 loi". Thong bao noi ve mot
+    khai bao thua, khong noi gi ve viec no thuoc stage khac.
+
+    landing-zone/organization co BA stage dung chung mot file - cung bay.
+
+    =====================================================================
+    NO DOI CHIEU GI
+
+    caller main.tf:  cac cap (key, layer) trong local.stages
+    <layer>/ops-loosen.yaml: moi muc phai co `stage`, va gia tri do phai la
+                             mot key that cua layer do
+
+    Chi bat buoc khi layer co >= 2 stage: mot stage thi khong the nham.
+    """
+    loi = []
+    for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/ops-pipeline*"))):
+        f = os.path.join(d, "main.tf")
+        if not os.path.isfile(f):
+            continue
+        noi_dung = "\n".join(
+            x for x in open(f).read().splitlines() if not x.lstrip().startswith("#")
+        )
+        cap = re.findall(
+            r'key\s*=\s*"([^"]+)"[\s\S]{0,400}?layer\s*=\s*"([^"]+)"', noi_dung
+        )
+        theo_layer = {}
+        for k, L in cap:
+            theo_layer.setdefault(L, []).append(k)
+
+        for L, keys in theo_layer.items():
+            fl = os.path.join(GOC, L, "ops-loosen.yaml")
+            if len(keys) < 2 or not os.path.isfile(fl):
+                continue
+            try:
+                import yaml
+                doc = yaml.safe_load(open(fl)) or {}
+            except Exception as e:
+                loi.append(f"{L}/ops-loosen.yaml khong doc duoc: {e}")
+                continue
+            for m in doc.get("loosen") or []:
+                dc = m.get("address", "(khong co address)")
+                if not m.get("stage"):
+                    loi.append(
+                        f"{L}/ops-loosen.yaml: muc {dc} THIEU truong `stage`, "
+                        f"ma layer nay co {len(keys)} stage ({', '.join(keys)}). "
+                        "gate.py se xet khai bao o CA cac stage, va stage nao "
+                        "khong noi long se bao 'khai bao KHONG dung toi' roi do "
+                        "duoi --strict - du ban plan cua no sach."
+                    )
+                elif m["stage"] not in keys:
+                    loi.append(
+                        f"{L}/ops-loosen.yaml: muc {dc} khai stage "
+                        f"{m['stage']!r} khong co trong layer nay. Stage that: "
+                        f"{', '.join(keys)}. Khai sai ten thi gate.py bo qua "
+                        "khai bao, va NOI se bi chan nhu chua khai gi."
+                    )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -945,6 +1016,10 @@ def main():
         l6 = kiem_quyen_doc_log()
         print(f"  {'x' if l6 else 'v'} caller co verify deu cap quyen doc log")
         loi += l6
+
+        l7 = kiem_loosen_co_stage()
+        print(f"  {'x' if l7 else 'v'} loosen cua layer nhieu stage deu co `stage`")
+        loi += l7
 
     print()
     if loi:

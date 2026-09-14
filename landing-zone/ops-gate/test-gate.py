@@ -328,6 +328,38 @@ print("── Khai bao con lai sau khi thay doi da di qua ──")
 # long dung dia chi do se khong bi chan.
 chay("khai bao khong dung toi    -> canh bao, sach", 0, plan(NO_OP),
      loosen=KHAI_DU)
+
+
+print()
+print("── Khai bao co `stage`: mot file cho ca layer, nhieu stage ──")
+
+# ops-loosen.yaml la MOT file cho ca layer, nhung gate.py chay theo TUNG
+# stage voi mot ban plan da -target. Truoc khi co truong `stage`, mot khai
+# bao cho stage A lam stage B DO duoi --strict: plan cua B sach, nhung khai
+# bao kia "khong dung toi".
+#
+# Da xay ra that o ops-network: khai bao ingress rule cua cloudops-firewall
+# giet stage cloudops-network.
+KHAI_CO_STAGE = """
+loosen:
+  - stage: cloudops-firewall
+    address: aws_vpc_security_group_ingress_rule.partner_service["x|10.0.0.0/8"]
+    ticket: TEST-1
+    reason: thu
+    approved_by: a@b.c
+"""
+
+chay("khai bao cua stage KHAC    -> bo qua, sach ca voi --strict", 0,
+     plan(NO_OP), stage="cloudops-network", loosen=KHAI_CO_STAGE, strict=True)
+
+chay("khai bao DUNG stage, khong dung toi -> canh bao + strict = thoat 1", 1,
+     plan(NO_OP), stage="cloudops-firewall", loosen=KHAI_CO_STAGE, strict=True)
+
+chay("khai bao DUNG stage, co NOI khop    -> sach", 0, plan(NO_OP,
+     rc('aws_vpc_security_group_ingress_rule.partner_service["x|10.0.0.0/8"]',
+        "aws_vpc_security_group_ingress_rule", ["create"],
+        before=None, after={"cidr_ipv4": "10.0.0.0/8", "from_port": 80})),
+     stage="cloudops-firewall", loosen=KHAI_CO_STAGE, strict=True)
 chay("khai bao khong dung + strict -> thoat 1", 1, plan(NO_OP),
      loosen=KHAI_DU, strict=True)
 
