@@ -65,9 +65,22 @@ Ba hệ quả:
 
 ### `gate.py` — cổng chặn
 
+> **Hai chữ phải hiểu trước khi đọc tiếp: NỚI và THẮT.**
+>
+> Chúng nói về **quyền**, **không** liên quan gì tới mới/cũ. (`nới` rất dễ đọc nhầm thành `mới` — đã có người đọc nhầm thật.)
+>
+> | | Nghĩa | Ví dụ |
+> |---|---|---|
+> | **nới** | sau thay đổi, có thứ **được phép hơn** trước | xoá một SCP Deny · thêm account vào `excluded_accounts` · tạo một ingress rule |
+> | **thắt** | sau thay đổi, có thứ **bị chặn hơn** trước | thêm một SCP Deny · xoá một ingress rule · bật lại một Config rule |
+>
+> **`gate.py` chỉ chặn chiều *nới*.** Chiều *thắt* đi qua tự do, không cần phiếu — bạn không bao giờ phải xin phép để làm hệ thống an toàn hơn.
+>
+> Hai chỗ ngược trực giác: **xoá** một policy attachment là **nới** (guardrail biến mất, mà policy vẫn tồn tại nên console trông như không có gì đổi), và **tạo** một ingress rule cũng là **nới** (thêm một cái cửa).
+
 | | |
 |---|---|
-| **Nó là gì** | script trả lời *"thay đổi này có **nới quyền** không?"* |
+| **Nó là gì** | script trả lời *"thay đổi này làm hệ thống **lỏng hơn** hay **chặt hơn**?"* |
 | **Chạy khi nào** | trong stage **Plan**, ngay sau `terraform plan`, **trước** khi có ai duyệt gì |
 | **Nó đọc** | `tfplan.json` — **bản kế hoạch**. Không phải code, không phải AWS |
 | **Thấy vấn đề thì** | thoát `1` → stage Plan đỏ → pipeline dừng, không tới Apply |
@@ -160,7 +173,7 @@ test-gate.py · test-loc.py · kiem-module.py
 | File | Đọc gì | Trả lời câu gì | Chặn ở đâu |
 |---|---|---|---|
 | `loc.py` | danh sách file đã đổi | pipeline nào **liên quan** | trước khi pipeline chạy |
-| `gate.py` | bản plan | thay đổi này **nới** hay **thắt** | trước Duyệt và Apply |
+| `gate.py` | bản plan | thay đổi này làm **lỏng hơn** hay **chặt hơn** | trước Duyệt và Apply |
 | `kiem-log.sh` | log của lần chạy này | có cảnh báo nào **lọt** không | sau Apply |
 | `test-*.py` | dữ liệu giả | ba file trên còn đúng không | không ở đâu |
 

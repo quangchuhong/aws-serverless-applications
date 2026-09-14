@@ -295,105 +295,121 @@ Bước 9 không phải cho đẹp. `terraform apply <file plan>` với `-target
 
 ### 2.4 Năm layer, cụ thể từng cái
 
-Bảng ở 2.2 nói pipeline nào apply layer nào. Mục này nói **trong mỗi layer có gì**, pipeline được chạm phần nào, và phần nào phải sửa tay.
+Bảng ở 2.2 nói pipeline nào apply layer nào. Mục này nói **trong mỗi layer có gì**, pipeline sửa được phần nào, và phần nào phải sửa tay.
 
-Cột quan trọng nhất ở mỗi khối dưới đây là **"pipeline KHÔNG được chạm"**. Đó không phải giới hạn kỹ thuật — nó là câu trả lời cho câu hỏi *"nếu tôi sửa dòng này rồi push, có gì xảy ra không"*. Câu trả lời thường là **không có gì**, và đó là kiểu hỏng không có triệu chứng.
+Mỗi layer viết theo cùng một hình dạng, và dòng quan trọng nhất là **"phải sửa tay"**. Đó không phải giới hạn kỹ thuật — nó là câu trả lời cho *"nếu tôi sửa dòng này rồi push thì có gì xảy ra không"*. Câu trả lời thường là **không có gì**, và đó là kiểu hỏng không có triệu chứng.
 
 #### `landing-zone/organization` — SCP, cây OU, tag policy
 
 | | |
 |---|---|
-| Khoá state | `organization/terraform.tfstate` |
-| Tạo resource ở | **management** — Organizations API chỉ gọi được từ đó |
-| Pipeline | `qh11-lz-ops` · **sec** sở hữu · 3 stage, 1 layer, 1 state |
-| Stage được chạm | `sec-ou` → OU level1 + level2 · `sec-scp` → `policy.scp` + `attachment.scp` · `sec-tagging` → `policy.tag` + `attachment.tag` |
-| Pipeline **KHÔNG** được chạm | `aws_organizations_organization`, `aws_organizations_delegated_administrator` — sửa tay |
-| Nhịp thay đổi | SCP: vài lần một tháng · cây OU: vài lần một năm |
-| Verify | `kiem-to-chuc.sh` — đọc SCP **đang gắn thật** ở AWS và cây OU thật |
+| **Nó chứa gì** | Guardrail của cả tổ chức: các SCP, cây OU hai tầng, tag policy, và đăng ký delegated administrator |
+| **Ai sửa** | `qh11-lz-ops` — **sec** sở hữu. Ba stage, một layer, một state |
+| **Pipeline sửa được** | `sec-ou` → cây OU · `sec-scp` → SCP và chỗ gắn SCP · `sec-tagging` → tag policy và chỗ gắn |
+| **Phải sửa tay** | `aws_organizations_organization` (chính cái tổ chức) và `aws_organizations_delegated_administrator` |
+| **Đổi bao lâu một lần** | SCP: vài lần một tháng · cây OU: vài lần một năm |
+| **Verify đọc** | `kiem-to-chuc.sh` — SCP **đang gắn thật** ở AWS và cây OU thật |
+| Khoá state · account | `organization/terraform.tfstate` · **management** (Organizations API chỉ gọi được từ đó) |
 | Chốt cứng | `terraform_data.scp_guard` — 2 precondition |
 
-Điều riêng của layer này: **thứ tự ba stage có ý nghĩa**. Đổi tên một OU làm khoá của `attachment.scp` đổi theo (khoá là `<policy>|<tên OU>`), nên Terraform thấy destroy + create. Nếu SCP chạy trước OU, attachment không được đối chiếu lại cho tới lượt sau. Đó là vì sao ba stage ở **cùng một pipeline** chứ không phải ba pipeline (mục 1.5).
+**Ví dụ một yêu cầu thật:** *"Chặn mọi account khỏi tắt CloudTrail."* → thêm một statement Deny vào định nghĩa SCP → stage `sec-scp`. `gate.py` thấy đây là **thắt**, nên đi qua không cần phiếu.
+
+Ngược lại: *"Cho security account làm delegated admin của GuardDuty."* → `aws_organizations_delegated_administrator` → **sửa tay**, pipeline không chạm tới.
+
+**Điều riêng của layer này:** thứ tự ba stage có ý nghĩa. Đổi tên một OU làm khoá của chỗ gắn SCP đổi theo (khoá là `<policy>|<tên OU>`), nên Terraform thấy destroy + create. Nếu SCP chạy trước OU, chỗ gắn không được đối chiếu lại cho tới lượt sau. Đó là vì sao ba stage ở **cùng một pipeline** (mục 1.5).
 
 #### `landing-zone/org-trail` — CloudTrail cấp tổ chức
 
 | | |
 |---|---|
-| Khoá state | `org-trail/terraform.tfstate` |
-| Tạo resource ở | trail ở **management** · bucket log ở **log-archive** |
-| Pipeline | `qh11-lz-ops-trail` · cloudops · 1 stage |
-| Stage được chạm | `aws_cloudtrail.this` — **đúng một resource** |
-| Pipeline **KHÔNG** được chạm | cả bucket và 7 resource cấu hình của nó: `bucket_policy`, `versioning`, `server_side_encryption`, `public_access_block`, `ownership_controls`, **`object_lock_configuration`**, lifecycle |
-| Nhịp thay đổi | gần như không đổi — sửa khi thêm data event |
-| Verify | `kiem-trail.sh` — trail, log file validation, bucket |
+| **Nó chứa gì** | Một trail ghi mọi API call của mọi account, và cái bucket chứa log đó — kèm 7 resource cấu hình bucket |
+| **Ai sửa** | `qh11-lz-ops-trail` — cloudops. Một stage |
+| **Pipeline sửa được** | `aws_cloudtrail.this` — **đúng một resource** |
+| **Phải sửa tay** | Toàn bộ bucket log: policy, versioning, mã hoá, public access block, ownership, lifecycle, và **object lock** |
+| **Đổi bao lâu một lần** | Gần như không đổi |
+| **Verify đọc** | `kiem-trail.sh` — trail, log file validation, bucket |
+| Khoá state · account | `org-trail/terraform.tfstate` · trail ở **management**, bucket ở **log-archive** |
 
-Object lock là lý do bucket nằm ngoài tầm pipeline. Một bucket log có object lock mà một đường tự động sửa được thì object lock không còn nghĩa gì: thứ nó bảo vệ chính là khả năng **không ai** xoá được log, kể cả người có quyền.
+**Ví dụ một yêu cầu thật:** *"Ghi thêm data event của S3 vào trail."* → `aws_cloudtrail.this` → pipeline làm được.
+
+Ngược lại: *"Giữ log 10 năm thay vì 7."* → lifecycle của bucket → **sửa tay**.
+
+**Vì sao bucket nằm ngoài tầm pipeline:** object lock. Một bucket log có object lock mà một đường tự động sửa được thì object lock không còn nghĩa gì — thứ nó bảo vệ chính là việc **không ai** xoá được log, kể cả người có quyền.
 
 #### `landing-zone/permission-sets` — ai vào account nào
 
 | | |
 |---|---|
-| Khoá state | `permission-sets/terraform.tfstate` |
-| Tạo resource ở | **management** (IAM Identity Center) |
-| Pipeline | `qh11-lz-ops-permission-set` · cloudops · 1 stage |
-| Stage được chạm | `aws_ssoadmin_account_assignment.this`, `aws_identitystore_group_membership.this` |
-| Pipeline **KHÔNG** được chạm | `aws_ssoadmin_permission_set`, `..._inline_policy`, `..._managed_policy_attachment`, `aws_identitystore_user` |
+| **Nó chứa gì** | Hai thứ khác nhau: **các permission set** (một set = một bộ quyền), và **các assignment** (group nào dùng set nào ở account nào) |
+| **Ai sửa** | `qh11-lz-ops-permission-set` — cloudops. Một stage |
+| **Pipeline sửa được** | assignment và thành viên group — tức **ai vào account nào** |
+| **Phải sửa tay** | Bản thân permission set: inline policy, managed policy gắn kèm, và user trong Identity Store |
+| **Đổi bao lâu một lần** | assignment: hằng tuần · nội dung permission set: vài lần một năm |
+| **Verify đọc** | `kiem-quyen.sh` — assignment thật theo từng account |
+| Khoá state · account | `permission-sets/terraform.tfstate` · **management** (IAM Identity Center) |
 | Đọc state layer khác | `account-baseline/terraform.tfstate` — lấy danh sách account vừa vend |
-| Nhịp thay đổi | assignment: hằng tuần · nội dung permission set: vài lần một năm |
-| Verify | `kiem-quyen.sh` — assignment thật theo từng account |
 
-Ranh giới ở đây là ranh giới **ngữ nghĩa**, không phải kỹ thuật. Tạo một assignment là cho *một* group vào *một* account. Đổi nội dung một permission set là đổi quyền của **mọi** người đang dùng set đó, ở **mọi** account, **ngay lập tức** — không ai phải đăng nhập lại. Việc thứ hai không phải việc hằng ngày, nên nó không nằm trên đường hằng ngày.
+**Ví dụ một yêu cầu thật:** *"Nhóm dev cần vào account nonprod vừa tạo."* → một assignment mới → pipeline làm được. `gate.py` coi **tạo** một assignment là **nới** (một group vừa vào được một account mới), nên phải khai `loosen` kèm ticket.
 
-Và đây là layer có dòng `state_chi_doc` đầu tiên: thiếu nó thì plan chết với `403 Forbidden` trên S3, và thông báo không nhắc gì tới `terraform_remote_state`.
+Ngược lại: *"Nhóm dev cần thêm quyền RDS."* → sửa inline policy của permission set → **sửa tay**.
+
+**Vì sao ranh giới nằm đúng ở đó:** tạo một assignment là cho *một* group vào *một* account. Đổi nội dung một permission set là đổi quyền của **mọi** người đang dùng set đó, ở **mọi** account, **ngay lập tức** — không ai phải đăng nhập lại. Việc thứ hai không phải việc hằng ngày, nên nó không nằm trên đường hằng ngày.
+
+Đây cũng là layer đầu tiên có `state_chi_doc`. Thiếu dòng đó thì plan chết với `403 Forbidden` trên S3, và thông báo không nhắc gì tới `terraform_remote_state`.
 
 #### `landing-zone/config-detective` — Config rule, và cả lớp phát hiện
 
 | | |
 |---|---|
-| Khoá state | `config-detective/terraform.tfstate` |
-| Tạo resource ở | **security** (aggregator, Security Hub + GuardDuty admin) · **log-archive** (bucket snapshot) · và một CloudFormation StackSet rải recorder xuống **mọi account thành viên** |
-| Pipeline | `qh11-lz-ops-config-rules` · cloudops · 1 stage |
-| Stage được chạm | `aws_config_organization_managed_rule.this` — **đúng một resource** |
-| Pipeline **KHÔNG** được chạm | recorder StackSet, aggregator, Security Hub, GuardDuty (detector + member + feature), bucket snapshot và policy của nó, SNS topic + policy + subscription, EventBridge rule → tức **toàn bộ đường báo động** |
-| Nhịp thay đổi | rule: hằng tuần · phần còn lại: vài lần một năm |
-| Verify | `kiem-config.sh` — đọc org config rule qua **đúng cửa mà apply dùng** (assume vào security) |
-| Quan sát thật | **75 resource** trong state |
+| **Nó chứa gì** | Lớp phát hiện của cả tổ chức: Config rule, recorder rải xuống mọi account, aggregator, Security Hub, GuardDuty, bucket snapshot, và **đường báo động** (SNS + EventBridge) |
+| **Ai sửa** | `qh11-lz-ops-config-rules` — cloudops. Một stage |
+| **Pipeline sửa được** | `aws_config_organization_managed_rule.this` — **đúng một resource trên 75** |
+| **Phải sửa tay** | Tất cả phần còn lại: recorder StackSet, aggregator, Security Hub, GuardDuty, bucket, SNS topic + policy + subscription, EventBridge rule |
+| **Đổi bao lâu một lần** | rule: hằng tuần · phần còn lại: vài lần một năm |
+| **Verify đọc** | `kiem-config.sh` — org config rule, qua **đúng cửa mà apply dùng** (assume vào security) |
+| Khoá state · account | `config-detective/terraform.tfstate` · **security** + **log-archive** + StackSet xuống mọi account thành viên |
 
-Layer nặng nhất, và có tỷ lệ "được chạm / tổng" thấp nhất: 1 trên 75. Chú thích ở đầu caller nói lý do:
+**Ví dụ một yêu cầu thật:** *"Bật thêm rule kiểm EBS đã mã hoá chưa."* → thêm một dòng vào `organization_rules` → pipeline làm được.
 
-> *Một pipeline tự apply được chúng là một pipeline có thể **tắt cả hệ thống phát hiện** của tổ chức trong một lần chạy.*
-
-Hệ quả vận hành phải biết: thêm một publisher vào `extra_publisher_arns` là sửa `aws_sns_topic_policy.alerts` — **nằm ngoài tầm pipeline**. Phải apply tay:
+Ngược lại: *"Thêm một địa chỉ nhận cảnh báo bảo mật."* → `alert_emails` → **sửa tay**. Và *"cho role CodeBuild của ops-network gửi được vào topic này"* → `aws_sns_topic_policy.alerts` → cũng **sửa tay**:
 
 ```bash
 cd landing-zone/config-detective && terraform apply -target=aws_sns_topic_policy.alerts
 ```
 
+**Vì sao tỷ lệ 1/75:** chú thích ở đầu caller nói thẳng — *một pipeline tự apply được chúng là một pipeline có thể **tắt cả hệ thống phát hiện** của tổ chức trong một lần chạy.*
+
 #### `landing-zone/network/ops` — lớp vận hành mạng
 
 | | |
 |---|---|
-| Khoá state | `demo-network-lz-full/ops/terraform.tfstate` — **khoá không khớp đường dẫn, có chủ đích** |
-| Tạo resource ở | **network**, qua `sts:AssumeRole` sang `OrganizationAccountAccessRole` |
-| Pipeline | `qh11-lz-ops-network` · cloudops · **2 stage** |
-| Stage được chạm | `cloudops-network` → 13 resource (DNS, endpoint, route, NLB, alarm) · `cloudops-firewall` → `networkfirewall_rule_group`, `vpc_security_group_ingress_rule` |
-| Pipeline **KHÔNG** được chạm | **không có gì** — cả **16** resource của layer đều nằm trong target của một trong hai stage |
-| Đọc state layer khác | `demo-network-lz-full/terraform.tfstate` — layer cha, lấy TGW, VPC, vùng |
-| Nhịp thay đổi | **hằng ngày** |
-| Verify | `kiem-mang.sh` — rule group, `StatefulDefaultActions`, alarm, subscription |
+| **Nó chứa gì** | Bề mặt vận hành mạng hằng ngày: DNS nội bộ, VPC endpoint, route ngoại lệ, dịch vụ công bố cho đối tác, luật tường lửa east-west, alarm VPN |
+| **Ai sửa** | `qh11-lz-ops-network` — cloudops. **Hai** stage |
+| **Pipeline sửa được** | `cloudops-network` → 13 resource (DNS, endpoint, route, NLB, alarm) · `cloudops-firewall` → nhóm luật tường lửa và ingress rule, **có cổng duyệt** |
+| **Phải sửa tay** | **Không có gì** — cả **16** resource của layer đều nằm trong target của một trong hai stage |
+| **Đổi bao lâu một lần** | **Hằng ngày** |
+| **Verify đọc** | `kiem-mang.sh` — nhóm luật, hành động mặc định của policy, alarm, subscription |
+| Khoá state · account | `demo-network-lz-full/ops/terraform.tfstate` — **khoá không khớp đường dẫn, có chủ đích** · **network**, qua assume role |
+| Đọc state layer khác | `demo-network-lz-full/terraform.tfstate` — layer cha: TGW, VPC, vùng |
 | Chốt cứng | `terraform_data.catalog_guard` — **31** precondition |
-| Quan sát thật | 21 resource trong state (16 địa chỉ, một số có `for_each`) |
 
-Layer duy nhất pipeline được chạm **toàn bộ** — và đó là nhất quán, không phải lỏng tay: cả layer này *chính là* bề mặt vận hành. Nó không chứa hạ tầng nền; hạ tầng nền nằm ở layer cha.
+**Ví dụ một yêu cầu thật:** *"Đội A xin mở port 443 sang đội B ở VPC khác."* → thêm một khối vào `firewall-rules.yaml` → stage `cloudops-firewall` → `gate.py` thấy **nới** → khai `loosen` kèm ticket → **một người duyệt** → apply.
 
-Nó cũng là layer duy nhất có **catalog YAML** (`apps`, `firewall-rules`, `routes`, `endpoints`, `dns-records`, `partners`) và duy nhất có **cổng duyệt** (`cloudops-firewall`).
+Đây là layer duy nhất có **catalog YAML** (`apps`, `firewall-rules`, `routes`, `endpoints`, `dns-records`, `partners`) và duy nhất có **cổng duyệt**.
+
+**Vì sao pipeline được chạm toàn bộ:** đó là nhất quán, không phải lỏng tay — cả layer này *chính là* bề mặt vận hành. Nó không chứa hạ tầng nền; hạ tầng nền ở layer cha.
 
 **Khoá state không khớp đường dẫn là chủ đích.** Layer này trước ở `demo/network-lz-full` và đã apply thật; khi đường dẫn đổi, khoá state giữ nguyên. Đổi khoá nghĩa là Terraform mở một state **rỗng**: plan đòi tạo lại ~200 resource, và hạ tầng thật thành mồ côi — vẫn chạy, vẫn tính tiền, không còn ai quản.
 
-#### Layer cha `landing-zone/network` — không pipeline nào ở đây apply
+#### Layer cha `landing-zone/network` — không pipeline vận hành nào chạm
 
-Khoá `demo-network-lz-full/terraform.tfstate`, khoảng **200 resource**: TGW, 17 subnet, 17 route table, 19 route, security VPC, Network Firewall policy, VPN đối tác. Nó do `vending-pipeline` apply, không phải một trong năm pipeline vận hành.
+| | |
+|---|---|
+| **Nó chứa gì** | Hạ tầng nền, ~**200** resource: TGW, 17 subnet, 17 route table, security VPC, Network Firewall policy, VPN đối tác |
+| **Ai sửa** | `vending-pipeline` — **không** phải một trong năm pipeline vận hành |
+| Khoá state | `demo-network-lz-full/terraform.tfstate` |
 
-`network/ops` **đọc** state này. Nên hai thứ ở layer cha mà lớp vận hành phụ thuộc vào nhưng không sửa được:
+`network/ops` **đọc** state này. Nên hai thứ lớp vận hành phụ thuộc vào mà **không sửa được**:
 
 - `var.firewall_mode` — `alert` hay `drop`. Lớp ops nạp luật; layer cha quyết định luật có chặn gì không.
 - SNS topic `netops` và các alarm action đi kèm.
@@ -420,6 +436,15 @@ Lớp thứ tư là lớp **duy nhất** đọc được ý định. `gate.py` b
 ### 3.1 `gate.py` — chiều, không phải hành động
 
 > Chi tiết đầy đủ — sáu phép so sánh, bốn luật ngầm chạy trước chúng, và bốn cái bẫy của `kiem-log.sh` — ở [doc 29 phần II](./29-Bo-loc-Kich-hoat-va-Cong-Chan.md#phần-ii--ops-gate).
+
+**Hai chữ phải hiểu trước: NỚI và THẮT.** Chúng nói về **quyền**, không liên quan gì tới mới/cũ (`nới` rất dễ đọc nhầm thành `mới`).
+
+| | Nghĩa | Ví dụ |
+|---|---|---|
+| **nới** | sau thay đổi, có thứ **được phép hơn** trước | xoá một SCP Deny · thêm account vào `excluded_accounts` · tạo một ingress rule |
+| **thắt** | sau thay đổi, có thứ **bị chặn hơn** trước | thêm một SCP Deny · xoá một ingress rule · bật lại một Config rule |
+
+**`gate.py` chỉ chặn chiều *nới*.** Chiều *thắt* đi qua tự do — bạn không bao giờ phải xin phép để làm hệ thống an toàn hơn.
 
 Cổng này không đếm. Nó đọc `before`/`after` của từng thuộc tính và biết chiều của từng dịch vụ:
 
