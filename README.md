@@ -31,6 +31,7 @@ Ghi chép và ví dụ Terraform về AWS: serverless workload và Landing Zone 
 | **[29](./docs/29-Bo-loc-Kich-hoat-va-Cong-Chan.md)** | **Bộ lọc kích hoạt và cổng chặn** – hai bộ phận dùng chung: `loc.py` quyết định thay đổi có được chạy, `gate.py` quyết định nó có được qua. Sáu phép so sánh chiều nới/thắt, và bốn cái bẫy của bộ đọc log |
 | **[30](./docs/30-Khuon-mau-Code-Layer-va-Caller-Pipeline.md)** | **Khuôn mẫu code** – mười hai việc hay gặp khi sửa một layer hoặc caller pipeline: catalog YAML, `terraform_remote_state`, assume role, `check` vs `precondition`, và bốn chỗ phải sửa cùng lúc khi thêm một resource |
 | **[31](./docs/31-Ban-do-Code-Landing-Zone.md)** | **Bản đồ code LZ** – toàn bộ 19 layer: nó là gì, khoá state, ai apply, ai đọc state của ai. Vì sao hai layer có hai pipeline, và "tôi sửa file này thì cái gì chạy" |
+| **[32](./docs/32-Tham-chieu-Code-Tung-Layer.md)** | **Tham chiếu code từng layer** – 413 resource, 126 check, 22 script: mỗi file làm gì, resource nào đáng biết tên, `check` nào bắt được gì. Kèm bảng tra "cần sửa X thì mở file nào" |
 | [11](./docs/11-Tag-Policy-va-Cost-Allocation.md) | Tag policy và cost allocation – chia bill theo team |
 
 ## Landing Zone – identity
