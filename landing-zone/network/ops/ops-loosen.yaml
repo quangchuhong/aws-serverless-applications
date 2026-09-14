@@ -56,9 +56,13 @@ loosen:
   #   port       80             target_port, khong phai 8081
   #   dich       10.20.0.10/32  app-prod-api
   #
-  # LUU Y dia chi: khoa la "<doi tac>-<dich vu>|<cidr>", va cidr o day la
-  # dai THAT cua doi tac (172.16.0.0/16) chu khong phai dai NLB - do la
-  # khoa cua partner_service_sources, khac voi cidr_ipv4 cua rule.
+  # LUU Y dia chi: khoa la "<doi tac>-<dich vu>|<cidr>", voi cidr la dai
+  # THAT cua doi tac - GIONG cidr_ipv4 cua chinh rule, vi rule nay nam tren
+  # SG cua NLB va kiem soat chang "doi tac -> NLB".
+  #
+  # Dai NLB (10.9.100.0/23) va cong 80 thuoc chang KHAC: NLB -> ung dung,
+  # va chang do khai o firewall-rules.yaml. Xem bang hai chang o vpn.tf,
+  # ngay tren resource nay.
   # ------------------------------------------------------------
   # `stage` BAT BUOC o layer nay vi no co HAI stage dung chung file nay.
   #

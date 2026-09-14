@@ -369,6 +369,32 @@ resource "aws_lb_listener" "partner_service" {
 # lan apply. Layer cha da doi sang cach nay cung luc.
 ########################################
 
+########################################
+# HAI CHANG, HAI CAP (dai, cong) - VA CHUNG DE BI LAN
+#
+# Rule nay nam tren SG cua NLB, nen no kiem soat chang THU NHAT: doi tac
+# goi vao NLB. Rule Suricata trong firewall-rules.yaml kiem soat chang THU
+# HAI: NLB goi vao ung dung.
+#
+#   chang            nguon             cong          khai o dau
+#   --------------   ---------------   -----------   ---------------------
+#   doi tac -> NLB   remote_cidr       port          partners.yaml (day)
+#                    172.16.0.0/16     8081
+#   NLB -> ung dung  dai NLB           target_port   firewall-rules.yaml
+#                    10.9.100.0/23     80
+#
+# Hai cap nay KHONG bao gio giong nhau, va lan chung la loi im lang:
+#
+#   - mo firewall o `port` (8081) thay vi `target_port` (80): apply XANH,
+#     va rule khong khop mot goi tin nao tron doi
+#   - mo SG o dai NLB thay vi dai doi tac: doi tac khong vao duoc NLB, con
+#     dai NLB thi da vao duoc san
+#
+# Da lan that mot lan khi doc ban plan o cong duyet: du doan `cidr_ipv4 =
+# 10.9.100.0/23, port 80` cho rule NAY, trong khi do la cap cua chang thu
+# hai. Ban plan dung; nguoi doc sai.
+########################################
+
 resource "aws_vpc_security_group_ingress_rule" "partner_service" {
   for_each = local.partner_on ? local.partner_service_sources : {}
 
