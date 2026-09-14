@@ -23,6 +23,151 @@ Cả hai đều là một bản dùng chung, và đó là quyết định thiế
 
 ---
 
+## 0b. Bốn file, mỗi file một câu hỏi
+
+Đọc mục này trước. Phần I và II bên dưới là chi tiết của chính bốn file này.
+
+### `ops-gate` KHÔNG phải một layer Terraform
+
+Câu hỏi đầu tiên ai cũng hỏi: *pipeline của nó đâu?* Không có.
+
+```
+landing-zone/ops-gate/
+  gate.py          36 KB
+  kiem-log.sh      20 KB
+  test-gate.py     18 KB
+```
+
+Không một file `.tf` nào. Không có trong `tf-backend/outputs.tf` (bảng khoá state), không có trong `push-tfvars.sh`. Nên nó **không có** state, tfvars, pipeline, hay cổng duyệt. Nó là một thư viện script nằm trong repo, và các pipeline khác **gọi** nó từ source đã checkout.
+
+"Triển khai" nó chỉ là một việc:
+
+```bash
+git push codecommit HEAD:main
+```
+
+Ba hệ quả:
+
+1. **Sửa `gate.py` là sửa cho cả năm pipeline, ngay lập tức.** Không rollout từng cái, không ghim phiên bản. Lần chạy tiếp theo của *bất kỳ* pipeline nào dùng bảng luật mới. (`landing-zone/ops-gate/` nằm trong `ban_do` của `ops-network` để ít nhất một pipeline chạy ngay và thử bảng mới — nhưng đó chỉ quyết định *khi nào có một lần chạy*, không quyết định phiên bản nào được dùng.)
+2. **`gate.py` vỡ thì pipeline đỏ, không phải đi qua.** Buildspec chạy dưới `set -euo pipefail`, nên một exception Python làm build thất bại. Hỏng theo chiều an toàn.
+3. **Nhưng `gate.py` *sai tinh vi* thì pipeline xanh** — một luật không còn nổ, một dòng thiếu trong `PHAM_VI`. Và không pipeline nào chạy `test-gate.py`. Xem cuối mục này.
+
+### `loc.py` — bộ lọc kích hoạt
+
+| | |
+|---|---|
+| **Nó là gì** | một Lambda trả lời *"thay đổi này có liên quan pipeline nào?"* |
+| **Chạy khi nào** | mỗi lần có commit vào `main` của CodeCommit, **trước** khi pipeline nào chạy |
+| **Nó đọc** | `GetDifferences(oldCommitId, commitId)` — danh sách file thật, vì sự kiện EventBridge **không** mang danh sách đó |
+| **Thấy vấn đề thì** | `ban_do` sai cấu trúc → `raise` **trước** khi chạm pipeline nào · khởi động lẻ thất bại → `raise` để số `Errors` của Lambda hiện ra |
+
+**Ví dụ:** bạn sửa `landing-zone/network/ops/firewall-rules.yaml`. `loc.py` thấy đường dẫn đó khớp tiền tố `"landing-zone/network/"` của `ops-network`, và không khớp tiền tố của bốn pipeline kia — nên chỉ `ops-network` chạy. Không có nó thì cả năm chạy, và bốn cái park bốn phiếu duyệt vô ích.
+
+### `gate.py` — cổng chặn
+
+| | |
+|---|---|
+| **Nó là gì** | script trả lời *"thay đổi này có **nới quyền** không?"* |
+| **Chạy khi nào** | trong stage **Plan**, ngay sau `terraform plan`, **trước** khi có ai duyệt gì |
+| **Nó đọc** | `tfplan.json` — **bản kế hoạch**. Không phải code, không phải AWS |
+| **Thấy vấn đề thì** | thoát `1` → stage Plan đỏ → pipeline dừng, không tới Apply |
+
+```sh
+# buildspec-terraform.yml:268
+GATE="${CODEBUILD_SRC_DIR}/landing-zone/ops-gate/gate.py"
+if [ ! -f "$GATE" ]; then echo "LOI: khong thay $GATE"; exit 1; fi
+python3 "$GATE" --plan tfplan.json --layer "${LAYER_DIR}" --stage "${GATE_STAGE}" --strict $LOOSEN
+```
+
+Đường dẫn **tuyệt đối từ gốc repo**, không tương đối từ layer — vì buildspec đã `cd` vào thư mục layer trước đó. Cái `if [ ! -f ]` tồn tại vì đường dẫn đó dễ hỏng khi ai đổi cấu trúc thư mục.
+
+**Ví dụ thật.** Thêm một dịch vụ đối tác vào catalog. Plan sinh ra:
+
+```
++ aws_vpc_security_group_ingress_rule.partner_service["sim-api-v2|172.16.0.0/16"]
+```
+
+`gate.py` biết **tạo** một ingress rule là **nới** — mở một cửa — nên nó chặn. Khai vào `ops-loosen.yaml` rồi thì nó in và đi tiếp:
+
+```
+NOI co khai bao: aws_vpc_security_group_ingress_rule.partner_service[...]
+    ticket TEST-9002 - mở dịch vụ api-v2 cho đối tác sim - duyệt bởi ...
+```
+
+### `kiem-log.sh` — bộ đọc log
+
+| | |
+|---|---|
+| **Nó là gì** | script trả lời *"có cảnh báo nào lọt qua trong một stage trông xanh không?"* |
+| **Chạy khi nào** | trong stage **Verify**, cuối cùng, ngay sau script verify của layer |
+| **Nó đọc** | CloudWatch Logs của **chính lần chạy này** — `list-pipeline-executions` → `list-action-executions` → `get-log-events` |
+| **Thấy vấn đề thì** | thoát khác `0` → stage Verify đỏ |
+
+**Vì sao nó phải tồn tại:** `check` block của Terraform **chỉ cảnh báo** — apply vẫn chạy tiếp, stage vẫn xanh. Một cảnh báo thật sống sót qua một pipeline hoàn toàn xanh, và không ai mở log ra đọc.
+
+**Ví dụ thật:**
+
+```
+── Log cua lan chay vua roi
+    2380 dong log
+    Warning:  1 phat hien / 2 dong
+      │ Warning: Check block assertion failed   (x2)
+        on firewall.tf line 284, in check "firewall_mode_makes_rules_meaningful":
+
+  CANH BAO log co 1 phat hien (Warning:).
+        Stage xanh khong co nghia la khong co gi.
+```
+
+Bốn stage trước đó đều xanh. Cảnh báo "firewall đang ở chế độ `alert` nên 7 rule không quyết định gì" chỉ hiện ra vì file này đi tìm nó.
+
+### `test-gate.py` và `test-loc.py` — và chúng chạy ở đâu
+
+| | |
+|---|---|
+| **Nó là gì** | 43 + 39 test dựng dữ liệu **giả** bằng tay rồi kiểm từng luật, từng chiều |
+| **Chạy khi nào trong pipeline** | **không bao giờ** |
+
+```bash
+python3 landing-zone/ops-gate/test-gate.py        # 43 dat / 0 truot
+python3 landing-zone/trigger-filter/test-loc.py   # 39/39 dat
+python3 landing-zone/kiem-module.py               # 18 phep kiem
+```
+
+Cả ba chỉ xuất hiện trong **chú thích** của code hạ tầng, không ở một lệnh nào của pipeline. Nên chúng chạy **duy nhất trên máy của người sửa**.
+
+Đó là lỗ thật, và nó ghép với hệ quả 2 và 3 ở trên: một `gate.py` *vỡ* thì đỏ (an toàn), nhưng một `gate.py` *sai tinh vi* thì **xanh**, và cổng im lặng ngừng chặn đúng cái nó được viết ra để chặn. Đã xảy ra hai lần: phép kiểm 18 ban đầu chỉ đọc một nửa (xanh cho đúng cấu hình làm pipeline đỏ), và phép kiểm 14 từng tự đi qua chính nó (chuỗi cần tìm nằm trong chú thích vừa viết).
+
+Chỗ đúng để bịt là stage `Lint` — nó chạy offline, không gọi AWS, và đứng trước mọi thứ chạm AWS. Cơ chế đã có sẵn: `lint_jobs = join(";", [for c in var.catalogs : "${c.layer}=${c.lint}"])`. Chưa làm.
+
+### Trong một lần chạy, chúng nằm ở đâu
+
+```
+commit vào main
+   │
+   loc.py ──► chỉ những pipeline bị chạm
+   │
+   ▼
+Nguồn → Lint → Expiry → ┌ Plan ──── Duyệt ── Apply ┐ → Verify
+                        │   │                      │      │
+                        │   gate.py                │      kiem-log.sh
+                        └──────────────────────────┘      (đọc log của
+                                                           chính lần chạy này)
+
+test-gate.py · test-loc.py · kiem-module.py
+   └─ không ở đâu trong hình này. Chỉ trên máy bạn.
+```
+
+| File | Đọc gì | Trả lời câu gì | Chặn ở đâu |
+|---|---|---|---|
+| `loc.py` | danh sách file đã đổi | pipeline nào **liên quan** | trước khi pipeline chạy |
+| `gate.py` | bản plan | thay đổi này **nới** hay **thắt** | trước Duyệt và Apply |
+| `kiem-log.sh` | log của lần chạy này | có cảnh báo nào **lọt** không | sau Apply |
+| `test-*.py` | dữ liệu giả | ba file trên còn đúng không | không ở đâu |
+
+Điểm dễ nhầm nhất: **`gate.py` đọc kế hoạch, `kiem-log.sh` đọc quá khứ.** Cái đầu chặn trước khi chuyện xảy ra; cái sau nói cho bạn biết chuyện gì vừa xảy ra mà không ai kêu. Và **không cái nào đọc AWS** — việc đó là của `verify.sh` từng layer, chạy ngay trước `kiem-log.sh` (doc 28 mục 6).
+
+---
+
 # Phần I — `trigger-filter`
 
 ## 1. Vì sao nó tồn tại
