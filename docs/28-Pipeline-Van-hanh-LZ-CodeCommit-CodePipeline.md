@@ -203,6 +203,8 @@ git push codecommit HEAD:main
 
 ### 2.1 Bộ lọc ở giữa, và vì sao nó phải tồn tại
 
+> Chi tiết đầy đủ — năm phép kiểm cấu trúc, các nhánh fail-open, và vì sao Lambda phải `raise` — ở [doc 29 phần I](./29-Bo-loc-Kich-hoat-va-Cong-Chan.md#phần-i--trigger-filter).
+
 Rule EventBridge của riêng một pipeline **không lọc được theo đường dẫn** — không phải vì viết sai, mà vì sự kiện không chứa danh sách file. Nên một dòng sửa trong `docs/` làm **cả năm** pipeline chạy, và mỗi cái park một phiếu duyệt.
 
 `trigger-filter` là một Lambda đứng giữa: nó gọi `GetDifferences` để lấy danh sách file thật, rồi chỉ khởi động pipeline có tiền tố bị chạm.
@@ -416,6 +418,8 @@ Khoá `demo-network-lz-full/terraform.tfstate`, khoảng **200 resource**: TGW, 
 Lớp thứ tư là lớp **duy nhất** đọc được ý định. `gate.py` biết "tạo một assignment là nới"; chỉ con người biết "assignment này có nên tồn tại".
 
 ### 3.1 `gate.py` — chiều, không phải hành động
+
+> Chi tiết đầy đủ — sáu phép so sánh, bốn luật ngầm chạy trước chúng, và bốn cái bẫy của `kiem-log.sh` — ở [doc 29 phần II](./29-Bo-loc-Kich-hoat-va-Cong-Chan.md#phần-ii--ops-gate).
 
 Cổng này không đếm. Nó đọc `before`/`after` của từng thuộc tính và biết chiều của từng dịch vụ:
 
