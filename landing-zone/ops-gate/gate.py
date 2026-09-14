@@ -245,6 +245,29 @@ LUAT = {
     "aws_sns_topic_subscription": {
         "xoa_la_noi": "mot nguoi nhan bao dong bien mat - phat hien van sinh ra, chi khong den voi ai",
     },
+
+    ####################################
+    # aws_sns_topic_policy CO Y KHONG NAM O DAY
+    #
+    # Da can nhac va da quyet dinh KHONG them - ghi lai o day de lan sau
+    # khong ai "phat hien lo hong" roi di sua.
+    #
+    # Dung la mot lo hong theo nghia hep: them mot Principal vao topic
+    # policy la noi quyen lien account, va cong nay khong thay. Chinh
+    # aws_ssoadmin_permission_set_inline_policy o tren duoc khai
+    # "bat_ky_doi" voi ly do "cong nay khong hieu noi dung policy" -
+    # cung tinh huong.
+    #
+    # Vi sao van khong: cong duyet co pham vi DA CHOT la SCP,
+    # permission-set va firewall rule. Them mot loai thu tu vao day la
+    # doi mo hinh van hanh, khong phai sua mot bo kiem - va do la quyet
+    # dinh cua nguoi so huu quy trinh, khong phai cua nguoi viet code.
+    #
+    # Neu doi y: 4 resource trong repo, va chi aws_sns_topic_policy.alerts
+    # cua config-detective di qua mot pipeline co cong (ba cai con lai o
+    # layer apply tay). Tieng on gan nhu bang khong, nen viec them lai
+    # re - cai dat gia la thay doi ai phai duyet cai gi.
+    ####################################
     "aws_cloudwatch_event_rule": {
         "xoa_la_noi": "phat hien khong con duoc chuyen di - Security Hub van day finding vao khoang khong",
         "thuoc_tinh": {
