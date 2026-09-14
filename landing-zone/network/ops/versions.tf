@@ -111,7 +111,23 @@ provider "aws" {
   #
   # Precondition trong main.tf doi chieu account thuc te voi account
   # ghi trong state cua layer cha, nen lech la plan dung lai.
-  profile = var.aws_profile != "" ? var.aws_profile : null
+  #
+  # assume_role_arn CO -> BO QUA profile. Hai dong nay tra loi hai cau
+  # khac nhau (nguon / dich) nhung chung KHONG duoc cung bat trong
+  # CodeBuild, va truoc day khong co gi thuc thi dieu do:
+  #
+  #   Error: failed to get shared config profile, default
+  #
+  # aws_profile nam trong terraform.tfvars, ma push-tfvars.sh day CHINH
+  # file do len S3 cho pipeline doc - nen gia tri danh cho nguoi ngoi may
+  # di thang vao CodeBuild, noi khong co ~/.aws/config. Con
+  # assume_role_arn thi buildspec truyen qua TF_VAR_. Ca hai cung co mat,
+  # va Terraform giai profile TRUOC khi assume.
+  #
+  # versions.tf cua ops-pipeline-network da du doan dung cho nay (diem 2)
+  # va ghi "khong sua duoc tu day; no la mot dong trong network/ops".
+  # Day la dong do.
+  profile = var.assume_role_arn == "" && var.aws_profile != "" ? var.aws_profile : null
 
   ####################################
   # ROLE - DUONG CHO CODEBUILD

@@ -11,22 +11,33 @@
 #    "state RONG" cua buildspec - va thong bao o do noi ve SAI KHOA
 #    STATE, khong noi rang layer chua duoc dung.
 #
-# 2. LAYER DUOC VIET CHO NGUOI NGOI MAY, CHUA CHO PIPELINE.
-#    network/ops/versions.tf dung:
+# 2. (DA XU LY) LAYER TUNG DUOC VIET CHO NGUOI NGOI MAY.
+#    network/ops/versions.tf tung dung:
 #
 #        profile = var.aws_profile != "" ? var.aws_profile : null
 #
-#    CodeBuild khong co profile. Nen layer se chay bang credential cua
-#    role CodeBuild - tuc account MANAGEMENT - va precondition trong
-#    main.tf doi chieu account thuc te voi account ghi trong state cua
-#    layer cha se DUNG PLAN LAI.
+#    Khoi nay du doan DUNG rang do la cho se hong, va ghi "khong sua
+#    duoc tu day". Dung - no la mot dong trong network/ops, va gio dong
+#    do da co dieu kien loai tru:
 #
-#    Do la mot phep chan tot: no khong tao rule group nham vao account
-#    chua bucket state. Nhung no cung nghia la layer nay chua pipeline
-#    duoc cho toi khi co duong assume_role - giong config-detective va
-#    org-trail da co san.
+#        profile = var.assume_role_arn == "" && var.aws_profile != ""
+#                  ? var.aws_profile : null
 #
-# Diem 2 khong sua duoc tu day; no la mot dong trong network/ops.
+#    HAU QUA THAT khac du doan o tren mot chut, va dang ghi lai: du doan
+#    la layer se chay bang credential CodeBuild roi bi precondition chan.
+#    Thuc te no vo SOM HON - Terraform giai profile TRUOC khi assume, va
+#    lan chay dau cua pipeline chet o
+#
+#        Error: failed to get shared config profile, default
+#
+#    tuc no khong bao gio den duoc precondition. Mot du doan dung ve CHO
+#    hong nhung sai ve CACH hong van dan nguoi doc di dung huong - nhung
+#    thong bao thi khong giong thu ho cho.
+#
+#    Vi sao aws_profile lai co mat trong CodeBuild: no nam trong
+#    terraform.tfvars, ma push-tfvars.sh day CHINH file do len S3 cho
+#    pipeline doc. Mot bien danh cho nguoi ngoi may di thang vao mot noi
+#    khong co ~/.aws/config.
 ########################################
 
 terraform {
