@@ -121,15 +121,44 @@ ban_do = {
     "landing-zone/ops-gate/",
   ]
 
-  # ops-network: CHUA bat.
+  ####################################
+  # ops-network: DA BAT
   #
-  # State cua landing-zone/network/ops dang rong (layer cha tung bi xoa),
-  # nen pipeline do se dung o chot chan state rong cua buildspec. Mo dong
-  # nay KHI VA CHI KHI da apply pipeline do - ten mot pipeline chua ton
-  # tai lam loc.py bao hong moi lan chay (phep 3).
+  # Khoi nay TUNG bi chu thich, voi ly do "state cua network/ops dang
+  # rong". Ha tang mang da duoc dung lai, pipeline qh11-lz-ops-network da
+  # ton tai (25 resource), va ca hai stage cong Verify da chay duoc mot
+  # luot "khong co thay doi". Nen dieu kien de mo da du.
   #
-  # Khi mo: xoa "landing-zone/network/ops" khoi layer_thu_cong ben duoi.
-  # "ops-network" = ["landing-zone/network/ops/", "landing-zone/ops-gate/"]
+  # HAI TIEN TO, va ops-gate/ o day vi cung ly do nhu ba pipeline tren:
+  # gate.py la bo phan loai ban plan ma MOI pipeline dung, nen sua luat
+  # trong do ma khong chay lai pipeline nao nghia la luat moi chua bao gio
+  # duoc thu.
+  #
+  # LUU Y: "landing-zone/network/ops" da duoc XOA khoi layer_thu_cong ben
+  # duoi. De o ca hai cho la mot cau tu mau thuan - "layer nay co duong tu
+  # dong" va "layer nay co y khong co duong tu dong" - va truoc day khong
+  # phep kiem nao bat duoc. kiem-module.py muc 15 gio bat.
+  ####################################
+  # TIEN TO LA CA THU MUC network/, KHONG CHI network/ops/
+  #
+  # So khop la so khop CHUOI, nen "landing-zone/network/" bat ca file trong
+  # "network/ops/" - khong can liet ke ca hai.
+  #
+  # VI SAO RONG HON PHAM VI PIPELINE APPLY: pipeline nay chi apply
+  # network/ops. Nhung ops doc layer CHA qua ops_handles - project, region,
+  # TGW, VPC, firewall.mode, alert_topic - nen mot thay doi o layer cha CO
+  # THE lam ops lech ma khong ai chay lai ops de biet.
+  #
+  # Gia phai tra: mot lan sua layer cha keo them mot luot ops-network, va
+  # luot do gan nhu luon ra "khong co thay doi" - nhung no VAN dung o cong
+  # duyet cua stage cloudops-firewall, vi CodePipeline khong bo qua mot
+  # action duyet khi plan rong. Chap nhan duoc vi layer cha doi vai lan mot
+  # nam; neu no thanh thu doi hang tuan thi day la dong dau tien phai xem
+  # lai.
+  "ops-network" = [
+    "landing-zone/network/",
+    "landing-zone/ops-gate/",
+  ]
 }
 
 ########################################
@@ -248,11 +277,20 @@ kiem_do_phu = true
 # apply kem mot viec chang lien quan.
 ########################################
 layer_thu_cong = [
-  # Ha tang mang da bi xoa het; ca hai layer nay dang co state RONG va se
-  # duoc dung lai sau. Ca hai deu phai mo lai khi den luc - xem trinh tu
-  # o khoi chu thich tren.
+  # landing-zone/network (layer CHA) van thu cong CO CHU DICH: no giu TGW,
+  # VPC, firewall policy, VPN - nhung thu doi vai lan mot nam, va mot
+  # pipeline tu apply duoc chung la mot pipeline co the lam mat duong cua
+  # ca to chuc trong mot lan chay.
   "landing-zone/network",
-  "landing-zone/network/ops",
+
+  # "landing-zone/network/ops" DA DUOC XOA khoi day khi mo "ops-network"
+  # trong ban_do o tren. Hai danh sach nay noi hai dieu trai nguoc nhau ve
+  # cung mot layer, nen mot duong dan KHONG duoc nam o ca hai.
+  #
+  # kiem-module.py muc 15 doi chieu viec do. Truoc khi co no, de sot o day
+  # khong lam gi hong: pipeline van chay binh thuong, chi co output cua
+  # layer nay noi rang layer do "khong co duong tu dong" - mot cau sai
+  # trong mot bao cao ma nguoi ta doc de biet cai gi dang duoc tu dong hoa.
 ]
 
 ########################################

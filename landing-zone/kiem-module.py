@@ -440,6 +440,47 @@ def kiem_phu_layer():
     )
 
     loi = []
+
+    ####################################
+    # 15. KHAI THU CONG MA THUC RA DA CO DUONG - HAI CAU TRAI NGUOC
+    #
+    # layer_thu_cong noi "layer nay duoc pipeline apply nhung CO Y khong co
+    # duong kich hoat tu dong". phu(L) noi nguoc lai: co mot pipeline vua
+    # APPLY L vua co tien to cham vao L. Ca hai dung ve cung mot layer la
+    # mot cau tu mau thuan.
+    #
+    # De sot KHONG lam gi hong: pipeline van chay binh thuong. Dau hieu duy
+    # nhat la output cua trigger-filter in layer do duoi muc "LAYER KHONG
+    # CO DUONG TU DONG" - mot cau SAI trong dung cai bao cao ma nguoi ta
+    # doc de biet thu gi dang duoc tu dong hoa.
+    #
+    # Da gan xay ra khi mo "ops-network": huong dan cu la "khi mo thi xoa
+    # landing-zone/network/ops khoi layer_thu_cong" - mot buoc phai NHO, o
+    # hai file khac nhau.
+    #
+    # ------------------------------------------------------------------
+    # DUNG LAI phu() CHU KHONG TU SO KHOP - va day la ly do
+    #
+    # Ban dau phep kiem nay giao thang hai danh sach: tien to nao trong
+    # ban_do cung nam trong layer_thu_cong thi bao. No keu NGAY, va keu
+    # SAI: sau khi ban_do cua ops-network noi rong thanh
+    # "landing-zone/network/", tien to do phu ca layer CHA - ma pipeline
+    # ops-network KHONG apply layer cha, no apply network/ops.
+    #
+    # ban_do noi ve KICH HOAT, layer_thu_cong noi ve APPLY. Hai truc khac
+    # nhau, va chi mau thuan khi CUNG MOT pipeline lam ca hai - dung dieu
+    # phu() da kiem. Khoi chu thich ngay tren phu() mo ta chinh cai bay do,
+    # va no duoc viet ra truoc phep kiem nay.
+    ####################################
+    mau_thuan = sorted(L for L in thu_cong if phu(L))
+    if mau_thuan:
+        loi.append(
+            "trigger-filter: " + ", ".join(mau_thuan) + " khai o layer_thu_cong "
+            "(\"co y khong co duong tu dong\") nhung CO mot pipeline vua apply "
+            "layer do vua co tien to trong ban_do cham vao no. Hai cau trai "
+            "nguoc nhau - xoa khoi layer_thu_cong."
+        )
+
     if sot:
         loi.append(
             f"Layer duoc pipeline APPLY nhung khong duong dan nao trong ban_do "
