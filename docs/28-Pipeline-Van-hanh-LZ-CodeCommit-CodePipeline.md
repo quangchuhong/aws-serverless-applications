@@ -290,6 +290,111 @@ Verify     buildspec-verify.yml — KHÔNG cài Terraform, KHÔNG đọc state, 
 
 Bước 9 không phải cho đẹp. `terraform apply <file plan>` với `-target` **loại output khỏi plan** trừ khi output phụ thuộc vào resource được target — kết quả là state có resource mới nhưng output cũ. `-refresh-only` không đổi hạ tầng; nó đọc lại thực tế và ghi state, kể cả output.
 
+### 2.4 Năm layer, cụ thể từng cái
+
+Bảng ở 2.2 nói pipeline nào apply layer nào. Mục này nói **trong mỗi layer có gì**, pipeline được chạm phần nào, và phần nào phải sửa tay.
+
+Cột quan trọng nhất ở mỗi khối dưới đây là **"pipeline KHÔNG được chạm"**. Đó không phải giới hạn kỹ thuật — nó là câu trả lời cho câu hỏi *"nếu tôi sửa dòng này rồi push, có gì xảy ra không"*. Câu trả lời thường là **không có gì**, và đó là kiểu hỏng không có triệu chứng.
+
+#### `landing-zone/organization` — SCP, cây OU, tag policy
+
+| | |
+|---|---|
+| Khoá state | `organization/terraform.tfstate` |
+| Tạo resource ở | **management** — Organizations API chỉ gọi được từ đó |
+| Pipeline | `qh11-lz-ops` · **sec** sở hữu · 3 stage, 1 layer, 1 state |
+| Stage được chạm | `sec-ou` → OU level1 + level2 · `sec-scp` → `policy.scp` + `attachment.scp` · `sec-tagging` → `policy.tag` + `attachment.tag` |
+| Pipeline **KHÔNG** được chạm | `aws_organizations_organization`, `aws_organizations_delegated_administrator` — sửa tay |
+| Nhịp thay đổi | SCP: vài lần một tháng · cây OU: vài lần một năm |
+| Verify | `kiem-to-chuc.sh` — đọc SCP **đang gắn thật** ở AWS và cây OU thật |
+| Chốt cứng | `terraform_data.scp_guard` — 2 precondition |
+
+Điều riêng của layer này: **thứ tự ba stage có ý nghĩa**. Đổi tên một OU làm khoá của `attachment.scp` đổi theo (khoá là `<policy>|<tên OU>`), nên Terraform thấy destroy + create. Nếu SCP chạy trước OU, attachment không được đối chiếu lại cho tới lượt sau. Đó là vì sao ba stage ở **cùng một pipeline** chứ không phải ba pipeline (mục 1.5).
+
+#### `landing-zone/org-trail` — CloudTrail cấp tổ chức
+
+| | |
+|---|---|
+| Khoá state | `org-trail/terraform.tfstate` |
+| Tạo resource ở | trail ở **management** · bucket log ở **log-archive** |
+| Pipeline | `qh11-lz-ops-trail` · cloudops · 1 stage |
+| Stage được chạm | `aws_cloudtrail.this` — **đúng một resource** |
+| Pipeline **KHÔNG** được chạm | cả bucket và 7 resource cấu hình của nó: `bucket_policy`, `versioning`, `server_side_encryption`, `public_access_block`, `ownership_controls`, **`object_lock_configuration`**, lifecycle |
+| Nhịp thay đổi | gần như không đổi — sửa khi thêm data event |
+| Verify | `kiem-trail.sh` — trail, log file validation, bucket |
+
+Object lock là lý do bucket nằm ngoài tầm pipeline. Một bucket log có object lock mà một đường tự động sửa được thì object lock không còn nghĩa gì: thứ nó bảo vệ chính là khả năng **không ai** xoá được log, kể cả người có quyền.
+
+#### `landing-zone/permission-sets` — ai vào account nào
+
+| | |
+|---|---|
+| Khoá state | `permission-sets/terraform.tfstate` |
+| Tạo resource ở | **management** (IAM Identity Center) |
+| Pipeline | `qh11-lz-ops-permission-set` · cloudops · 1 stage |
+| Stage được chạm | `aws_ssoadmin_account_assignment.this`, `aws_identitystore_group_membership.this` |
+| Pipeline **KHÔNG** được chạm | `aws_ssoadmin_permission_set`, `..._inline_policy`, `..._managed_policy_attachment`, `aws_identitystore_user` |
+| Đọc state layer khác | `account-baseline/terraform.tfstate` — lấy danh sách account vừa vend |
+| Nhịp thay đổi | assignment: hằng tuần · nội dung permission set: vài lần một năm |
+| Verify | `kiem-quyen.sh` — assignment thật theo từng account |
+
+Ranh giới ở đây là ranh giới **ngữ nghĩa**, không phải kỹ thuật. Tạo một assignment là cho *một* group vào *một* account. Đổi nội dung một permission set là đổi quyền của **mọi** người đang dùng set đó, ở **mọi** account, **ngay lập tức** — không ai phải đăng nhập lại. Việc thứ hai không phải việc hằng ngày, nên nó không nằm trên đường hằng ngày.
+
+Và đây là layer có dòng `state_chi_doc` đầu tiên: thiếu nó thì plan chết với `403 Forbidden` trên S3, và thông báo không nhắc gì tới `terraform_remote_state`.
+
+#### `landing-zone/config-detective` — Config rule, và cả lớp phát hiện
+
+| | |
+|---|---|
+| Khoá state | `config-detective/terraform.tfstate` |
+| Tạo resource ở | **security** (aggregator, Security Hub + GuardDuty admin) · **log-archive** (bucket snapshot) · và một CloudFormation StackSet rải recorder xuống **mọi account thành viên** |
+| Pipeline | `qh11-lz-ops-config-rules` · cloudops · 1 stage |
+| Stage được chạm | `aws_config_organization_managed_rule.this` — **đúng một resource** |
+| Pipeline **KHÔNG** được chạm | recorder StackSet, aggregator, Security Hub, GuardDuty (detector + member + feature), bucket snapshot và policy của nó, SNS topic + policy + subscription, EventBridge rule → tức **toàn bộ đường báo động** |
+| Nhịp thay đổi | rule: hằng tuần · phần còn lại: vài lần một năm |
+| Verify | `kiem-config.sh` — đọc org config rule qua **đúng cửa mà apply dùng** (assume vào security) |
+| Quan sát thật | **75 resource** trong state |
+
+Layer nặng nhất, và có tỷ lệ "được chạm / tổng" thấp nhất: 1 trên 75. Chú thích ở đầu caller nói lý do:
+
+> *Một pipeline tự apply được chúng là một pipeline có thể **tắt cả hệ thống phát hiện** của tổ chức trong một lần chạy.*
+
+Hệ quả vận hành phải biết: thêm một publisher vào `extra_publisher_arns` là sửa `aws_sns_topic_policy.alerts` — **nằm ngoài tầm pipeline**. Phải apply tay:
+
+```bash
+cd landing-zone/config-detective && terraform apply -target=aws_sns_topic_policy.alerts
+```
+
+#### `landing-zone/network/ops` — lớp vận hành mạng
+
+| | |
+|---|---|
+| Khoá state | `demo-network-lz-full/ops/terraform.tfstate` — **khoá không khớp đường dẫn, có chủ đích** |
+| Tạo resource ở | **network**, qua `sts:AssumeRole` sang `OrganizationAccountAccessRole` |
+| Pipeline | `qh11-lz-ops-network` · cloudops · **2 stage** |
+| Stage được chạm | `cloudops-network` → 13 resource (DNS, endpoint, route, NLB, alarm) · `cloudops-firewall` → `networkfirewall_rule_group`, `vpc_security_group_ingress_rule` |
+| Pipeline **KHÔNG** được chạm | **không có gì** — cả **16** resource của layer đều nằm trong target của một trong hai stage |
+| Đọc state layer khác | `demo-network-lz-full/terraform.tfstate` — layer cha, lấy TGW, VPC, vùng |
+| Nhịp thay đổi | **hằng ngày** |
+| Verify | `kiem-mang.sh` — rule group, `StatefulDefaultActions`, alarm, subscription |
+| Chốt cứng | `terraform_data.catalog_guard` — **31** precondition |
+| Quan sát thật | 21 resource trong state (16 địa chỉ, một số có `for_each`) |
+
+Layer duy nhất pipeline được chạm **toàn bộ** — và đó là nhất quán, không phải lỏng tay: cả layer này *chính là* bề mặt vận hành. Nó không chứa hạ tầng nền; hạ tầng nền nằm ở layer cha.
+
+Nó cũng là layer duy nhất có **catalog YAML** (`apps`, `firewall-rules`, `routes`, `endpoints`, `dns-records`, `partners`) và duy nhất có **cổng duyệt** (`cloudops-firewall`).
+
+**Khoá state không khớp đường dẫn là chủ đích.** Layer này trước ở `demo/network-lz-full` và đã apply thật; khi đường dẫn đổi, khoá state giữ nguyên. Đổi khoá nghĩa là Terraform mở một state **rỗng**: plan đòi tạo lại ~200 resource, và hạ tầng thật thành mồ côi — vẫn chạy, vẫn tính tiền, không còn ai quản.
+
+#### Layer cha `landing-zone/network` — không pipeline nào ở đây apply
+
+Khoá `demo-network-lz-full/terraform.tfstate`, khoảng **200 resource**: TGW, 17 subnet, 17 route table, 19 route, security VPC, Network Firewall policy, VPN đối tác. Nó do `vending-pipeline` apply, không phải một trong năm pipeline vận hành.
+
+`network/ops` **đọc** state này. Nên hai thứ ở layer cha mà lớp vận hành phụ thuộc vào nhưng không sửa được:
+
+- `var.firewall_mode` — `alert` hay `drop`. Lớp ops nạp luật; layer cha quyết định luật có chặn gì không.
+- SNS topic `netops` và các alarm action đi kèm.
+
 ---
 
 ## 3. Sáu lớp kiểm, và chúng không thấy nhau
@@ -491,66 +596,157 @@ if d is None:                      # không đọc được list-rule-groups
 
 ---
 
-## 7. Drift — phép kiểm có giá trị nhất, và nhánh chưa ai đi thử
+## 7. Drift — chạy như thế nào
 
-Một CodeBuild riêng, chạy theo `drift_cron` (mặc định `cron(0 19 * * ? *)`). Nó **chỉ** `plan -lock=false`, và không có nhánh apply — không phải vì một biến được đặt đúng, mà vì **đoạn code apply không tồn tại**. Một biến có thể bị đè sai; một đoạn code không có thì không.
+### 7.1 Nó không phải một stage
+
+Drift **không nằm trong** pipeline. Nó là một CodeBuild project riêng với một EventBridge rule riêng theo lịch. Mỗi pipeline có một cái:
+
+```
+qh11-lz-ops-network          pipeline  — chạy khi có người push
+qh11-lz-ops-network-drift    job riêng — chạy theo đồng hồ
+```
+
+Lịch mặc định `cron(0 19 * * ? *)` là giờ **UTC**, tức **2 giờ sáng giờ Việt Nam**. Nên câu "không ai mở log của một job chạy lúc 2 giờ sáng" ở mục 1.1 là nghĩa đen, không phải cách nói.
+
+### 7.2 Nó chạy trên những layer nào
+
+Một biến môi trường `LAYERS` mang danh sách `<đường dẫn layer>=<khoá state>`, cách nhau bằng dấu cách:
+
+```hcl
+LAYERS = join(" ", [for l, k in local.stage_keys : "${l}=${k}"])
+```
+
+`stage_keys` là các layer **khác nhau** của pipeline đó. Với `ops-network` nó ra đúng một mục, dù pipeline có hai stage — vì hai stage ấy cùng một layer:
+
+```
+landing-zone/network/ops=demo-network-lz-full/ops/terraform.tfstate
+```
+
+Hôm nay **cả năm pipeline đều đúng một layer**. Vòng lặp tồn tại cho trường hợp một pipeline apply nhiều layer, chưa phải hiện tại.
+
+### 7.3 Với mỗi layer, nó làm gì
+
+Sáu bước, giống hệt stage Plan — trừ ba chỗ, và ba chỗ đó là toàn bộ sự khác biệt:
+
+| | Stage Plan | Job drift |
+|---|---|---|
+| kéo tfvars từ S3 | có | có |
+| sinh `backend.tf`, `init` theo khoá state | có | có |
+| kiểm state rỗng | có | có |
+| **`-target`** | **có** | **KHÔNG** |
+| khoá state khi plan | có | **`-lock=false`** |
+| nhánh apply | có | **không tồn tại trong file** |
 
 `-lock=false` là cố ý: bước này chạy theo lịch và có thể trùng với một lần apply thật. Một phép **kiểm** làm chặn một lần **sửa** là một phép kiểm gây ra sự cố.
 
-Ba thứ nó phân biệt, và cái thứ ba hay bị gộp:
+Không có nhánh apply — không phải vì một biến được đặt đúng, mà vì **đoạn code apply không tồn tại**. Một biến có thể bị đè sai; một đoạn code không có thì không.
 
-| Kết quả | Nghĩa |
+### 7.4 Làm sao nó biết có drift: `-detailed-exitcode`
+
+Đây là mấu chốt của cả cơ chế.
+
+`terraform plan` bình thường **luôn thoát 0** — dù có thay đổi hay không. Nên một script không đọc được kết quả. Cờ `-detailed-exitcode` đổi điều đó:
+
+| Mã thoát | Nghĩa |
 |---|---|
-| `SO_DRIFT` | layer có thay đổi ngoài Terraform |
-| `SO_HONG` | layer **không kiểm được** — thiếu tfvars, sai khoá state |
-| cả hai `0` | khớp |
+| `0` | không có thay đổi nào |
+| `2` | **có** thay đổi |
+| khác | plan hỏng |
 
-Một layer thiếu tfvars không sinh ra dòng drift nào. Nếu chỉ đếm `SO_DRIFT` thì báo cáo nói "0 drift" cho một hệ thống **chưa hề được nhìn**. Đếm riêng, báo riêng.
+Chính cờ đó biến `plan` từ một bản **báo cáo** thành một phép **thử**:
 
-Job thoát khác 0 khi có drift, để lần chạy hiện ra là **thất bại** trong console và mọi bảng theo dõi. Một job xanh mang tin xấu bên trong là một job không ai mở ra.
+```sh
+terraform plan -input=false -lock=false -detailed-exitcode -no-color > /tmp/plan.txt
+CODE=$?
+case "$CODE" in
+  0) echo "   KHONG CO THAY DOI" ;;
+  2) tail -60 /tmp/plan.txt; SO_DRIFT=$((SO_DRIFT + 1)) ;;
+  *) tail -40 /tmp/plan.txt; SO_HONG=$((SO_HONG + 1)) ;;
+esac
+```
 
-**Nhánh chưa ai đi thử.** Thứ tự trong buildspec là:
+Hai chốt **trước** khi tới plan cũng cộng vào `SO_HONG`, và cả hai đều `continue` chứ không chạy tiếp:
+
+| Chốt | Vì sao không chạy plan tiếp |
+|---|---|
+| không kéo được tfvars từ S3 | mọi biến đều có mặc định, nên plan sẽ **thành công** và mô tả một tổ chức không có gì — tức báo drift giả ở mức tối đa |
+| `terraform state list` ra 0 resource | state rỗng nghĩa là **sai khoá**, không phải drift |
+
+### 7.5 Ba kết cục
 
 ```sh
 if [ "$SO_DRIFT" = "0" ] && [ "$SO_HONG" = "0" ]; then
-  echo "Moi layer khop state."; exit 0        # ← thoát ở đây
+  echo "Moi layer khop state."
+  exit 0                      # ← xanh, và KHÔNG gửi gì
 fi
-if [ -n "${DRIFT_TOPIC_ARN:-}" ]; then
-  ... aws sns publish ...                     # ← chỉ chạy khi CÓ phát hiện
+# ... soạn thư vào một file ...
+aws sns publish ...           # ← chỉ tới đây khi CÓ phát hiện
+exit 1                        # ← build ĐỎ
 ```
 
-Nên chạy tay job drift trên một hệ thống sạch **không kiểm được gì** về đường SNS. Và khi nó chạy, thất bại là im lặng:
+Job thoát khác 0 khi có phát hiện, để lần chạy hiện ra là **thất bại** trong console và mọi bảng theo dõi. Một job xanh mang tin xấu bên trong là một job không ai mở ra.
 
-```sh
-if aws sns publish ...; then echo "Da bao ve ..."
-else echo "CANH BAO: khong bao duoc ve SNS - xem quyen sns:Publish"; fi
+### 7.6 Vì sao `SO_HONG` đếm riêng
+
+"Không kiểm được" **không phải** "sạch".
+
+Một layer thiếu tfvars hay sai khoá state không sinh ra dòng drift nào. Nếu chỉ đếm `SO_DRIFT` thì báo cáo nói **"0 drift"** cho một hệ thống **chưa hề được nhìn** — và đó là câu trả lời sai nguy hiểm hơn cả một câu trả lời sai, vì nó trấn an.
+
+### 7.7 Vì sao không `-target` — và hệ quả
+
+Đây là khác biệt quan trọng nhất so với pipeline.
+
+Pipeline chỉ nhìn những resource trong `targets`. Drift nhìn **cả layer**. Nên nó thấy đúng những gì không ai apply — tức những thứ dễ trôi nhất, và những thứ không lớp nào khác nhìn tới.
+
+Hệ quả ngược cũng thật: bất cứ thứ gì pipeline **không chạm tới được** sẽ hiện ra như drift **mỗi đêm, vĩnh viễn**. Đó chính là chuyện đã xảy ra với `terraform_data.catalog_guard` trước khi nó được đưa vào `targets` (mục 4). Một cảnh báo luôn kêu thì chẳng mấy sẽ không ai đọc — tức ràng buộc C ở mục 1.1 bị phá từ bên trong.
+
+### 7.8 Chạy tay
+
+```bash
+aws codebuild start-build --project-name qh11-lz-ops-network-drift --region ap-southeast-1
 ```
 
-`else` không làm build đỏ.
+`terraform output drift_project` in sẵn lệnh này ở trường `chay_tay`.
 
-### Hai cách khai đích báo, và vế thứ hai của SNS liên account
+**Nhưng trên một hệ thống sạch, lần chạy đó không kiểm được gì về đường báo động**: job thoát 0 ở 7.5 *trước* khối `sns publish`. Xem 7.10.
 
-```hcl
-drift_emails    = ["ai@day.com"]   # CHỌN MỘT: layer tự tạo topic ở chính account này
-drift_topic_arn = ""               # HOẶC: dùng topic có sẵn — loại trừ với dòng trên
-```
+### 7.9 Khai đích báo về đâu
 
-Khai **cả hai** thì `drift_topic_arn` thắng, topic tự tạo **không** được tạo, và những địa chỉ kia nhận số không. `check "khong_khai_ca_hai_nguon_topic"` có cảnh báo — nhưng `check` không bao giờ làm apply dừng.
+| | |
+|---|---|
+| `drift_emails = ["…"]` | layer tự tạo topic ở **chính account này** — không phụ thuộc liên account |
+| `drift_topic_arn = "…"` | dùng một topic **có sẵn** |
 
-Và `[""]` **không phải** `[]`: nó là danh sách có một phần tử rỗng, `length()` trả về 1. Tuỳ cấu hình mà nó im lặng hôm nay và nổ hôm sau. Từ nay 17 biến `*_emails` có `validation` chặn ở plan, và `kiem-module.py` phép kiểm 17 giữ chỗ đó.
+**Chọn một.** Khai cả hai thì `drift_topic_arn` thắng, topic tự tạo **không** được tạo, và những địa chỉ trong `drift_emails` nhận số không. `check "khong_khai_ca_hai_nguon_topic"` có cảnh báo — nhưng `check` không bao giờ làm apply dừng.
 
-Nếu dùng topic ở **account khác**: SNS liên account đòi **cả hai** phía cho phép. Quyền IAM của bên gửi là chưa đủ — resource policy của topic cũng phải cho:
+Và `[""]` **không phải** `[]`: nó là danh sách có một phần tử rỗng, `length()` trả về 1. Tuỳ cấu hình mà nó im lặng hôm nay và nổ hôm sau. Nay 17 biến `*_emails` có `validation` chặn ở plan, và `kiem-module.py` phép kiểm 17 giữ chỗ đó.
+
+Nếu topic nằm ở **account khác**: SNS liên account đòi **cả hai** phía cho phép. Quyền IAM của bên gửi là chưa đủ — resource policy của topic cũng phải cho:
 
 ```bash
 aws sns get-topic-attributes --topic-arn <arn> --query 'Attributes.Policy' --output text \
   | python3 -m json.tool     # tìm AllowCrossAccountPublish
 ```
 
-Và topic đó nằm ngoài tầm pipeline `ops-config-rules`: stage của nó `-target` vào đúng `aws_config_organization_managed_rule`, cố ý — *"một pipeline tự apply được chúng là một pipeline có thể tắt cả hệ thống phát hiện của tổ chức trong một lần chạy."* Thêm publisher là apply **tay**:
+Topic của `config-detective` nằm ngoài tầm pipeline (mục 2.4), nên thêm publisher là apply **tay**:
 
 ```bash
 cd landing-zone/config-detective && terraform apply -target=aws_sns_topic_policy.alerts
 ```
+
+### 7.10 Nhánh chưa ai đi thử
+
+Khi publish thất bại, nó thất bại **im lặng**:
+
+```sh
+if aws sns publish ...; then echo "Da bao ve ..."
+else echo "CANH BAO: khong bao duoc ve SNS - xem quyen sns:Publish"; fi
+```
+
+`else` không làm build đỏ. Ghép với 7.5 — nhánh publish chỉ chạy khi *có* phát hiện — kết quả là: **đường báo động của cả năm pipeline chưa từng được đi thử**, vì hệ thống đang sạch. Khai báo đã thông (5 role trong `AllowCrossAccountPublish`); chạy thật thì chưa.
+
+Muốn kiểm chứng thì phải tạo một drift thật, nhỏ, đảo ngược được, rồi chạy tay job drift và đọc xem log in `Da bao ve` hay `CANH BAO`.
 
 ---
 
