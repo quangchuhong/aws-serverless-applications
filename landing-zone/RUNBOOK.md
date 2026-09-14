@@ -8,10 +8,21 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 >
 > **Đã xoá rồi, giờ dựng lại?** Đừng bắt đầu từ giai đoạn 0 — nhảy tới [Dựng lại sau khi xoá](#dựng-lại-sau-khi-xoá). Đường đó ngắn hơn và có bốn bước preflight mà lần dựng đầu không có.
 >
-> **Đã có người đi hết đường này** — cả 9 giai đoạn (giai đoạn 10 mới có code). [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại 34 lỗi thật gặp phải, kèm sổ tay tra cứu nhanh ở mục 6.
+> **Đã có người đi hết đường này** — 16 giai đoạn, và cả đường tự động (12–16) đã chạy thật. [doc 22 – Nhật ký triển khai](../docs/22-Nhat-ky-Trien-khai-LZ-DIY.md) ghi lại từng lỗi theo thứ tự gặp, kèm sổ tay tra cứu nhanh ở mục 6.
 
-**Thời gian**: ~2–3 giờ cho lần đầu, phần lớn là chờ AWS.
-**Chi phí**: ~$0. `config-detective` (giai đoạn 7) đo được $0.29 một lần rồi ~$0/ngày; `org-trail` chỉ tốn tiền lưu trữ S3.
+**Hai nửa, và nửa sau mới có gần đây:**
+
+| | Giai đoạn | Là gì |
+|---|---|---|
+| **Nửa 1** | 0–11 | Dựng hạ tầng. Chạy **bằng tay**, từng layer |
+| **Nửa 2** | 12–16 | Dựng **đường tự động**: kho CodeCommit, sáu pipeline, bộ lọc kích hoạt |
+
+Nửa 2 không phải "làm nốt cho đủ bộ". Sau giai đoạn 11 hạ tầng đã chạy được — nửa 2 là thứ làm việc **sửa** nó trở nên lặp lại được và có chỗ chặn. Chi tiết cơ chế ở [doc 28](../docs/28-Pipeline-Van-hanh-LZ-CodeCommit-CodePipeline.md).
+
+**Mỗi giai đoạn viết theo một khuôn:** *Mục tiêu → Điều kiện trước → Chạy → `☑ Xong khi`*. Dòng `☑ Xong khi` luôn là một **phép đo**, không phải một cảm giác — nếu nó không chạy được thành một lệnh thì nó chưa đủ tốt.
+
+**Thời gian**: ~2–3 giờ cho nửa 1, thêm ~1–2 giờ cho nửa 2. Phần lớn là chờ AWS.
+**Chi phí**: nửa 1 ~$0 tới giai đoạn 9 (`config-detective` đo được $0.29 một lần rồi ~$0/ngày). Giai đoạn 10 là **~$770/tháng** — xem cảnh báo dưới bản đồ. Nửa 2 gần như $0: CodeBuild tính theo phút chạy.
 
 ---
 
@@ -39,9 +50,32 @@ Hướng dẫn chạy **theo thứ tự**, từ tài khoản trắng đến LZ h
 9. account-baseline      20 phút    thay cho AFT - don default VPC tu dong
    ↓
 10. network              45 phút    TGW + firewall + egress   ← CHI KHI CO WORKLOAD
+   ↓
+11. network/ops          20 phút    DNS, endpoint, route, luat tuong lua
+                                    ← lop sua HANG NGAY
+
+── het ha tang. tu day la duong TU DONG ──────────────────
+
+12. Kho CodeCommit        5 phút    KHONG layer nao tao no  ← thu cong
+   ↓
+13. vending-pipeline     20 phút    pipeline dau tien + kho tfvars dung chung
+   ↓
+14. 5 x ops-pipeline*    45 phút    nam pipeline van hanh
+   ↓
+15. trigger-filter       15 phút    Lambda loc - BAT SAU KHI co pipeline
+   ↓
+16. tu_kich_hoat=false   10 phút    tat rule rieng - THU TU KHONG DAO DUOC
 ```
 
-Giai đoạn **3 và 4 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
+Giai đoạn **3, 4 và 12 là thủ công** — không có Terraform. Đừng tìm code cho chúng.
+
+**Ba chỗ thứ tự không đảo được**, và cả ba đều hỏng **không có triệu chứng** nếu làm ngược:
+
+| Đảo thứ tự | Hậu quả |
+|---|---|
+| 11 trước 10 | `network/ops` đọc state của `network` — không có cha thì không plan được |
+| 15 trước 14 | `ban_do` gọi tên pipeline chưa tồn tại → Lambda ném lỗi mỗi lần chạy |
+| 16 trước 15 | giữa hai lần apply **không có gì** kích hoạt pipeline nào |
 
 > **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Chín giai đoạn đầu tốn ~$0/ngày; giai đoạn 10 tốn **~$770/tháng** ở 2 AZ, trong đó $570 là Network Firewall endpoint chạy 24/7 dù có gói tin hay không. Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dùng [`landing-zone/network`](../landing-zone/network/) — dựng, xem, xoá.
 
@@ -998,6 +1032,179 @@ Rồi lấy attachment ID điền vào `spoke_attachments` của layer này và 
 ☑ Xong giai đoạn 10 khi: EC2 trong spoke `curl` ra Internet được, IP trả về nằm trong `terraform output nat_public_ips`, **và** CIDR của spoke xuất hiện trong route propagated ở trên.
 
 Chi tiết ở [README của layer](./network/README.md).
+
+---
+
+## Giai đoạn 11 — `network/ops`
+
+**Mục tiêu:** lớp vận hành mạng — DNS nội bộ, VPC endpoint, route ngoại lệ, dịch vụ đối tác, luật tường lửa east-west. Đây là layer bị sửa **hằng ngày**, khác với giai đoạn 10 vốn đổi vài lần một năm.
+
+**Điều kiện trước:** giai đoạn 10 xong. Layer này **đọc state** của `network` qua `terraform_remote_state` — không có cha thì không plan được.
+
+```bash
+cd landing-zone/network/ops
+terraform init -backend-config=backend.hcl     # backend.hcl do wire-backends.sh sinh
+
+./lint.sh --strict            # offline, khong goi AWS
+terraform plan                # DAY DU, khong -target
+terraform apply
+```
+
+**Vì sao `terraform plan` đầy đủ ở đây quan trọng:** pipeline luôn plan có `-target`, nên nó **không thấy** những gì nằm ngoài phạm vi. Một plan đầy đủ là phép kiểm duy nhất thấy được phần `-target` bỏ qua — và đó là cách 31 `precondition` của `terraform_data.catalog_guard` từng bị phát hiện là chưa bao giờ chạy.
+
+**Kiểm chứng — hỏi AWS, đừng hỏi state:**
+
+```bash
+cd ../
+./kiem-mang.sh 'arn:aws:iam::<account-network>:role/OrganizationAccountAccessRole' da-dung
+```
+
+☑ Xong giai đoạn 11 khi: `kiem-mang.sh` ra `0 loi`, và số dòng luật nó đọc từ `describe-rule-group` khớp với `terraform output summary`.
+
+> **Firewall mặc định ở chế độ `alert`.** Rule được nạp nhưng **không chặn gì** — luồng không khớp rule nào cũng đi qua bình thường. Chuyển sang `drop` ở `var.firewall_mode` của **layer cha** sau khi đọc đủ log UNMATCHED. `check "firewall_mode_makes_rules_meaningful"` sẽ cảnh báo mỗi lần apply cho tới khi bạn chuyển.
+
+---
+
+## Giai đoạn 12 — Kho CodeCommit *(thủ công)*
+
+**Mục tiêu:** có một kho Git **trong AWS** để pipeline lấy source. Repo GitHub không kích hoạt gì — chính sách không cho GitHub làm bề mặt điều khiển.
+
+**Không layer nào tạo repo này.** `codecommit-guard/versions.tf` ghi thẳng điều đó, và `trigger-filter` đọc nó bằng `data`, không `resource`. Nên đây là một bước tay, và nó phải xong **trước** mọi pipeline.
+
+```bash
+aws codecommit create-repository --repository-name diy-aws-landing-zone \
+  --region ap-southeast-1
+
+# roi them remote va day len
+git remote add codecommit \
+  https://git-codecommit.ap-southeast-1.amazonaws.com/v1/repos/diy-aws-landing-zone
+git push codecommit HEAD:main
+```
+
+**Hai remote là hai bản sao, và chỉ một cái chạy:**
+
+```bash
+git push origin  <branch>      # GitHub - de doc, de review, KHONG kich hoat gi
+git push codecommit HEAD:main  # AWS - cai nay moi chay pipeline
+```
+
+Đẩy một bên rồi tưởng đã xong là lỗi hay gặp nhất của người mới vào repo này.
+
+☑ Xong giai đoạn 12 khi: `aws codecommit get-branch --repository-name diy-aws-landing-zone --branch-name main` ra một `commitId`.
+
+> `codecommit-guard` — layer chặn push trực tiếp và bắt đi qua pull request của CodeCommit — **để tắt ở giai đoạn này** (`enable = false`). Bật nó sớm thì mọi bước bên dưới không push được. Xem [doc 31 mục 7](../docs/31-Ban-do-Code-Landing-Zone.md).
+
+---
+
+## Giai đoạn 13 — `vending-pipeline`
+
+**Mục tiêu:** pipeline đầu tiên, và nó sở hữu **kho tfvars dùng chung** mà mọi pipeline sau đọc.
+
+**Điều kiện trước:** giai đoạn 12 xong.
+
+```bash
+cd landing-zone/vending-pipeline
+cp -n terraform.tfvars.example terraform.tfvars
+# dien: repository_name, approval_emails, tfvars_bucket se do chinh layer nay tao
+terraform apply
+
+# roi day tfvars cua MOI layer len kho
+./push-tfvars.sh
+```
+
+**`push-tfvars.sh` có danh sách `LAYERS` gõ tay.** Thêm một layer mới mà quên thêm vào đó thì **không có lỗi lúc đẩy** — chỉ có lỗi lúc pipeline chạy, và thông báo nói về S3 chứ không nói về script này.
+
+☑ Xong giai đoạn 13 khi: `terraform output -raw tfvars_bucket` ra tên bucket, và `aws s3 ls s3://<bucket>/tfvars/ --recursive` liệt kê đủ tfvars của các layer.
+
+---
+
+## Giai đoạn 14 — Năm `ops-pipeline*`
+
+**Mục tiêu:** năm pipeline vận hành, tách theo **chủ sở hữu** chứ không theo layer.
+
+| Thứ tự | Caller | Apply layer | Chủ sở hữu |
+|---|---|---|---|
+| 14a | `ops-pipeline` | `organization` — 3 stage | **sec** |
+| 14b | `ops-pipeline-trail` | `org-trail` | cloudops |
+| 14c | `ops-pipeline-permission-set` | `permission-sets` | cloudops |
+| 14d | `ops-pipeline-config-rules` | `config-detective` | cloudops |
+| 14e | `ops-pipeline-network` | `network/ops` — 2 stage, một có cổng duyệt | cloudops |
+
+**Điều kiện trước, cho mỗi cái:** hai giá trị lấy từ layer sở hữu chúng, **không gõ tay**:
+
+```bash
+cd landing-zone/tf-backend     && terraform output layers
+cd ../vending-pipeline         && terraform output -raw tfvars_bucket
+```
+
+**Chạy — kiểm offline trước, luôn:**
+
+```bash
+cd landing-zone
+python3 kiem-module.py               # 18 phep kiem: module <-> MOI caller
+python3 ops-gate/test-gate.py        # 43 test cho cong chan
+python3 trigger-filter/test-loc.py   # 39 test cho bo loc
+
+cd ops-pipeline-<tên>
+cp -n terraform.tfvars.example terraform.tfvars
+terraform apply
+terraform output next_steps          # in ra viec con lai cua chinh layer nay
+```
+
+**Lần chạy đầu của mỗi pipeline PHẢI là một lần không có thay đổi.** Mọi stage ra `KHONG CO THAY DOI`. Để xem đường đi có thông không **trước khi** một thay đổi thật đi qua nó. Một pipeline chạy đúng một lần với một thay đổi thật thì chưa chứng minh được gì về lần thứ hai.
+
+☑ Xong giai đoạn 14 khi: cả năm pipeline chạy hết vòng **Nguồn → Lint → Plan → Apply → Verify**, và stage Verify của từng cái ra `0 loi`.
+
+> Mỗi pipeline còn tạo một job drift riêng chạy theo lịch (mặc định `cron(0 19 * * ? *)` = **2 giờ sáng giờ VN**). Khai `drift_emails` **hoặc** `drift_topic_arn` — **không cả hai**, và `[""]` không phải `[]`. Xem [doc 28 mục 7](../docs/28-Pipeline-Van-hanh-LZ-CodeCommit-CodePipeline.md).
+
+---
+
+## Giai đoạn 15 — `trigger-filter`
+
+**Mục tiêu:** một Lambda ở giữa, để một commit chỉ khởi động những pipeline **bị chạm**.
+
+**Vì sao cần:** sự kiện `CodeCommit Repository State Change` **không mang danh sách file** — chỉ có `repositoryName`, `commitId`, `oldCommitId`, `referenceName`. Nên rule EventBridge của riêng một pipeline không lọc được theo đường dẫn, và một dòng sửa trong `docs/` làm **cả năm** pipeline chạy, mỗi cái park một phiếu duyệt.
+
+**Điều kiện trước:** giai đoạn 14 xong — `ban_do` gọi tên pipeline thật, và Lambda kiểm điều đó mỗi lần chạy.
+
+```bash
+cd landing-zone/trigger-filter
+cp -n terraform.tfvars.example terraform.tfvars
+# dien ban_do (ten NGAN cua pipeline -> tien to duong dan) va tru
+terraform apply
+```
+
+**Bốn cách viết một danh sách tiền tố, bốn nghĩa:**
+
+| Viết | Nghĩa |
+|---|---|
+| `"landing-zone/network/"` | đúng — có `/` nên không bắt `landing-zone/network-cu/` |
+| `"landing-zone/network"` | bắt luôn `network-cu/...` |
+| `""` | chạy với **mọi** thay đổi — hợp lệ, nhưng phải có chủ đích |
+| `[]` | pipeline **không bao giờ chạy** — và đây là lỗi cứng |
+
+Dòng cuối là cái đáng sợ nhất: một danh sách rỗng **đọc giống "chưa điền" và chạy giống "đã tắt"**.
+
+☑ Xong giai đoạn 15 khi: push một commit chỉ sửa một layer, và **chỉ** pipeline của layer đó chạy. Kiểm bằng `aws lambda invoke` hoặc đọc log của hàm — kết quả có `da_khoi_dong` và `bo_qua`.
+
+---
+
+## Giai đoạn 16 — Tắt rule riêng của từng pipeline
+
+**Mục tiêu:** để `trigger-filter` thành **đường duy nhất** tới các pipeline.
+
+**Thứ tự này không đảo được.** Bật `trigger-filter` **trước** (giai đoạn 15), rồi mới tắt rule riêng. Làm ngược lại thì giữa hai lần apply **không có gì kích hoạt pipeline nào** — và đó là kiểu hỏng không có triệu chứng.
+
+```bash
+# trong terraform.tfvars cua TUNG ops-pipeline*
+tu_kich_hoat = false
+
+terraform apply
+```
+
+☑ Xong giai đoạn 16 khi: push một commit chỉ sửa `docs/`, và **không pipeline nào** chạy.
+
+> Còn `tu_kich_hoat = true` ở pipeline nào thì **mọi** commit vào `main` làm nó chạy và park một phiếu duyệt — kể cả commit chỉ sửa tài liệu.
 
 ---
 
