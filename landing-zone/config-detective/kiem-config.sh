@@ -170,7 +170,11 @@ if d is None:
 else:
     print(f"    account  {d.get('Account')}")
     print(f"    arn      {d.get('Arn')}")
-print(f"    assume   {ARN_ROLE or 'KHONG - doc truc tiep bang danh tinh CodeBuild'}")
+# "danh tinh CodeBuild" la mot phong doan, khong phai mot phep doc.
+# Script nay chay ca trong pipeline LAN bang tay, va lan chay tay dau tien
+# la mot nguoi dang nhap SSO - dong cu bao ho rang ho la CodeBuild. Ten
+# dung o ngay dong `arn` phia tren; dong nay chi noi CO assume hay khong.
+print(f"    assume   {ARN_ROLE or 'KHONG - doc bang danh tinh dang co (xem arn o tren)'}")
 
 ####################################
 # 1. RULE CO TON TAI KHONG
