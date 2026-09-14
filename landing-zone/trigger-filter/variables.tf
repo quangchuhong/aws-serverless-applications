@@ -136,6 +136,13 @@ variable "loi_emails" {
   type        = list(string)
   description = "Dia chi nhan bao khi bo loc hong. Moi dia chi phai bam xac nhan."
   default     = []
+
+  # [""] khong phai []: length la 1, va apply se do o giua khi SNS tu
+  # choi endpoint rong. Bat tu plan.
+  validation {
+    condition     = alltrue([for e in var.loi_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "loi_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 ########################################

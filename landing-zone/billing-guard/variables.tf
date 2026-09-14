@@ -18,6 +18,13 @@ variable "owner" {
 variable "alert_emails" {
   description = "Email nhan canh bao. Moi email phai XAC NHAN qua link SNS gui toi."
   type        = list(string)
+
+  # [""] khong phai []: length la 1, va apply se do o giua khi SNS tu
+  # choi endpoint rong. Bat tu plan.
+  validation {
+    condition     = alltrue([for e in var.alert_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "alert_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 ########################################

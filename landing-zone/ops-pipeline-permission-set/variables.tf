@@ -137,6 +137,15 @@ variable "approval_emails" {
   description = "Dia chi nhan thu can duyet. MOI DIA CHI PHAI BAM XAC NHAN, neu khong no khong nhan gi va Terraform van bao thanh cong."
   type        = list(string)
   default     = []
+
+  # [""] khong phai []: length la 1, va Terraform nhan vi no DUNG kieu
+  # list(string). Module cung co validation nay - khai lai o day de
+  # thong bao goi ten bien cua LAYER, tuc dung ten ma nguoi sua
+  # terraform.tfvars dang doc.
+  validation {
+    condition     = alltrue([for e in var.approval_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "approval_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 
@@ -152,6 +161,15 @@ variable "drift_cron" {
 variable "drift_emails" {
   type    = list(string)
   default = []
+
+  # [""] khong phai []: length la 1, va Terraform nhan vi no DUNG kieu
+  # list(string). Module cung co validation nay - khai lai o day de
+  # thong bao goi ten bien cua LAYER, tuc dung ten ma nguoi sua
+  # terraform.tfvars dang doc.
+  validation {
+    condition     = alltrue([for e in var.drift_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "drift_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 variable "drift_topic_arn" {

@@ -112,4 +112,11 @@ variable "netops_emails" {
   EOT
   type        = list(string)
   default     = []
+
+  # [""] khong phai []: length la 1, va apply se do o giua khi SNS tu
+  # choi endpoint rong. Bat tu plan.
+  validation {
+    condition     = alltrue([for e in var.netops_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "netops_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }

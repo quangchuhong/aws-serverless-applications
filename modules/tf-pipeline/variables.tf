@@ -269,6 +269,32 @@ variable "drift_emails" {
   EOT
   type        = list(string)
   default     = []
+
+  ####################################
+  # [""] KHONG PHAI DANH SACH RONG
+  #
+  # Da xay ra that: mot nguoi muon "de rong" va go [""]. Terraform
+  # nhan, va length(var.drift_emails) la 1 chu khong phai 0. Hau qua
+  # tuy theo drift_topic_arn:
+  #
+  #   drift_topic_arn != ""  -> tao_topic = false, khong co subscription
+  #                             nao duoc tao. Chi co check
+  #                             "khong_khai_ca_hai_nguon_topic" keu -
+  #                             ma check chi CANH BAO, apply van xanh.
+  #                             Khong mat gi, va cung khong ai biet.
+  #
+  #   drift_topic_arn == ""  -> tao_topic = true, va apply co gang tao
+  #                             subscription voi endpoint = "".
+  #                             SNS tu choi, apply do GIUA CHUNG - sau
+  #                             khi mot phan resource da duoc tao.
+  #
+  # Nen no la mot qua min: im lang o cau hinh nay, no o cau hinh sau.
+  # Bat tu plan.
+  ####################################
+  validation {
+    condition     = alltrue([for e in var.drift_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "drift_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong, khong phai danh sach rong."
+  }
 }
 
 variable "drift_topic_arn" {
@@ -426,6 +452,14 @@ variable "approval_emails" {
   EOT
   type        = list(string)
   default     = []
+
+  # Xem chu thich o drift_emails: [""] khong phai []. O day no do ngay
+  # luc apply (SNS tu choi endpoint rong) chu khong im lang - nhung do
+  # o apply, tuc sau khi da qua plan va qua mat nguoi duyet.
+  validation {
+    condition     = alltrue([for e in var.approval_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "approval_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 ########################################

@@ -263,6 +263,15 @@ variable "approval_emails" {
   EOT
   type        = list(string)
   default     = []
+
+  # [""] khong phai []: length la 1, va Terraform nhan vi no DUNG kieu
+  # list(string). Module cung co validation nay - khai lai o day de
+  # thong bao goi ten bien cua LAYER, tuc dung ten ma nguoi sua
+  # terraform.tfvars dang doc.
+  validation {
+    condition     = alltrue([for e in var.approval_emails : can(regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", e))])
+    error_message = "approval_emails co phan tu khong phai dia chi email. De trong thi viet [] - [\"\"] la danh sach CO MOT phan tu rong."
+  }
 }
 
 ########################################

@@ -902,6 +902,85 @@ def kiem_loosen_co_stage():
     return loi
 
 
+def kiem_danh_sach_email():
+    """17. Moi bien `*_emails` kieu list(string) phai co `validation`.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VA NO LA MOT QUA MIN CHU KHONG PHAI MOT LAN DO
+
+    Trong ops-pipeline-network/terraform.tfvars co:
+
+        drift_emails = [""]
+
+    Nguoi go muon noi "de rong". Terraform nhan, vi [""] DUNG kieu
+    list(string) - no la danh sach CO MOT phan tu, va phan tu do rong.
+    length() tra ve 1, khong phai 0. Hau qua tuy cau hinh:
+
+      con drift_topic_arn  -> khong subscription nao duoc tao. Chi co
+                              check "khong_khai_ca_hai_nguon_topic" keu,
+                              ma check chi CANH BAO. Apply xanh, khong
+                              mat gi, va khong ai biet.
+      bo drift_topic_arn   -> apply co gang tao subscription voi
+                              endpoint = "". SNS tu choi, va apply do
+                              GIUA CHUNG - sau khi mot phan resource da
+                              duoc tao.
+
+    Nen no im lang o cau hinh hom nay va no o cau hinh hom sau. Do la
+    ly do phep kiem nay doi `validation` chu khong doi `check`:
+    validation chan tu plan, check chi noi.
+
+    =====================================================================
+    VI SAO KIEM O DAY CHU KHONG CHI SUA SAU CHO DA BIET
+
+    16 bien danh sach email nam rai o 13 file. Sua sau chi trong so do
+    de hom nay, va bien thu bay duoc them vao thang sau thi khong co gi
+    nhac. Phep kiem nay la cho de cai nhac do ton tai.
+
+    Bo qua control-tower/core_account_emails: no kieu object, khong phai
+    list, va no thuoc duong Control Tower - khong dung trong LZ nay.
+    """
+    loi = []
+    goc_tim = [
+        os.path.join(GOC, "landing-zone"),
+        os.path.join(GOC, "modules"),
+    ]
+    files = []
+    for g in goc_tim:
+        files += glob.glob(os.path.join(g, "**/*.tf"), recursive=True)
+
+    for f in sorted(files):
+        # Bo dong chu thich TRUOC khi tim. Phep kiem 14 tung tu qua phep
+        # dot bien cua chinh no vi chuoi can tim nam trong chu thich vua
+        # viet - cung cai bay, o day tranh tu dau.
+        noi_dung = "\n".join(
+            x for x in open(f).read().splitlines() if not x.lstrip().startswith("#")
+        )
+        for m in re.finditer(r'variable\s+"([a-z_]*_emails)"\s*\{', noi_dung):
+            ten = m.group(1)
+            i = m.end()
+            sau = 1
+            j = i
+            while sau and j < len(noi_dung):
+                if noi_dung[j] == "{":
+                    sau += 1
+                elif noi_dung[j] == "}":
+                    sau -= 1
+                j += 1
+            than = noi_dung[i:j]
+            if "list(string)" not in than:
+                continue
+            if re.search(r"^\s*validation\s*\{", than, re.M):
+                continue
+            loi.append(
+                f"{os.path.relpath(f, GOC)}: bien {ten} kieu list(string) khong co "
+                "`validation`. [\"\"] se di qua kieu (length = 1, khong phai 0) va "
+                "hong o cho khac: hoac apply do giua chung khi SNS tu choi endpoint "
+                "rong, hoac khong tao subscription nao ma khong co gi bao. Them "
+                "validation doi moi phan tu khop dang email."
+            )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -1020,6 +1099,10 @@ def main():
         l7 = kiem_loosen_co_stage()
         print(f"  {'x' if l7 else 'v'} loosen cua layer nhieu stage deu co `stage`")
         loi += l7
+
+        l8 = kiem_danh_sach_email()
+        print(f"  {'x' if l8 else 'v'} moi bien *_emails co validation")
+        loi += l8
 
     print()
     if loi:
