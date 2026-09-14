@@ -67,13 +67,41 @@ XANH=$'\033[32m'; DO=$'\033[31m'; VANG=$'\033[33m'; HET=$'\033[0m'
 ARN_ROLE="${1:-}"
 CHE_DO="${2:-}"
 
+########################################
+# HAI NGUYEN NHAN, HAI CACH CHUA - DUNG KHANG DINH MOT CAI
+#
+# Ban dau thong bao nay viet: "Gia tri do Terraform sinh ra, nen rong o
+# day nghia la chuoi verify trong main.tf bi sua sai - KHONG phai nguoi
+# dung go thieu."
+#
+# Cau do SAI ngay lan dau co nguoi chay tay: ho go `./kiem-mang.sh` khong
+# tham so - dung nhu dong `#   ./kiem-mang.sh <arn> <che-do>` o dau file
+# moi - va bi thong bao khang dinh rang loi nam o Terraform.
+#
+# Mot thong bao doan sai nguyen nhan thi TE HON mot thong bao ngan, vi no
+# gui nguoi doc di dung huong khong co gi. Day la lan thu nam cung kieu
+# trong du an nay.
+########################################
 if [[ "$CHE_DO" != "chua-dung" && "$CHE_DO" != "da-dung" ]]; then
-  echo "${DO}LOI: tham so thu hai phai la 'chua-dung' hoac 'da-dung'.${HET}"
+  echo "${DO}LOI: thieu hoac sai tham so thu hai (che do).${HET}"
   echo "     Nhan duoc: '${CHE_DO}'"
   echo
-  echo "     Gia tri nay do Terraform sinh tu enable_network_stage va"
-  echo "     enable_firewall_stage, nen rong o day nghia la chuoi verify trong"
-  echo "     main.tf bi sua sai - KHONG phai nguoi dung go thieu."
+  echo "     Cach dung:"
+  echo "       ./kiem-mang.sh '<arn-role-assume>' chua-dung|da-dung"
+  echo
+  echo "     chua-dung : hai stage network dang TAT - KHONG duoc thay rule"
+  echo "                 group hay alarm. Thay thi la ha tang khong ai quan."
+  echo "     da-dung   : stage dang bat - rule group phai ton tai, phai duoc"
+  echo "                 mot firewall policy doc toi, alarm phai co nguoi nhan."
+  echo
+  echo "     Chay TAY thi go thang hai tham so. Vi du hom nay:"
+  echo "       ./kiem-mang.sh 'arn:aws:iam::<account-mang>:role/<role>' chua-dung"
+  echo
+  echo "     Chay TU PIPELINE thi Terraform sinh chuoi nay tu"
+  echo "     enable_network_stage / enable_firewall_stage, nen rong o do la"
+  echo "     dau hieu chuoi verify trong ops-pipeline-network/main.tf bi sua"
+  echo "     hong - thuong la mat cap nhay don quanh ARN, lam bash gop khoang"
+  echo "     trang va day che do len thanh tham so thu nhat."
   exit 2
 fi
 
