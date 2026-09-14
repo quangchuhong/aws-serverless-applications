@@ -120,4 +120,19 @@ rules:
   # No van apply thanh cong. Van hien trong console. Van chiem
   # capacity. Chi la khong lam gi ca. Terraform canh bao truong hop
   # nay - xem check "icmp_rules_are_shadowed" trong ../firewall.tf.
-
+  - id: fw-0030
+    from: app-dev
+    to: security-tools
+    ports: [443]
+    ticket: TEST-9001
+    expires: 2027-06-30
+    note: TEST - dev goi API cua cum security, co han
+  - id: fw-0031
+    from: partner-sim
+    to: app-prod-api
+    ports: [80]
+    ticket: TEST-9002
+    expires: 2026-12-31
+    note: TEST - partner goi dich vu thu hai. ports = target_port (80),
+          KHONG phai port ngoai (8081) - firewall thay ket noi THU HAI,
+          tu NLB toi ung dung.

@@ -77,3 +77,8 @@ apps:
   #   owner: team-app
   #   note: Chi tang du lieu, khong phai ca VPC
   # ------------------------------------------------------------
+  - name: app-prod-api
+    spoke: app-prod
+    cidr: 10.20.0.10/32
+    owner: team-app
+    note: TEST - dich cua partner service thu hai

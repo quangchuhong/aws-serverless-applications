@@ -174,3 +174,9 @@ partners:
 #     expires: 2026-12-31        # NEN khop voi ngay trong ho so
 #     note: Acme goi order-api de doi soat
 # --------------------------------------------------------------
+      - name: api-v2
+        port: 8081          # 8080 da bi `api` chiem - NLB khong cho hai
+        target_port: 80     # listener cung mot cong
+        target: app-prod-api
+        ticket: TEST-9002
+        expires: 2026-12-31

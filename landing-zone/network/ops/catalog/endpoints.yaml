@@ -61,7 +61,16 @@
 # gan PHZ truc tiep. Phai kiem tu mot account khac.
 # ==============================================================
 
-endpoints: []
+endpoints:
+  # TEST - DONG DUY NHAT TRONG CA BO TEST TON TIEN THAT
+  #
+  # ~$0.01/gio moi AZ moi dich vu. Chay 2 AZ = ~$14.60/thang, tinh ca
+  # khi khong ai goi den no. XOA sau khi thu xong duong di.
+  #
+  # Bo dong nay ra thi nam file test kia van thu duoc ca hai stage.
+  - service: kms
+    ticket: TEST-9020
+    note: TEST - XOA sau khi thu xong. Xem ghi chu chi phi o tren.
 
 # --------------------------------------------------------------
 # Vi du (dang tat)

@@ -56,7 +56,17 @@
 # mot dai ben trong landing zone, va khong di qua security VPC.
 # ==============================================================
 
-routes: []
+routes:
+  # TEST - blackhole la lua chon an toan nhat de thu:
+  #   - khong phu thuoc tgw-attach-* id that
+  #   - 10.13.7.0/24 khong thuoc spoke nao, nen khong cat duong cua ai
+  #   - khong phai mot duong tat VONG QUA FIREWALL (canh bao cua file nay)
+  - id: rt-0090
+    table: spokes
+    destination: 10.13.7.0/24
+    target: blackhole
+    ticket: TEST-9030
+    note: TEST - cach ly mot dai gia lap, khong cham ha tang that
 
 # --------------------------------------------------------------
 # Vi du (dang tat)

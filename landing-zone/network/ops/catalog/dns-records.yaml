@@ -63,7 +63,25 @@
 # giu: `cd .. && terraform output -json ops_handles | jq '.dns.managed_records'`
 # ==============================================================
 
-records: []
+records:
+  # TEST - hai ban ghi de thu stage cloudops-network.
+  #
+  # Ten da chon de KHONG trung ban ghi layer cha tu sinh. Lint khong
+  # kiem duoc viec do (no can state layer cha); `terraform plan` thi bat.
+  # Danh sach layer cha dang giu:
+  #   cd .. && terraform output -json ops_handles | jq '.dns.managed_records'
+  - name: order-api
+    type: A
+    ttl: 60
+    values: ["10.20.0.10"]
+    ticket: TEST-9010
+    note: TEST - VIP cua order-api trong app-prod
+  - name: cache
+    type: CNAME
+    ttl: 300
+    values: ["test-cache.abc123.ap-southeast-1.cache.amazonaws.com"]
+    ticket: TEST-9011
+    note: TEST - bi danh, doi cluster khong phai doi app
 
 # --------------------------------------------------------------
 # Vi du (dang tat)
