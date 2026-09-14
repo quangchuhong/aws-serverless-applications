@@ -156,19 +156,100 @@ Grep ở mục 1 ra **rỗng** cho cả bốn. Không phải "chưa hoàn thiệ
 
 Nhóm thiếu nhưng **hợp lý ở giai đoạn này**: SSM patch baseline, Service Quotas, auto-remediation (Config remediation / SSM Automation), break-glass thứ hai, session policy cho Deny liên account.
 
+> **Chi phí thực hiện của ba việc đầu — đo bằng code, ở mục 7.2.** Đừng xếp sprint từ bảng này: ba việc nhìn ngang nhau ở đây, mà công sức thật lệch nhau 3 lần về số layer phải chạm.
+
 Một điểm công bằng cho bản DIY: dòng cuối bảng trên cho thấy phần **khó** của Inspector/Macie đã làm rồi. `notify.tf` cố ý **không** làm EventBridge fan-in cross-account, vì Security Hub đã gom sẵn — nên thêm Inspector hay Macie sau này chỉ là bật, không phải đi dây lại.
 
 ---
 
 ## 7. Ba việc ưu tiên
 
-| # | Việc | Vì sao thứ tự này |
+### 7.1 Xếp theo giá trị
+
+| # | Việc | Vì sao |
 |---|---|---|
-| **1** | Bật **một** Security Hub standard (`fsbp`), đo chi phí một tuần | Rẻ nhất, thu hẹp khoảng cách với CT nhiều nhất. Là **một dòng tfvars**, không phải code |
+| **1** | Bật **một** Security Hub standard (`fsbp`), đo chi phí một tuần | Rẻ nhất, thu hẹp khoảng cách với CT nhiều nhất |
 | **2** | **VPC Flow Logs** tập trung về log-archive | Không có nó thì mọi điều tra mạng bắt đầu từ chỗ không có dữ liệu |
 | **3** | **AWS Backup cấp tổ chức** | Câu audit chắc chắn hỏi, và là thứ mất nhiều thời gian nhất để làm sau |
 
 Việc thứ tư: chạy ba bộ test trong stage `Lint`. Quan trọng, nhưng nó **bảo vệ cái đã có** chứ không thêm năng lực mới — nên xếp sau.
+
+### 7.2 Chi phí thực hiện, đo bằng code chứ không bằng cảm giác
+
+Ba việc trên nhìn ngang nhau. Đọc code thì không, và nó lệch **cả hai chiều** so với phỏng đoán ban đầu.
+
+#### Việc 1 — Security Hub `fsbp`: không một dòng code
+
+```hcl
+# config-detective/terraform.tfvars
+security_hub_standards = ["fsbp"]
+```
+
+**Nhưng không phải "push là xong".** `aws_securityhub_standards_subscription.this` nằm **ngoài `-target`** của stage `cloudops-config-rules` (stage đó chỉ được chạm `aws_config_organization_managed_rule`). Nên phải apply tay:
+
+```bash
+cd landing-zone/config-detective
+terraform apply -target=aws_securityhub_standards_subscription.this
+cd ../vending-pipeline && ./push-tfvars.sh   # de job drift khong bao lech moi dem
+```
+
+Dòng thứ hai không bỏ được: job drift chạy `plan` **không** `-target`, nên tfvars ở S3 lệch với local sẽ thành một dòng drift mỗi đêm.
+
+**Cái đắt không phải công sức mà là hoá đơn.** FSBP ~200 control × 14 account × 2 region, tính theo số lần kiểm. Đó là lý do `check.security_hub_costs_money` tồn tại. Bật một standard, một region trước, đo một tuần.
+
+#### Việc 2 — Flow Logs: **không dễ**, và rào cản là provider
+
+```
+network/versions.tf          → 1 provider, KHÔNG alias   ← không với tới log-archive
+config-detective/versions.tf → alias "security", alias "log_archive"
+```
+
+Gom flow log về log-archive cần **ba** chỗ:
+
+| Layer | Việc | Vì sao phải ở đây |
+|---|---|---|
+| `config-detective` | bucket ở log-archive + bucket policy cho `delivery.logs.amazonaws.com` | layer duy nhất có provider alias `log_archive` |
+| `network` | `aws_flow_log` cho VPC hub, nhận ARN bucket qua **biến** | VPC hub khai ở đây |
+| `account-baseline` | VPC spoke ở account thành viên sinh từ **CloudFormation StackSet** → sửa template, không phải Terraform | StackSet là thứ rải xuống account thành viên |
+
+Và nó tạo một **cạnh phụ thuộc liên layer mới**. Mục 6 của [doc 31](./31-Ban-do-Code-Landing-Zone.md) ghi rằng cả hạ tầng hiện chỉ có **hai** cạnh như vậy, cố ý — *mỗi cạnh là một layer có thể làm layer khác chết*. Đây sẽ là cạnh thứ ba, nên nó cần một quyết định chứ không chỉ một lần code.
+
+Chi phí vận hành cũng không nhỏ: flow log tính theo GB thu nhận **và** GB lưu trữ, và nó là một trong những dòng hoá đơn lớn ở quy mô.
+
+#### Việc 3 — AWS Backup: **dễ hơn phỏng đoán**, và chỗ tôi suýt nói sai
+
+Phỏng đoán ban đầu: rào cản lớn nhất là phải bật `BACKUP_POLICY` ở cấp tổ chức. Đọc code thì nó **đã bật sẵn**:
+
+```hcl
+# organization/organization.tf:16
+enabled_policy_types = [
+  "SERVICE_CONTROL_POLICY",
+  "TAG_POLICY",
+  "BACKUP_POLICY",      # <- da co
+]
+```
+
+Nên chia làm hai mức, và mức đầu thật sự dễ:
+
+| Mức | Việc | Công sức |
+|---|---|---|
+| **Tối thiểu** | một file mới trong `organization`, đúng khuôn `tag-policy.tf`: `aws_organizations_policy` type `BACKUP_POLICY` + attachment, chọn resource theo tag, ghi vào vault mặc định của từng account | ~60 dòng, **một** layer |
+| **Đạt chuẩn audit** | thêm một vault **bất biến ở log-archive** + vault policy cho phép sao lưu chéo từ tổ chức | thêm một layer (`config-detective` có sẵn alias) |
+
+Mức tối thiểu chạm layer `organization` — **sec sở hữu**, nên cần họ duyệt, và `gate.py` sẽ coi việc thêm một policy type mới là thay đổi cần đọc.
+
+### 7.3 Thứ tự sau khi đo
+
+| | Việc | Công sức | Số layer chạm |
+|---|---|---|---|
+| 1 | Security Hub `fsbp` | 1 dòng tfvars + 1 lệnh apply | 1 |
+| 2 | AWS Backup **tối thiểu** | ~60 dòng, 1 file mới | 1 *(sec duyệt)* |
+| 3 | Flow Logs | 3 layer + 1 cạnh phụ thuộc mới | 3 |
+| 4 | Backup **vault cross-account** | thêm vault + policy | 2 |
+
+**Thứ tự này đảo việc 2 và 3 so với 7.1**, và lý do là thứ chỉ thấy được sau khi đọc code: Backup tối thiểu rẻ hơn Flow Logs nhiều, dù giá trị audit cao hơn. Xếp theo giá trị thì Flow Logs trước; xếp theo *giá trị chia cho công sức* thì Backup trước.
+
+Cả hai thứ tự đều đúng — chỉ là trả lời hai câu hỏi khác nhau. Dùng 7.1 khi trình bày với người ra quyết định, dùng 7.3 khi lên sprint.
 
 ---
 
