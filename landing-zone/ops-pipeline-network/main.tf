@@ -123,6 +123,43 @@ locals {
       Action   = ["sts:AssumeRole"]
       Resource = var.network_pipeline_role_arns
     },
+
+    ####################################
+    # CHO PHEP KIEM LOG DUNG CHUNG - CHI DOC
+    #
+    # buildspec-verify.yml goi ../ops-gate/kiem-log.sh LUON sau lenh verify
+    # cua pipeline nay. No doc log cua CHINH lan chay do de tim CANH BAO -
+    # mot check block Terraform that bai hay mot dong "changed outside of
+    # Terraform" di qua ma stage van xanh, va khong ai mo log cua mot build
+    # mau xanh.
+    #
+    # Loc theo EXECUTION chu khong theo cua so thoi gian, nen no can doc
+    # danh sach action de lay build-uuid (chinh la ten log stream).
+    #
+    # KHOI NAY TUNG BI QUEN O DUNG CALLER NAY. Ba caller kia co no tu khi
+    # stage Verify duoc them; cai nay duoc noi verify sau, va phan IAM
+    # khong di theo. Lan chay dau: phan layer XANH hoan toan
+    # (rule group duoc policy doc toi, 2/2 alarm, subscription da xac
+    # nhan) roi do o
+    #
+    #   AccessDeniedException ... codepipeline:ListPipelineExecutions
+    #
+    # tuc mot bao cao dung bi mot phep doc log khong co quyen lam do.
+    # kiem-module.py muc 14 gio doi chieu viec nay - theo ACTION chu khong
+    # theo ten Sid, vi ops-pipeline cap cung bon action duoi Sid khac
+    # ("DocChoVerify") va no hoan toan hop le.
+    ####################################
+    {
+      Sid    = "DocLogChoVerify"
+      Effect = "Allow"
+      Action = [
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+      ]
+      Resource = "*"
+    },
   ]
 
   ####################################

@@ -725,6 +725,71 @@ def kiem_thuoc_tinh_stage():
     return loi
 
 
+def kiem_quyen_doc_log():
+    """14. Caller co `verify` phai cap bon action ma kiem-log.sh can.
+
+    =====================================================================
+    LOI NAY DA XAY RA, VA NO DO SAU MOT BAO CAO XANH
+
+    buildspec-verify.yml goi ops-gate/kiem-log.sh LUON sau lenh verify cua
+    tung pipeline. Script do doc log cua chinh lan chay, nen no can bon
+    action chi-doc. Thieu chung thi phan layer chay xong, in ra mot bao
+    cao hoan toan xanh, roi stage do o
+
+      AccessDeniedException ... codepipeline:ListPipelineExecutions
+
+    Da xay ra o ops-pipeline-network: ba caller kia co khoi quyen do tu
+    khi stage Verify duoc them, cai nay duoc noi verify sau va phan IAM
+    khong di theo.
+
+    =====================================================================
+    DOI CHIEU THEO ACTION, KHONG THEO TEN Sid
+
+    ops-pipeline cap dung bon action nay duoi Sid "DocChoVerify" (gop voi
+    quyen doc tag policy), con ba caller kia dung "DocLogChoVerify". Ca
+    hai deu hop le. Kiem theo ten Sid se bao hong mot thu dang chay -
+    dung loai canh bao sai ma repo nay coi la te hon khong co canh bao.
+    """
+    CAN = [
+        "codepipeline:ListPipelineExecutions",
+        "codepipeline:ListActionExecutions",
+        "logs:GetLogEvents",
+        "logs:DescribeLogStreams",
+    ]
+    loi = []
+    for d in sorted(glob.glob(os.path.join(GOC, "landing-zone/ops-pipeline*"))):
+        f = os.path.join(d, "main.tf")
+        if not os.path.isfile(f):
+            continue
+        # BO DONG CHU THICH TRUOC KHI TIM
+        #
+        # Kiem dot bien dau tien KHONG keu, va ly do la chinh khoi chu
+        # thich moi them vao ops-pipeline-network: no co dong
+        #
+        #   #   AccessDeniedException ... codepipeline:ListPipelineExecutions
+        #
+        # nen chuoi van "tim thay" du dong CAP QUYEN da bi xoa. Van ban MO
+        # TA mot quyen bi doc thanh quyen do - cung lop loi voi kiem-log.sh
+        # bat `echo "CANH BAO..."` va bat van ban trong output cua Terraform.
+        #
+        # Mot phep kiem doc ca chu thich la mot phep kiem co the duoc lam
+        # cho im bang cach viet them mot dong van xuoi.
+        noi_dung = "\n".join(
+            d for d in open(f).read().splitlines() if not d.lstrip().startswith("#")
+        )
+        if not re.search(r"(?<![\w])verify\s*=", noi_dung):
+            continue
+        thieu = [a for a in CAN if a not in noi_dung]
+        if thieu:
+            loi.append(
+                os.path.basename(d) + " khai `verify` nhung quyen_dich_vu thieu "
+                + ", ".join(thieu)
+                + ". kiem-log.sh se do voi AccessDenied SAU khi phan layer da in"
+                " mot bao cao xanh."
+            )
+    return loi
+
+
 def kiem_push_tfvars(ap):
     """11. push-tfvars.sh phai phu het layer ma cac pipeline apply.
 
@@ -835,6 +900,10 @@ def main():
         l5 = kiem_thuoc_tinh_stage()
         print(f"  {'x' if l5 else 'v'} moi stage.value.X co trong kieu cua var.stages")
         loi += l5
+
+        l6 = kiem_quyen_doc_log()
+        print(f"  {'x' if l6 else 'v'} caller co verify deu cap quyen doc log")
+        loi += l6
 
     print()
     if loi:
