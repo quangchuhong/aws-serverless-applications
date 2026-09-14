@@ -429,6 +429,23 @@ output "ops_handles" {
     owner       = var.owner
     environment = var.environment
 
+    ####################################
+    # DICH BAO DONG - CUNG LY DO VOI cost_center O TREN
+    #
+    # Hai alarm VPN doi tac cua ops/ can mot ARN SNS. Truyen qua day chu
+    # khong de nguoi ta go lai vao ops/terraform.tfvars, vi mot ARN go tay
+    # la mot ARN co the go sai - va mot ARN sai KHONG lam apply do: alarm
+    # van duoc tao, van doi mau, va publish that bai trong im lang.
+    #
+    # Da co tien le that trong ha tang nay: ten topic cua config-detective
+    # la "quh11-lz-security-findings" con cac pipeline dung tien to
+    # "qh11-lz" - hai quy uoc cung ton tai, va doan sai mot chu la hong.
+    #
+    # null khi enable_netops_alerts = false. ops/ dung try() nen no chiu
+    # duoc null, va check "partner_alarms_reach_someone" ben do van keu.
+    ####################################
+    alert_topic = try(aws_sns_topic.netops[0].arn, null)
+
     firewall = {
       enabled = var.enable_firewall
       mode    = var.firewall_mode

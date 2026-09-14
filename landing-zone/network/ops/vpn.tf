@@ -423,6 +423,41 @@ resource "aws_vpn_connection_route" "partner_extra" {
 # ai doc nua.
 ########################################
 
+########################################
+# DICH BAO DONG: LAY TU LAYER CHA, var CHI DE DE LEN
+#
+# Truoc day hai alarm dung thang var.alarm_actions, va bien do mac dinh
+# RONG. Ket qua o lan chay that dau tien cua kiem-mang.sh:
+#
+#   quh11-net-partner-vpn-DUT           OK, 0 action, ActionsEnabled=True
+#   quh11-net-partner-vpn-mat-du-phong  OK, 0 action, ActionsEnabled=True
+#
+# Hai canh bao ton tai, doi mau trong console, va khong goi ai. Khong lop
+# nao do: alarm duoc tao thanh cong, plan ra No changes, va trieu chung duy
+# nhat la mot ngay doi tac goi dien bao duong ham dut.
+#
+# Gio layer cha tao topic (notify.tf) va day ARN qua ops_handles, nen
+# truong hop mac dinh la CO nguoi nhan. var.alarm_actions van con, nhung
+# doi vai tro: tu "cho de dien ARN" thanh "cho de DE LEN" khi can ban ve
+# mot dich khac.
+#
+# Thu tu uu tien nay co chu dich. Nguoc lai - var thang, hub lam du phong -
+# se lam mot tfvars cu con sot dong `alarm_actions = []` AM THAM vo hieu
+# hoa topic cua layer cha, va do dung la kieu hong ma ca khoi nay noi ve.
+########################################
+#
+# Viet tach lam hai buoc chu khong compact([try(...)]): alert_topic la
+# null khi layer cha dat enable_netops_alerts = false, va compact() nhan
+# danh sach CHUOI - mot phan tu null o do la mot loi kieu du lieu giua
+# apply, khong phai mot danh sach rong.
+locals {
+  hub_topic = try(local.hub.alert_topic, null)
+
+  alarm_dich = length(var.alarm_actions) > 0 ? var.alarm_actions : (
+    local.hub_topic == null ? [] : [local.hub_topic]
+  )
+}
+
 resource "aws_cloudwatch_metric_alarm" "partner_vpn_down" {
   count = local.partner_on && try(local.hub.partner.vpn_connection_id, null) != null ? 1 : 0
 
@@ -446,8 +481,8 @@ resource "aws_cloudwatch_metric_alarm" "partner_vpn_down" {
   # phai mot tin trung tinh.
   treat_missing_data = "breaching"
 
-  alarm_actions = var.alarm_actions
-  ok_actions    = var.alarm_actions
+  alarm_actions = local.alarm_dich
+  ok_actions    = local.alarm_dich
 
   tags = { Name = "${local.hub.project}-partner-vpn-DUT" }
 }
@@ -473,7 +508,7 @@ resource "aws_cloudwatch_metric_alarm" "partner_vpn_degraded" {
   # nhat de nguoi ta tat ca hai.
   treat_missing_data = "notBreaching"
 
-  alarm_actions = var.alarm_actions
+  alarm_actions = local.alarm_dich
 
   tags = { Name = "${local.hub.project}-partner-vpn-mat-du-phong" }
 }
@@ -493,7 +528,11 @@ resource "aws_cloudwatch_metric_alarm" "partner_vpn_degraded" {
 
 check "partner_alarms_reach_someone" {
   assert {
-    condition     = length(local.partner_services) == 0 || length(var.alarm_actions) > 0
-    error_message = "Co ${length(local.partner_services)} dich vu cong bo cho doi tac nhung alarm_actions dang rong. Hai canh bao duong ham VAN duoc tao va van doi trang thai trong console - chi la khong ai duoc bao. Nguoi phat hien ra duong ham dut se la doi tac, va ho phat hien bang mot cuoc goi dien. Dat alarm_actions = [\"arn:aws:sns:...\"] trong terraform.tfvars."
+    # local.alarm_dich chu khong var.alarm_actions: dich bao dong gio co
+    # the den tu topic cua layer cha qua ops_handles. Kiem var o day se
+    # keu ngay ca khi alarm DA co nguoi nhan - va mot check keu sai la
+    # mot check nguoi ta hoc cach bo qua.
+    condition     = length(local.partner_services) == 0 || length(local.alarm_dich) > 0
+    error_message = "Co ${length(local.partner_services)} dich vu cong bo cho doi tac nhung alarm_actions dang rong. Hai canh bao duong ham VAN duoc tao va van doi trang thai trong console - chi la khong ai duoc bao. Nguoi phat hien ra duong ham dut se la doi tac, va ho phat hien bang mot cuoc goi dien. HAI cach chua, va cach dau duoc khuyen: (1) o LAYER CHA dat enable_netops_alerts = true va dien netops_emails - topic se duoc tao o chinh account mang va ARN tu chay sang day qua ops_handles, khong ai phai go lai ARN; (2) hoac dien alarm_actions = [\"arn:aws:sns:...\"] trong terraform.tfvars cua lop nay de DE LEN dich cua layer cha."
   }
 }
