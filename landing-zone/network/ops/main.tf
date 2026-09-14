@@ -29,7 +29,38 @@ locals {
   # state nam ngay day, chi la Terraform dang tim tu mot thu muc khac.
   ########################################
 
-  state_config = var.state_backend != "local" ? var.state_config : {
+  ####################################
+  # BO `profile` KHI CHAY TRONG PIPELINE
+  #
+  # state_config nam trong terraform.tfvars, ma push-tfvars.sh day CHINH
+  # file do len S3 cho pipeline doc. Nen mot dong viet cho nguoi ngoi may
+  #
+  #   state_config = { ... profile = "default" ... }
+  #
+  # di thang vao CodeBuild, noi khong co ~/.aws/config, va lan chay dau
+  # cua qh11-lz-ops-network chet ngay o stage Plan:
+  #
+  #   Error: failed to get shared config profile, default
+  #   PLAN HONG
+  #
+  # Trong CodeBuild khong can profile: role cua chinh CodeBuild o account
+  # management da doc duoc bucket state (module cap s3:GetObject qua
+  # state_chi_doc). Bo dong do di la dung chuoi credential mac dinh, tuc
+  # dung role dang chay.
+  #
+  # DIEU KIEN la assume_role_arn chu khong phai mot bien rieng: no la thu
+  # DUY NHAT chi co trong pipeline (buildspec truyen qua TF_VAR_), nen no
+  # khong the lech voi thuc te. Mot bien kieu "dang_chay_trong_pipeline"
+  # thi lech duoc.
+  #
+  # Cung mau voi dong `profile` cua provider trong versions.tf - cung mot
+  # lop loi o hai bien khac nhau, va cai o day moi la cai da no.
+  ####################################
+  state_config_hieu_luc = var.assume_role_arn == "" ? var.state_config : {
+    for k, v in var.state_config : k => v if k != "profile"
+  }
+
+  state_config = var.state_backend != "local" ? local.state_config_hieu_luc : {
     path = lookup(var.state_config, "path", "${path.module}/../terraform.tfstate")
   }
 }

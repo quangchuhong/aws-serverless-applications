@@ -293,7 +293,7 @@ module "pipeline" {
   # =================================================================
   # NHAY DON QUANH ARN - KHONG PHAI TRANG TRI
   #
-  # network_deploy_role_arn hom nay RONG. Khong co nhay thi buildspec
+  # network_deploy_role_arn CO THE rong (mac dinh la vay). Khong co nhay thi buildspec
   # `eval` thay
   #
   #   ./landing-zone/network/kiem-mang.sh  chua-dung
