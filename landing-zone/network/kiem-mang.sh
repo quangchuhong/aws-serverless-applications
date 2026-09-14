@@ -223,6 +223,44 @@ PY
 
   aws cloudwatch describe-alarms --region "$REGION" --output json \
     > "$D/alarms.json" 2>"$D/alarms.err"
+
+  ####################################
+  # MAT XICH THU BA: TOPIC CO AI DANG KY CHUA
+  #
+  # "alarm co 1 action" moi chung minh duoc hai mat xich: alarm -> topic.
+  # Mat thu ba - topic -> nguoi nhan - van co the dut, va dut trong im
+  # lang: SNS de subscription o PendingConfirmation cho toi khi co nguoi
+  # bam link trong thu, va o trang thai do no khong nhan gi.
+  #
+  # Terraform khong tra loi duoc cau nay: no bao tao thanh cong va plan ra
+  # "No changes" o CA HAI trang thai. Phai hoi AWS.
+  #
+  # Chi hoi nhung topic ma alarm CUA LAYER NAY dang tro toi.
+  ####################################
+  : > "$D/subs.jsonl"
+  for T in $(python3 - "$D/alarms.json" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+ra = set()
+for a in d.get("MetricAlarms", []):
+    ten = a.get("AlarmName", "")
+    if not (ten.endswith("-partner-vpn-DUT") or ten.endswith("-partner-vpn-mat-du-phong")):
+        continue
+    for x in (a.get("AlarmActions") or []) + (a.get("OKActions") or []):
+        if x.startswith("arn:aws:sns:"):
+            ra.add(x)
+for x in sorted(ra):
+    print(x)
+PY
+  ); do
+    aws sns list-subscriptions-by-topic --topic-arn "$T" --region "$REGION" \
+      --output json 2>>"$D/subs.err" \
+      | python3 -c "import json,sys; d=json.load(sys.stdin); d['__topic']='$T'; print(json.dumps(d))" \
+      >> "$D/subs.jsonl" 2>>"$D/subs.err" || true
+  done
 fi
 
 ########################################
@@ -406,6 +444,76 @@ else:
                         "        khong toi - luc do alarm ton tai ma khong bao gio bao."
                     )
                 break
+
+####################################
+# 3. TOPIC CO AI DANG KY, VA DA XAC NHAN CHUA
+#
+# "alarm co 1 action" chi chung minh alarm -> topic. Mat xich thu ba -
+# topic -> nguoi nhan - dut duoc ma moi lop van xanh: SNS de subscription
+# o PendingConfirmation cho toi khi co nguoi bam link trong thu, va o
+# trang thai do no khong nhan gi. Terraform bao tao thanh cong va plan ra
+# "No changes" o CA HAI trang thai.
+####################################
+if thay_alarm:
+    print()
+    print("── Nguoi nhan cua topic bao dong")
+    sub_theo_topic = {}
+    for o in doc_nhieu("subs.jsonl"):
+        sub_theo_topic[o.get("__topic", "?")] = o.get("Subscriptions") or []
+
+    dich = sorted({
+        x for a in thay_alarm.values()
+        for x in (a.get("AlarmActions") or []) + (a.get("OKActions") or [])
+        if x.startswith("arn:aws:sns:")
+    })
+
+    for t in dich:
+        if t not in sub_theo_topic:
+            # Doc khong duoc != khong co ai. Thuong gap khi topic o ACCOUNT
+            # KHAC - va luc do con mot cau hoi nua chua tra loi: policy cua
+            # topic do co cho alarm ben nay publish khong.
+            print(f"    {t}")
+            print("        khong doc duoc danh sach dang ky (topic o account khac?)")
+            canh.append(
+                f"khong doc duoc nguoi dang ky cua {t}.\n"
+                "        Nen KHONG ket luan duoc la co ai nhan hay khong. Neu topic nam o\n"
+                "        ACCOUNT KHAC thi con mot cau nua chua tra loi: resource policy ben\n"
+                "        do co cho cloudwatch.amazonaws.com tu account nay publish khong -\n"
+                "        thieu thi alarm doi mau va SNS tu choi, im lang."
+            )
+            continue
+
+        subs = sub_theo_topic[t]
+        cho_xac_nhan = [s for s in subs if s.get("SubscriptionArn") == "PendingConfirmation"]
+        da_xac_nhan = len(subs) - len(cho_xac_nhan)
+        print(f"    {t}")
+        print(f"        {da_xac_nhan} da xac nhan, {len(cho_xac_nhan)} cho xac nhan")
+
+        if not subs:
+            loi.append(
+                f"topic {t} KHONG co ai dang ky.\n"
+                "        Alarm ban vao no thanh cong va message di vao hu khong. Moi lop\n"
+                "        deu xanh: alarm co action, SNS nhan message, Terraform khong co\n"
+                "        gi de noi."
+            )
+        elif da_xac_nhan == 0:
+            loi.append(
+                f"topic {t} co {len(cho_xac_nhan)} dang ky nhung TAT CA con o\n"
+                "        PendingConfirmation - chua ai bam link trong thu SNS gui, nen\n"
+                "        chua ai nhan duoc gi.\n"
+                "        Terraform khong noi duoc dieu nay: no bao tao thanh cong va plan\n"
+                "        ra 'No changes' o ca hai trang thai.\n"
+                "        Kiem lai hop thu (ke ca muc spam) roi bam link xac nhan."
+            )
+        elif cho_xac_nhan:
+            canh.append(
+                f"topic {t} co {len(cho_xac_nhan)} dang ky con cho xac nhan:\n"
+                + "".join(
+                    f"          {s.get('Endpoint', '?')}\n" for s in cho_xac_nhan
+                )
+                + f"        {da_xac_nhan} dia chi khac DA xac nhan nen canh bao van den duoc -\n"
+                "        nhung nhung dia chi tren thi khong."
+            )
 
 ####################################
 # KET LUAN THEO CHE DO
