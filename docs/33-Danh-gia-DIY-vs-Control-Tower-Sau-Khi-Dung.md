@@ -84,6 +84,68 @@ Ví dụ một `check` mà CT không thể có, vì nó đặc thù cho tổ ch�
 
 CT bật cho bạn hàng trăm detective control ngày đầu. Ở đây có 10 Config rule và 0 Security Hub standard. Xem mục 5 và 6.
 
+### 2.4 Bảng đối chiếu từng hạng mục
+
+Ba trục ở trên là kết luận. Bảng này là chỗ đọc ra kết luận đó, từng hạng mục một. Cột cuối nói **chênh lệch nghiêng về bên nào**, không phải "có/không".
+
+| Hạng mục | AWS Control Tower | Bản này | Nghiêng về |
+|---|---|---|---|
+| Dựng nền lần đầu | Vài giờ, bấm nút | Nhiều ngày, viết code | **CT** |
+| Cấu trúc OU | Theo khuôn của CT, có OU bắt buộc | Tự khai bằng YAML, hai tầng | **Bản này** |
+| Guardrail phòng ngừa | Controls do AWS ship, bật/tắt theo OU | 4 SCP tự viết, gồm region deny | hoà |
+| Guardrail phát hiện | Hàng trăm control ngày đầu | 10 Config rule, 0 Security Hub standard | **CT** |
+| Sửa một guardrail | Trong khuôn CT cho phép; ngoài khuôn thì không | Sửa file, qua pipeline, có người duyệt | **Bản này** |
+| CloudTrail tổ chức | ✓ | ✓ **+ object lock** ở log-archive | **Bản này** |
+| Log archive tách account | ✓ | ✓ | hoà |
+| Account vending | Account Factory / AFT | `vending-pipeline`, 7 stage trên 4 layer | hoà — xem ghi chú dưới |
+| Baseline cho account mới | ✓ | ✓ qua StackSet | hoà |
+| **Mạng** | **không làm gì** | TGW hub-spoke, VPC kiểm tra, egress/ingress tập trung, DNS, VPN đối tác | **Bản này, tuyệt đối** |
+| Đọc plan và phân loại nới/thắt | ✗ | `gate.py`, 37 loại resource có luật chiều | **Bản này** |
+| Nới quyền buộc có ticket + hạn | ✗ | `ops-loosen.yaml`, vòng bốn nhịp | **Bản này** |
+| Cổng duyệt người giữa plan và apply | ✗ | `approve_stages` | **Bản này** |
+| Kiểm chứng bằng cách đọc AWS | ✗ — dashboard đọc Config | 7 script verify, không đụng state | **Bản này** |
+| Drift | LZ drift, phạm vi hẹp hơn | Mỗi pipeline một job, không có nhánh apply | **Bản này** |
+| Bắt cảnh báo lọt qua stage xanh | ✗ | `kiem-log.sh` | **Bản này** |
+| Kiến thức tổ chức mã hoá trong code | ✗ | 126 `check` | **Bản này** |
+| Region / partition không được CT hỗ trợ | ✗ | chạy được | **Bản này** |
+| Trạng thái "landing zone needs update" chặn thay đổi | có | không tồn tại | **Bản này** |
+| Đường nâng cấp được quản lý | AWS ship control mới | tự đọc Control Catalog rồi port tay | **CT** |
+| AWS Support debug hộ | ✓ | ✗ | **CT** |
+| Thuê người biết sẵn | ✓ | ✗ | **CT** |
+
+**Ghi chú về dòng account vending** — nó ghi "hoà" chứ không ghi "CT", và đó không phải nhân nhượng: nếu muốn vend account bằng Terraform thì CT đưa bạn tới **AFT**, mà AFT là **một bộ pipeline bạn phải tự vận hành** trong một account riêng của nó — CodePipeline, CodeBuild, Step Functions, DynamoDB. Nghĩa là gánh nặng vận hành không biến mất khi dùng CT; nó chỉ đổi tên.
+
+### 2.5 Chi phí — hai bên trả cho cái gì
+
+Điểm khởi đầu phải nói rõ, vì đây là chỗ hay bị nói sai theo cả hai chiều:
+
+> **Bản thân Control Tower không tính phí, và bản này cũng vậy.** Cả hai đều trả tiền cho **những dịch vụ bên dưới được bật lên**. Nên câu hỏi đúng không phải "cái nào rẻ hơn", mà là **"ai quyết định bật cái gì"**.
+
+Và đó chính là chỗ chênh lệch:
+
+| | Control Tower | Bản này |
+|---|---|---|
+| Ai chọn phạm vi ghi nhận của Config | CT đặt baseline, ghi rộng trên mọi region được quản trị | **Khai trong code**: 10 org rule, 2 region |
+| Thu hẹp phạm vi đó | Là một thao tác trên landing zone, trong khuôn CT cho phép | Sửa một dòng, qua pipeline |
+| Biết một tính năng có đang tốn tiền không | Đọc bảng giá rồi suy ra | **Đọc hoá đơn** — và nó khớp với `terraform output` |
+| Tắt cả một lớp để tiết kiệm | Không có khái niệm đó — baseline luôn chạy ở mọi account được quản trị | `terraform destroy` một layer, dựng lại khi cần |
+
+**Bốn ưu thế chi phí của bản này, mỗi cái kiểm lại được:**
+
+1. **Mọi công tắc đều tường minh, và hoá đơn xác nhận được.** Dòng `Security Hub $0.00` ở mục 5.2 là bằng chứng độc lập cho `standards = []`. Một tính năng đang bật thì **không thể** có hoá đơn bằng không. Ở CT bạn không có phép đối chiếu này, vì baseline không do bạn khai.
+
+2. **Phạm vi Config do mình chọn — và Config là dòng lớn nhất.** Trong $1,57 đo được, Config chiếm **$1,04**, tức hai phần ba. Config tính theo số configuration item ghi nhận và số lần đánh giá rule, nên nó nhân theo **account × region × mức độ thay đổi resource**. Đây là đòn bẩy chi phí lớn nhất của bất kỳ landing zone nào, và ở bản này nó là một con số trong code.
+
+3. **Tắt được cả một lớp mà không phá nền tảng.** Network Firewall ra **$0,0988** vì lớp mạng được dựng, kiểm chứng một đến hai giờ, rồi xoá. Không phải vì nó rẻ — mà vì *xoá và dựng lại được*. CT không có tương đương: baseline của nó chạy ở mọi account được quản trị, không có cách "tạm đỗ" mà vẫn giữ landing zone.
+
+4. **Không có chi phí ẩn của chu kỳ cập nhật.** CT sinh ra trạng thái *landing zone needs update*, và trong lúc đó một số thao tác bị chặn cho tới khi có người chạy cập nhật trên toàn tổ chức. Đó là chi phí bằng **thời gian kỹ sư** chứ không nằm trên hoá đơn — nhưng nó là chi phí thật, và nó lặp lại.
+
+**Chỗ CT rẻ hơn, và nó không nhỏ:** bạn không phải trả cho việc *dựng* sáu pipeline, `gate.py`, `loc.py`, 22 script và 126 `check`. Chi phí đó đã trả bằng thời gian, và nó tiếp tục trả bằng bus factor ở mục 4. Nếu tính tổng chi phí sở hữu trong ba năm mà quy thời gian kỹ sư ra tiền, kết luận có thể đảo chiều — và đó là một quyết định tổ chức, không phải một phép so hoá đơn.
+
+**Một cảnh báo về quy mô:** $1,57 là số của **năm account, trong một kỳ ngắn hơn kỳ dựng**. Ở 50 account, con số tuyệt đối tăng nhiều lần — nhưng **thứ tự trong bảng không đổi**: Config vẫn là dòng lớn nhất, và phần quản trị vẫn nhỏ hơn hạ tầng mạng chạy thường trú (~$1.020/tháng ở 2 AZ / 5 spoke) một bậc rõ rệt.
+
+> Kiểm lại hai con số này bằng chính công cụ đã sinh ra chúng: xuất Cost Explorer theo **account** và theo **dịch vụ**, lọc ra account quản trị (ở đó có hệ thống chạy từ trước nền tảng này), rồi đối chiếu với `terraform output` của `config-detective`. Hai nguồn không liên quan phải nói cùng một điều — nếu không, một trong hai sai.
+
 ---
 
 ## 3. Ưu điểm

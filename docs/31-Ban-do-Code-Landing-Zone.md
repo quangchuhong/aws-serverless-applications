@@ -234,6 +234,61 @@ Dòng cuối là chỗ đang gây ồn: `tu_kich_hoat = true` ở `ops-network` 
 
 ---
 
+## 9. Thuật ngữ — thư mục này gọi là gì ở ngoài kia
+
+Bộ code này đặt tên thư mục bằng chức năng của nó trong tổ chức. Cộng đồng cloud/devops có tên **tiếng Anh** riêng cho từng thứ, và biết tên đó có ba cái lợi: tìm tài liệu được, nói chuyện với người ngoài được, và biết mình đang tự viết lại cái gì đã có sẵn trên thị trường.
+
+### 9.1 Gọi cả bộ này là gì
+
+| Tên | Dùng khi nào |
+|---|---|
+| **Custom landing zone** (hay *DIY / hand-rolled / self-managed landing zone*) | Chính xác nhất. AWS dùng chữ *custom-built landing zone* để đối lập với *service-based* (Control Tower) |
+| **Landing zone as code** | Khi muốn nhấn rằng toàn bộ nền tảng nằm trong IaC |
+| **Cloud foundation** | Tên trung lập giữa các cloud — Azure gọi *Azure Landing Zones (ALZ)*, GCP có *Cloud Foundation Fabric* |
+| **Cloud platform engineering** | Tên của **nghề**, không phải của sản phẩm |
+
+Đội làm việc này: **platform team**, **cloud platform team**, hoặc **CCoE** (Cloud Center of Excellence).
+
+### 9.2 Từng phần trong repo
+
+| Trong repo này | Tên cộng đồng | Ghi chú |
+|---|---|---|
+| `vending-pipeline` | **Account Vending Machine (AVM)** · **account factory** | AWS đặt ra từ *account vending machine* ở giải pháp landing zone đời đầu. Bản Terraform chính thức của AWS tên là **AFT — Account Factory for Terraform** |
+| `account-baseline` | **account baseline** · **account bootstrap** | Đúng từ, dùng nguyên |
+| `organization` — SCP, tag policy | **preventive guardrails** | CT gọi là *controls*; trước đây gọi là *guardrails* |
+| `config-detective` | **detective controls** · **detective guardrails** | Phát hiện sau, đối lập với preventive |
+| `ops-gate/gate.py` | **policy as code**, cụ thể là **plan-time policy enforcement** | Bản thương mại của đúng việc này: **OPA/Conftest**, **HashiCorp Sentinel**, **Checkov**, **tfsec**. `gate.py` là một *home-grown policy engine* |
+| `catalog/*.yaml` có `ticket` + `expires` | **exception management** · **time-bound exceptions** | Mở port bằng sửa YAML rồi qua duyệt: *self-service through code review* |
+| 5 pipeline `ops-pipeline*` | **TACOS** — *Terraform Automation and Collaboration Software* | Từ này có thật và đang dùng rộng: Terraform Cloud, Spacelift, env0, Atlantis, Scalr đều tự gọi mình là TACOS. Ta đã tự viết một cái |
+| `approve_stages` | **manual approval gate** · **change gate** | Ngữ cảnh kiểm toán: **segregation of duties (SoD)** |
+| Job drift, không có nhánh apply | **drift detection**, chế độ **detect-only** | Chiều ngược lại là **continuous reconciliation** / **self-healing** |
+| 7 script `verify.sh` | **post-deployment verification** · **infrastructure acceptance testing** | Công cụ tương đương: **Terratest**, **InSpec**, **Config conformance pack** |
+| 126 `precondition` / `check` | **assertions in IaC** | Terraform gọi thẳng là *custom conditions* |
+| 19 layer, mỗi layer một state | **state isolation** để giảm **blast radius**; kiến trúc **layered stacks** | Phản đề — một state khổng lồ cho cả hạ tầng — Gruntwork đặt tên là **terralith** |
+| `modules/tf-pipeline` + 5 caller | **root module** vs **child module**; caller mỏng bọc module dày là **wrapper module** | |
+| `tf-backend`, và việc pipeline không tự dựng lại chính nó (mục 4) | **the bootstrap problem** · **seed / bootstrap stack** | |
+| Mô hình đội nền tảng lo guardrail, đội khác tự phục vụ bên trong | **paved road** (Netflix) · **golden path** (Spotify) | |
+| Rủi ro ở mục 4 của [doc 33](./33-Danh-gia-DIY-vs-Control-Tower-Sau-Khi-Dung.md) | **bus factor** · **key person risk**; hệ thống tự viết kiểu này bị gọi là **bespoke**, gắt hơn là **snowflake** | |
+| `network/` — TGW + VPC kiểm tra | **hub-and-spoke** với **centralized inspection** / **centralized egress** | Đây là từ khoá để tìm whitepaper của AWS về multi-VPC |
+
+### 9.3 Ba cái tên **không** đúng với bộ này
+
+Dùng sai ba từ này là chỗ hay bị vặn lại khi trình bày với kiểm toán hoặc khi phỏng vấn:
+
+| Từ | Vì sao không đúng |
+|---|---|
+| **GitOps** | GitOps đòi **continuous reconciliation**: một agent liên tục so trạng thái thật với git rồi *tự kéo về*. Ở đây là **push-based CI/CD**, và job drift **cố ý không có nhánh apply**. Gọi đúng là **pipeline-driven IaC** |
+| **IDP** (Internal Developer Platform) | IDP nhấn vào **developer self-service** — portal, catalog dịch vụ, lập trình viên tự bấm (Backstage, Port, Humanitec). Bộ này hướng vào **governance**, người dùng là đội vận hành |
+| **SRE** | Khác nghề. SRE lo SLO, error budget, độ tin cậy lúc chạy. Đây là **platform / infrastructure engineering** |
+
+### 9.4 Một câu để mô tả bộ này ra ngoài
+
+> Một **custom AWS landing zone** dựng bằng Terraform — multi-account guardrails, **account vending**, hub-and-spoke network với **centralized inspection** — vận hành bằng **pipeline-driven IaC** có **policy-as-code gate** đọc plan, **manual approval**, **drift detection** và **post-apply verification**.
+
+Câu này dùng đúng từ khoá mà người cùng nghề nhận ra ngay, và không có từ nào nói quá so với thứ thật sự có trong code.
+
+---
+
 ## Liên quan
 
 - [`landing-zone/RUNBOOK.md`](../landing-zone/RUNBOOK.md) — trình tự dựng, từng lệnh
