@@ -1011,7 +1011,7 @@ Layer [`network`](../landing-zone/network/) làm giai đoạn 1 của [doc 17](.
 | Layer | Chi phí |
 |---|---|
 | Bảy layer trước | ~$0/ngày |
-| `network`, 2 AZ | **~$770/tháng** |
+| `network`, 2 AZ / 5 spoke | **~$1.020/tháng** — firewall 57%, **TGW attachment 29%** |
 
 Trong đó **$570 là Network Firewall endpoint** — $0.395/giờ **mỗi AZ**, chạy 24/7 dù có gói tin nào đi qua hay không. Đây là quyết định khác hẳn `enable = true` ở mọi layer trước, nên README của layer mở đầu bằng bảng chi phí chứ không phải bằng kiến trúc.
 
@@ -1077,7 +1077,7 @@ Còn lại, không thuộc giai đoạn nào của runbook:
 | `enable_cost_allocation_tags` ở `billing-guard` | Chỉ có nghĩa khi đã có resource mang tag |
 | Xem lại pham vi `lz-db-admin` / `lz-server-admin` | Hai set này để `all`, tức có quyền ghi vào production, trong khi `lz-app-admin` chỉ nonprod. Không nhất quán — hoặc là cố ý và cần ghi rõ, hoặc là sót |
 | Layer `control-tower` | **Chưa ai chạy bao giờ.** Mặc định tắt, không ảnh hưởng gì — nhưng một lớp chưa ai chạy là một lớp chưa ai tin được, đúng như lỗi 26 vừa chứng minh với code viết cùng ngày |
-| Layer `network` | Có code, `plan` sạch, **chưa apply**. Và bật nó là ~$770/tháng — không phải việc "làm nốt cho đủ bộ" mà là quyết định có workload thật hay không. Xem mục 6f |
+| Layer `network` | Có code, `plan` sạch, **chưa apply**. Và bật nó là ~$1.020/tháng — không phải việc "làm nốt cho đủ bộ" mà là quyết định có workload thật hay không. Xem mục 6f |
 
 ### Vì sao `org-trail` là việc tiếp theo
 

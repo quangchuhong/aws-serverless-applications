@@ -26,10 +26,17 @@ Nửa 2 không phải "làm nốt cho đủ bộ". Sau giai đoạn 11 hạ tầ
 
 | | |
 |---|---|
-| **Đo từ hoá đơn** | Năm account của LZ cộng lại **$1.57** cho cả kỳ. Config $1.04 · pipeline + drift $0.69 · GuardDuty $0.27 · S3 $0.17 · Network Firewall **$0.0988** · CloudTrail tổ chức và Security Hub **$0.00** |
-| **Tính ra nếu chạy thường trú** | Giai đoạn 10 ở 2 AZ / 5 spoke ≈ **$1.020/tháng**, trong đó ~$577 là Network Firewall endpoint |
+| **Đo từ hoá đơn, theo ACCOUNT** | Năm account của LZ cộng lại **$1.5735**. network **$0.6606** · log-archive $0.4705 · security $0.2333 · app-prod $0.2092 · app-dev ~$0 |
+| **Trong đó account mạng** | Network Firewall $0.0988 (**15%**) · **Transit Gateway + NAT + endpoint + NLB $0.5618 (85%)** |
+| **Tính ra nếu chạy thường trú** | Giai đoạn 10 ở 2 AZ / 5 spoke ≈ **$1.020/tháng** — firewall $0.790/giờ, **TGW attachment $0.400/giờ**, còn lại $0.207/giờ |
 
-`$0.0988` của tường lửa **không** nghĩa là nó rẻ — nghĩa là lớp mạng chưa bao giờ được để chạy: dựng, kiểm chứng 1–2 giờ, rồi xoá. Con số $1.020 là dự phóng từ đơn giá theo giờ, **không phải số trên hoá đơn**.
+Ba điều phải đọc đúng ở bảng trên:
+
+1. `$0.0988` của tường lửa **không** nghĩa là nó rẻ — nghĩa là lớp mạng chưa bao giờ được để chạy: dựng, kiểm chứng, rồi xoá.
+2. **Khoản tốn nhất khi chạy thử vài giờ là Transit Gateway, không phải tường lửa.** TGW tính theo **số attachment**, mà số attachment luôn lớn hơn số AZ; còn tường lửa tính theo AZ và trong lần đo này nó chỉ bật vài phút.
+3. **Cost Explorer không có dòng "Transit Gateway"** — phí của nó nằm trong `EC2-Other`, chung với NAT và EBS. Tìm theo tên dịch vụ sẽ không thấy gì và tưởng nhầm là nó không tốn tiền. Muốn tách ra thì group theo **Usage Type** và tìm `*-TransitGateway-Hours` / `*-TransitGateway-Bytes`.
+
+Con số $1.020 là dự phóng từ đơn giá theo giờ, **không phải số trên hoá đơn** — bảng tính từng khoản ở [doc 15 mục 8.3](../docs/15-Security-VPC-Network-Firewall.md), cách đọc hoá đơn ở [doc 33 mục 5.2](../docs/33-Danh-gia-DIY-vs-Control-Tower-Sau-Khi-Dung.md).
 
 ---
 
@@ -84,9 +91,19 @@ Giai đoạn **3, 4 và 12 là thủ công** — không có Terraform. Đừng t
 | 15 trước 14 | `ban_do` gọi tên pipeline chưa tồn tại → Lambda ném lỗi mỗi lần chạy |
 | 16 trước 15 | giữa hai lần apply **không có gì** kích hoạt pipeline nào |
 
-> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Mười một giai đoạn kia đo được **$1.57 cả kỳ**; giai đoạn 10 nếu **để chạy thường trú** thì dự phóng ~**$1.020/tháng** ở 2 AZ và 5 spoke, trong đó ~$577 là Network Firewall endpoint — tính theo **giờ × số AZ**, không theo lưu lượng, nên 10 spoke hay 1 spoke gần như bằng nhau.
+> **Giai đoạn 10 không phải "làm nốt cho đủ bộ".** Mười một giai đoạn kia đo được **$1.57 cả kỳ**; giai đoạn 10 nếu **để chạy thường trú** thì dự phóng ~**$1.020/tháng** ở 2 AZ và 5 spoke.
 >
-> Công thức để tính cho cấu hình của bạn: `(số AZ × $0.44/giờ) + (số spoke × $0.05/giờ) + $0.15/giờ`. **Thêm một AZ đắt hơn thêm mười lăm spoke.**
+> Hai khoản chiếm 86% dự phóng đó, và chúng nhân theo **hai chiều khác nhau**:
+>
+> | Khoản | Cách tính | USD/giờ |
+> |---|---|---|
+> | Firewall endpoint | **số AZ** × $0.395 | 0.790 |
+> | **TGW attachment** | **số attachment** × $0.05 — 5 spoke + egress + security + ingress = 8 | **0.400** |
+> | NAT + interface endpoint + NLB + EC2 | theo AZ | 0.207 |
+>
+> Thêm một AZ ≈ **$0.49/giờ**; thêm một spoke = **$0.05/giờ** → **một AZ ngang khoảng mười spoke**. Đừng nén bảng này thành một công thức một dòng: bản nén cũ làm sai đơn giá và giấu mất Transit Gateway, đúng khoản tốn thứ hai ([doc 33 mục 5.2](../docs/33-Danh-gia-DIY-vs-Control-Tower-Sau-Khi-Dung.md)).
+>
+> Đơn giá firewall cần **tra lại theo region**: AWS có đợt giảm giá tháng 2/2026 và endpoint thứ hai trở đi rẻ hơn endpoint đầu.
 >
 > Chỉ dựng khi thật sự có workload cần kết nối. Muốn xem thiết kế chạy thế nào mà không trả tiền thường trực thì dựng, kiểm chứng, rồi xoá — hoá đơn thật cho thấy cách đó tốn vài xu.
 

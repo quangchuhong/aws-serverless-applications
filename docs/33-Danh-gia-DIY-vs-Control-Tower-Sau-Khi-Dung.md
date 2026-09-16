@@ -134,9 +134,11 @@ Và đó chính là chỗ chênh lệch:
 
 1. **Mọi công tắc đều tường minh, và hoá đơn xác nhận được.** Dòng `Security Hub $0.00` ở mục 5.2 là bằng chứng độc lập cho `standards = []`. Một tính năng đang bật thì **không thể** có hoá đơn bằng không. Ở CT bạn không có phép đối chiếu này, vì baseline không do bạn khai.
 
-2. **Phạm vi Config do mình chọn — và Config là dòng lớn nhất.** Trong $1,57 đo được, Config chiếm **$1,04**, tức hai phần ba. Config tính theo số configuration item ghi nhận và số lần đánh giá rule, nên nó nhân theo **account × region × mức độ thay đổi resource**. Đây là đòn bẩy chi phí lớn nhất của bất kỳ landing zone nào, và ở bản này nó là một con số trong code.
+2. **Phạm vi Config do mình chọn.** Config là dòng dịch vụ lớn nhất trong cả tổ chức ($1.0430 ở lát cắt theo dịch vụ), và nó tính theo số configuration item ghi nhận cùng số lần đánh giá rule — tức nhân theo **account × region × mức độ thay đổi resource**. Đây là đòn bẩy chi phí lớn nhất của bất kỳ landing zone nào, và ở bản này nó là một con số trong code: 10 rule, 2 region. *(Không quy được bao nhiêu trong $1.0430 đó thuộc riêng LZ — xem cái bẫy hai lát cắt ở mục 5.2.)*
 
-3. **Tắt được cả một lớp mà không phá nền tảng.** Network Firewall ra **$0,0988** vì lớp mạng được dựng, kiểm chứng một đến hai giờ, rồi xoá. Không phải vì nó rẻ — mà vì *xoá và dựng lại được*. CT không có tương đương: baseline của nó chạy ở mọi account được quản trị, không có cách "tạm đỗ" mà vẫn giữ landing zone.
+3. **Tắt được cả một lớp mà không phá nền tảng.** Cả account mạng chỉ ra **$0.6606** vì lớp mạng được dựng, kiểm chứng, rồi xoá. Không phải vì nó rẻ — mà vì *xoá và dựng lại được*; để chạy thường trú thì cùng lớp đó là ~**$1.020/tháng**. CT không có tương đương: baseline của nó chạy ở mọi account được quản trị, không có cách "tạm đỗ" mà vẫn giữ landing zone.
+
+   > Và đây là chỗ dễ đọc nhầm nhất của cả phần chi phí: trong $0.6606 đó, **Network Firewall chỉ chiếm $0.0988 (15%)**. 85% còn lại là **Transit Gateway attachment, NAT, interface endpoint và NLB** — những thứ tính tiền **theo giờ** và **không có dòng riêng trên Cost Explorer** (chúng nằm trong `EC2-Other`). Chạy thử vài giờ thì TGW, không phải tường lửa, là khoản tốn nhất.
 
 4. **Không có chi phí ẩn của chu kỳ cập nhật.** CT sinh ra trạng thái *landing zone needs update*, và trong lúc đó một số thao tác bị chặn cho tới khi có người chạy cập nhật trên toàn tổ chức. Đó là chi phí bằng **thời gian kỹ sư** chứ không nằm trên hoá đơn — nhưng nó là chi phí thật, và nó lặp lại.
 
@@ -208,33 +210,91 @@ Dòng đầu là **khoảng cách lớn nhất với CT, và nó là một dòng
 
 Cả bốn công tắc đều tắt **có lý do** — chi phí, và giai đoạn rollout. `check.security_hub_costs_money` và `check.guardduty_features_cost_money` tồn tại đúng để nhắc điều đó. Nhưng "tắt có lý do" và "tắt vì quên" trông giống nhau sau sáu tháng, nên chúng đáng có một ngày hẹn.
 
-### 5.2 Hoá đơn xác nhận điều đó, và nó rẻ hơn dự đoán
+### 5.2 Hoá đơn xác nhận điều đó — và nó có một cái bẫy về cách đọc
 
-Export Cost Explorer cho **năm account của LZ** (loại account quản trị ra, vì ở đó có một hệ thống ứng dụng chạy từ trước nền tảng này):
+Có **hai** bản export, và chúng là **hai lát cắt khác nhau của cùng một tổng**: một cắt theo account, một cắt theo dịch vụ. Trộn hai lát này là lỗi, và bản đầu của tài liệu đã mắc đúng lỗi đó — xem hộp cảnh báo cuối mục.
 
-| Dịch vụ | Cả kỳ | Đọc ra điều gì |
+#### a) Lát cắt theo ACCOUNT — đây là con số của LZ
+
+Loại account quản trị ra, vì ở đó có một hệ thống ứng dụng chạy từ trước nền tảng này.
+
+| Account | Cả kỳ | Tỷ trọng | Đọc ra điều gì |
+|---|---|---|---|
+| **network** | **$0.6606** | **42%** | **dòng lớn nhất của LZ** — và phần lớn nó KHÔNG phải firewall |
+| log-archive | $0.4705 | 30% | lưu trữ nhật ký có object lock |
+| security | $0.2333 | 15% | Config aggregator, GuardDuty, Security Hub |
+| app-prod | $0.2092 | 13% | account vend ra, gần như trống |
+| app-dev | $0.0000110 | ~0% | vend xong, chưa dùng |
+| **Cộng, năm account** | **$1.5735** | | làm tròn **$1.57** |
+
+#### b) Lát cắt theo DỊCH VỤ — **không** quy được về năm account trên
+
+| Dịch vụ | Cả kỳ, **mọi account** | Đọc ra điều gì |
 |---|---|---|
-| Config | **$1.04** | dòng lớn nhất của cả phần quản trị |
-| CodeBuild + CodePipeline | **$0.69** | sáu pipeline cộng job drift, hàng chục lần chạy |
-| GuardDuty | **$0.27** | bật ở 14 account thành viên |
-| S3 | **$0.17** | nhật ký, state, snapshot |
-| Network Firewall | **$0.0988** | xem cảnh báo dưới |
+| Config | $1.0430 | |
+| CodeBuild | $0.6350 | |
+| GuardDuty | $0.2662 | |
+| S3 | $0.1984 | |
+| **Network Firewall** | **$0.0988** | chỉ tồn tại ở account network → **toàn bộ là của LZ** |
+| CodePipeline | $0.0560 | |
 | CloudTrail | **$0.00** | trail cấp tổ chức không tính phí |
 | **Security Hub** | **$0.00** | ← **hoá đơn xác nhận `standards = []`** |
 | SNS · SQS · CodeCommit | **$0.00** | trong hạn miễn phí ở quy mô này |
-| **Cộng, năm account** | **$1.57** | |
+| *(EC2-Other)* | *$103.06* | **chỗ Transit Gateway nằm** — xem mục c |
+| *(VPC)* | *$42.49* | VPN, interface endpoint, IPv4 công cộng |
 
-Dòng `Security Hub $0.00` là một **bằng chứng độc lập** cho mục 5.1: nếu có standard nào đang bật thì nó không thể bằng không. Trạng thái đọc từ `terraform output` và trạng thái đọc từ hoá đơn khớp nhau — hai nguồn không liên quan cùng nói một điều.
+> **Phép thử cho thấy hai lát không cộng chung được:** sáu dòng đầu bảng b cộng lại ra **$2.2974**, lớn hơn **$1.5735** của cả năm account LZ. Nghĩa là một phần Config, CodeBuild và S3 trong bảng b thuộc về **account quản trị**, không thuộc LZ. Bảng b trả lời "dịch vụ nào tốn tiền trong cả tổ chức", không trả lời "LZ tốn bao nhiêu".
 
-> **`$0.0988` KHÔNG có nghĩa là Network Firewall rẻ.** Nó có nghĩa là lớp mạng **chưa bao giờ được để chạy**: dựng lên, kiểm chứng một đến hai giờ, rồi xoá. Điểm kiểm tra tính tiền theo **giờ**, nên vài giờ ra vài xu.
->
-> Đó là một điểm mạnh thật — *xoá và dựng lại được* nên kiểm chứng gần như không tốn gì. Nhưng nó không trả lời câu "chạy thường trú tốn bao nhiêu". Câu đó là **phép tính**, không phải phép đo:
->
-> `(số AZ × $0.44/giờ) + (số spoke × $0.05/giờ) + $0.15/giờ`
->
-> 2 AZ / 5 spoke ≈ **$1.020/tháng**, trong đó ~$577 là firewall endpoint. **Thêm một AZ đắt hơn thêm mười lăm spoke** — tường lửa nhân theo AZ, không theo lưu lượng hay số spoke.
+Dòng `Security Hub $0.00` vẫn là **bằng chứng độc lập** cho mục 5.1, và nó không bị ảnh hưởng bởi cái bẫy trên: Security Hub chỉ được bật bởi LZ, nên $0.00 ở lát cắt nào cũng là $0.00.
 
-**Một lưu ý về phạm vi số liệu:** export kết thúc ở hết tháng 8, mà LZ dựng từ **cuối tháng 8 tới giữa tháng 9**. Nên `$1.57` là **cận dưới** — nó chỉ bắt được mấy ngày đầu. Xuất thêm tháng 9 thì con số tăng, nhưng vẫn ở thang vài đô: không dịch vụ nào trong bảng có đơn giá đủ lớn để đổi bậc.
+#### c) Transit Gateway ở đâu trên hoá đơn — và vì sao tưởng là nó không tốn tiền
+
+**Cost Explorer không có dòng "Transit Gateway".** Phí attachment và phí data processing của TGW nằm trong **`EC2-Other`**, chung với NAT Gateway, EBS và IPv4 công cộng. Ai đọc export theo dịch vụ rồi tìm chữ "Transit Gateway" sẽ **không thấy gì** và kết luận nhầm rằng nó không tốn tiền.
+
+Đó là lý do phải quay về lát cắt theo account:
+
+| | Cả kỳ | Phần trăm account network |
+|---|---|---|
+| Account **network**, tổng | **$0.6606** | 100% |
+| — Network Firewall | $0.0988 | **15%** |
+| — **phần còn lại**: TGW attachment, NAT, interface endpoint, NLB | **$0.5618** | **85%** |
+
+> **Đọc ra điều quan trọng nhất của cả mục 5:** trong kỳ đo, **hạ tầng mạng tính theo giờ tốn gấp ~5,7 lần tường lửa**, và TGW là khoản lớn nhất trong đó. Lý do là thời gian sống khác nhau — tường lửa chỉ bật vài phút, còn attachment và NAT sống suốt cả lần dựng thử. Tường lửa tính **theo AZ**, TGW tính **theo số attachment**, và số attachment lớn hơn số AZ trong mọi topology hub-spoke thật.
+
+**Cách tự tách $0.5618 ra từng khoản** — export hiện tại không tách được, cần một lát cắt thứ ba:
+
+```
+Cost Explorer → Group by: Usage Type → Filter: Linked account = network → Daily
+```
+
+TGW hiện ra dưới dạng usage type chứ không phải tên dịch vụ: `*-TransitGateway-Hours` (phí attachment) và `*-TransitGateway-Bytes` (phí data processing). Từ 2024 AWS có **cost allocation tag cho TGW attachment**, nên gắn tag theo spoke thì chia được tiền về từng spoke.
+
+#### d) Chạy thường trú tốn bao nhiêu — đây là phép TÍNH, không phải phép đo
+
+Bảng tính từng khoản nằm ở [doc 15 mục 8.3](./15-Security-VPC-Network-Firewall.md), và **nó có tính TGW đầy đủ**. Tóm tắt cho 5 spoke / 2 AZ:
+
+| Khoản | Cách tính | USD/giờ | Tỷ trọng |
+|---|---|---|---|
+| Firewall endpoint | 2 AZ × $0.395 | 0.790 | 57% |
+| **TGW attachment** | **8 × $0.05** — 5 spoke + egress + security + ingress | **0.400** | **29%** |
+| NAT Gateway | 2 AZ × $0.045 | 0.090 | 6% |
+| Interface endpoint | 2 AZ × 3 dịch vụ × $0.01 | 0.060 | 4% |
+| NLB | 2 AZ × $0.0225 | 0.045 | 3% |
+| EC2 kiểm chứng | 1 × t3.micro | 0.012 | 1% |
+| | **Cộng** | **~1.397** | ≈ **$1.020/tháng** |
+
+**Thêm một AZ** = firewall $0.395 + NAT $0.045 + endpoint $0.03 + NLB $0.0225 ≈ **$0.49/giờ**.
+**Thêm một spoke** = **$0.05/giờ**.
+→ **Thêm một AZ ngang thêm khoảng mười spoke.**
+
+> ⚠️ **Hai cảnh báo về đơn giá trong bảng này:**
+>
+> 1. Một bản tóm tắt cũ của tài liệu này từng nén cả bảng trên thành `(số AZ × $0.44/giờ) + (số spoke × $0.05/giờ) + $0.15/giờ`. Công thức đó **sai ba chỗ**: đơn giá firewall không phải $0.44, nó đếm 5 attachment thay vì 8, và nó gộp NAT + endpoint + NLB thành $0.15 trong khi thực tế là $0.207. Nó cũng **giấu mất chữ Transit Gateway**, đúng thứ tốn tiền thứ hai. Công thức đó đã bị bỏ; dùng bảng trên.
+> 2. AWS có **đợt giảm giá Network Firewall tháng 2/2026**, và cấu trúc giá hiện có phân biệt endpoint thứ nhất với endpoint thứ hai trở đi (tham chiếu us-east-1: $0.395 và $0.158 mỗi giờ, $0.065/GB). Tôi **không truy cập được** trang giá AWS từ môi trường này để xác nhận cho region đang dùng. Nếu đúng như vậy thì tỷ lệ "một AZ ≈ mười spoke" **giảm còn khoảng năm spoke**, và tỷ trọng 57% của firewall cũng giảm theo. **Tra lại bảng giá theo region trước khi dùng con số này để ra quyết định.**
+
+**Một lưu ý về phạm vi số liệu:** export kết thúc ở hết tháng 8, mà LZ dựng từ **cuối tháng 8 tới giữa tháng 9**. Nên `$1.57` là **cận dưới** — nó chỉ bắt được mấy ngày đầu. Xuất thêm tháng 9 thì con số tăng, nhưng vẫn ở thang vài đô.
+
+> **Ghi lỗi để không lặp lại.** Bản đầu của mục này trình bày bảng b (theo dịch vụ, **mọi** account) như thể đó là chi phí của năm account LZ, và **không nhắc Transit Gateway một lần nào** vì Cost Explorer không có dòng mang tên đó. Hai lỗi cùng một gốc: **đọc một lát cắt rồi kết luận về một lát cắt khác.** Đây chính là nguyên tắc mục 1 đặt ra cho phần "thiếu" — mỗi con số phải kèm cách kiểm lại — áp dụng cho chính phần chi phí thì lại quên.
 
 ---
 

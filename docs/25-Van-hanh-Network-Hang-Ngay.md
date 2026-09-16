@@ -42,7 +42,7 @@ Bảng `rtb-spokes` có **đúng một dòng**:
 
 Một dòng đó phủ mọi đích đến: Internet, spoke khác, ingress VPC. Gói tin rời khỏi bất kỳ spoke nào đều vào firewall trước, rồi TGW mới quyết định nó đi tiếp đâu.
 
-Thêm một route spoke-to-spoke **không mở thêm kết nối nào** — kết nối đã sẵn có. Nó tạo một đường tắt **vòng qua firewall**, vì route cụ thể hơn `0.0.0.0/0` nên nó thắng. Đó đúng là thứ cả thiết kế này tốn ~$770/tháng để ngăn.
+Thêm một route spoke-to-spoke **không mở thêm kết nối nào** — kết nối đã sẵn có. Nó tạo một đường tắt **vòng qua firewall**, vì route cụ thể hơn `0.0.0.0/0` nên nó thắng. Đó đúng là thứ cả thiết kế này tốn ~$1.020/tháng để ngăn (2 AZ / 5 spoke — [doc 15 mục 8.3](./15-Security-VPC-Network-Firewall.md)).
 
 Cho nên yêu cầu "mở đường giữa hai VPC" luôn được giải bằng **một dòng trong `firewall-rules.yaml`**, không bao giờ bằng một dòng route. Lớp ops in cảnh báo khi phát hiện route có hình dạng đó (`check "no_firewall_bypass_routes"`).
 
